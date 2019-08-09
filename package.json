@@ -27,7 +27,9 @@
     "test": "node scripts/frontend/test",
     "webpack": "NODE_OPTIONS=\"--max-old-space-size=3584\" webpack --config config/webpack.config.js",
     "webpack-prod": "NODE_OPTIONS=\"--max-old-space-size=3584\" NODE_ENV=production webpack --config config/webpack.config.js",
-    "webpack-vrt": "NODE_OPTIONS=\"--max-old-space-size=3584\" NODE_ENV=production webpack --config config/webpack.config.review_toolbar.js"
+    "webpack-vrt": "NODE_OPTIONS=\"--max-old-space-size=3584\" NODE_ENV=production webpack --config config/webpack.config.review_toolbar.js",
+    "snyk-protect": "snyk protect",
+    "prepublish": "npm run snyk-protect"
   },
   "dependencies": {
     "@babel/core": "^7.4.4",
@@ -142,7 +144,8 @@
     "webpack-cli": "^3.2.1",
     "webpack-stats-plugin": "^0.2.1",
     "worker-loader": "^2.0.0",
-    "xterm": "^3.5.0"
+    "xterm": "^3.5.0",
+    "snyk": "^1.192.2"
   },
   "devDependencies": {
     "@babel/plugin-transform-modules-commonjs": "^7.2.0",
@@ -206,5 +209,6 @@
   "engines": {
     "node": ">=8.10.0",
     "yarn": "^1.10.0"
-  }
+  },
+  "snyk": true
 }
