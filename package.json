@@ -28,7 +28,9 @@
     "test": "node scripts/frontend/test",
     "webpack": "NODE_OPTIONS=\"--max-old-space-size=3584\" webpack --config config/webpack.config.js",
     "webpack-vendor": "NODE_OPTIONS=\"--max-old-space-size=3584\" webpack --config config/webpack.vendor.config.js",
-    "webpack-prod": "NODE_OPTIONS=\"--max-old-space-size=3584\" NODE_ENV=production webpack --config config/webpack.config.js"
+    "webpack-prod": "NODE_OPTIONS=\"--max-old-space-size=3584\" NODE_ENV=production webpack --config config/webpack.config.js",
+    "snyk-protect": "snyk protect",
+    "prepare": "yarn run snyk-protect"
   },
   "dependencies": {
     "@babel/core": "^7.8.4",
@@ -86,7 +88,7 @@
     "imports-loader": "^0.8.0",
     "jed": "^1.1.1",
     "jest-transform-graphql": "^2.1.0",
-    "jquery": "^3.4.1",
+    "jquery": "^3.5.0",
     "jquery-ujs": "1.2.2",
     "jquery.caret": "^0.3.1",
     "jquery.waitforimages": "^2.2.0",
@@ -140,7 +142,8 @@
     "webpack-cli": "^3.3.9",
     "webpack-stats-plugin": "^0.3.0",
     "worker-loader": "^2.0.0",
-    "xterm": "^3.5.0"
+    "xterm": "^3.5.0",
+    "snyk": "^1.317.0"
   },
   "devDependencies": {
     "@babel/plugin-transform-modules-commonjs": "^7.8.3",
@@ -209,5 +212,6 @@
   "engines": {
     "node": ">=8.10.0",
     "yarn": "^1.10.0"
-  }
+  },
+  "snyk": true
 }
