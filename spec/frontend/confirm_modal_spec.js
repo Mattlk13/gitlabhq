@@ -1,6 +1,6 @@
 import Vue from 'vue';
-import initConfirmModal from '~/confirm_modal';
 import { TEST_HOST } from 'helpers/test_constants';
+import initConfirmModal from '~/confirm_modal';
 
 describe('ConfirmModal', () => {
   const buttons = [
@@ -8,7 +8,6 @@ describe('ConfirmModal', () => {
       path: `${TEST_HOST}/1`,
       method: 'delete',
       modalAttributes: {
-        modalId: 'geo-entry-removal-modal',
         title: 'Remove tracking database entry',
         message: 'Tracking database entry will be removed. Are you sure?',
         okVariant: 'danger',
@@ -19,7 +18,6 @@ describe('ConfirmModal', () => {
       path: `${TEST_HOST}/1`,
       method: 'post',
       modalAttributes: {
-        modalId: 'geo-entry-removal-modal',
         title: 'Update tracking database entry',
         message: 'Tracking database entry will be updated. Are you sure?',
         okVariant: 'success',
@@ -31,7 +29,7 @@ describe('ConfirmModal', () => {
   beforeEach(() => {
     const buttonContainer = document.createElement('div');
 
-    buttons.forEach(x => {
+    buttons.forEach((x) => {
       const button = document.createElement('button');
       button.setAttribute('class', 'js-confirm-modal-button');
       button.setAttribute('data-path', x.path);
@@ -52,7 +50,8 @@ describe('ConfirmModal', () => {
   const findModal = () => document.querySelector('.gl-modal');
   const findModalOkButton = (modal, variant) =>
     modal.querySelector(`.modal-footer .btn-${variant}`);
-  const findModalCancelButton = modal => modal.querySelector('.modal-footer .btn-secondary');
+  const findModalCancelButton = (modal) => modal.querySelector('.modal-footer .btn-secondary');
+  const modalIsHidden = () => findModal() === null;
 
   const serializeModal = (modal, buttonIndex) => {
     const { modalAttributes } = buttons[buttonIndex];
@@ -61,11 +60,10 @@ describe('ConfirmModal', () => {
       path: modal.querySelector('form').action,
       method: modal.querySelector('input[name="_method"]').value,
       modalAttributes: {
-        modalId: modal.id,
         title: modal.querySelector('.modal-title').innerHTML,
         message: modal.querySelector('.modal-body div').innerHTML,
         okVariant: [...findModalOkButton(modal, modalAttributes.okVariant).classList]
-          .find(x => x.match('btn-'))
+          .find((x) => x.match('btn-'))
           .replace('btn-', ''),
         okTitle: findModalOkButton(modal, modalAttributes.okVariant).innerHTML,
       },
@@ -80,9 +78,7 @@ describe('ConfirmModal', () => {
   describe('when button clicked', () => {
     beforeEach(() => {
       initConfirmModal();
-      findJsHooks()
-        .item(0)
-        .click();
+      findJsHooks().item(0).click();
     });
 
     it('does not replace JsHook with GlModal', () => {
@@ -92,6 +88,7 @@ describe('ConfirmModal', () => {
     describe('GlModal', () => {
       it('is rendered', () => {
         expect(findModal()).toExist();
+        expect(modalIsHidden()).toBe(false);
       });
 
       describe('Cancel Button', () => {
@@ -102,7 +99,9 @@ describe('ConfirmModal', () => {
         });
 
         it('closes the modal', () => {
-          expect(findModal()).not.toExist();
+          setImmediate(() => {
+            expect(modalIsHidden()).toBe(true);
+          });
         });
       });
     });
@@ -115,9 +114,7 @@ describe('ConfirmModal', () => {
   `(`when multiple buttons exist`, ({ index }) => {
     beforeEach(() => {
       initConfirmModal();
-      findJsHooks()
-        .item(index)
-        .click();
+      findJsHooks().item(index).click();
     });
 
     it('correct props are passed to gl-modal', () => {

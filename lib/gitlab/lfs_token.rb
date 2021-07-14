@@ -14,7 +14,7 @@ module Gitlab
 
     include LfsTokenHelper
 
-    DEFAULT_EXPIRE_TIME = 1800
+    DEFAULT_EXPIRE_TIME = 7200 # Default value 2 hours
 
     attr_accessor :actor
 
@@ -52,7 +52,7 @@ module Gitlab
     def valid_user?
       return true unless user?
 
-      !actor.blocked? && (!actor.allow_password_authentication? || !actor.password_expired?)
+      !actor.blocked? && !actor.password_expired_if_applicable?
     end
 
     def authentication_payload(repository_http_path)

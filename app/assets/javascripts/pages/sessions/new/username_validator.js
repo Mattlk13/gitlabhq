@@ -1,9 +1,9 @@
 import { debounce } from 'lodash';
-import InputValidator from '~/validators/input_validator';
 
+import createFlash from '~/flash';
 import axios from '~/lib/utils/axios_utils';
-import flash from '~/flash';
 import { __ } from '~/locale';
+import InputValidator from '~/validators/input_validator';
 
 const debounceTimeoutDuration = 1000;
 const rootUrl = gon.relative_url_root;
@@ -20,11 +20,11 @@ export default class UsernameValidator extends InputValidator {
     const container = opts.container || '';
     const validateLengthElements = document.querySelectorAll(`${container} .js-validate-username`);
 
-    this.debounceValidateInput = debounce(inputDomElement => {
+    this.debounceValidateInput = debounce((inputDomElement) => {
       UsernameValidator.validateUsernameInput(inputDomElement);
     }, debounceTimeoutDuration);
 
-    validateLengthElements.forEach(element =>
+    validateLengthElements.forEach((element) =>
       element.addEventListener('input', this.eventHandler.bind(this)),
     );
   }
@@ -39,10 +39,10 @@ export default class UsernameValidator extends InputValidator {
   static validateUsernameInput(inputDomElement) {
     const username = inputDomElement.value;
 
-    if (inputDomElement.checkValidity() && username.length > 0) {
+    if (inputDomElement.checkValidity() && username.length > 1) {
       UsernameValidator.setMessageVisibility(inputDomElement, pendingMessageSelector);
       UsernameValidator.fetchUsernameAvailability(username)
-        .then(usernameTaken => {
+        .then((usernameTaken) => {
           UsernameValidator.setInputState(inputDomElement, !usernameTaken);
           UsernameValidator.setMessageVisibility(inputDomElement, pendingMessageSelector, false);
           UsernameValidator.setMessageVisibility(
@@ -50,7 +50,11 @@ export default class UsernameValidator extends InputValidator {
             usernameTaken ? unavailableMessageSelector : successMessageSelector,
           );
         })
-        .catch(() => flash(__('An error occurred while validating username')));
+        .catch(() =>
+          createFlash({
+            message: __('An error occurred while validating username'),
+          }),
+        );
     }
   }
 

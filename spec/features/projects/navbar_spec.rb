@@ -2,105 +2,22 @@
 
 require 'spec_helper'
 
-describe 'Project navbar' do
-  let(:user) { create(:user) }
-  let(:project) { create(:project, :repository) }
+RSpec.describe 'Project navbar' do
+  include NavbarStructureHelper
+  include WaitForRequests
 
-  let(:analytics_nav_item) do
-    {
-      nav_item: _('Analytics'),
-      nav_sub_items: [
-        _('CI / CD Analytics'),
-        (_('Code Review') if Gitlab.ee?),
-        _('Repository Analytics'),
-        _('Value Stream Analytics')
-      ]
-    }
-  end
+  include_context 'project navbar structure'
 
-  let(:structure) do
-    [
-      {
-        nav_item: _('Project overview'),
-        nav_sub_items: [
-          _('Details'),
-          _('Activity'),
-          _('Releases')
-        ]
-      },
-      {
-        nav_item: _('Repository'),
-        nav_sub_items: [
-          _('Files'),
-          _('Commits'),
-          _('Branches'),
-          _('Tags'),
-          _('Contributors'),
-          _('Graph'),
-          _('Compare'),
-          (_('Locked Files') if Gitlab.ee?)
-        ]
-      },
-      {
-        nav_item: _('Issues'),
-        nav_sub_items: [
-          _('List'),
-          _('Boards'),
-          _('Labels'),
-          _('Milestones')
-        ]
-      },
-      {
-        nav_item: _('Merge Requests'),
-        nav_sub_items: []
-      },
-      {
-        nav_item: _('CI / CD'),
-        nav_sub_items: [
-          _('Pipelines'),
-          _('Jobs'),
-          _('Artifacts'),
-          _('Schedules')
-        ]
-      },
-      {
-        nav_item: _('Operations'),
-        nav_sub_items: [
-          _('Metrics'),
-          _('Environments'),
-          _('Error Tracking'),
-          _('Serverless'),
-          _('Kubernetes')
-        ]
-      },
-      analytics_nav_item,
-      {
-        nav_item: _('Wiki'),
-        nav_sub_items: []
-      },
-      {
-        nav_item: _('Snippets'),
-        nav_sub_items: []
-      },
-      {
-        nav_item: _('Settings'),
-        nav_sub_items: [
-          _('General'),
-          _('Members'),
-          _('Integrations'),
-          _('Webhooks'),
-          _('Repository'),
-          _('CI / CD'),
-          _('Operations'),
-          (_('Audit Events') if Gitlab.ee?)
-        ].compact
-      }
-    ]
-  end
+  let_it_be(:project) { create(:project, :repository) }
+
+  let(:user) { project.owner }
 
   before do
-    project.add_maintainer(user)
     sign_in(user)
+
+    stub_config(registry: { enabled: false })
+    insert_package_nav(_('Infrastructure'))
+    insert_infrastructure_registry_nav
   end
 
   it_behaves_like 'verified navigation bar' do
@@ -109,18 +26,53 @@ describe 'Project navbar' do
     end
   end
 
-  if Gitlab.ee?
-    context 'when issues analytics is available' do
-      before do
-        stub_licensed_features(issues_analytics: true)
+  context 'when value stream is available' do
+    before do
+      visit project_path(project)
+    end
 
-        analytics_nav_item[:nav_sub_items] << _('Issues Analytics')
-        analytics_nav_item[:nav_sub_items].sort!
-
-        visit project_path(project)
+    it 'redirects to value stream when Analytics item is clicked' do
+      page.within('.sidebar-top-level-items') do
+        find('.shortcuts-analytics').click
       end
 
-      it_behaves_like 'verified navigation bar'
+      wait_for_requests
+
+      expect(page).to have_current_path(project_cycle_analytics_path(project))
     end
+  end
+
+  context 'when pages are available' do
+    before do
+      stub_config(pages: { enabled: true })
+
+      insert_after_sub_nav_item(
+        _('Monitor'),
+        within: _('Settings'),
+        new_sub_nav_item_name: _('Pages')
+      )
+
+      visit project_path(project)
+    end
+
+    it_behaves_like 'verified navigation bar'
+  end
+
+  context 'when container registry is available' do
+    before do
+      stub_config(registry: { enabled: true })
+
+      insert_container_nav
+
+      insert_after_sub_nav_item(
+        _('Monitor'),
+        within: _('Settings'),
+        new_sub_nav_item_name: _('Packages & Registries')
+      )
+
+      visit project_path(project)
+    end
+
+    it_behaves_like 'verified navigation bar'
   end
 end

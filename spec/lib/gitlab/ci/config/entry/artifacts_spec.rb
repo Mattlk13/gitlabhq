@@ -2,7 +2,7 @@
 
 require 'spec_helper'
 
-describe Gitlab::Ci::Config::Entry::Artifacts do
+RSpec.describe Gitlab::Ci::Config::Entry::Artifacts do
   let(:entry) { described_class.new(config) }
 
   describe 'validation' do
@@ -36,6 +36,14 @@ describe Gitlab::Ci::Config::Entry::Artifacts do
           expect(entry.value).to eq config
         end
       end
+
+      context "when value includes 'public' keyword" do
+        let(:config) { { paths: %w[results.txt], public: false } }
+
+        it 'returns general artifact and report-type artifacts configuration' do
+          expect(entry.value).to eq config
+        end
+      end
     end
 
     context 'when entry value is not correct' do
@@ -64,6 +72,15 @@ describe Gitlab::Ci::Config::Entry::Artifacts do
           it 'reports error' do
             expect(entry.errors)
               .to include 'artifacts reports should be a hash'
+          end
+        end
+
+        context "when 'public' is not a boolean" do
+          let(:config) { { paths: %w[results.txt], public: 'false' } }
+
+          it 'reports error' do
+            expect(entry.errors)
+              .to include 'artifacts public should be a boolean value'
           end
         end
 
@@ -123,26 +140,25 @@ describe Gitlab::Ci::Config::Entry::Artifacts do
           end
         end
       end
+    end
 
-      context 'when feature flag :ci_expose_arbitrary_artifacts_in_mr is disabled' do
-        before do
-          stub_feature_flags(ci_expose_arbitrary_artifacts_in_mr: false)
+    describe 'excluded artifacts' do
+      context 'when configuration is valid' do
+        let(:config) { { untracked: true, exclude: ['some/directory/'] } }
+
+        it 'correctly parses the configuration' do
+          expect(entry).to be_valid
+          expect(entry.value).to eq config
         end
+      end
 
-        context 'when syntax is correct' do
-          let(:config) { { expose_as: 'Test results', paths: ['test.txt'] } }
+      context 'when configuration is not valid' do
+        let(:config) { { untracked: true, exclude: 1234 } }
 
-          it 'is valid' do
-            expect(entry.errors).to be_empty
-          end
-        end
-
-        context 'when syntax for :expose_as is incorrect' do
-          let(:config) { { paths: %w[results.txt], expose_as: '' } }
-
-          it 'is valid' do
-            expect(entry.errors).to be_empty
-          end
+        it 'returns an error' do
+          expect(entry).not_to be_valid
+          expect(entry.errors)
+            .to include 'artifacts exclude should be an array of strings'
         end
       end
     end

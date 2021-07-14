@@ -2,7 +2,7 @@
 
 require 'spec_helper'
 
-describe GroupMemberPresenter do
+RSpec.describe GroupMemberPresenter do
   let(:user) { double(:user) }
   let(:group) { double(:group) }
   let(:group_member) { double(:group_member, source: group) }
@@ -142,7 +142,7 @@ describe GroupMemberPresenter do
     let(:expected_roles) { { 'Developer' => 30, 'Maintainer' => 40, 'Owner' => 50, 'Reporter' => 20 } }
 
     before do
-      entity.parent = group
+      entity.update!(parent: group)
     end
   end
 end

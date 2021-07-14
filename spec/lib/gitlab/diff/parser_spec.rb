@@ -2,7 +2,7 @@
 
 require 'spec_helper'
 
-describe Gitlab::Diff::Parser do
+RSpec.describe Gitlab::Diff::Parser do
   include RepoHelpers
 
   let(:project) { create(:project, :repository) }
@@ -144,6 +144,16 @@ eos
   context 'when lines is empty' do
     it { expect(parser.parse([])).to eq([]) }
     it { expect(parser.parse(nil)).to eq([]) }
+  end
+
+  context 'when it is a binary notice' do
+    let(:diff)  do
+      <<~END
+        Binary files a/test and b/test differ
+      END
+    end
+
+    it { expect(parser.parse(diff.each_line)).to eq([]) }
   end
 
   describe 'tolerates special diff markers in a content' do

@@ -1,9 +1,9 @@
 # frozen_string_literal: true
 
 require 'spec_helper'
-require Rails.root.join('db', 'post_migrate', '20190418132125_populate_project_statistics_packages_size.rb')
+require_migration!
 
-describe PopulateProjectStatisticsPackagesSize, :migration do
+RSpec.describe PopulateProjectStatisticsPackagesSize do
   let(:project_statistics) { table(:project_statistics) }
   let(:namespaces)         { table(:namespaces) }
   let(:projects)           { table(:projects) }
@@ -16,7 +16,7 @@ describe PopulateProjectStatisticsPackagesSize, :migration do
   let(:artifacts_size) { 4.terabytes }
   let(:storage_size)   { repo_size + lfs_size + artifacts_size }
 
-  let(:namespace)  { namespaces.create(name: 'foo', path: 'foo') }
+  let(:namespace)  { namespaces.create!(name: 'foo', path: 'foo') }
   let(:package)    { packages.create!(project_id: project.id, name: 'a package', package_type: 1) }
   let(:project)    { projects.create!(namespace_id: namespace.id) }
 

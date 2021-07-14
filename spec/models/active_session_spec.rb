@@ -9,29 +9,27 @@ RSpec.describe ActiveSession, :clean_gitlab_redis_shared_state do
     end
   end
 
-  let(:session) do
-    double(:session, { id: '6919a6f1bb119dd7396fadc38fd18d0d',
-                       '[]': {} })
-  end
+  let(:rack_session) { Rack::Session::SessionId.new('6919a6f1bb119dd7396fadc38fd18d0d') }
+  let(:session) { instance_double(ActionDispatch::Request::Session, id: rack_session, '[]': {}) }
 
   let(:request) do
     double(:request, {
       user_agent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 8_1_3 like Mac OS X) AppleWebKit/600.1.4 ' \
         '(KHTML, like Gecko) Mobile/12B466 [FBDV/iPhone7,2]',
-      ip: '127.0.0.1',
+      remote_ip: '127.0.0.1',
       session: session
     })
   end
 
   describe '#current?' do
     it 'returns true if the active session matches the current session' do
-      active_session = ActiveSession.new(session_id: '6919a6f1bb119dd7396fadc38fd18d0d')
+      active_session = ActiveSession.new(session_private_id: rack_session.private_id)
 
       expect(active_session.current?(session)).to be true
     end
 
     it 'returns false if the active session does not match the current session' do
-      active_session = ActiveSession.new(session_id: '59822c7d9fcdfa03725eff41782ad97d')
+      active_session = ActiveSession.new(session_id: Rack::Session::SessionId.new('59822c7d9fcdfa03725eff41782ad97d'))
 
       expect(active_session.current?(session)).to be false
     end
@@ -41,19 +39,6 @@ RSpec.describe ActiveSession, :clean_gitlab_redis_shared_state do
       session = double(:session, id: nil)
 
       expect(active_session.current?(session)).to be false
-    end
-  end
-
-  describe '#public_id' do
-    it 'returns an encrypted, url-encoded session id' do
-      original_session_id = "!*'();:@&\n=+$,/?%abcd#123[4567]8"
-      active_session = ActiveSession.new(session_id: original_session_id)
-      encrypted_encoded_id = active_session.public_id
-
-      encrypted_id = CGI.unescape(encrypted_encoded_id)
-      derived_session_id = Gitlab::CryptoHelper.aes256_gcm_decrypt(encrypted_id)
-
-      expect(original_session_id).to eq derived_session_id
     end
   end
 
@@ -104,13 +89,14 @@ RSpec.describe ActiveSession, :clean_gitlab_redis_shared_state do
   describe '.list_sessions' do
     it 'uses the ActiveSession lookup to return original sessions' do
       Gitlab::Redis::SharedState.with do |redis|
-        redis.set("session:gitlab:6919a6f1bb119dd7396fadc38fd18d0d", Marshal.dump({ _csrf_token: 'abcd' }))
+        # Emulate redis-rack: https://github.com/redis-store/redis-rack/blob/c75f7f1a6016ee224e2615017fbfee964f23a837/lib/rack/session/redis.rb#L88
+        redis.set("session:gitlab:#{rack_session.private_id}", Marshal.dump({ _csrf_token: 'abcd' }))
 
         redis.sadd(
           "session:lookup:user:gitlab:#{user.id}",
           %w[
-            6919a6f1bb119dd7396fadc38fd18d0d
-            59822c7d9fcdfa03725eff41782ad97d
+            2::418729c72310bbf349a032f0bb6e3fce9f5a69df8f000d8ae0ac5d159d8f21ae
+            2::d2ee6f70d6ef0e8701efa3f6b281cbe8e6bf3d109ef052a8b5ce88bfc7e71c26
           ]
         )
       end
@@ -127,17 +113,18 @@ RSpec.describe ActiveSession, :clean_gitlab_redis_shared_state do
         redis.sadd("session:lookup:user:gitlab:#{user.id}", session_ids)
       end
 
-      expect(ActiveSession.session_ids_for_user(user.id)).to eq(session_ids)
+      expect(ActiveSession.session_ids_for_user(user.id).map(&:to_s)).to eq(session_ids)
     end
   end
 
   describe '.sessions_from_ids' do
     it 'uses the ActiveSession lookup to return original sessions' do
       Gitlab::Redis::SharedState.with do |redis|
-        redis.set("session:gitlab:6919a6f1bb119dd7396fadc38fd18d0d", Marshal.dump({ _csrf_token: 'abcd' }))
+        # Emulate redis-rack: https://github.com/redis-store/redis-rack/blob/c75f7f1a6016ee224e2615017fbfee964f23a837/lib/rack/session/redis.rb#L88
+        redis.set("session:gitlab:#{rack_session.private_id}", Marshal.dump({ _csrf_token: 'abcd' }))
       end
 
-      expect(ActiveSession.sessions_from_ids(['6919a6f1bb119dd7396fadc38fd18d0d'])).to eq [{ _csrf_token: 'abcd' }]
+      expect(ActiveSession.sessions_from_ids([rack_session.private_id])).to eq [{ _csrf_token: 'abcd' }]
     end
 
     it 'avoids a redis lookup for an empty array' do
@@ -154,7 +141,7 @@ RSpec.describe ActiveSession, :clean_gitlab_redis_shared_state do
 
       sessions = %w[session-a session-b]
       mget_responses = sessions.map { |session| [Marshal.dump(session)]}
-      expect(redis).to receive(:mget).twice.and_return(*mget_responses)
+      expect(redis).to receive(:mget).twice.times.and_return(*mget_responses)
 
       expect(ActiveSession.sessions_from_ids([1, 2])).to eql(sessions)
     end
@@ -165,10 +152,10 @@ RSpec.describe ActiveSession, :clean_gitlab_redis_shared_state do
       ActiveSession.set(user, request)
 
       Gitlab::Redis::SharedState.with do |redis|
-        expect(redis.scan_each.to_a).to match_array [
-          "session:user:gitlab:#{user.id}:6919a6f1bb119dd7396fadc38fd18d0d",
+        expect(redis.scan_each.to_a).to include(
+          "session:user:gitlab:#{user.id}:2::418729c72310bbf349a032f0bb6e3fce9f5a69df8f000d8ae0ac5d159d8f21ae",
           "session:lookup:user:gitlab:#{user.id}"
-        ]
+        )
       end
     end
 
@@ -211,82 +198,130 @@ RSpec.describe ActiveSession, :clean_gitlab_redis_shared_state do
     end
   end
 
-  describe '.destroy' do
-    it 'removes the entry associated with the currently killed user session' do
-      Gitlab::Redis::SharedState.with do |redis|
-        redis.set("session:user:gitlab:#{user.id}:6919a6f1bb119dd7396fadc38fd18d0d", '')
-        redis.set("session:user:gitlab:#{user.id}:59822c7d9fcdfa03725eff41782ad97d", '')
-        redis.set("session:user:gitlab:9999:5c8611e4f9c69645ad1a1492f4131358", '')
+  describe '.destroy_session' do
+    shared_examples 'removes all session data' do
+      before do
+        Gitlab::Redis::SharedState.with do |redis|
+          redis.set("session:user:gitlab:#{user.id}:#{active_session_lookup_key}", '')
+          # Emulate redis-rack: https://github.com/redis-store/redis-rack/blob/c75f7f1a6016ee224e2615017fbfee964f23a837/lib/rack/session/redis.rb#L88
+          redis.set("session:gitlab:#{rack_session.private_id}", '')
+
+          redis.set(described_class.key_name(user.id, active_session_lookup_key),
+                    Marshal.dump(active_session))
+          redis.sadd(described_class.lookup_key_name(user.id),
+                     active_session_lookup_key)
+        end
       end
 
-      ActiveSession.destroy(user, request.session.id)
+      it 'removes the devise session' do
+        subject
 
-      Gitlab::Redis::SharedState.with do |redis|
-        expect(redis.scan_each(match: "session:user:gitlab:*")).to match_array [
-          "session:user:gitlab:#{user.id}:59822c7d9fcdfa03725eff41782ad97d",
-          "session:user:gitlab:9999:5c8611e4f9c69645ad1a1492f4131358"
-        ]
+        Gitlab::Redis::SharedState.with do |redis|
+          expect(redis.scan_each(match: "session:gitlab:*").to_a).to be_empty
+        end
+      end
+
+      it 'removes the lookup entry' do
+        subject
+
+        Gitlab::Redis::SharedState.with do |redis|
+          expect(redis.scan_each(match: "session:lookup:user:gitlab:#{user.id}").to_a).to be_empty
+        end
+      end
+
+      it 'removes the ActiveSession' do
+        subject
+
+        Gitlab::Redis::SharedState.with do |redis|
+          expect(redis.scan_each(match: "session:user:gitlab:*").to_a).to be_empty
+        end
       end
     end
 
-    it 'removes the lookup entry' do
-      Gitlab::Redis::SharedState.with do |redis|
-        redis.set("session:user:gitlab:#{user.id}:6919a6f1bb119dd7396fadc38fd18d0d", '')
-        redis.sadd("session:lookup:user:gitlab:#{user.id}", '6919a6f1bb119dd7396fadc38fd18d0d')
+    context 'destroy called with Rack::Session::SessionId#private_id' do
+      subject { ActiveSession.destroy_session(user, rack_session.private_id) }
+
+      it 'calls .destroy_sessions' do
+        expect(ActiveSession).to(
+          receive(:destroy_sessions)
+            .with(anything, user, [rack_session.private_id]))
+
+        subject
       end
 
-      ActiveSession.destroy(user, request.session.id)
+      context 'ActiveSession with session_private_id' do
+        let(:active_session) { ActiveSession.new(session_private_id: rack_session.private_id) }
+        let(:active_session_lookup_key) { rack_session.private_id }
 
-      Gitlab::Redis::SharedState.with do |redis|
-        expect(redis.scan_each(match: "session:lookup:user:gitlab:#{user.id}").to_a).to be_empty
-      end
-    end
-
-    it 'removes the devise session' do
-      Gitlab::Redis::SharedState.with do |redis|
-        redis.set("session:user:gitlab:#{user.id}:6919a6f1bb119dd7396fadc38fd18d0d", '')
-        redis.set("session:gitlab:6919a6f1bb119dd7396fadc38fd18d0d", '')
-      end
-
-      ActiveSession.destroy(user, request.session.id)
-
-      Gitlab::Redis::SharedState.with do |redis|
-        expect(redis.scan_each(match: "session:gitlab:*").to_a).to be_empty
+        include_examples 'removes all session data'
       end
     end
   end
 
-  describe '.destroy_with_public_id' do
-    it 'receives a user and public id and destroys the associated session' do
-      ActiveSession.set(user, request)
-      session = ActiveSession.list(user).first
+  describe '.destroy_all_but_current' do
+    it 'gracefully handles a nil session ID' do
+      expect(described_class).not_to receive(:destroy_sessions)
 
-      ActiveSession.destroy_with_public_id(user, session.public_id)
-
-      total_sessions = ActiveSession.list(user).count
-      expect(total_sessions).to eq 0
+      ActiveSession.destroy_all_but_current(user, nil)
     end
 
-    it 'handles invalid input for public id' do
-      expect do
-        ActiveSession.destroy_with_public_id(user, nil)
-      end.not_to raise_error
+    context 'with user sessions' do
+      let(:current_session_id) { '6919a6f1bb119dd7396fadc38fd18d0d' }
 
-      expect do
-        ActiveSession.destroy_with_public_id(user, "")
-      end.not_to raise_error
+      before do
+        Gitlab::Redis::SharedState.with do |redis|
+          # setup for current user
+          [current_session_id, '59822c7d9fcdfa03725eff41782ad97d'].each do |session_public_id|
+            session_private_id = Rack::Session::SessionId.new(session_public_id).private_id
+            active_session = ActiveSession.new(session_private_id: session_private_id)
+            redis.set(described_class.key_name(user.id, session_private_id),
+                      Marshal.dump(active_session))
+            redis.sadd(described_class.lookup_key_name(user.id),
+                       session_private_id)
+          end
 
-      expect do
-        ActiveSession.destroy_with_public_id(user, "aaaaaaaa")
-      end.not_to raise_error
-    end
+          # setup for unrelated user
+          unrelated_user_id = 9999
+          session_private_id = Rack::Session::SessionId.new('5c8611e4f9c69645ad1a1492f4131358').private_id
+          active_session = ActiveSession.new(session_private_id: session_private_id)
 
-    it 'does not attempt to destroy session when given invalid input for public id' do
-      expect(ActiveSession).not_to receive(:destroy)
+          redis.set(described_class.key_name(unrelated_user_id, session_private_id),
+                    Marshal.dump(active_session))
+          redis.sadd(described_class.lookup_key_name(unrelated_user_id),
+                     session_private_id)
+        end
+      end
 
-      ActiveSession.destroy_with_public_id(user, nil)
-      ActiveSession.destroy_with_public_id(user, "")
-      ActiveSession.destroy_with_public_id(user, "aaaaaaaa")
+      it 'removes the entry associated with the all user sessions but current' do
+        expect { ActiveSession.destroy_all_but_current(user, request.session) }
+          .to(change { ActiveSession.session_ids_for_user(user.id).size }.from(2).to(1))
+
+        expect(ActiveSession.session_ids_for_user(9999).size).to eq(1)
+      end
+
+      it 'removes the lookup entry of deleted sessions' do
+        session_private_id = Rack::Session::SessionId.new(current_session_id).private_id
+        ActiveSession.destroy_all_but_current(user, request.session)
+
+        Gitlab::Redis::SharedState.with do |redis|
+          expect(
+            redis.smembers(described_class.lookup_key_name(user.id))
+          ).to eq([session_private_id])
+        end
+      end
+
+      it 'does not remove impersonated sessions' do
+        impersonated_session_id = '6919a6f1bb119dd7396fadc38fd18eee'
+        Gitlab::Redis::SharedState.with do |redis|
+          redis.set(described_class.key_name(user.id, impersonated_session_id),
+            Marshal.dump(ActiveSession.new(session_id: Rack::Session::SessionId.new(impersonated_session_id), is_impersonated: true)))
+          redis.sadd(described_class.lookup_key_name(user.id), impersonated_session_id)
+        end
+
+        expect { ActiveSession.destroy_all_but_current(user, request.session) }.to change { ActiveSession.session_ids_for_user(user.id).size }.from(3).to(2)
+
+        expect(ActiveSession.session_ids_for_user(9999).size).to eq(1)
+      end
     end
   end
 
@@ -322,7 +357,7 @@ RSpec.describe ActiveSession, :clean_gitlab_redis_shared_state do
           (1..max_number_of_sessions_plus_two).each do |number|
             redis.set(
               "session:user:gitlab:#{user.id}:#{number}",
-              Marshal.dump(ActiveSession.new(session_id: "#{number}", updated_at: number.days.ago))
+              Marshal.dump(ActiveSession.new(session_id: number.to_s, updated_at: number.days.ago))
             )
             redis.sadd(
               "session:lookup:user:gitlab:#{user.id}",
@@ -402,6 +437,39 @@ RSpec.describe ActiveSession, :clean_gitlab_redis_shared_state do
             expect(sessions.count).to eq(sessions_before_cleanup.count)
             expect(lookup_entries.count).to be < lookup_entries_before_cleanup.count
           end
+        end
+      end
+    end
+
+    context 'cleaning up old sessions stored by Rack::Session::SessionId#private_id' do
+      let(:max_number_of_sessions_plus_one) { ActiveSession::ALLOWED_NUMBER_OF_ACTIVE_SESSIONS + 1 }
+      let(:max_number_of_sessions_plus_two) { ActiveSession::ALLOWED_NUMBER_OF_ACTIVE_SESSIONS + 2 }
+
+      before do
+        Gitlab::Redis::SharedState.with do |redis|
+          (1..max_number_of_sessions_plus_two).each do |number|
+            redis.set(
+              "session:user:gitlab:#{user.id}:#{number}",
+              Marshal.dump(ActiveSession.new(session_private_id: number.to_s, updated_at: number.days.ago))
+            )
+            redis.sadd(
+              "session:lookup:user:gitlab:#{user.id}",
+              "#{number}"
+            )
+          end
+        end
+      end
+
+      it 'removes obsolete active sessions entries' do
+        ActiveSession.cleanup(user)
+
+        Gitlab::Redis::SharedState.with do |redis|
+          sessions = redis.scan_each(match: "session:user:gitlab:#{user.id}:*").to_a
+
+          expect(sessions.count).to eq(ActiveSession::ALLOWED_NUMBER_OF_ACTIVE_SESSIONS)
+          expect(sessions).not_to(
+            include("session:user:gitlab:#{user.id}:#{max_number_of_sessions_plus_one}",
+                    "session:user:gitlab:#{user.id}:#{max_number_of_sessions_plus_two}"))
         end
       end
     end

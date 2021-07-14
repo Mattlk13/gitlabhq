@@ -2,6 +2,10 @@
 
 module Pages
   class LookupPath
+    include Gitlab::Utils::StrongMemoize
+
+    LegacyStorageDisabledError = Class.new(::StandardError)
+
     def initialize(project, trim_prefix: nil, domain: nil)
       @project = project
       @domain = domain
@@ -22,9 +26,17 @@ module Pages
     end
 
     def source
+      return unless deployment&.file
+
+      global_id = ::Gitlab::GlobalId.build(deployment, id: deployment.id).to_s
+
       {
-        type: 'file',
-        path: File.join(project.full_path, 'public/')
+        type: 'zip',
+        path: deployment.file.url_or_file_path(expire_at: 1.day.from_now),
+        global_id: global_id,
+        sha256: deployment.file_sha256,
+        file_size: deployment.size,
+        file_count: deployment.file_count
       }
     end
 
@@ -39,5 +51,11 @@ module Pages
     private
 
     attr_reader :project, :trim_prefix, :domain
+
+    def deployment
+      strong_memoize(:deployment) do
+        project.pages_metadatum.pages_deployment
+      end
+    end
   end
 end

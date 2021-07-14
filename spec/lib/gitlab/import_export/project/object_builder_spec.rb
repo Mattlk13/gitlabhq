@@ -2,7 +2,7 @@
 
 require 'spec_helper'
 
-describe Gitlab::ImportExport::Project::ObjectBuilder do
+RSpec.describe Gitlab::ImportExport::Project::ObjectBuilder do
   let!(:group) { create(:group, :private) }
   let!(:subgroup) { create(:group, :private, parent: group) }
   let!(:project) do
@@ -148,6 +148,32 @@ describe Gitlab::ImportExport::Project::ObjectBuilder do
                                             'target_branch' => 'TargetBranch',
                                             'author_id' => project.creator.id)
       expect(merge_request.persisted?).to be true
+    end
+  end
+
+  context 'merge request diff commit users' do
+    it 'finds the existing user' do
+      user = MergeRequest::DiffCommitUser
+        .find_or_create('Alice', 'alice@example.com')
+
+      found = described_class.build(
+        MergeRequest::DiffCommitUser,
+        'name' => 'Alice',
+        'email' => 'alice@example.com'
+      )
+
+      expect(found).to eq(user)
+    end
+
+    it 'creates a new user' do
+      found = described_class.build(
+        MergeRequest::DiffCommitUser,
+        'name' => 'Alice',
+        'email' => 'alice@example.com'
+      )
+
+      expect(found.name).to eq('Alice')
+      expect(found.email).to eq('alice@example.com')
     end
   end
 end

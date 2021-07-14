@@ -2,7 +2,7 @@
 
 require 'spec_helper'
 
-describe Gitlab::LegacyGithubImport::IssueFormatter do
+RSpec.describe Gitlab::LegacyGithubImport::IssueFormatter do
   let(:client) { double }
   let!(:project) { create(:project, namespace: create(:namespace, path: 'octocat')) }
   let(:octocat) { double(id: 123456, login: 'octocat', email: 'octocat@example.com') }
@@ -152,7 +152,7 @@ describe Gitlab::LegacyGithubImport::IssueFormatter do
 
   context 'when importing a Gitea project' do
     before do
-      project.update(import_type: 'gitea')
+      project.update!(import_type: 'gitea')
     end
 
     it_behaves_like 'Gitlab::LegacyGithubImport::IssueFormatter#attributes'

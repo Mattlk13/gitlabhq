@@ -24,7 +24,7 @@ $white-gd-bg: #fdd;
 $white-gd-x: $black;
 $white-gd-x-bg: #faa;
 $white-gr: #a00;
-$white-gh: #999;
+$white-gh: #800080;
 $white-gi: $black;
 $white-gi-bg: #dfd;
 $white-gi-x: $black;
@@ -78,9 +78,24 @@ $white-gc-bg: #eaf2f5;
 }
 
 // Line numbers
+.file-line-num {
+  @include line-number-link($black-transparent);
+}
+
 .line-numbers,
 .diff-line-num {
   background-color: $gray-light;
+
+  &.conflict_marker,
+  &.conflict_our {
+    background-color: map-get($conflict-colors, 'white-header-head-neutral');
+    border-color: map-get($conflict-colors, 'white-header-head-neutral');
+  }
+
+  &.conflict_their {
+    background-color: map-get($conflict-colors, 'white-header-origin-neutral');
+    border-color: map-get($conflict-colors, 'white-header-origin-neutral');
+  }
 }
 
 .diff-line-num,
@@ -97,7 +112,7 @@ pre.code,
 &,
 pre.code,
 .line_holder .line_content {
-  background-color: $white-light;
+  background-color: $white;
   color: $white-code-color;
 }
 
@@ -111,6 +126,13 @@ pre.code,
   .new-nonewline.line_content,
   .old-nonewline.line_content {
     @include match-line;
+  }
+
+  .diff-grid-left:hover,
+  .diff-grid-right:hover {
+    .diff-line-num:not(.empty-cell):not(.conflict_marker_their):not(.conflict_marker_our) {
+      @include line-number-hover($white-over-bg);
+    }
   }
 
   .diff-line-num {
@@ -134,12 +156,7 @@ pre.code,
 
     &.is-over,
     &.hll:not(.empty-cell).is-over {
-      background-color: $white-over-bg;
-      border-color: darken($white-over-bg, 5%);
-
-      a {
-        color: darken($white-over-bg, 15%);
-      }
+      @include line-number-hover($white-over-bg);
     }
 
     &.hll:not(.empty-cell) {
@@ -151,6 +168,7 @@ pre.code,
   &:not(.diff-expanded) + .diff-expanded,
   &.diff-expanded + .line_holder:not(.diff-expanded) {
     > .diff-line-num,
+    > .line-coverage,
     > .line_content {
       border-top: 1px solid $white-expanded-border;
     }
@@ -158,6 +176,7 @@ pre.code,
 
   &.diff-expanded {
     > .diff-line-num,
+    > .line-coverage,
     > .line_content {
       background: $white-expanded-bg;
       border-color: $white-expanded-bg;
@@ -191,6 +210,25 @@ pre.code,
 
     &.match {
       @include match-line;
+    }
+
+    &.hll:not(.empty-cell) {
+      background-color: $line-select-yellow;
+    }
+  }
+
+  .line-coverage {
+    @include line-coverage-border-color($green-400, $red-400);
+  }
+
+  .line-coverage,
+  .line-codequality {
+    &.old {
+      background-color: $line-removed;
+    }
+
+    &.new {
+      background-color: $line-added;
     }
 
     &.hll:not(.empty-cell) {
@@ -249,7 +287,9 @@ span.highlight_word {
 
 .ge { font-style: italic; }
 .gr { color: $white-gr; }
-.gh { color: $white-gh; }
+
+.gh { color: $white-gh;
+  font-weight: $gl-font-weight-bold; }
 
 .gi {
   color: $white-gi;

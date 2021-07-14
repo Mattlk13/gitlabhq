@@ -6,7 +6,7 @@ module Gitlab
       class RelationFactory
         include Gitlab::Utils::StrongMemoize
 
-        IMPORTED_OBJECT_MAX_RETRIES = 5.freeze
+        IMPORTED_OBJECT_MAX_RETRIES = 5
 
         OVERRIDES = {}.freeze
         EXISTING_OBJECT_RELATIONS = %i[].freeze
@@ -31,8 +31,8 @@ module Gitlab
 
         TOKEN_RESET_MODELS = %i[Project Namespace Group Ci::Trigger Ci::Build Ci::Runner ProjectHook].freeze
 
-        def self.create(*args)
-          new(*args).create
+        def self.create(*args, **kwargs)
+          new(*args, **kwargs).create
         end
 
         def self.relation_class(relation_name)
@@ -44,8 +44,9 @@ module Gitlab
           relation_name.to_s.constantize
         end
 
-        def initialize(relation_sym:, relation_hash:, members_mapper:, object_builder:, user:, importable:, excluded_keys: [])
+        def initialize(relation_sym:, relation_index:, relation_hash:, members_mapper:, object_builder:, user:, importable:, excluded_keys: [])
           @relation_name = self.class.overrides[relation_sym]&.to_sym || relation_sym
+          @relation_index = relation_index
           @relation_hash = relation_hash.except('noteable_id')
           @members_mapper = members_mapper
           @object_builder = object_builder
@@ -53,6 +54,7 @@ module Gitlab
           @importable = importable
           @imported_object_retries = 0
           @relation_hash[importable_column_name] = @importable.id
+          @original_user = {}
 
           # Remove excluded keys from relation_hash
           # We don't do this in the parsed_relation_hash because of the 'transformed attributes'
@@ -67,6 +69,7 @@ module Gitlab
         # the relation_hash, updating references with new object IDs, mapping users using
         # the "members_mapper" object, also updating notes if required.
         def create
+          return @relation_hash if author_relation?
           return if invalid_relation? || predefined_relation?
 
           setup_base_models
@@ -93,6 +96,10 @@ module Gitlab
           relation_class.try(:predefined_id?, @relation_hash['id'])
         end
 
+        def author_relation?
+          @relation_name == :author
+        end
+
         def setup_models
           raise NotImplementedError
         end
@@ -112,6 +119,7 @@ module Gitlab
         def update_user_references
           self.class::USER_REFERENCES.each do |reference|
             if @relation_hash[reference]
+              @original_user[reference] = @relation_hash[reference]
               @relation_hash[reference] = @members_mapper.map[@relation_hash[reference]]
             end
           end
@@ -243,28 +251,20 @@ module Gitlab
         # will be used. Otherwise, a note stating the original author name
         # is left.
         def set_note_author
-          old_author_id = @relation_hash['author_id']
+          old_author_id = @original_user['author_id']
           author = @relation_hash.delete('author')
 
-          update_note_for_missing_author(author['name']) unless has_author?(old_author_id)
-        end
-
-        def has_author?(old_author_id)
-          admin_user? && @members_mapper.include?(old_author_id)
+          unless @members_mapper.include?(old_author_id)
+            @relation_hash['note'] = "%{note}\n\n %{missing_author_note}" % {
+              note: @relation_hash['note'].presence || '*Blank note*',
+              missing_author_note: missing_author_note(@relation_hash['updated_at'], author['name'])
+            }
+          end
         end
 
         def missing_author_note(updated_at, author_name)
           timestamp = updated_at.split('.').first
-          "\n\n *By #{author_name} on #{timestamp} (imported from GitLab project)*"
-        end
-
-        def update_note_for_missing_author(author_name)
-          @relation_hash['note'] = '*Blank note*' if @relation_hash['note'].blank?
-          @relation_hash['note'] = "#{@relation_hash['note']}#{missing_author_note(@relation_hash['updated_at'], author_name)}"
-        end
-
-        def admin_user?
-          @user.admin?
+          "*By #{author_name} on #{timestamp} (imported from GitLab)*"
         end
 
         def existing_object?

@@ -2,7 +2,7 @@
 
 require 'spec_helper'
 
-describe PagesDomain do
+RSpec.describe PagesDomain do
   using RSpec::Parameterized::TableSyntax
 
   subject(:pages_domain) { described_class.new }
@@ -10,6 +10,15 @@ describe PagesDomain do
   describe 'associations' do
     it { is_expected.to belong_to(:project) }
     it { is_expected.to have_many(:serverless_domain_clusters) }
+  end
+
+  describe '.for_project' do
+    it 'returns domains assigned to project' do
+      domain = create(:pages_domain, :with_project)
+      create(:pages_domain) # unrelated domain
+
+      expect(described_class.for_project(domain.project)).to eq([domain])
+    end
   end
 
   describe 'validate domain' do
@@ -97,8 +106,8 @@ describe PagesDomain do
     it 'saves validity time' do
       domain.save
 
-      expect(domain.certificate_valid_not_before).to be_like_time(Time.parse("2016-02-12 14:32:00 UTC"))
-      expect(domain.certificate_valid_not_after).to be_like_time(Time.parse("2020-04-12 14:32:00 UTC"))
+      expect(domain.certificate_valid_not_before).to be_like_time(Time.zone.parse("2020-03-16 14:20:34 UTC"))
+      expect(domain.certificate_valid_not_after).to be_like_time(Time.zone.parse("2220-01-28 14:20:34 UTC"))
     end
   end
 
@@ -328,9 +337,11 @@ describe PagesDomain do
   end
 
   describe '#update_daemon' do
+    let_it_be(:project) { create(:project).tap(&:mark_pages_as_deployed) }
+
     context 'when usage is serverless' do
       it 'does not call the UpdatePagesConfigurationService' do
-        expect(Projects::UpdatePagesConfigurationService).not_to receive(:new)
+        expect(PagesUpdateConfigurationWorker).not_to receive(:perform_async)
 
         create(:pages_domain, usage: :serverless)
       end
@@ -352,12 +363,20 @@ describe PagesDomain do
       domain.destroy!
     end
 
-    it 'delegates to Projects::UpdatePagesConfigurationService' do
-      service = instance_double('Projects::UpdatePagesConfigurationService')
-      expect(Projects::UpdatePagesConfigurationService).to receive(:new) { service }
-      expect(service).to receive(:execute)
+    it "schedules a PagesUpdateConfigurationWorker" do
+      expect(PagesUpdateConfigurationWorker).to receive(:perform_async).with(project.id)
 
-      create(:pages_domain)
+      create(:pages_domain, project: project)
+    end
+
+    context "when the pages aren't deployed" do
+      let_it_be(:project) { create(:project).tap(&:mark_pages_as_not_deployed) }
+
+      it "does not schedule a PagesUpdateConfigurationWorker" do
+        expect(PagesUpdateConfigurationWorker).not_to receive(:perform_async).with(project.id)
+
+        create(:pages_domain, project: project)
+      end
     end
 
     context 'configuration updates when attributes change' do
@@ -366,7 +385,7 @@ describe PagesDomain do
       let_it_be(:domain) { create(:pages_domain) }
 
       where(:attribute, :old_value, :new_value, :update_expected) do
-        now = Time.now
+        now = Time.current
         future = now + 1.day
 
         :project | nil       | :project1 | true
@@ -536,6 +555,24 @@ describe PagesDomain do
                      'user_provided', 'gitlab_provided')
   end
 
+  describe '#save' do
+    context 'when we failed to obtain ssl certificate' do
+      let(:domain) { create(:pages_domain, auto_ssl_enabled: true, auto_ssl_failed: true) }
+
+      it 'clears failure if auto ssl is disabled' do
+        expect do
+          domain.update!(auto_ssl_enabled: false)
+        end.to change { domain.auto_ssl_failed }.from(true).to(false)
+      end
+
+      it 'does not clear failure on unrelated updates' do
+        expect do
+          domain.update!(verified_at: Time.current)
+        end.not_to change { domain.auto_ssl_failed }.from(true)
+      end
+    end
+  end
+
   describe '.for_removal' do
     subject { described_class.for_removal }
 
@@ -593,6 +630,7 @@ describe PagesDomain do
     let!(:domain_with_expired_user_provided_certificate) do
       create(:pages_domain, :with_expired_certificate)
     end
+
     let!(:domain_with_user_provided_certificate_and_auto_ssl) do
       create(:pages_domain, auto_ssl_enabled: true)
     end
@@ -602,7 +640,11 @@ describe PagesDomain do
       create(:pages_domain, :letsencrypt, :with_expired_certificate)
     end
 
-    it 'contains only domains needing verification' do
+    let!(:domain_with_failed_auto_ssl) do
+      create(:pages_domain, auto_ssl_enabled: true, auto_ssl_failed: true)
+    end
+
+    it 'contains only domains needing ssl renewal' do
       is_expected.to(
         contain_exactly(
           domain_with_user_provided_certificate_and_auto_ssl,
@@ -622,25 +664,16 @@ describe PagesDomain do
       end
     end
 
-    context 'when there are pages deployed for the project' do
-      before do
-        generic_commit_status = create(:generic_commit_status, :success, stage: 'deploy', name: 'pages:deploy')
-        generic_commit_status.update!(project: project)
-        project.pages_metadatum.destroy!
-        project.reload
-      end
+    it 'returns the virual domain when there are pages deployed for the project' do
+      project.mark_pages_as_deployed
+      project.update_pages_deployment!(create(:pages_deployment, project: project))
 
-      it 'returns the virual domain' do
-        expect(Pages::VirtualDomain).to receive(:new).with([project], domain: pages_domain).and_call_original
+      expect(Pages::VirtualDomain).to receive(:new).with([project], domain: pages_domain).and_call_original
 
-        expect(pages_domain.pages_virtual_domain).to be_an_instance_of(Pages::VirtualDomain)
-      end
+      virtual_domain = pages_domain.pages_virtual_domain
 
-      it 'migrates project pages metadata' do
-        expect { pages_domain.pages_virtual_domain }.to change {
-          project.reload.pages_metadatum&.deployed
-        }.from(nil).to(true)
-      end
+      expect(virtual_domain).to be_an_instance_of(Pages::VirtualDomain)
+      expect(virtual_domain.lookup_paths).not_to be_empty
     end
   end
 

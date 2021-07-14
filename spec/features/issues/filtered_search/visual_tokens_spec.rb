@@ -2,16 +2,17 @@
 
 require 'spec_helper'
 
-describe 'Visual tokens', :js do
+RSpec.describe 'Visual tokens', :js do
   include FilteredSearchHelpers
 
-  let!(:project) { create(:project) }
-  let!(:user) { create(:user, name: 'administrator', username: 'root') }
-  let!(:user_rock) { create(:user, name: 'The Rock', username: 'rock') }
-  let!(:milestone_nine) { create(:milestone, title: '9.0', project: project) }
-  let!(:milestone_ten) { create(:milestone, title: '10.0', project: project) }
-  let!(:label) { create(:label, project: project, title: 'abc') }
-  let!(:cc_label) { create(:label, project: project, title: 'Community Contribution') }
+  let_it_be(:project) { create(:project) }
+  let_it_be(:user) { create(:user, name: 'administrator', username: 'root') }
+  let_it_be(:user_rock) { create(:user, name: 'The Rock', username: 'rock') }
+  let_it_be(:milestone_nine) { create(:milestone, title: '9.0', project: project) }
+  let_it_be(:milestone_ten) { create(:milestone, title: '10.0', project: project) }
+  let_it_be(:label) { create(:label, project: project, title: 'abc') }
+  let_it_be(:cc_label) { create(:label, project: project, title: 'Community Contribution') }
+  let_it_be(:issue) { create(:issue, project: project) }
 
   let(:filtered_search) { find('.filtered-search') }
   let(:filter_author_dropdown) { find("#js-dropdown-author .filter-dropdown") }
@@ -27,7 +28,6 @@ describe 'Visual tokens', :js do
     project.add_user(user, :maintainer)
     project.add_user(user_rock, :maintainer)
     sign_in(user)
-    create(:issue, project: project)
 
     set_cookie('sidebar_collapsed', 'true')
 
@@ -36,7 +36,7 @@ describe 'Visual tokens', :js do
 
   describe 'editing a single token' do
     before do
-      input_filtered_search('author=@root assignee=none', submit: false)
+      input_filtered_search('author:=@root assignee:=none', submit: false)
       first('.tokens-container .filtered-search-token').click
       wait_for_requests
     end
@@ -53,7 +53,7 @@ describe 'Visual tokens', :js do
     end
 
     it 'ends editing mode when document is clicked' do
-      find('#content-body').click
+      find('.js-navbar').click
 
       expect_filtered_search_input_empty
       expect(page).to have_css('#js-dropdown-author', visible: false)
@@ -77,7 +77,7 @@ describe 'Visual tokens', :js do
 
   describe 'editing multiple tokens' do
     before do
-      input_filtered_search('author=@root assignee=none', submit: false)
+      input_filtered_search('author:=@root assignee:=none', submit: false)
       first('.tokens-container .filtered-search-token').click
     end
 
@@ -93,7 +93,7 @@ describe 'Visual tokens', :js do
 
   describe 'editing a search term while editing another filter token' do
     before do
-      input_filtered_search('foo assignee=', submit: false)
+      input_filtered_search('foo assignee:=', submit: false)
       first('.tokens-container .filtered-search-term').click
     end
 
@@ -112,8 +112,8 @@ describe 'Visual tokens', :js do
 
   describe 'add new token after editing existing token' do
     before do
-      input_filtered_search('author=@root assignee=none', submit: false)
-      first('.tokens-container .filtered-search-token').double_click
+      input_filtered_search('author:=@root assignee:=none', submit: false)
+      first('.tokens-container .filtered-search-token').click
       filtered_search.send_keys(' ')
     end
 
@@ -123,7 +123,7 @@ describe 'Visual tokens', :js do
       end
 
       it 'opens token dropdown' do
-        filtered_search.send_keys('author=')
+        filtered_search.send_keys('author:=')
 
         expect(page).to have_css('#js-dropdown-author', visible: true)
       end
@@ -131,7 +131,7 @@ describe 'Visual tokens', :js do
 
     describe 'visual tokens' do
       it 'creates visual token' do
-        filtered_search.send_keys('author=@thomas ')
+        filtered_search.send_keys('author:=@thomas ')
         token = page.all('.tokens-container .filtered-search-token')[1]
 
         expect(token.find('.name').text).to eq('Author')
@@ -140,9 +140,9 @@ describe 'Visual tokens', :js do
     end
 
     it 'does not tokenize incomplete token' do
-      filtered_search.send_keys('author=')
+      filtered_search.send_keys('author:=')
 
-      find('body').click
+      find('.js-navbar').click
       token = page.all('.tokens-container .js-visual-token')[1]
 
       expect_filtered_search_input_empty
@@ -152,7 +152,7 @@ describe 'Visual tokens', :js do
 
   describe 'search using incomplete visual tokens' do
     before do
-      input_filtered_search('author=@root assignee=none', extra_space: false)
+      input_filtered_search('author:=@root assignee:=none', extra_space: false)
     end
 
     it 'tokenizes the search term to complete visual token' do
@@ -160,6 +160,35 @@ describe 'Visual tokens', :js do
         author_token(user.name),
         assignee_token('None')
       ])
+    end
+  end
+
+  it 'does retain hint token when mix of typing and clicks are performed' do
+    input_filtered_search('label:', extra_space: false, submit: false)
+
+    expect(page).to have_css('#js-dropdown-operator', visible: true)
+
+    find('#js-dropdown-operator li[data-value="="]').click
+
+    token = page.all('.tokens-container .js-visual-token')[0]
+
+    expect(token.find('.name').text).to eq('Label')
+    expect(token.find('.operator').text).to eq('=')
+  end
+
+  describe 'Any/None option' do
+    it 'hidden when NOT operator is selected' do
+      input_filtered_search('milestone:!=', extra_space: false, submit: false)
+
+      expect(page).not_to have_selector("#js-dropdown-milestone", text: 'Any')
+      expect(page).not_to have_selector("#js-dropdown-milestone", text: 'None')
+    end
+
+    it 'shown when EQUAL operator is selected' do
+      input_filtered_search('milestone:=', extra_space: false, submit: false)
+
+      expect(page).to have_selector("#js-dropdown-milestone", text: 'Any')
+      expect(page).to have_selector("#js-dropdown-milestone", text: 'None')
     end
   end
 end

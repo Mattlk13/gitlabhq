@@ -1,15 +1,20 @@
 <script>
-import folderMixin from 'ee_else_ce/environments/mixins/environments_folder_view_mixin';
-import environmentsMixin from '../mixins/environments_mixin';
-import CIPaginationMixin from '../../vue_shared/mixins/ci_pagination_api_mixin';
+import { GlBadge, GlTab, GlTabs } from '@gitlab/ui';
+import DeleteEnvironmentModal from '../components/delete_environment_modal.vue';
 import StopEnvironmentModal from '../components/stop_environment_modal.vue';
+import environmentsMixin from '../mixins/environments_mixin';
+import EnvironmentsPaginationApiMixin from '../mixins/environments_pagination_api_mixin';
 
 export default {
   components: {
+    DeleteEnvironmentModal,
+    GlBadge,
+    GlTab,
+    GlTabs,
     StopEnvironmentModal,
   },
 
-  mixins: [environmentsMixin, CIPaginationMixin, folderMixin],
+  mixins: [environmentsMixin, EnvironmentsPaginationApiMixin],
 
   props: {
     endpoint: {
@@ -22,7 +27,8 @@ export default {
     },
     cssContainerClass: {
       type: String,
-      required: true,
+      required: false,
+      default: '',
     },
     canReadEnvironment: {
       type: Boolean,
@@ -39,26 +45,34 @@ export default {
 <template>
   <div :class="cssContainerClass">
     <stop-environment-modal :environment="environmentInStopModal" />
+    <delete-environment-modal :environment="environmentInDeleteModal" />
 
-    <h4 class="js-folder-name environments-folder-name">
+    <h4 class="gl-font-weight-normal" data-testid="folder-name">
       {{ s__('Environments|Environments') }} /
       <b>{{ folderName }}</b>
     </h4>
 
-    <div class="top-area">
-      <tabs v-if="!isLoading" :tabs="tabs" scope="environments" @onChangeTab="onChangeTab" />
-    </div>
+    <gl-tabs v-if="!isLoading" scope="environments" content-class="gl-display-none">
+      <gl-tab
+        v-for="(tab, i) in tabs"
+        :key="`${tab.name}-${i}`"
+        :active="tab.isActive"
+        :title-item-class="tab.isActive ? 'gl-outline-none' : ''"
+        :title-link-attributes="{ 'data-testid': `environments-tab-${tab.scope}` }"
+        @click="onChangeTab(tab.scope)"
+      >
+        <template #title>
+          <span>{{ tab.name }}</span>
+          <gl-badge size="sm" class="gl-tab-counter-badge">{{ tab.count }}</gl-badge>
+        </template>
+      </gl-tab>
+    </gl-tabs>
 
     <container
       :is-loading="isLoading"
       :environments="state.environments"
       :pagination="state.paginationInformation"
       :can-read-environment="canReadEnvironment"
-      :canary-deployment-feature-id="canaryDeploymentFeatureId"
-      :show-canary-deployment-callout="showCanaryDeploymentCallout"
-      :user-callouts-path="userCalloutsPath"
-      :lock-promotion-svg-path="lockPromotionSvgPath"
-      :help-canary-deployments-path="helpCanaryDeploymentsPath"
       @onChangePage="onChangePage"
     />
   </div>

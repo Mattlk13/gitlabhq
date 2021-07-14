@@ -2,11 +2,11 @@
 
 require 'spec_helper'
 
-describe Profiles::NotificationsController do
+RSpec.describe Profiles::NotificationsController do
   let(:user) do
     create(:user) do |user|
-      user.emails.create(email: 'original@example.com')
-      user.emails.create(email: 'new@example.com')
+      user.emails.create!(email: 'original@example.com', confirmed_at: Time.current)
+      user.emails.create!(email: 'new@example.com', confirmed_at: Time.current)
       user.notification_email = 'original@example.com'
       user.save!
     end
@@ -19,6 +19,30 @@ describe Profiles::NotificationsController do
       get :show
 
       expect(response).to render_template :show
+    end
+
+    context 'when personal projects are present', :request_store do
+      let!(:personal_project_1) { create(:project, namespace: user.namespace) }
+
+      context 'N+1 query check' do
+        render_views
+
+        it 'does not have an N+1' do
+          sign_in(user)
+
+          get :show
+
+          control = ActiveRecord::QueryRecorder.new do
+            get :show
+          end
+
+          create_list(:project, 2, namespace: user.namespace)
+
+          expect do
+            get :show
+          end.not_to exceed_query_limit(control)
+        end
+      end
     end
 
     context 'with groups that do not have notification preferences' do
@@ -37,19 +61,57 @@ describe Profiles::NotificationsController do
         expect(assigns(:group_notifications).map(&:source_id)).to include(subgroup.id)
       end
 
-      it 'has an N+1 (but should not)' do
-        sign_in(user)
+      context 'N+1 query check' do
+        render_views
 
-        control = ActiveRecord::QueryRecorder.new do
+        it 'does not have an N+1' do
+          sign_in(user)
+
           get :show
+
+          control = ActiveRecord::QueryRecorder.new do
+            get :show
+          end
+
+          create_list(:group, 2, parent: group)
+
+          expect do
+            get :show
+          end.not_to exceed_query_limit(control)
         end
+      end
+    end
 
-        create_list(:group, 2, parent: group)
+    context 'with group notifications' do
+      let(:notifications_per_page) { 5 }
 
-        # We currently have an N + 1, switch to `not_to` once fixed
-        expect do
+      let_it_be(:group) { create(:group) }
+      let_it_be(:subgroups) { create_list(:group, 10, parent: group) }
+
+      before do
+        group.add_developer(user)
+        sign_in(user)
+        allow(Kaminari.config).to receive(:default_per_page).and_return(notifications_per_page)
+      end
+
+      it 'paginates the groups' do
+        get :show
+
+        expect(assigns(:group_notifications).count).to eq(5)
+      end
+
+      context 'when the user is not a member' do
+        let(:notifications_per_page) { 20 }
+
+        let_it_be(:public_group) { create(:group, :public) }
+
+        it 'does not show public groups', :aggregate_failures do
           get :show
-        end.to exceed_query_limit(control)
+
+          # Let's make sure we're grabbing all groups in one page, just in case
+          expect(assigns(:user_groups).count).to eq(11)
+          expect(assigns(:user_groups)).not_to include(public_group)
+        end
       end
     end
 
@@ -87,10 +149,11 @@ describe Profiles::NotificationsController do
     it 'updates only permitted attributes' do
       sign_in(user)
 
-      put :update, params: { user: { notification_email: 'new@example.com', notified_of_own_activity: true, admin: true } }
+      put :update, params: { user: { notification_email: 'new@example.com', email_opted_in: true, notified_of_own_activity: true, admin: true } }
 
       user.reload
       expect(user.notification_email).to eq('new@example.com')
+      expect(user.email_opted_in).to eq(true)
       expect(user.notified_of_own_activity).to eq(true)
       expect(user.admin).to eq(false)
       expect(controller).to set_flash[:notice].to('Notification settings saved')

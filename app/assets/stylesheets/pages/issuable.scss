@@ -1,19 +1,16 @@
 .issuable-warning-icon {
-  background-color: $orange-100;
+  background-color: $orange-50;
   border-radius: $border-radius-default;
+  color: $orange-600;
   width: $issuable-warning-size;
   height: $issuable-warning-size;
   text-align: center;
   margin-right: $issuable-warning-icon-margin;
   line-height: $gl-line-height-24;
-
-  .icon {
-    fill: $orange-600;
-    vertical-align: text-bottom;
-  }
 }
 
 .limit-container-width {
+  .flash-container,
   .detail-page-header,
   .page-content-header,
   .commit-box,
@@ -50,6 +47,7 @@
 
   .title-container {
     display: flex;
+    align-items: flex-start;
   }
 
   .title {
@@ -65,23 +63,10 @@
 
   .btn-edit {
     margin-left: auto;
-    height: $gl-padding * 2;
   }
 
   .emoji-block {
     padding: $gl-padding-4 0;
-
-    @include media-breakpoint-down(md) {
-      padding: $gl-padding-8 0;
-    }
-  }
-}
-
-.issuable-filter-count {
-  span {
-    display: block;
-    margin-bottom: -16px;
-    padding: 13px 0;
   }
 }
 
@@ -115,30 +100,22 @@
     font-size: 0;
     margin-bottom: -5px;
   }
-
-  .scoped-label-wrapper {
-    > a {
-      max-width: 100%;
-    }
-
-    .color-label {
-      padding-right: $gl-padding-24;
-    }
-
-    .scoped-label {
-      right: 12px;
-    }
-  }
 }
 
-.assignee {
+.assignee,
+.reviewer {
   .merge-icon {
-    color: $orange-500;
+    color: $orange-400;
     position: absolute;
     bottom: 0;
     right: 0;
-    text-shadow: -1px -1px 0 $white-light, 1px -1px 0 $white-light, -1px 1px 0 $white-light, 1px 1px 0 $white-light;
+    filter: drop-shadow(0 0 0.5px $white) drop-shadow(0 0 1px $white) drop-shadow(0 0 2px $white);
   }
+}
+
+.reviewer .merge-icon {
+  bottom: -3px;
+  right: -3px;
 }
 
 .right-sidebar {
@@ -167,10 +144,6 @@
     }
   }
 
-  a.gl-label-icon {
-    color: $gray-500;
-  }
-
   .gl-label .gl-label-link:hover {
     text-decoration: none;
     color: inherit;
@@ -180,14 +153,8 @@
     }
   }
 
-  .gl-label .gl-label-icon:hover {
-    text-decoration: none;
-    color: $gray-500;
-  }
-
   .btn-link {
     color: inherit;
-    outline: none;
   }
 
   .issuable-header-text {
@@ -226,10 +193,6 @@
       border: 0;
     }
 
-    .select2-container span {
-      margin-top: 0;
-    }
-
     &.assignee {
       .author-link {
         display: block;
@@ -250,26 +213,10 @@
 
   .title {
     color: $gl-text-color;
-    margin-bottom: $gl-padding-8;
-    line-height: 1;
+    line-height: $gl-line-height-20;
 
     .avatar {
       margin-left: 0;
-    }
-
-    a.edit-link:not([href]):hover {
-      color: rgba($gray-normal, 0.2);
-    }
-
-    .lock-edit, // uses same style, different js behaviour
-    .edit-link {
-      @extend .btn-blank;
-      color: $gl-text-color;
-
-      &:hover {
-        text-decoration: underline;
-        color: $blue-800;
-      }
     }
   }
 
@@ -283,10 +230,6 @@
       position: relative;
       display: inline-block;
       text-overflow: ellipsis;
-    }
-
-    cite {
-      font-style: normal;
     }
 
     button {
@@ -309,7 +252,6 @@
   }
 
   .issuable-sidebar {
-    width: 100%;
     height: 100%;
     overflow-y: scroll;
     overflow-x: hidden;
@@ -325,11 +267,6 @@
 
     .value {
       line-height: 1;
-
-      .assign-yourself {
-        margin-top: 10px;
-        display: block;
-      }
     }
 
     .issuable-sidebar {
@@ -340,14 +277,10 @@
       padding-top: 10px;
     }
 
-    &:not(.issue-boards-sidebar):not([data-signed-in]):not([data-always-show-toggle]) {
+    &:not(.boards-sidebar):not([data-signed-in]):not([data-always-show-toggle]) {
       .issuable-sidebar-header {
         display: none;
       }
-    }
-
-    .assign-yourself .btn-link {
-      padding-left: 0;
     }
 
     .light {
@@ -382,13 +315,6 @@
       margin: 0;
     }
 
-    .username {
-      display: block;
-      margin-top: 4px;
-      font-size: 13px;
-      font-weight: $gl-font-weight-normal;
-    }
-
     .hide-expanded {
       display: none;
     }
@@ -411,8 +337,9 @@
       border-bottom: 0;
       overflow: hidden;
 
-      &:hover {
-        background-color: $sidebar-block-hover-color;
+      &.with-sub-blocks .sub-block:hover,
+      &:not(.with-sub-blocks):hover {
+        background-color: $gray-100;
       }
 
       &.issuable-sidebar-header {
@@ -433,7 +360,7 @@
       height: $sidebar-toggle-height;
       margin-left: 0;
       padding-left: 0;
-      border-bottom: 1px solid $border-gray-dark;
+      border-bottom: 1px solid $border-white-normal;
     }
 
     a.gutter-toggle {
@@ -441,6 +368,13 @@
       justify-content: center;
       flex-direction: column;
       text-align: center;
+    }
+
+    .merge-icon {
+      height: 12px;
+      width: 12px;
+      bottom: -5px;
+      right: 4px;
     }
 
     .sidebar-collapsed-icon {
@@ -453,7 +387,7 @@
       text-align: center;
       color: $gl-text-color-secondary;
 
-      svg {
+      > svg {
         fill: $gl-text-color-secondary;
       }
 
@@ -461,14 +395,9 @@
       &:hover .todo-undone {
         color: $gl-text-color;
 
-        svg {
+        > svg {
           fill: $gl-text-color;
         }
-      }
-
-      span {
-        display: block;
-        margin-top: 0;
       }
 
       .sidebar-avatar-counter {
@@ -536,10 +465,6 @@
 
     .issuable-header-btn {
       display: none;
-    }
-
-    .merge-icon {
-      font-size: 10px;
     }
 
     .multiple-users {
@@ -628,18 +553,18 @@
   padding: 16px 0;
 
   small {
-    color: $gray-700;
+    color: $gray-500;
   }
 }
 
 .edited-text {
-  color: $gray-700;
+  color: $gray-500;
   display: block;
   margin: 16px 0 0;
   font-size: 85%;
 
   .author-link {
-    color: $gray-700;
+    color: $gray-500;
   }
 }
 
@@ -690,23 +615,16 @@
   }
 
   .btn-link {
-    outline: none;
     padding: 0;
   }
 
   .btn-link:hover {
-    @extend a:hover;
+    color: $blue-800;
     text-decoration: none;
   }
 
   .btn-link:focus {
     text-decoration: none;
-  }
-}
-
-.issuable-form-padding-top {
-  @include media-breakpoint-up(sm) {
-    padding-top: 7px;
   }
 }
 
@@ -757,21 +675,17 @@
 
 .issuable-list {
   li {
-    .issue-box {
-      display: flex;
-    }
-
     .issuable-info-container {
       flex: 1;
       display: flex;
-      padding-right: $gl-padding;
 
       .issuable-main-info {
         flex: 1 auto;
         margin-right: 10px;
         min-width: 0;
 
-        .issue-weight-icon {
+        .issue-weight-icon,
+        .issue-estimate-icon {
           vertical-align: sub;
         }
       }
@@ -835,8 +749,8 @@
         }
       }
 
-      .gl-label-icon {
-        color: $gray-500;
+      .milestone {
+        color: $gray-700;
       }
     }
 
@@ -864,11 +778,41 @@
   }
 }
 
-.time_tracker {
-  padding-bottom: 0;
-  border-bottom: 0;
+.add-issuable-form-input-token-list {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  list-style: none;
+  margin-bottom: 0;
+  padding-left: 0;
+}
 
+.add-issuable-form-token-list-item {
+  max-width: 100%;
+  margin-bottom: $gl-vert-padding;
+  margin-right: 5px;
+}
 
+.add-issuable-form-input-list-item {
+  flex: 1;
+  min-width: 200px;
+  margin-bottom: $gl-vert-padding;
+}
+
+.add-issuable-form-input {
+  width: 100%;
+  border: 0;
+
+  &:focus {
+    outline: none;
+  }
+}
+
+.add-issuable-form-actions {
+  margin-top: $gl-padding;
+}
+
+.time-tracker {
   .sidebar-collapsed-icon {
     > .stopwatch-svg {
       display: inline-block;
@@ -915,7 +859,7 @@
   }
 
   .time-tracking-help-state {
-    background: $white-light;
+    background: $white;
     margin: 16px -20px -20px;
     padding: 16px 20px;
     border-top: 1px solid $border-gray-light;
@@ -941,12 +885,12 @@
 }
 
 .issuable-todo-btn {
-  .fa-spinner {
+  .gl-spinner {
     display: none;
   }
 
   &.is-loading {
-    .fa-spinner {
+    .gl-spinner {
       display: inline-block;
     }
 
@@ -958,26 +902,22 @@
   }
 }
 
-.issuable-close-button,
-.issuable-close-toggle {
-  @include transition(border-color, color);
-}
-
-.issuable-close-dropdown {
-  .dropdown-menu {
-    min-width: 270px;
-    left: auto;
-    right: 0;
+/*
+ * Following overrides are done to prevent
+ * legacy dropdown styles from influencing
+ * GitLab UI components used within GlDropdown
+ */
+.issuable-move-dropdown {
+  .b-dropdown-form {
+    @include gl-p-0;
   }
 
-  .description {
-    .text {
-      margin: 0;
-    }
+  .gl-search-box-by-type button.gl-clear-icon-button:hover {
+    @include gl-bg-transparent;
   }
 
-  .dropdown-toggle > .icon {
-    margin: 0 3px;
+  .issuable-move-button:not(.disabled):hover {
+    @include gl-text-white;
   }
 }
 
@@ -990,7 +930,7 @@
     .sidebar-collapsed-divider {
       line-height: 5px;
       font-size: 12px;
-      color: $gray-700;
+      color: $gray-500;
 
       + .sidebar-collapsed-icon {
         padding-top: 0;
@@ -1003,12 +943,8 @@
   vertical-align: sub;
 }
 
-.suggestion-item a {
-  color: initial;
-}
-
 .suggestion-confidential {
-  color: $orange-600;
+  color: $orange-500;
 }
 
 .suggestion-state-open {
@@ -1030,5 +966,17 @@
   .avatar {
     margin-top: -3px;
     border: 0;
+  }
+}
+
+@include media-breakpoint-down(sm) {
+  // Overriding the following rule with the negative margin
+  // https://gitlab.com/gitlab-org/gitlab/-/blob/146c43c931c3743a140529307aea616e4aa9ff21/app/assets/stylesheets/framework/sidebar.scss#L1-5
+  .container-fluid {
+    .issuable-list,
+    .issues-filters,
+    .epics-filters {
+      margin: 0 (-$gl-padding);
+    }
   }
 }

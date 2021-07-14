@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 module QA
-  context 'Verify', :docker do
+  RSpec.describe 'Verify', :runner do
     describe 'Pipeline creation and processing' do
       let(:executor) { "qa-runner-#{Time.now.to_i}" }
       let(:max_wait) { 30 }
@@ -12,7 +12,7 @@ module QA
         end
       end
 
-      before do
+      let!(:runner) do
         Resource::Runner.fabricate! do |runner|
           runner.project = project
           runner.name = executor
@@ -21,10 +21,11 @@ module QA
       end
 
       after do
-        Service::DockerRun::GitlabRunner.new(executor).remove!
+        runner.remove_via_api!
       end
 
-      it 'users creates a pipeline which gets processed', :smoke do
+      it 'users creates a pipeline which gets processed', testcase: 'https://gitlab.com/gitlab-org/quality/testcases/-/issues/1849' do
+        # TODO: Convert back to :smoke once proved to be stable. Related issue: https://gitlab.com/gitlab-org/gitlab/-/issues/300909
         Flow::Login.sign_in
 
         Resource::Repository::Commit.fabricate_via_api! do |commit|
@@ -47,7 +48,7 @@ module QA
                       - echo 'FAILURE'
                       - exit 1
 
-                  test-tags:
+                  test-tags-mismatch:
                     tags:
                      - invalid
                     script: echo 'NOOP'
@@ -65,13 +66,12 @@ module QA
           )
         end.project.visit!
 
-        Page::Project::Menu.perform(&:click_ci_cd_pipelines)
-        Page::Project::Pipeline::Index.perform(&:click_on_latest_pipeline)
+        Flow::Pipeline.visit_latest_pipeline
 
         {
           'test-success': :passed,
           'test-failure': :failed,
-          'test-tags': :pending,
+          'test-tags-mismatch': :pending,
           'test-artifacts': :passed
         }.each do |job, status|
           Page::Project::Pipeline::Show.perform do |pipeline|

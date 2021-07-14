@@ -54,6 +54,7 @@ module LoadedInGroupList
         .where(members[:source_type].eq(Namespace.name))
         .where(members[:source_id].eq(namespaces[:id]))
         .where(members[:requested_at].eq(nil))
+        .where(members[:access_level].gt(Gitlab::Access::MINIMAL_ACCESS))
     end
   end
 
@@ -70,8 +71,12 @@ module LoadedInGroupList
   end
 
   def member_count
-    @member_count ||= try(:preloaded_member_count) || users.count
+    @member_count ||= try(:preloaded_member_count) || members.count
+  end
+
+  def guest_count
+    @guest_count ||= members.guests.count
   end
 end
 
-LoadedInGroupList::ClassMethods.prepend_if_ee('EE::LoadedInGroupList::ClassMethods')
+LoadedInGroupList::ClassMethods.prepend_mod_with('LoadedInGroupList::ClassMethods')

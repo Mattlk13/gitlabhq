@@ -1,9 +1,15 @@
-# Issues Statistics API
+---
+stage: Plan
+group: Project Management
+info: To determine the technical writer assigned to the Stage/Group associated with this page, see https://about.gitlab.com/handbook/engineering/ux/technical-writing/#assignments
+---
 
-Every API call to issues_statistics must be authenticated.
+# Issues statistics API **(FREE)**
+
+Every API call to the [issues](../user/project/issues/index.md) statistics API must be authenticated.
 
 If a user is not a member of a project and the project is private, a `GET`
-request on that project will result to a `404` status code.
+request on that project results in a `404` status code.
 
 ## Get issues statistics
 
@@ -34,19 +40,19 @@ GET /issues_statistics?confidential=true
 | `author_id`         | integer          | no         | Return issues created by the given user `id`. Mutually exclusive with `author_username`. Combine with `scope=all` or `scope=assigned_to_me`. |
 | `author_username`   | string           | no         | Return issues created by the given `username`. Similar to `author_id` and mutually exclusive with `author_id`. |
 | `assignee_id`       | integer          | no         | Return issues assigned to the given user `id`. Mutually exclusive with `assignee_username`. `None` returns unassigned issues. `Any` returns issues with an assignee. |
-| `assignee_username` | string array     | no         | Return issues assigned to the given `username`. Similar to `assignee_id` and mutually exclusive with `assignee_id`. In CE version `assignee_username` array should only contain a single value or an invalid param error will be returned otherwise. |
+| `assignee_username` | string array     | no         | Return issues assigned to the given `username`. Similar to `assignee_id` and mutually exclusive with `assignee_id`. In GitLab CE `assignee_username` array should only contain a single value or an invalid parameter error is returned otherwise. |
 | `my_reaction_emoji` | string           | no         | Return issues reacted by the authenticated user by the given `emoji`. `None` returns issues not given a reaction. `Any` returns issues given at least one reaction. |
 | `iids[]`            | integer array    | no         | Return only the issues having the given `iid`                                                                                                       |
 | `search`            | string           | no         | Search issues against their `title` and `description`                                                                                               |
 | `in`                | string           | no         | Modify the scope of the `search` attribute. `title`, `description`, or a string joining them with comma. Default is `title,description`             |
-| `created_after`     | datetime         | no         | Return issues created on or after the given time                                                                                                    |
-| `created_before`    | datetime         | no         | Return issues created on or before the given time                                                                                                   |
-| `updated_after`     | datetime         | no         | Return issues updated on or after the given time                                                                                                    |
-| `updated_before`    | datetime         | no         | Return issues updated on or before the given time                                                                                                   |
-| `confidential`     | Boolean          | no         | Filter confidential or public issues.                                                                                                               |
+| `created_after`     | datetime         | no         | Return issues created on or after the given time. Expected in ISO 8601 format (`2019-03-15T08:00:00Z`) |
+| `created_before`    | datetime         | no         | Return issues created on or before the given time. Expected in ISO 8601 format (`2019-03-15T08:00:00Z`) |
+| `updated_after`     | datetime         | no         | Return issues updated on or after the given time. Expected in ISO 8601 format (`2019-03-15T08:00:00Z`) |
+| `updated_before`    | datetime         | no         | Return issues updated on or before the given time. Expected in ISO 8601 format (`2019-03-15T08:00:00Z`) |
+| `confidential`     | boolean          | no         | Filter confidential or public issues.                                                                                                               |
 
 ```shell
-curl --header "PRIVATE-TOKEN: <your_access_token>" https://gitlab.example.com/api/v4/issues_statistics
+curl --header "PRIVATE-TOKEN: <your_access_token>" "https://gitlab.example.com/api/v4/issues_statistics"
 ```
 
 Example response:
@@ -84,7 +90,7 @@ GET /groups/:id/issues_statistics?confidential=true
 
 | Attribute           | Type             | Required   | Description                                                                                                                   |
 | ------------------- | ---------------- | ---------- | ----------------------------------------------------------------------------------------------------------------------------- |
-| `id`                | integer/string   | yes        | The ID or [URL-encoded path of the group](README.md#namespaced-path-encoding) owned by the authenticated user                 |
+| `id`                | integer/string   | yes        | The ID or [URL-encoded path of the group](index.md#namespaced-path-encoding) owned by the authenticated user                 |
 | `labels`            | string           | no         | Comma-separated list of label names, issues must have all labels to be returned. `None` lists all issues with no labels. `Any` lists all issues with at least one label. |
 | `iids[]`            | integer array    | no         | Return only the issues having the given `iid`                                                                                 |
 | `milestone`         | string           | no         | The milestone title. `None` lists all issues with no milestone. `Any` lists all issues that have an assigned milestone.       |
@@ -92,17 +98,17 @@ GET /groups/:id/issues_statistics?confidential=true
 | `author_id`         | integer          | no         | Return issues created by the given user `id`. Mutually exclusive with `author_username`. Combine with `scope=all` or `scope=assigned_to_me`. |
 | `author_username`   | string           | no         | Return issues created by the given `username`. Similar to `author_id` and mutually exclusive with `author_id`. |
 | `assignee_id`       | integer          | no         | Return issues assigned to the given user `id`. Mutually exclusive with `assignee_username`. `None` returns unassigned issues. `Any` returns issues with an assignee. |
-| `assignee_username` | string array     | no         | Return issues assigned to the given `username`. Similar to `assignee_id` and mutually exclusive with `assignee_id`. In CE version `assignee_username` array should only contain a single value or an invalid param error will be returned otherwise. |
+| `assignee_username` | string array     | no         | Return issues assigned to the given `username`. Similar to `assignee_id` and mutually exclusive with `assignee_id`. In GitLab CE `assignee_username` array should only contain a single value or an invalid parameter error is returned otherwise. |
 | `my_reaction_emoji` | string           | no         | Return issues reacted by the authenticated user by the given `emoji`. `None` returns issues not given a reaction. `Any` returns issues given at least one reaction. |
 | `search`            | string           | no         | Search group issues against their `title` and `description`                                                                   |
-| `created_after`     | datetime         | no         | Return issues created on or after the given time                                                                              |
-| `created_before`    | datetime         | no         | Return issues created on or before the given time                                                                             |
-| `updated_after`     | datetime         | no         | Return issues updated on or after the given time                                                                              |
-| `updated_before`    | datetime         | no         | Return issues updated on or before the given time                                                                             |
-| `confidential`     | Boolean          | no         | Filter confidential or public issues.                                                                                         |
+| `created_after`     | datetime         | no         | Return issues created on or after the given time. Expected in ISO 8601 format (`2019-03-15T08:00:00Z`) |
+| `created_before`    | datetime         | no         | Return issues created on or before the given time. Expected in ISO 8601 format (`2019-03-15T08:00:00Z`) |
+| `updated_after`     | datetime         | no         | Return issues updated on or after the given time. Expected in ISO 8601 format (`2019-03-15T08:00:00Z`) |
+| `updated_before`    | datetime         | no         | Return issues updated on or before the given time. Expected in ISO 8601 format (`2019-03-15T08:00:00Z`) |
+| `confidential`     | boolean          | no         | Filter confidential or public issues.                                                                                         |
 
 ```shell
-curl --header "PRIVATE-TOKEN: <your_access_token>" https://gitlab.example.com/api/v4/groups/4/issues_statistics
+curl --header "PRIVATE-TOKEN: <your_access_token>" "https://gitlab.example.com/api/v4/groups/4/issues_statistics"
 ```
 
 Example response:
@@ -140,7 +146,7 @@ GET /projects/:id/issues_statistics?confidential=true
 
 | Attribute           | Type             | Required   | Description                                                                                                                   |
 | ------------------- | ---------------- | ---------- | ----------------------------------------------------------------------------------------------------------------------------- |
-| `id`                | integer/string   | yes        | The ID or [URL-encoded path of the project](README.md#namespaced-path-encoding) owned by the authenticated user               |
+| `id`                | integer/string   | yes        | The ID or [URL-encoded path of the project](index.md#namespaced-path-encoding) owned by the authenticated user               |
 | `iids[]`            | integer array    | no         | Return only the milestone having the given `iid`                                                                              |
 | `labels`            | string           | no         | Comma-separated list of label names, issues must have all labels to be returned. `None` lists all issues with no labels. `Any` lists all issues with at least one label. |
 | `milestone`         | string           | no         | The milestone title. `None` lists all issues with no milestone. `Any` lists all issues that have an assigned milestone.       |
@@ -148,17 +154,17 @@ GET /projects/:id/issues_statistics?confidential=true
 | `author_id`         | integer          | no         | Return issues created by the given user `id`. Mutually exclusive with `author_username`. Combine with `scope=all` or `scope=assigned_to_me`. |
 | `author_username`   | string           | no         | Return issues created by the given `username`. Similar to `author_id` and mutually exclusive with `author_id`. |
 | `assignee_id`       | integer          | no         | Return issues assigned to the given user `id`. Mutually exclusive with `assignee_username`. `None` returns unassigned issues. `Any` returns issues with an assignee. |
-| `assignee_username` | string array     | no         | Return issues assigned to the given `username`. Similar to `assignee_id` and mutually exclusive with `assignee_id`. In CE version `assignee_username` array should only contain a single value or an invalid param error will be returned otherwise. |
+| `assignee_username` | string array     | no         | Return issues assigned to the given `username`. Similar to `assignee_id` and mutually exclusive with `assignee_id`. In GitLab CE `assignee_username` array should only contain a single value or an invalid parameter error is returned otherwise. |
 | `my_reaction_emoji` | string           | no         | Return issues reacted by the authenticated user by the given `emoji`. `None` returns issues not given a reaction. `Any` returns issues given at least one reaction. |
 | `search`            | string           | no         | Search project issues against their `title` and `description`                                                                 |
-| `created_after`     | datetime         | no         | Return issues created on or after the given time                                                                              |
-| `created_before`    | datetime         | no         | Return issues created on or before the given time                                                                             |
-| `updated_after`     | datetime         | no         | Return issues updated on or after the given time                                                                              |
-| `updated_before`    | datetime         | no         | Return issues updated on or before the given time                                                                             |
-| `confidential`     | Boolean          | no         | Filter confidential or public issues.                                                                                         |
+| `created_after`     | datetime         | no         | Return issues created on or after the given time. Expected in ISO 8601 format (`2019-03-15T08:00:00Z`) |
+| `created_before`    | datetime         | no         | Return issues created on or before the given time. Expected in ISO 8601 format (`2019-03-15T08:00:00Z`) |
+| `updated_after`     | datetime         | no         | Return issues updated on or after the given time. Expected in ISO 8601 format (`2019-03-15T08:00:00Z`) |
+| `updated_before`    | datetime         | no         | Return issues updated on or before the given time. Expected in ISO 8601 format (`2019-03-15T08:00:00Z`) |
+| `confidential`     | boolean          | no         | Filter confidential or public issues.                                                                                         |
 
 ```shell
-curl --header "PRIVATE-TOKEN: <your_access_token>" https://gitlab.example.com/api/v4/projects/4/issues_statistics
+curl --header "PRIVATE-TOKEN: <your_access_token>" "https://gitlab.example.com/api/v4/projects/4/issues_statistics"
 ```
 
 Example response:

@@ -2,10 +2,11 @@
 
 require 'spec_helper'
 
-describe DiffFileEntity do
+RSpec.describe DiffFileEntity do
   include RepoHelpers
 
-  let(:project) { create(:project, :repository) }
+  let_it_be(:project) { create(:project, :repository) }
+
   let(:repository) { project.repository }
   let(:commit) { project.commit(sample_commit.id) }
   let(:diff_refs) { commit.diff_refs }
@@ -21,10 +22,12 @@ describe DiffFileEntity do
   end
 
   context 'when there is a merge request' do
+    let_it_be(:merge_request) { create(:merge_request, source_project: project, target_project: project) }
+
     let(:user) { create(:user) }
+    let(:code_navigation_path) { Gitlab::CodeNavigationPath.new(project, project.commit.sha) }
     let(:request) { EntityRequest.new(project: project, current_user: user) }
-    let(:merge_request) { create(:merge_request, source_project: project, target_project: project) }
-    let(:entity) { described_class.new(diff_file, options.merge(request: request, merge_request: merge_request)) }
+    let(:entity) { described_class.new(diff_file, options.merge(request: request, merge_request: merge_request, code_navigation_path: code_navigation_path)) }
     let(:exposed_urls) { %i(edit_path view_path context_lines_path) }
 
     it_behaves_like 'diff file entity'
@@ -32,6 +35,7 @@ describe DiffFileEntity do
     it 'exposes additional attributes' do
       expect(subject).to include(*exposed_urls)
       expect(subject).to include(:replaced_view_path)
+      expect(subject).to include(:code_navigation_path)
     end
 
     it 'points all urls to merge request target project' do
@@ -46,6 +50,14 @@ describe DiffFileEntity do
       allow(diff_file.viewer).to receive(:collapsed?) { true }
 
       expect(subject).to include(:load_collapsed_diff_url)
+    end
+
+    context 'when diff_view is unknown' do
+      let(:options) { { diff_view: :unknown } }
+
+      it 'hides highlighted_diff_lines and parallel_diff_lines' do
+        is_expected.not_to include(:highlighted_diff_lines, :parallel_diff_lines)
+      end
     end
   end
 
@@ -64,6 +76,17 @@ describe DiffFileEntity do
       lines.each do |parallel_line|
         expect(parallel_line[:left].as_json).to match_schema('entities/diff_line') if parallel_line[:left]
         expect(parallel_line[:right].as_json).to match_schema('entities/diff_line') if parallel_line[:right]
+      end
+    end
+  end
+
+  describe '#is_fully_expanded' do
+    context 'file with a conflict' do
+      let(:options) { { conflicts: { diff_file.new_path => double(diff_lines_for_serializer: []) } } }
+
+      it 'returns false' do
+        expect(diff_file).not_to receive(:fully_expanded?)
+        expect(subject[:is_fully_expanded]).to eq(false)
       end
     end
   end

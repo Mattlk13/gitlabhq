@@ -2,7 +2,7 @@
 
 require 'spec_helper'
 
-describe Gitlab::Pagination::OffsetPagination do
+RSpec.describe Gitlab::Pagination::OffsetPagination do
   let(:resource) { Project.all }
   let(:custom_port) { 8080 }
   let(:incoming_api_projects_url) { "#{Gitlab.config.gitlab.url}:#{custom_port}/api/v4/projects" }
@@ -13,7 +13,7 @@ describe Gitlab::Pagination::OffsetPagination do
 
   let(:request_context) { double("request_context") }
 
-  subject do
+  subject(:paginator) do
     described_class.new(request_context)
   end
 
@@ -118,6 +118,108 @@ describe Gitlab::Pagination::OffsetPagination do
 
               subject.paginate(resource)
             end
+          end
+
+          it 'does not return the total headers when excluding them' do
+            expect_no_header('X-Total')
+            expect_no_header('X-Total-Pages')
+            expect_header('X-Per-Page', '2')
+            expect_header('X-Page', '1')
+
+            paginator.paginate(resource, exclude_total_headers: true)
+          end
+        end
+
+        context 'when resource already paginated' do
+          let(:resource) { Project.all.page(1).per(1) }
+
+          context 'when per_page param is specified' do
+            let(:query) { base_query.merge(page: 1, per_page: 2) }
+
+            it 'returns appropriate amount of resources based on per_page param' do
+              expect(subject.paginate(resource).count).to eq 2
+            end
+          end
+
+          context 'when page and per page params are strings' do
+            let(:query) { base_query.merge(page: '1', per_page: '1') }
+
+            it 'returns appropriate amount of resources' do
+              expect(subject.paginate(resource).count).to eq 1
+            end
+          end
+
+          context 'when per_page param is blank' do
+            let(:query) { base_query.merge(page: 1) }
+
+            it 'returns appropriate amount of resources' do
+              expect(subject.paginate(resource).count).to eq 1
+            end
+          end
+
+          context 'when page param is blank' do
+            let(:query) { base_query }
+
+            it 'returns appropriate amount of resources based on resource per(N)' do
+              expect(subject.paginate(resource).count).to eq 1
+            end
+          end
+        end
+
+        context 'when resource does not respond to limit_value' do
+          let(:custom_collection) do
+            Class.new do
+              include Enumerable
+
+              def initialize(items)
+                @collection = items
+              end
+
+              def each
+                @collection.each { |item| yield item }
+              end
+
+              def page(number)
+                Kaminari.paginate_array(@collection).page(number)
+              end
+            end
+          end
+
+          let(:resource) { custom_collection.new(Project.all).page(query[:page]) }
+
+          context 'when page param is blank' do
+            let(:query) { base_query }
+
+            it 'returns appropriate amount of resources' do
+              expect(subject.paginate(resource).count).to eq 3
+            end
+          end
+
+          context 'when per_page param is blank' do
+            let(:query) { base_query.merge(page: 1) }
+
+            it 'returns appropriate amount of resources with default per page value' do
+              expect(subject.paginate(resource).count).to eq 3
+            end
+          end
+        end
+
+        context 'when resource is a paginatable array' do
+          let(:resource) { Kaminari.paginate_array(Project.all.to_a) }
+
+          it_behaves_like 'response with pagination headers'
+
+          it 'only returns the requested resources' do
+            expect(paginator.paginate(resource).count).to eq(2)
+          end
+
+          it 'does not return total headers when excluding them' do
+            expect_no_header('X-Total')
+            expect_no_header('X-Total-Pages')
+            expect_header('X-Per-Page', '2')
+            expect_header('X-Page', '1')
+
+            paginator.paginate(resource, exclude_total_headers: true)
           end
         end
       end

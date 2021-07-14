@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 namespace :admin do
   resources :users, constraints: { id: %r{[a-zA-Z./0-9_\-]+} } do
     resources :keys, only: [:show, :destroy]
@@ -13,10 +15,14 @@ namespace :admin do
       get :keys
       put :block
       put :unblock
+      put :ban
+      put :unban
       put :deactivate
       put :activate
       put :unlock
       put :confirm
+      put :approve
+      delete :reject
       post :impersonate
       patch :disable_two_factor
       delete 'remove/:email_id', action: 'remove_email', as: 'remove_email'
@@ -81,7 +87,15 @@ namespace :admin do
     post :preview, on: :collection
   end
 
-  resource :logs, only: [:show]
+  get :instance_review, to: 'instance_review#index'
+
+  resources :background_migrations, only: [:index] do
+    member do
+      post :pause
+      post :resume
+    end
+  end
+
   resource :health_check, controller: 'health_check', only: [:show]
   resource :background_jobs, controller: 'background_jobs', only: [:show]
 
@@ -89,6 +103,10 @@ namespace :admin do
   resources :requests_profiles, only: [:index, :show], param: :name, constraints: { name: /.+\.(html|txt)/ }
 
   resources :projects, only: [:index]
+
+  resources :usage_trends, only: :index
+  resource :dev_ops_report, controller: 'dev_ops_report', only: :show
+  resources :cohorts, only: :index
 
   scope(path: 'projects/*namespace_id',
         as: :namespace,
@@ -106,21 +124,14 @@ namespace :admin do
     end
   end
 
-  resource :appearances, only: [:show, :create, :update], path: 'appearance' do
-    member do
-      get :preview_sign_in
-      delete :logo
-      delete :header_logos
-      delete :favicon
-    end
-  end
-
   resource :application_settings, only: :update do
-    # This redirect should be removed with 13.0 release.
-    # https://gitlab.com/gitlab-org/gitlab/issues/199427
-    get '/', to: redirect('admin/application_settings/general'), as: nil
-
     resources :services, only: [:index, :edit, :update]
+    resources :integrations, only: [:edit, :update] do
+      member do
+        put :test
+        post :reset
+      end
+    end
 
     get :usage_data
     put :reset_registration_token
@@ -133,18 +144,30 @@ namespace :admin do
     get :status_create_self_monitoring_project
     delete :delete_self_monitoring_project
     get :status_delete_self_monitoring_project
+
+    resource :appearances, only: [:show, :create, :update], path: 'appearance', module: 'application_settings' do
+      member do
+        get :preview_sign_in
+        delete :logo
+        delete :header_logos
+        delete :favicon
+      end
+    end
   end
+
+  resources :plan_limits, only: :create
 
   resources :labels
 
   resources :runners, only: [:index, :show, :update, :destroy] do
     member do
-      get :resume
-      get :pause
+      post :resume
+      post :pause
     end
 
     collection do
       get :tag_list, format: :json
+      get :runner_setup_scripts, format: :json
     end
   end
 
@@ -154,7 +177,13 @@ namespace :admin do
     end
   end
 
+  namespace :ci do
+    resource :variables, only: [:show, :update]
+  end
+
   concerns :clusterable
+
+  get '/dashboard/stats', to: 'dashboard#stats'
 
   root to: 'dashboard#index'
 end

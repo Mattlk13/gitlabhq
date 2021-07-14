@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 class KeysFinder
+  delegate :find, :find_by_id, to: :execute
+
   InvalidFingerprint = Class.new(StandardError)
   GitLabAccessDeniedError = Class.new(StandardError)
 
@@ -46,7 +48,7 @@ class KeysFinder
     return keys unless params[:fingerprint].present?
     raise InvalidFingerprint unless valid_fingerprint_param?
 
-    keys.where(fingerprint_query).first # rubocop: disable CodeReuse/ActiveRecord
+    keys.find_by(fingerprint_query) # rubocop: disable CodeReuse/ActiveRecord
   end
 
   def valid_fingerprint_param?

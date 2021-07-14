@@ -2,7 +2,7 @@
 require 'fast_spec_helper'
 require 'active_support/concern'
 
-describe Gitlab::Utils::LazyAttributes do
+RSpec.describe Gitlab::Utils::LazyAttributes do
   subject(:klass) do
     Class.new do
       include Gitlab::Utils::LazyAttributes
@@ -13,8 +13,10 @@ describe Gitlab::Utils::LazyAttributes do
 
       def initialize
         @number = -> { 1 }
-        @reader_1, @reader_2 = 'reader_1', -> { 'reader_2' }
-        @incorrect_type, @accessor_2 = -> { :incorrect_type }, -> { 'accessor_2' }
+        @reader_1 = 'reader_1'
+        @reader_2 = -> { 'reader_2' }
+        @incorrect_type = -> { :incorrect_type }
+        @accessor_2 = -> { 'accessor_2' }
       end
     end
   end

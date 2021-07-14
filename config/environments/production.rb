@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 Rails.application.configure do
   # Settings specified here will take precedence over those in config/application.rb
 
@@ -12,7 +14,7 @@ Rails.application.configure do
   config.public_file_server.enabled = false
 
   # Compress JavaScripts and CSS.
-  config.assets.js_compressor = :uglifier
+  config.assets.js_compressor = :terser
   # config.assets.css_compressor = :sass
 
   # Don't fallback to assets pipeline if a precompiled asset is missed
@@ -52,6 +54,9 @@ Rails.application.configure do
   # Enable serving of images, stylesheets, and JavaScripts from an asset server
   config.action_controller.asset_host = ENV['GITLAB_CDN_HOST'] if ENV['GITLAB_CDN_HOST'].present?
 
+  # Do not dump schema after migrations.
+  config.active_record.dump_schema_after_migration = false
+
   # Precompile additional assets (application.js, application.css, and all non-JS/CSS are already added)
   # config.assets.precompile += %w( search.js )
 
@@ -74,6 +79,4 @@ Rails.application.configure do
   config.action_mailer.raise_delivery_errors = true
 
   config.eager_load = true
-
-  config.allow_concurrency = Gitlab::Runtime.multi_threaded?
 end

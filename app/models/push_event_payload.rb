@@ -1,6 +1,8 @@
 # frozen_string_literal: true
 
 class PushEventPayload < ApplicationRecord
+  extend SuppressCompositePrimaryKeyWarning
+
   include ShaAttribute
 
   belongs_to :event, inverse_of: :push_event_payload
@@ -23,4 +25,4 @@ class PushEventPayload < ApplicationRecord
   }
 end
 
-PushEventPayload.prepend_if_ee('EE::PushEventPayload')
+PushEventPayload.prepend_mod_with('PushEventPayload')

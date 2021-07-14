@@ -13,7 +13,7 @@ module FilteredSearchHelpers
       search = "#{search_term} "
     end
 
-    filtered_search.set(search)
+    filtered_search.set(search, rapid: false)
 
     if submit
       # Wait for the lazy author/assignee tokens that
@@ -26,7 +26,7 @@ module FilteredSearchHelpers
   # Select a label clicking in the search dropdown instead
   # of entering label names on the input.
   def select_label_on_dropdown(label_title)
-    input_filtered_search("label=", submit: false)
+    input_filtered_search("label:=", submit: false)
 
     within('#js-dropdown-label') do
       wait_for_requests
@@ -45,9 +45,8 @@ module FilteredSearchHelpers
     all_count = open_count + closed_count
 
     expect(page).to have_issuable_counts(open: open_count, closed: closed_count, all: all_count)
-    page.within '.issues-list' do
-      expect(page).to have_selector('.issue', count: open_count)
-    end
+
+    expect(page).to have_selector('.issue', count: open_count)
   end
 
   # Enables input to be added character by character
@@ -71,7 +70,7 @@ module FilteredSearchHelpers
   end
 
   def init_label_search
-    filtered_search.set('label=')
+    filtered_search.set('label:=')
     # This ensures the dropdown is shown
     expect(find('#js-dropdown-label')).not_to have_css('.filter-dropdown-loading')
   end
@@ -112,6 +111,10 @@ module FilteredSearchHelpers
 
   def assignee_token(assignee_name = nil)
     create_token('Assignee', assignee_name)
+  end
+
+  def reviewer_token(reviewer_name = nil)
+    create_token('Reviewer', reviewer_name)
   end
 
   def milestone_token(milestone_name = nil, has_symbol = true, operator = '=')

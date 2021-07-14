@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 namespace :gitlab do
   namespace :uploads do
     namespace :sanitize do
@@ -6,7 +8,7 @@ namespace :gitlab do
         args.with_defaults(dry_run: 'true')
         args.with_defaults(sleep_time: 0.3)
 
-        logger = Logger.new(STDOUT)
+        logger = Logger.new($stdout)
 
         sanitizer = Gitlab::Sanitizers::Exif.new(logger: logger)
         sanitizer.batch_clean(start_id: args.start_id, stop_id: args.stop_id,

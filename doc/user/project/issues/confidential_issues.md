@@ -1,8 +1,12 @@
-# Confidential issues
+---
+stage: Plan
+group: Project Management
+info: To determine the technical writer assigned to the Stage/Group associated with this page, see https://about.gitlab.com/handbook/engineering/ux/technical-writing/#assignments
+---
 
-> [Introduced](https://gitlab.com/gitlab-org/gitlab-foss/-/merge_requests/3282) in GitLab 8.6.
+# Confidential issues **(FREE)**
 
-Confidential issues are issues visible only to members of a project with
+Confidential issues are [issues](index.md) visible only to members of a project with
 [sufficient permissions](#permissions-and-access-to-confidential-issues).
 Confidential issues can be used by open source projects and companies alike to
 keep security vulnerabilities private or prevent surprises from leaking out.
@@ -13,7 +17,7 @@ You can make an issue confidential during issue creation or by editing
 an existing one.
 
 When you create a new issue, a checkbox right below the text area is available
-to mark the issue as confidential. Check that box and hit the **Submit issue**
+to mark the issue as confidential. Check that box and hit the **Create issue**
 button to create the issue. For existing issues, edit them, check the
 confidential checkbox and hit **Save changes**.
 
@@ -23,8 +27,8 @@ confidential checkbox and hit **Save changes**.
 
 There are two ways to change an issue's confidentiality.
 
-The first way is to edit the issue and mark/unmark the confidential checkbox.
-Once you save the issue, it will change the confidentiality of the issue.
+The first way is to edit the issue and toggle the confidentiality checkbox.
+After you save the issue, the confidentiality of the issue is updated.
 
 The second way is to locate the Confidentiality section in the sidebar and click
 **Edit**. A popup should appear and give you the option to turn on or turn off confidentiality.
@@ -40,19 +44,19 @@ system note in the issue's comments.
 
 ## Indications of a confidential issue
 
->**Note:** If you don't have [enough permissions](#permissions-and-access-to-confidential-issues),
-you won't be able to see the confidential issues at all.
-
 There are a few things that visually separate a confidential issue from a
 regular one. In the issues index page view, you can see the eye-slash icon
 next to the issues that are marked as confidential.
 
 ![Confidential issues index page](img/confidential_issues_index_page.png)
 
+If you don't have [enough permissions](#permissions-and-access-to-confidential-issues),
+you cannot see confidential issues at all.
+
 ---
 
 Likewise, while inside the issue, you can see the eye-slash icon right next to
-the issue number, but there is also an indicator in the comment area that the
+the issue number. There is also an indicator in the comment area that the
 issue you are commenting on is confidential.
 
 ![Confidential issue page](img/confidential_issues_issue_page.png)
@@ -71,39 +75,39 @@ least [Reporter access](../../permissions.md#project-members-permissions). Howev
 confidential issues, but can only view the ones that they created themselves.
 
 Confidential issues are also hidden in search results for unprivileged users.
-For example, here's what a user with Maintainer and Guest access sees in the
-project's search results respectively.
+For example, here's what a user with the [Maintainer role](../../permissions.md) and Guest access
+sees in the project's search results respectively.
 
-| Maintainer access | Guest access |
-| :-----------: | :----------: |
-| ![Confidential issues search master](img/confidential_issues_search_master.png) | ![Confidential issues search guest](img/confidential_issues_search_guest.png) |
+| Maintainer role                                                                        | Guest access                                                                     |
+|:---------------------------------------------------------------------------------------|:---------------------------------------------------------------------------------|
+| ![Confidential issues search by maintainer](img/confidential_issues_search_master.png) | ![Confidential issues search by guest](img/confidential_issues_search_guest.png) |
 
 ## Merge Requests for Confidential Issues
 
-> [Introduced](https://gitlab.com/gitlab-org/gitlab-foss/issues/58583) in GitLab 12.1.
+> [Introduced](https://gitlab.com/gitlab-org/gitlab-foss/-/issues/58583) in GitLab 12.1.
 
 To help prevent confidential information being leaked from a public project
 in the process of resolving a confidential issue, confidential issues can be
 resolved by creating a merge request from a private fork.
 
-The merge request created will target the default branch of the private fork,
+The created merge request targets the default branch of the private fork,
 not the default branch of the public upstream project. This prevents the merge
 request, branch, and commits entering the public repository, and revealing
-confidential information prematurely. When the confidential commits are ready
-to be made public, this can be done by opening a merge request from the private
-fork to the public upstream project.
+confidential information prematurely. To make a confidential commit public,
+open a merge request from the private fork to the public upstream project.
 
-TIP: **Best practice:**
-If you create a long-lived private fork in the same group or in a sub-group of
-the original upstream, all the users with Developer membership to the public
-project will also have the same permissions in the private project. This way,
-all the Developers, who have access to view confidential issues, will have a
-streamlined workflow for fixing them.
+Permissions are inherited from parent groups. Developers have the same permissions
+for private forks created in the same group or in a subgroup of the original
+Permissions are inherited from parent groups. When private forks are created
+in the same group or subgroup as the original upstream repository, users
+receive the same permissions in both projects. This inheritance ensures
+Developer users have the needed permissions to both view confidential issues and
+resolve them.
 
 ### How it works
 
 On a confidential issue, a **Create confidential merge request** button is
-available. Clicking on it will open a dropdown where you can choose to
+available. Clicking on it opens a dropdown where you can choose to
 **Create confidential merge request and branch** or **Create branch**:
 
 | Create confidential merge request | Create branch |
@@ -114,12 +118,12 @@ The **Project** dropdown includes the list of private forks the user is a member
 of as at least a Developer and merge requests are enabled.
 
 Whenever the **Branch name** and **Source (branch or tag)** fields change, the
-availability of the target or source branch will be checked. Both branches should
-be available in the private fork selected.
+availability of the target and source branch are checked. Both branches should
+be available in the selected private fork.
 
-By clicking the **Create confidential merge request** button, GitLab will create
+By clicking the **Create confidential merge request** button, GitLab creates
 the branch and merge request in the private fork. When you choose
-**Create branch**, GitLab will only create the branch.
+**Create branch**, GitLab creates only the branch.
 
-Once the branch is created in the private fork, developers can now push code to
+After the branch is created in the private fork, developers can push code to
 that branch to fix the confidential issue.

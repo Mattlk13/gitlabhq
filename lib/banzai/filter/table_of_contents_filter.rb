@@ -17,7 +17,10 @@ module Banzai
     #   :toc - String containing Table of Contents data as a `ul` element with
     #          `li` child elements.
     class TableOfContentsFilter < HTML::Pipeline::Filter
-      PUNCTUATION_REGEXP = /[^\p{Word}\- ]/u.freeze
+      include Gitlab::Utils::Markdown
+
+      CSS   = 'h1, h2, h3, h4, h5, h6'
+      XPATH = Gitlab::Utils::Nokogiri.css_to_xpath(CSS).freeze
 
       def call
         return doc if context[:no_header_anchors]
@@ -27,16 +30,9 @@ module Banzai
         headers = Hash.new(0)
         header_root = current_header = HeaderNode.new
 
-        doc.css('h1, h2, h3, h4, h5, h6').each do |node|
+        doc.xpath(XPATH).each do |node|
           if header_content = node.children.first
-            id = node
-              .text
-              .strip
-              .downcase
-              .gsub(PUNCTUATION_REGEXP, '') # remove punctuation
-              .tr(' ', '-') # replace spaces with dash
-              .squeeze('-') # replace multiple dashes with one
-              .gsub(/\A(\d+)\z/, 'anchor-\1') # digits-only hrefs conflict with issue refs
+            id = string_to_anchor(node.text)
 
             uniq = headers[id] > 0 ? "-#{headers[id]}" : ''
             headers[id] += 1

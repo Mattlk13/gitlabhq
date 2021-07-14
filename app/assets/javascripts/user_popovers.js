@@ -1,16 +1,18 @@
 import Vue from 'vue';
 
+import { sanitize } from '~/lib/dompurify';
+
 import UsersCache from './lib/utils/users_cache';
 import UserPopover from './vue_shared/components/user_popover/user_popover.vue';
 
-const removeTitle = el => {
+const removeTitle = (el) => {
   // Removing titles so its not showing tooltips also
 
   el.dataset.originalTitle = '';
   el.setAttribute('title', '');
 };
 
-const getPreloadedUserInfo = dataset => {
+const getPreloadedUserInfo = (dataset) => {
   const userId = dataset.user || dataset.userId;
   const { username, name, avatarUrl } = dataset;
 
@@ -26,7 +28,7 @@ const getPreloadedUserInfo = dataset => {
  * Adds a UserPopover component to the body, hands over as much data as the target element has in data attributes.
  * loads based on data-user-id more data about a user from the API and sets it on the popover
  */
-const populateUserInfo = user => {
+const populateUserInfo = (user) => {
   const { userId } = user;
 
   return Promise.all([UsersCache.retrieveById(userId), UsersCache.retrieveStatusById(userId)]).then(
@@ -34,11 +36,15 @@ const populateUserInfo = user => {
       if (userData) {
         Object.assign(user, {
           avatarUrl: userData.avatar_url,
+          bot: userData.bot,
           username: userData.username,
           name: userData.name,
           location: userData.location,
           bio: userData.bio,
-          organization: userData.organization,
+          bioHtml: sanitize(userData.bio_html),
+          workInformation: userData.work_information,
+          websiteUrl: userData.website_url,
+          pronouns: userData.pronouns,
           loaded: true,
         });
       }
@@ -55,14 +61,36 @@ const populateUserInfo = user => {
 };
 
 const initializedPopovers = new Map();
+let domObservedForChanges = false;
 
-export default (elements = document.querySelectorAll('.js-user-link')) => {
+const addPopoversToModifiedTree = new MutationObserver(() => {
+  const userLinks = document?.querySelectorAll('.js-user-link, .gfm-project_member');
+
+  if (userLinks) {
+    addPopovers(userLinks); /* eslint-disable-line no-use-before-define */
+  }
+});
+
+function observeBody() {
+  if (!domObservedForChanges) {
+    addPopoversToModifiedTree.observe(document.body, {
+      subtree: true,
+      childList: true,
+    });
+
+    domObservedForChanges = true;
+  }
+}
+
+export default function addPopovers(elements = document.querySelectorAll('.js-user-link')) {
   const userLinks = Array.from(elements);
   const UserPopoverComponent = Vue.extend(UserPopover);
 
+  observeBody();
+
   return userLinks
     .filter(({ dataset }) => dataset.user || dataset.userId)
-    .map(el => {
+    .map((el) => {
       if (initializedPopovers.has(el)) {
         return initializedPopovers.get(el);
       }
@@ -70,7 +98,7 @@ export default (elements = document.querySelectorAll('.js-user-link')) => {
       const user = {
         location: null,
         bio: null,
-        organization: null,
+        workInformation: null,
         status: null,
         loaded: false,
       };
@@ -101,4 +129,4 @@ export default (elements = document.querySelectorAll('.js-user-link')) => {
 
       return renderedPopover;
     });
-};
+}

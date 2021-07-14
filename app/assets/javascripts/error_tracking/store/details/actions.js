@@ -1,12 +1,12 @@
-import service from '../../services';
-import * as types from './mutation_types';
 import createFlash from '~/flash';
 import Poll from '~/lib/utils/poll';
 import { __ } from '~/locale';
+import service from '../../services';
+import * as types from './mutation_types';
 
 let stackTracePoll;
 
-const stopPolling = poll => {
+const stopPolling = (poll) => {
   if (poll) poll.stop();
 };
 
@@ -26,11 +26,11 @@ export function startPollingStacktrace({ commit }, endpoint) {
     },
     errorCallback: () => {
       commit(types.SET_LOADING_STACKTRACE, false);
-      createFlash(__('Failed to load stacktrace.'));
+      createFlash({
+        message: __('Failed to load stacktrace.'),
+      });
     },
   });
 
   stackTracePoll.makeRequest();
 }
-
-export default () => {};

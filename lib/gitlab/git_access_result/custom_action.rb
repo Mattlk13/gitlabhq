@@ -10,9 +10,9 @@ module Gitlab
       # {
       #   'action' => 'geo_proxy_to_primary',
       #   'data' => {
-      #     'api_endpoints' => %w{geo/proxy_git_push_ssh/info_refs geo/proxy_git_push_ssh/push},
+      #     'api_endpoints' => %w{geo/proxy_git_ssh/info_refs_receive_pack geo/proxy_git_ssh/receive_pack},
       #     'gl_username' => user.username,
-      #     'primary_repo' => geo_primary_http_url_to_repo(project_or_wiki)
+      #     'primary_repo' => geo_primary_http_url_to_repo(container)
       #   }
       # }
       #

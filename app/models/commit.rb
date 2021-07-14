@@ -15,13 +15,10 @@ class Commit
   include ActsAsPaginatedDiff
   include CacheMarkdownField
 
-  attr_mentionable :safe_message, pipeline: :single_line
-
   participant :author
   participant :committer
   participant :notes_with_associations
 
-  attr_accessor :author
   attr_accessor :redacted_description_html
   attr_accessor :redacted_title_html
   attr_accessor :redacted_full_title_html
@@ -30,21 +27,25 @@ class Commit
   delegate :repository, to: :container
   delegate :project, to: :repository, allow_nil: true
 
-  DIFF_SAFE_LINES = Gitlab::Git::DiffCollection::DEFAULT_LIMITS[:max_lines]
-
-  # Commits above this size will not be rendered in HTML
-  DIFF_HARD_LIMIT_FILES = 1000
-  DIFF_HARD_LIMIT_LINES = 50000
-
   MIN_SHA_LENGTH = Gitlab::Git::Commit::MIN_SHA_LENGTH
   COMMIT_SHA_PATTERN = /\h{#{MIN_SHA_LENGTH},40}/.freeze
   EXACT_COMMIT_SHA_PATTERN = /\A#{COMMIT_SHA_PATTERN}\z/.freeze
   # Used by GFM to match and present link extensions on node texts and hrefs.
   LINK_EXTENSION_PATTERN = /(patch)/.freeze
 
+  DEFAULT_MAX_DIFF_LINES_SETTING = 50_000
+  DEFAULT_MAX_DIFF_FILES_SETTING = 1_000
+  MAX_DIFF_LINES_SETTING_UPPER_BOUND = 100_000
+  MAX_DIFF_FILES_SETTING_UPPER_BOUND = 3_000
+  DIFF_SAFE_LIMIT_FACTOR = 10
+
   cache_markdown_field :title, pipeline: :single_line
-  cache_markdown_field :full_title, pipeline: :single_line
-  cache_markdown_field :description, pipeline: :commit_description
+  cache_markdown_field :full_title, pipeline: :single_line, limit: 1.kilobyte
+  cache_markdown_field :description, pipeline: :commit_description, limit: 1.megabyte
+
+  # Share the cache used by the markdown fields
+  attr_mentionable :title, pipeline: :single_line
+  attr_mentionable :description, pipeline: :commit_description, limit: 1.megabyte
 
   class << self
     def decorate(commits, container)
@@ -69,7 +70,8 @@ class Commit
       collection.sort do |a, b|
         operands = [a, b].tap { |o| o.reverse! if sort == 'desc' }
 
-        attr1, attr2 = operands.first.public_send(order_by), operands.second.public_send(order_by) # rubocop:disable PublicSend
+        attr1 = operands.first.public_send(order_by) # rubocop:disable GitlabSecurity/PublicSend
+        attr2 = operands.second.public_send(order_by) # rubocop:disable GitlabSecurity/PublicSend
 
         # use case insensitive comparison for string values
         order_by.in?(%w[email name]) ? attr1.casecmp(attr2) : attr1 <=> attr2
@@ -81,11 +83,43 @@ class Commit
       sha[0..MIN_SHA_LENGTH]
     end
 
-    def max_diff_options
+    def diff_safe_lines(project: nil)
+      diff_safe_max_lines(project: project)
+    end
+
+    def diff_max_files(project: nil)
+      if Feature.enabled?(:increased_diff_limits, project)
+        3000
+      elsif Feature.enabled?(:configurable_diff_limits, project)
+        Gitlab::CurrentSettings.diff_max_files
+      else
+        1000
+      end
+    end
+
+    def diff_max_lines(project: nil)
+      if Feature.enabled?(:increased_diff_limits, project)
+        100000
+      elsif Feature.enabled?(:configurable_diff_limits, project)
+        Gitlab::CurrentSettings.diff_max_lines
+      else
+        50000
+      end
+    end
+
+    def max_diff_options(project: nil)
       {
-        max_files: DIFF_HARD_LIMIT_FILES,
-        max_lines: DIFF_HARD_LIMIT_LINES
+        max_files: diff_max_files(project: project),
+        max_lines: diff_max_lines(project: project)
       }
+    end
+
+    def diff_safe_max_files(project: nil)
+      diff_max_files(project: project) / DIFF_SAFE_LIMIT_FACTOR
+    end
+
+    def diff_safe_max_lines(project: nil)
+      diff_max_lines(project: project) / DIFF_SAFE_LIMIT_FACTOR
     end
 
     def from_hash(hash, container)
@@ -128,6 +162,7 @@ class Commit
   delegate \
     :pipelines,
     :last_pipeline,
+    :lazy_latest_pipeline,
     :latest_pipeline,
     :latest_pipeline_for_project,
     :set_latest_pipeline_for_ref,
@@ -135,7 +170,7 @@ class Commit
     to: :with_pipeline
 
   def with_pipeline
-    @with_pipeline ||= CommitWithPipeline.new(self)
+    @with_pipeline ||= Ci::CommitWithPipeline.new(self)
   end
 
   def id
@@ -209,6 +244,14 @@ class Commit
       end
   end
 
+  def author_full_text
+    return unless author_name && author_email
+
+    strong_memoize(:author_full_text) do
+      "#{author_name} <#{author_email}>"
+    end
+  end
+
   # Returns full commit message if title is truncated (greater than 99 characters)
   # otherwise returns commit message without first line
   def description
@@ -222,12 +265,16 @@ class Commit
     description.present?
   end
 
+  def timestamp
+    committed_date.xmlschema
+  end
+
   def hook_attrs(with_changed_files: false)
     data = {
       id: id,
       message: safe_message,
       title: title,
-      timestamp: committed_date.xmlschema,
+      timestamp: timestamp,
       url: Gitlab::UrlBuilder.build(self),
       author: {
         name: author_name,
@@ -240,14 +287,6 @@ class Commit
     end
 
     data
-  end
-
-  # Discover issues should be closed when this commit is pushed to a project's
-  # default branch.
-  def closes_issues(current_user = self.committer)
-    return unless repository.repo_type.project?
-
-    Gitlab::ClosingIssueExtractor.new(project, current_user).closed_by_message(safe_message)
   end
 
   def lazy_author
@@ -299,14 +338,6 @@ class Commit
     notes.includes(:author, :award_emoji)
   end
 
-  def merge_requests
-    strong_memoize(:merge_requests) do
-      next MergeRequest.none unless repository.repo_type.project? && project
-
-      project.merge_requests.by_commit_sha(sha)
-    end
-  end
-
   def method_missing(method, *args, &block)
     @raw.__send__(method, *args, &block) # rubocop:disable GitlabSecurity/PublicSend
   end
@@ -334,7 +365,11 @@ class Commit
     strong_memoize(:raw_signature_type) do
       next unless @raw.instance_of?(Gitlab::Git::Commit)
 
-      @raw.raw_commit.signature_type if defined? @raw.raw_commit.signature_type
+      if raw_commit_from_rugged? && gpg_commit.signature_text.present?
+        :PGP
+      elsif defined? @raw.raw_commit.signature_type
+        @raw.raw_commit.signature_type
+      end
     end
   end
 
@@ -346,13 +381,21 @@ class Commit
     strong_memoize(:signature) do
       case signature_type
       when :PGP
-        Gitlab::Gpg::Commit.new(self).signature
+        gpg_commit.signature
       when :X509
         Gitlab::X509::Commit.new(self).signature
       else
         nil
       end
     end
+  end
+
+  def raw_commit_from_rugged?
+    @raw.raw_commit.is_a?(Rugged::Commit)
+  end
+
+  def gpg_commit
+    @gpg_commit ||= Gitlab::Gpg::Commit.new(self)
   end
 
   def revert_branch_name
@@ -415,7 +458,7 @@ class Commit
   end
 
   def has_been_reverted?(current_user, notes_association = nil)
-    ext = all_references(current_user)
+    ext = Gitlab::ReferenceExtractor.new(project, current_user)
     notes_association ||= notes_with_associations
 
     notes_association.system.each do |note|
@@ -485,10 +528,12 @@ class Commit
     # We don't want to do anything for `Commit` model, so this is empty.
   end
 
-  WIP_REGEX = /\A\s*(((?i)(\[WIP\]|WIP:|WIP)\s|WIP$))|(fixup!|squash!)\s/.freeze
+  # WIP is deprecated in favor of Draft. Currently both options are supported
+  # https://gitlab.com/gitlab-org/gitlab/-/issues/227426
+  DRAFT_REGEX = /\A\s*#{Regexp.union(Gitlab::Regex.merge_request_wip, Gitlab::Regex.merge_request_draft)}|(fixup!|squash!)\s/.freeze
 
   def work_in_progress?
-    !!(title =~ WIP_REGEX)
+    !!(title =~ DRAFT_REGEX)
   end
 
   def merged_merge_request?(user)

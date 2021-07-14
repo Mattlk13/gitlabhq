@@ -2,18 +2,20 @@
 
 require 'fast_spec_helper'
 
-describe Gitlab::SidekiqConfig::Worker do
+RSpec.describe Gitlab::SidekiqConfig::Worker do
   def create_worker(queue:, **attributes)
     namespace = queue.include?(':') && queue.split(':').first
     inner_worker = double(
+      name: attributes[:worker_name] || 'Foo::BarWorker',
       queue: queue,
       queue_namespace: namespace,
       get_feature_category: attributes[:feature_category],
       get_weight: attributes[:weight],
       get_worker_resource_boundary: attributes[:resource_boundary],
-      latency_sensitive_worker?: attributes[:latency_sensitive],
+      get_urgency: attributes[:urgency],
       worker_has_external_dependencies?: attributes[:has_external_dependencies],
-      idempotent?: attributes[:idempotent]
+      idempotent?: attributes[:idempotent],
+      get_tags: attributes[:tags]
     )
 
     described_class.new(inner_worker, ee: false)
@@ -47,7 +49,7 @@ describe Gitlab::SidekiqConfig::Worker do
   describe 'delegations' do
     [
       :feature_category_not_owned?, :get_feature_category, :get_weight,
-      :get_worker_resource_boundary, :latency_sensitive_worker?, :queue,
+      :get_worker_resource_boundary, :get_urgency, :queue,
       :queue_namespace, :worker_has_external_dependencies?
     ].each do |meth|
       it "delegates #{meth} to the worker class" do
@@ -86,21 +88,25 @@ describe Gitlab::SidekiqConfig::Worker do
   describe 'YAML encoding' do
     it 'encodes the worker in YAML as a hash of the queue' do
       attributes_a = {
+        worker_name: 'WorkerA',
         feature_category: :source_code_management,
         has_external_dependencies: false,
-        latency_sensitive: false,
+        urgency: :low,
         resource_boundary: :memory,
         weight: 2,
-        idempotent: true
+        idempotent: true,
+        tags: []
       }
 
       attributes_b = {
+        worker_name: 'WorkerB',
         feature_category: :not_owned,
         has_external_dependencies: true,
-        latency_sensitive: true,
+        urgency: :high,
         resource_boundary: :unknown,
         weight: 3,
-        idempotent: false
+        idempotent: false,
+        tags: [:no_disk_io]
       }
 
       worker_a = create_worker(queue: 'a', **attributes_a)

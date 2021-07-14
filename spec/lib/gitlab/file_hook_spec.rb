@@ -2,14 +2,14 @@
 
 require 'spec_helper'
 
-describe Gitlab::FileHook do
-  let(:file_hook) { Rails.root.join('plugins', 'test.rb') }
+RSpec.describe Gitlab::FileHook do
+  let(:file_hook) { Rails.root.join('file_hooks', 'test.rb') }
   let(:tmp_file) { Tempfile.new('file_hook-dump') }
 
   let(:file_hook_source) do
     <<~EOS
       #!/usr/bin/env ruby
-      x = STDIN.read
+      x = $stdin.read
       File.write('#{tmp_file.path}', x)
     EOS
   end

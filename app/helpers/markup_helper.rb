@@ -79,7 +79,7 @@ module MarkupHelper
     md = markdown_field(object, attribute, options.merge(post_process: false))
     return unless md.present?
 
-    tags = %w(a gl-emoji b pre code p span)
+    tags = %w(a gl-emoji b strong i em pre code p span)
     tags << 'img' if options[:allow_images]
 
     text = truncate_visible(md, max_chars || md.length)
@@ -88,7 +88,7 @@ module MarkupHelper
       text,
       tags: tags,
       attributes: Rails::Html::WhiteListSanitizer.allowed_attributes +
-          %w(style data-src data-name data-unicode-version data-iid data-project-path data-mr-title)
+          %w(style data-src data-name data-unicode-version data-iid data-project-path data-mr-title data-html)
     )
 
     # since <img> tags are stripped, this can leave empty <a> tags hanging around
@@ -118,6 +118,7 @@ module MarkupHelper
 
   def markup(file_name, text, context = {})
     context[:project] ||= @project
+    context[:text_source] ||= :blob
     html = context.delete(:rendered) || markup_unsafe(file_name, text, context)
     prepare_for_rendering(html, context)
   end
@@ -126,15 +127,7 @@ module MarkupHelper
     text = wiki_page.content
     return '' unless text.present?
 
-    context.merge!(
-      pipeline: :wiki,
-      project: @project,
-      project_wiki: @project_wiki,
-      repository: @project_wiki.repository,
-      page_slug: wiki_page.slug,
-      issuable_state_filter_enabled: true
-    )
-
+    context = render_wiki_content_context(@wiki, wiki_page, context)
     html = markup_unsafe(wiki_page.path, text, context)
 
     prepare_for_rendering(html, context)
@@ -181,6 +174,20 @@ module MarkupHelper
   end
 
   private
+
+  def render_wiki_content_context(wiki, wiki_page, context)
+    context.merge(
+      pipeline: :wiki,
+      wiki: wiki,
+      repository: wiki.repository,
+      page_slug: wiki_page.slug,
+      issuable_state_filter_enabled: true
+    ).merge(render_wiki_content_context_container(wiki))
+  end
+
+  def render_wiki_content_context_container(wiki)
+    { project: wiki.container }
+  end
 
   # Return +text+, truncated to +max_chars+ characters, excluding any HTML
   # tags.
@@ -233,7 +240,7 @@ module MarkupHelper
 
   def strip_empty_link_tags(text)
     scrubber = Loofah::Scrubber.new do |node|
-      node.remove if node.name == 'a' && node.content.blank?
+      node.remove if node.name == 'a' && node.children.empty?
     end
 
     sanitize text, scrubber: scrubber
@@ -244,7 +251,6 @@ module MarkupHelper
     content_tag :button,
       type: 'button',
       class: 'toolbar-btn js-md has-tooltip',
-      tabindex: -1,
       data: data,
       title: options[:title],
       aria: { label: options[:title] } do
@@ -300,7 +306,7 @@ module MarkupHelper
 
       # RepositoryLinkFilter and UploadLinkFilter
       commit:         @commit,
-      project_wiki:   @project_wiki,
+      wiki:           @wiki,
       ref:            @ref,
       requested_path: @path
     )
@@ -312,3 +318,5 @@ module MarkupHelper
 
   extend self
 end
+
+MarkupHelper.prepend_mod_with('MarkupHelper')

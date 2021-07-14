@@ -12,16 +12,21 @@ class LicenseTemplate
       (fullname|name\sof\s(author|copyright\sowner))
     [\>\}\]]}xi.freeze
 
-  attr_reader :key, :name, :category, :nickname, :url, :meta
+  attr_reader :key, :name, :project, :category, :nickname, :url, :meta
 
-  def initialize(key:, name:, category:, content:, nickname: nil, url: nil, meta: {})
+  def initialize(key:, name:, project:, category:, content:, nickname: nil, url: nil, meta: {})
     @key = key
     @name = name
+    @project = project
     @category = category
     @content = content
     @nickname = nickname
     @url = url
     @meta = meta
+  end
+
+  def project_id
+    project&.id
   end
 
   def popular?
@@ -39,7 +44,7 @@ class LicenseTemplate
   end
 
   # Populate placeholders in the LicenseTemplate content
-  def resolve!(project_name: nil, fullname: nil, year: Time.now.year.to_s)
+  def resolve!(project_name: nil, fullname: nil, year: Time.current.year.to_s)
     # Ensure the string isn't shared with any other instance of LicenseTemplate
     new_content = content.dup
     new_content.gsub!(YEAR_TEMPLATE_REGEX, year) if year.present?

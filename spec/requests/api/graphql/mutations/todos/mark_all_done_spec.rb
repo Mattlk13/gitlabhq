@@ -2,7 +2,7 @@
 
 require 'spec_helper'
 
-describe 'Marking all todos done' do
+RSpec.describe 'Marking all todos done' do
   include GraphqlHelpers
 
   let_it_be(:current_user) { create(:user) }
@@ -22,8 +22,8 @@ describe 'Marking all todos done' do
     graphql_mutation(:todos_mark_all_done, input,
                      <<-QL.strip_heredoc
                        clientMutationId
+                       todos { id }
                        errors
-                       updatedIds
                      QL
     )
   end
@@ -40,7 +40,7 @@ describe 'Marking all todos done' do
     expect(todo3.reload.state).to eq('done')
     expect(other_user_todo.reload.state).to eq('pending')
 
-    updated_todo_ids = mutation_response['updatedIds']
+    updated_todo_ids = mutation_response['todos'].map { |todo| todo['id'] }
     expect(updated_todo_ids).to contain_exactly(global_id_of(todo1), global_id_of(todo3))
   end
 
@@ -52,14 +52,13 @@ describe 'Marking all todos done' do
     expect(todo3.reload.state).to eq('pending')
     expect(other_user_todo.reload.state).to eq('pending')
 
-    updated_todo_ids = mutation_response['updatedIds']
+    updated_todo_ids = mutation_response['todos']
     expect(updated_todo_ids).to be_empty
   end
 
   context 'when user is not logged in' do
     let(:current_user) { nil }
 
-    it_behaves_like 'a mutation that returns top-level errors',
-                    errors: ['The resource that you are attempting to access does not exist or you don\'t have permission to perform this action']
+    it_behaves_like 'a mutation that returns a top-level access error'
   end
 end

@@ -1,25 +1,24 @@
-import initSettingsPanels from '~/settings_panels';
-import AjaxVariableList from '~/ci_variable_list/ajax_variable_list';
 import initVariableList from '~/ci_variable_list';
-import DueDateSelectors from '~/due_date_select';
+import GroupRunnersFilteredSearchTokenKeys from '~/filtered_search/group_runners_filtered_search_token_keys';
+import initSharedRunnersForm from '~/group_settings/mount_shared_runners';
+import { FILTERED_SEARCH } from '~/pages/constants';
+import initFilteredSearch from '~/pages/search/init_filtered_search';
+import { initRunnerAwsDeployments } from '~/pages/shared/mount_runner_aws_deployments';
+import { initInstallRunner } from '~/pages/shared/mount_runner_instructions';
+import initSettingsPanels from '~/settings_panels';
 
-document.addEventListener('DOMContentLoaded', () => {
-  // Initialize expandable settings panels
-  initSettingsPanels();
-  // eslint-disable-next-line no-new
-  new DueDateSelectors();
+// Initialize expandable settings panels
+initSettingsPanels();
 
-  if (gon.features.newVariablesUi) {
-    initVariableList();
-  } else {
-    const variableListEl = document.querySelector('.js-ci-variable-list-section');
-    // eslint-disable-next-line no-new
-    new AjaxVariableList({
-      container: variableListEl,
-      saveButton: variableListEl.querySelector('.js-ci-variables-save-button'),
-      errorBox: variableListEl.querySelector('.js-ci-variable-error-box'),
-      saveEndpoint: variableListEl.dataset.saveEndpoint,
-      maskableRegex: variableListEl.dataset.maskableRegex,
-    });
-  }
+initFilteredSearch({
+  page: FILTERED_SEARCH.ADMIN_RUNNERS,
+  filteredSearchTokenKeys: GroupRunnersFilteredSearchTokenKeys,
+  anchor: FILTERED_SEARCH.GROUP_RUNNERS_ANCHOR,
+  useDefaultState: false,
 });
+
+initSharedRunnersForm();
+initVariableList();
+
+initInstallRunner();
+initRunnerAwsDeployments();

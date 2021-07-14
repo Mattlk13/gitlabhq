@@ -2,14 +2,14 @@
 
 require 'spec_helper'
 
-describe 'Unsubscribe links', :sidekiq_might_not_need_inline do
+RSpec.describe 'Unsubscribe links', :sidekiq_might_not_need_inline do
   include Warden::Test::Helpers
 
   let(:recipient) { create(:user) }
   let(:author) { create(:user) }
   let(:project) { create(:project, :public) }
   let(:params) { { title: 'A bug!', description: 'Fix it!', assignees: [recipient] } }
-  let(:issue) { Issues::CreateService.new(project, author, params).execute }
+  let(:issue) { Issues::CreateService.new(project: project, current_user: author, params: params, spam_params: nil).execute }
 
   let(:mail) { ActionMailer::Base.deliveries.last }
   let(:body) { Capybara::Node::Simple.new(mail.default_part_body.to_s) }

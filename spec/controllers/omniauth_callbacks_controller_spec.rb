@@ -2,7 +2,7 @@
 
 require 'spec_helper'
 
-describe OmniauthCallbacksController, type: :controller, do_not_mock_admin_mode: true do
+RSpec.describe OmniauthCallbacksController, type: :controller do
   include LoginHelpers
 
   describe 'omniauth' do
@@ -40,11 +40,27 @@ describe OmniauthCallbacksController, type: :controller, do_not_mock_admin_mode:
       end
     end
 
+    context 'when sign in is not valid' do
+      let(:provider) { :github }
+      let(:extern_uid) { 'my-uid' }
+
+      it 'renders omniauth error page' do
+        allow_next_instance_of(Gitlab::Auth::OAuth::User) do |instance|
+          allow(instance).to receive(:valid_sign_in?).and_return(false)
+        end
+
+        post provider
+
+        expect(response).to render_template("errors/omniauth_error")
+        expect(response).to have_gitlab_http_status(:unprocessable_entity)
+      end
+    end
+
     context 'when the user is on the last sign in attempt' do
       let(:extern_uid) { 'my-uid' }
 
       before do
-        user.update(failed_attempts: User.maximum_attempts.pred)
+        user.update!(failed_attempts: User.maximum_attempts.pred)
         subject.response = ActionDispatch::Response.new
       end
 
@@ -144,10 +160,19 @@ describe OmniauthCallbacksController, type: :controller, do_not_mock_admin_mode:
         let(:extern_uid) { 'my-uid' }
         let(:provider) { :github }
 
+        it_behaves_like 'known sign in' do
+          let(:post_action) { post provider }
+        end
+
         it 'allows sign in' do
           post provider
 
           expect(request.env['warden']).to be_authenticated
+        end
+
+        it 'creates an authentication event record' do
+          expect { post provider }.to change { AuthenticationEvent.count }.by(1)
+          expect(AuthenticationEvent.last.provider).to eq(provider.to_s)
         end
 
         context 'when user has no linked provider' do
@@ -177,6 +202,23 @@ describe OmniauthCallbacksController, type: :controller, do_not_mock_admin_mode:
           end
         end
 
+        context 'when user with 2FA is unconfirmed' do
+          render_views
+
+          let(:user) { create(:omniauth_user, :two_factor, extern_uid: 'my-uid', provider: provider) }
+
+          before do
+            user.update_column(:confirmed_at, nil)
+          end
+
+          it 'redirects to login page' do
+            post provider
+
+            expect(response).to redirect_to(new_user_session_path)
+            expect(flash[:alert]).to match(/You have to confirm your email address before continuing./)
+          end
+        end
+
         context 'sign up' do
           include_context 'sign_up'
 
@@ -191,7 +233,7 @@ describe OmniauthCallbacksController, type: :controller, do_not_mock_admin_mode:
           before do
             stub_env('IN_MEMORY_APPLICATION_SETTINGS', 'false')
             settings = Gitlab::CurrentSettings.current_application_settings
-            settings.update(disabled_oauth_sign_in_sources: [provider.to_s])
+            settings.update!(disabled_oauth_sign_in_sources: [provider.to_s])
           end
 
           it 'prevents login via POST' do
@@ -208,7 +250,7 @@ describe OmniauthCallbacksController, type: :controller, do_not_mock_admin_mode:
           end
 
           it 'allows linking the disabled provider' do
-            user.identities.destroy_all # rubocop: disable DestroyAll
+            user.identities.destroy_all # rubocop: disable Cop/DestroyAll
             sign_in(user)
 
             expect { post provider }.to change { user.reload.identities.count }.by(1)
@@ -234,8 +276,65 @@ describe OmniauthCallbacksController, type: :controller, do_not_mock_admin_mode:
           post 'auth0'
 
           expect(request.env['warden']).not_to be_authenticated
-          expect(response.status).to eq(302)
+          expect(response).to have_gitlab_http_status(:found)
           expect(controller).to set_flash[:alert].to('Wrong extern UID provided. Make sure Auth0 is configured correctly.')
+        end
+      end
+
+      context 'atlassian_oauth2' do
+        let(:provider) { :atlassian_oauth2 }
+        let(:extern_uid) { 'my-uid' }
+
+        context 'when the user and identity already exist' do
+          let(:user) { create(:atlassian_user, extern_uid: extern_uid) }
+
+          it 'allows sign-in' do
+            post :atlassian_oauth2
+
+            expect(request.env['warden']).to be_authenticated
+          end
+
+          it 'sets the username and caller_id in the context' do
+            expect(controller).to receive(:atlassian_oauth2).and_wrap_original do |m, *args|
+              m.call(*args)
+
+              expect(Gitlab::ApplicationContext.current)
+                .to include('meta.user' => user.username,
+                            'meta.caller_id' => 'OmniauthCallbacksController#atlassian_oauth2')
+            end
+
+            post :atlassian_oauth2
+          end
+        end
+
+        context 'for a new user' do
+          before do
+            stub_omniauth_setting(enabled: true, auto_link_user: true, allow_single_sign_on: ['atlassian_oauth2'])
+
+            user.destroy!
+          end
+
+          it 'denies sign-in if sign-up is enabled, but block_auto_created_users is set' do
+            post :atlassian_oauth2
+
+            expect(flash[:alert]).to start_with 'Your account has been blocked.'
+          end
+
+          it 'accepts sign-in if sign-up is enabled' do
+            stub_omniauth_setting(block_auto_created_users: false)
+
+            post :atlassian_oauth2
+
+            expect(request.env['warden']).to be_authenticated
+          end
+
+          it 'denies sign-in if sign-up is not enabled' do
+            stub_omniauth_setting(allow_single_sign_on: false, block_auto_created_users: false)
+
+            post :atlassian_oauth2
+
+            expect(flash[:alert]).to start_with 'Signing in using your Atlassian account without a pre-existing GitLab account is not allowed.'
+          end
         end
       end
 
@@ -249,7 +348,7 @@ describe OmniauthCallbacksController, type: :controller, do_not_mock_admin_mode:
             post 'salesforce'
 
             expect(request.env['warden']).not_to be_authenticated
-            expect(response.status).to eq(302)
+            expect(response).to have_gitlab_http_status(:found)
             expect(controller).to set_flash[:alert].to('Email not verified. Please verify your email in Salesforce.')
           end
         end
@@ -280,16 +379,21 @@ describe OmniauthCallbacksController, type: :controller, do_not_mock_admin_mode:
 
     before do
       stub_last_request_id(last_request_id)
-      stub_omniauth_saml_config({ enabled: true, auto_link_saml_user: true, allow_single_sign_on: ['saml'],
-                                  providers: [saml_config] })
+      stub_omniauth_saml_config(enabled: true, auto_link_saml_user: true, allow_single_sign_on: ['saml'],
+                                  providers: [saml_config])
       mock_auth_hash_with_saml_xml('saml', +'my-uid', user.email, mock_saml_response)
       request.env['devise.mapping'] = Devise.mappings[:user]
       request.env['omniauth.auth'] = Rails.application.env_config['omniauth.auth']
     end
 
+    it_behaves_like 'known sign in' do
+      let(:user) { create(:omniauth_user, extern_uid: 'my-uid', provider: 'saml') }
+      let(:post_action) { post :saml, params: { SAMLResponse: mock_saml_response } }
+    end
+
     context 'sign up' do
       before do
-        user.destroy
+        user.destroy!
       end
 
       it 'denies login if sign up is enabled, but block_auto_created_users is set' do
@@ -361,6 +465,18 @@ describe OmniauthCallbacksController, type: :controller, do_not_mock_admin_mode:
 
       it 'doesn\'t link a new identity to the user' do
         expect { post :saml, params: { SAMLResponse: mock_saml_response } }.not_to change { user.identities.count }
+      end
+
+      it 'sets the username and caller_id in the context' do
+        expect(controller).to receive(:saml).and_wrap_original do |m, *args|
+          m.call(*args)
+
+          expect(Gitlab::ApplicationContext.current)
+            .to include('meta.user' => user.username,
+                        'meta.caller_id' => 'OmniauthCallbacksController#saml')
+        end
+
+        post :saml, params: { SAMLResponse: mock_saml_response }
       end
     end
   end

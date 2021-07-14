@@ -1,19 +1,28 @@
+---
+stage: Manage
+group: Access
+info: To determine the technical writer assigned to the Stage/Group associated with this page, see https://about.gitlab.com/handbook/engineering/ux/technical-writing/#assignments
+---
+
 # Group badges API
 
-> [Introduced](https://gitlab.com/gitlab-org/gitlab-foss/-/merge_requests/17082)
-in GitLab 10.6.
+> [Introduced](https://gitlab.com/gitlab-org/gitlab-foss/-/merge_requests/17082) in GitLab 10.6.
 
 ## Placeholder tokens
 
-Badges support placeholders that will be replaced in real time in both the link and image URL. The allowed placeholders are:
+Badges support placeholders that are replaced in real time in both the link and image URL. The allowed placeholders are:
 
-- **%{project_path}**: will be replaced by the project path.
-- **%{project_id}**: will be replaced by the project id.
-- **%{default_branch}**: will be replaced by the project default branch.
-- **%{commit_sha}**: will be replaced by the last project's commit sha.
+<!-- vale gitlab.Spelling = NO -->
 
-Because these endpoints aren't inside a project's context, the information used to replace the placeholders will be
-from the first group's project by creation date. If the group hasn't got any project the original URL with the placeholders will be returned.
+- **%{project_path}**: replaced by the project path.
+- **%{project_id}**: replaced by the project ID.
+- **%{default_branch}**: replaced by the project default branch.
+- **%{commit_sha}**: replaced by the last project's commit SHA.
+
+<!-- vale gitlab.Spelling = YES -->
+
+Because these endpoints aren't inside a project's context, the information used to replace the placeholders comes
+from the first group's project by creation date. If the group hasn't got any project the original URL with the placeholders is returned.
 
 ## List all badges of a group
 
@@ -25,11 +34,11 @@ GET /groups/:id/badges
 
 | Attribute | Type | Required | Description |
 | --------- | ---- | -------- | ----------- |
-| `id`      | integer/string | yes | The ID or [URL-encoded path of the group](README.md#namespaced-path-encoding) owned by the authenticated user |
+| `id`      | integer/string | yes | The ID or [URL-encoded path of the group](index.md#namespaced-path-encoding) owned by the authenticated user |
 | `name`    | string         | no  | Name of the badges to return (case-sensitive). |
 
 ```shell
-curl --header "PRIVATE-TOKEN: <your_access_token>" https://gitlab.example.com/api/v4/groups/:id/badges?name=Coverage
+curl --header "PRIVATE-TOKEN: <your_access_token>" "https://gitlab.example.com/api/v4/groups/:id/badges?name=Coverage"
 ```
 
 Example response:
@@ -58,11 +67,11 @@ GET /groups/:id/badges/:badge_id
 
 | Attribute | Type | Required | Description |
 | --------- | ---- | -------- | ----------- |
-| `id`      | integer/string | yes | The ID or [URL-encoded path of the group](README.md#namespaced-path-encoding) owned by the authenticated user |
+| `id`      | integer/string | yes | The ID or [URL-encoded path of the group](index.md#namespaced-path-encoding) owned by the authenticated user |
 | `badge_id` | integer | yes   | The badge ID |
 
 ```shell
-curl --header "PRIVATE-TOKEN: <your_access_token>" https://gitlab.example.com/api/v4/groups/:id/badges/:badge_id
+curl --header "PRIVATE-TOKEN: <your_access_token>" "https://gitlab.example.com/api/v4/groups/:id/badges/:badge_id"
 ```
 
 Example response:
@@ -88,12 +97,14 @@ POST /groups/:id/badges
 
 | Attribute | Type | Required | Description |
 | --------- | ---- | -------- | ----------- |
-| `id`      | integer/string | yes | The ID or [URL-encoded path of the group](README.md#namespaced-path-encoding) owned by the authenticated user |
+| `id`      | integer/string | yes | The ID or [URL-encoded path of the group](index.md#namespaced-path-encoding) owned by the authenticated user |
 | `link_url` | string         | yes | URL of the badge link |
 | `image_url` | string | yes | URL of the badge image |
 
 ```shell
-curl --request POST --header "PRIVATE-TOKEN: <your_access_token>" --data "link_url=https://gitlab.com/gitlab-org/gitlab-foss/commits/master&image_url=https://shields.io/my/badge1&position=0" https://gitlab.example.com/api/v4/groups/:id/badges
+curl --request POST --header "PRIVATE-TOKEN: <your_access_token>" \
+     --data "link_url=https://gitlab.com/gitlab-org/gitlab-foss/commits/master&image_url=https://shields.io/my/badge1&position=0" \
+     "https://gitlab.example.com/api/v4/groups/:id/badges"
 ```
 
 Example response:
@@ -119,13 +130,14 @@ PUT /groups/:id/badges/:badge_id
 
 | Attribute | Type | Required | Description |
 | --------- | ---- | -------- | ----------- |
-| `id`      | integer/string | yes | The ID or [URL-encoded path of the group](README.md#namespaced-path-encoding) owned by the authenticated user |
+| `id`      | integer/string | yes | The ID or [URL-encoded path of the group](index.md#namespaced-path-encoding) owned by the authenticated user |
 | `badge_id` | integer | yes   | The badge ID |
 | `link_url` | string         | no | URL of the badge link |
 | `image_url` | string | no | URL of the badge image |
 
 ```shell
-curl --request PUT --header "PRIVATE-TOKEN: <your_access_token>" https://gitlab.example.com/api/v4/groups/:id/badges/:badge_id
+curl --request PUT --header "PRIVATE-TOKEN: <your_access_token>" \
+     "https://gitlab.example.com/api/v4/groups/:id/badges/:badge_id"
 ```
 
 Example response:
@@ -151,11 +163,11 @@ DELETE /groups/:id/badges/:badge_id
 
 | Attribute | Type | Required | Description |
 | --------- | ---- | -------- | ----------- |
-| `id`      | integer/string | yes | The ID or [URL-encoded path of the group](README.md#namespaced-path-encoding) owned by the authenticated user |
+| `id`      | integer/string | yes | The ID or [URL-encoded path of the group](index.md#namespaced-path-encoding) owned by the authenticated user |
 | `badge_id` | integer | yes   | The badge ID |
 
 ```shell
-curl --request DELETE --header "PRIVATE-TOKEN: <your_access_token>" https://gitlab.example.com/api/v4/groups/:id/badges/:badge_id
+curl --request DELETE --header "PRIVATE-TOKEN: <your_access_token>" "https://gitlab.example.com/api/v4/groups/:id/badges/:badge_id"
 ```
 
 ## Preview a badge from a group
@@ -168,12 +180,12 @@ GET /groups/:id/badges/render
 
 | Attribute | Type | Required | Description |
 | --------- | ---- | -------- | ----------- |
-| `id`      | integer/string | yes | The ID or [URL-encoded path of the group](README.md#namespaced-path-encoding) owned by the authenticated user |
+| `id`      | integer/string | yes | The ID or [URL-encoded path of the group](index.md#namespaced-path-encoding) owned by the authenticated user |
 | `link_url` | string         | yes | URL of the badge link|
 | `image_url` | string | yes | URL of the badge image |
 
 ```shell
-curl --header "PRIVATE-TOKEN: <your_access_token>" https://gitlab.example.com/api/v4/groups/:id/badges/render?link_url=http%3A%2F%2Fexample.com%2Fci_status.svg%3Fproject%3D%25%7Bproject_path%7D%26ref%3D%25%7Bdefault_branch%7D&image_url=https%3A%2F%2Fshields.io%2Fmy%2Fbadge
+curl --header "PRIVATE-TOKEN: <your_access_token>" "https://gitlab.example.com/api/v4/groups/:id/badges/render?link_url=http%3A%2F%2Fexample.com%2Fci_status.svg%3Fproject%3D%25%7Bproject_path%7D%26ref%3D%25%7Bdefault_branch%7D&image_url=https%3A%2F%2Fshields.io%2Fmy%2Fbadge"
 ```
 
 Example response:
@@ -183,6 +195,6 @@ Example response:
   "link_url": "http://example.com/ci_status.svg?project=%{project_path}&ref=%{default_branch}",
   "image_url": "https://shields.io/my/badge",
   "rendered_link_url": "http://example.com/ci_status.svg?project=example-org/example-project&ref=master",
-  "rendered_image_url": "https://shields.io/my/badge",
+  "rendered_image_url": "https://shields.io/my/badge"
 }
 ```

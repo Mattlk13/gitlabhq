@@ -6,19 +6,15 @@ module Gitlab
       include ObjectImporter
 
       def representation_class
-        Representation::PullRequest
+        Gitlab::GithubImport::Representation::PullRequest
       end
 
       def importer_class
         Importer::PullRequestImporter
       end
 
-      def counter_name
-        :github_importer_imported_pull_requests
-      end
-
-      def counter_description
-        'The number of imported GitHub pull requests'
+      def object_type
+        :pull_request
       end
     end
   end

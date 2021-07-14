@@ -26,6 +26,8 @@ module Gitlab
       end
 
       def execute
+        info(project.id, message: "starting importer")
+
         retval =
           if parallel?
             parallel_import
@@ -42,9 +44,14 @@ module Gitlab
         # still scheduling duplicates while. Since all work has already been
         # completed those jobs will just cycle through any remaining pages while
         # not scheduling anything.
-        Caching.expire(already_imported_cache_key, 15.minutes.to_i)
+        Gitlab::Cache::Import::Caching.expire(already_imported_cache_key, 15.minutes.to_i)
+        info(project.id, message: "importer finished")
 
         retval
+      rescue StandardError => e
+        error(project.id, e)
+
+        raise e
       end
 
       # Imports all the objects in sequence in the current thread.
@@ -96,6 +103,8 @@ module Gitlab
           page.objects.each do |object|
             next if already_imported?(object)
 
+            Gitlab::GithubImport::ObjectCounter.increment(project, object_type, :fetched)
+
             yield object
 
             # We mark the object as imported immediately so we don't end up
@@ -112,14 +121,18 @@ module Gitlab
       def already_imported?(object)
         id = id_for_already_imported_cache(object)
 
-        Caching.set_includes?(already_imported_cache_key, id)
+        Gitlab::Cache::Import::Caching.set_includes?(already_imported_cache_key, id)
       end
 
       # Marks the given object as "already imported".
       def mark_as_imported(object)
         id = id_for_already_imported_cache(object)
 
-        Caching.set_add(already_imported_cache_key, id)
+        Gitlab::Cache::Import::Caching.set_add(already_imported_cache_key, id)
+      end
+
+      def object_type
+        raise NotImplementedError
       end
 
       # Returns the ID to use for the cache used for checking if an object has
@@ -156,6 +169,40 @@ module Gitlab
       # import.
       def collection_options
         {}
+      end
+
+      private
+
+      def info(project_id, extra = {})
+        logger.info(log_attributes(project_id, extra))
+      end
+
+      def error(project_id, exception)
+        logger.error(
+          log_attributes(
+            project_id,
+            message: 'importer failed',
+            'error.message': exception.message
+          )
+        )
+
+        Gitlab::ErrorTracking.track_exception(
+          exception,
+          log_attributes(project_id)
+        )
+      end
+
+      def log_attributes(project_id, extra = {})
+        extra.merge(
+          import_source: :github,
+          project_id: project_id,
+          importer: importer_class.name,
+          parallel: parallel?
+        )
+      end
+
+      def logger
+        @logger ||= Gitlab::Import::Logger.build
       end
     end
   end

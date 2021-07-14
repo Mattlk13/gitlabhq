@@ -1,13 +1,13 @@
-import Api from '~/api';
 import MockAdapter from 'axios-mock-adapter';
 import testAction from 'helpers/vuex_action_helper';
-import axios from '~/lib/utils/axios_utils';
-import createFlash from '~/flash';
-import getInitialState from '~/ci_variable_list/store/state';
+import Api from '~/api';
 import * as actions from '~/ci_variable_list/store/actions';
 import * as types from '~/ci_variable_list/store/mutation_types';
-import mockData from '../services/mock_data';
+import getInitialState from '~/ci_variable_list/store/state';
 import { prepareDataForDisplay, prepareEnvironments } from '~/ci_variable_list/store/utils';
+import createFlash from '~/flash';
+import axios from '~/lib/utils/axios_utils';
+import mockData from '../services/mock_data';
 
 jest.mock('~/api.js');
 jest.mock('~/flash.js');
@@ -75,13 +75,23 @@ describe('CI variable list store actions', () => {
     });
   });
 
+  describe('setVariableProtected', () => {
+    it('commits SET_VARIABLE_PROTECTED mutation', () => {
+      testAction(actions.setVariableProtected, {}, {}, [
+        {
+          type: types.SET_VARIABLE_PROTECTED,
+        },
+      ]);
+    });
+  });
+
   describe('deleteVariable', () => {
-    it('dispatch correct actions on successful deleted variable', done => {
+    it('dispatch correct actions on successful deleted variable', (done) => {
       mock.onPatch(state.endpoint).reply(200);
 
       testAction(
         actions.deleteVariable,
-        mockVariable,
+        {},
         state,
         [],
         [
@@ -95,12 +105,12 @@ describe('CI variable list store actions', () => {
       );
     });
 
-    it('should show flash error and set error in state on delete failure', done => {
+    it('should show flash error and set error in state on delete failure', (done) => {
       mock.onPatch(state.endpoint).reply(500, '');
 
       testAction(
         actions.deleteVariable,
-        mockVariable,
+        {},
         state,
         [],
         [
@@ -119,12 +129,12 @@ describe('CI variable list store actions', () => {
   });
 
   describe('updateVariable', () => {
-    it('dispatch correct actions on successful updated variable', done => {
+    it('dispatch correct actions on successful updated variable', (done) => {
       mock.onPatch(state.endpoint).reply(200);
 
       testAction(
         actions.updateVariable,
-        mockVariable,
+        {},
         state,
         [],
         [
@@ -138,7 +148,7 @@ describe('CI variable list store actions', () => {
       );
     });
 
-    it('should show flash error and set error in state on update failure', done => {
+    it('should show flash error and set error in state on update failure', (done) => {
       mock.onPatch(state.endpoint).reply(500, '');
 
       testAction(
@@ -162,7 +172,7 @@ describe('CI variable list store actions', () => {
   });
 
   describe('addVariable', () => {
-    it('dispatch correct actions on successful added variable', done => {
+    it('dispatch correct actions on successful added variable', (done) => {
       mock.onPatch(state.endpoint).reply(200);
 
       testAction(
@@ -181,7 +191,7 @@ describe('CI variable list store actions', () => {
       );
     });
 
-    it('should show flash error and set error in state on add failure', done => {
+    it('should show flash error and set error in state on add failure', (done) => {
       mock.onPatch(state.endpoint).reply(500, '');
 
       testAction(
@@ -205,7 +215,7 @@ describe('CI variable list store actions', () => {
   });
 
   describe('fetchVariables', () => {
-    it('dispatch correct actions on fetchVariables', done => {
+    it('dispatch correct actions on fetchVariables', (done) => {
       mock.onGet(state.endpoint).reply(200, { variables: mockData.mockVariables });
 
       testAction(
@@ -226,18 +236,20 @@ describe('CI variable list store actions', () => {
       );
     });
 
-    it('should show flash error and set error in state on fetch variables failure', done => {
+    it('should show flash error and set error in state on fetch variables failure', (done) => {
       mock.onGet(state.endpoint).reply(500);
 
       testAction(actions.fetchVariables, {}, state, [], [{ type: 'requestVariables' }], () => {
-        expect(createFlash).toHaveBeenCalledWith('There was an error fetching the variables.');
+        expect(createFlash).toHaveBeenCalledWith({
+          message: 'There was an error fetching the variables.',
+        });
         done();
       });
     });
   });
 
   describe('fetchEnvironments', () => {
-    it('dispatch correct actions on fetchEnvironments', done => {
+    it('dispatch correct actions on fetchEnvironments', (done) => {
       Api.environments = jest.fn().mockResolvedValue({ data: mockData.mockEnvironments });
 
       testAction(
@@ -258,7 +270,7 @@ describe('CI variable list store actions', () => {
       );
     });
 
-    it('should show flash error and set error in state on fetch environments failure', done => {
+    it('should show flash error and set error in state on fetch environments failure', (done) => {
       Api.environments = jest.fn().mockRejectedValue();
 
       testAction(
@@ -268,11 +280,73 @@ describe('CI variable list store actions', () => {
         [],
         [{ type: 'requestEnvironments' }],
         () => {
-          expect(createFlash).toHaveBeenCalledWith(
-            'There was an error fetching the environments information.',
-          );
+          expect(createFlash).toHaveBeenCalledWith({
+            message: 'There was an error fetching the environments information.',
+          });
           done();
         },
+      );
+    });
+  });
+
+  describe('Update variable values', () => {
+    it('updateVariableKey', () => {
+      testAction(
+        actions.updateVariableKey,
+        { key: mockVariable.key },
+        {},
+        [
+          {
+            type: types.UPDATE_VARIABLE_KEY,
+            payload: mockVariable.key,
+          },
+        ],
+        [],
+      );
+    });
+
+    it('updateVariableValue', () => {
+      testAction(
+        actions.updateVariableValue,
+        { secret_value: mockVariable.value },
+        {},
+        [
+          {
+            type: types.UPDATE_VARIABLE_VALUE,
+            payload: mockVariable.value,
+          },
+        ],
+        [],
+      );
+    });
+
+    it('updateVariableType', () => {
+      testAction(
+        actions.updateVariableType,
+        { variable_type: mockVariable.variable_type },
+        {},
+        [{ type: types.UPDATE_VARIABLE_TYPE, payload: mockVariable.variable_type }],
+        [],
+      );
+    });
+
+    it('updateVariableProtected', () => {
+      testAction(
+        actions.updateVariableProtected,
+        { protected_variable: mockVariable.protected },
+        {},
+        [{ type: types.UPDATE_VARIABLE_PROTECTED, payload: mockVariable.protected }],
+        [],
+      );
+    });
+
+    it('updateVariableMasked', () => {
+      testAction(
+        actions.updateVariableMasked,
+        { masked: mockVariable.masked },
+        {},
+        [{ type: types.UPDATE_VARIABLE_MASKED, payload: mockVariable.masked }],
+        [],
       );
     });
   });

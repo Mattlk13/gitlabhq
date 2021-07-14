@@ -15,7 +15,6 @@
 @import 'framework/badges';
 @import 'framework/calendar';
 @import 'framework/callout';
-@import 'framework/carousel';
 @import 'framework/common';
 @import 'framework/dropdowns';
 @import 'framework/files';
@@ -23,7 +22,7 @@
 @import 'framework/flash';
 @import 'framework/forms';
 @import 'framework/gfm';
-@import 'framework/gitlab_theme';
+@import 'framework/kbd';
 @import 'framework/header';
 @import 'framework/highlight';
 @import 'framework/issue_box';
@@ -39,12 +38,12 @@
 @import 'framework/secondary_navigation_elements';
 @import 'framework/selects';
 @import 'framework/sidebar';
+@import 'framework/contextual_sidebar_header';
 @import 'framework/contextual_sidebar';
 @import 'framework/tables';
 @import 'framework/notes';
 @import 'framework/tabs';
 @import 'framework/timeline';
-@import 'framework/tooltips';
 @import 'framework/toggle';
 @import 'framework/typography';
 @import 'framework/zen';
@@ -68,5 +67,7 @@
 @import 'framework/read_more';
 @import 'framework/flex_grid';
 @import 'framework/system_messages';
-@import "framework/spinner";
+@import 'framework/spinner';
 @import 'framework/card';
+@import 'framework/source_editor';
+@import 'framework/diffs';

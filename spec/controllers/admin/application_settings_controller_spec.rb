@@ -2,8 +2,9 @@
 
 require 'spec_helper'
 
-describe Admin::ApplicationSettingsController do
+RSpec.describe Admin::ApplicationSettingsController, :do_not_mock_admin_mode_setting do
   include StubENV
+  include UsageDataHelpers
 
   let(:group) { create(:group) }
   let(:project) { create(:project, namespace: group) }
@@ -14,22 +15,53 @@ describe Admin::ApplicationSettingsController do
     stub_env('IN_MEMORY_APPLICATION_SETTINGS', 'false')
   end
 
+  describe 'GET #integrations' do
+    before do
+      sign_in(admin)
+    end
+
+    context 'when GitLab.com' do
+      before do
+        allow(::Gitlab).to receive(:com?) { true }
+      end
+
+      it 'returns 404' do
+        get :integrations
+
+        expect(response).to have_gitlab_http_status(:not_found)
+      end
+    end
+
+    context 'when not GitLab.com' do
+      before do
+        allow(::Gitlab).to receive(:com?) { false }
+      end
+
+      it 'renders correct template' do
+        get :integrations
+
+        expect(response).to have_gitlab_http_status(:ok)
+        expect(response).to render_template('admin/application_settings/integrations')
+      end
+    end
+  end
+
   describe 'GET #usage_data with no access' do
     before do
-      allow(ActiveRecord::Base.connection).to receive(:transaction_open?).and_return(false)
+      stub_usage_data_connections
       sign_in(user)
     end
 
     it 'returns 404' do
       get :usage_data, format: :html
 
-      expect(response.status).to eq(404)
+      expect(response).to have_gitlab_http_status(:not_found)
     end
   end
 
   describe 'GET #usage_data' do
     before do
-      allow(ActiveRecord::Base.connection).to receive(:transaction_open?).and_return(false)
+      stub_usage_data_connections
       sign_in(admin)
     end
 
@@ -37,7 +69,7 @@ describe Admin::ApplicationSettingsController do
       get :usage_data, format: :html
 
       expect(response.body).to start_with('<span')
-      expect(response.status).to eq(200)
+      expect(response).to have_gitlab_http_status(:ok)
     end
 
     it 'returns JSON data' do
@@ -46,13 +78,20 @@ describe Admin::ApplicationSettingsController do
       body = json_response
       expect(body["version"]).to eq(Gitlab::VERSION)
       expect(body).to include('counts')
-      expect(response.status).to eq(200)
+      expect(response).to have_gitlab_http_status(:ok)
     end
   end
 
   describe 'PUT #update' do
     before do
       sign_in(admin)
+    end
+
+    it 'updates the require_admin_approval_after_user_signup setting' do
+      put :update, params: { application_setting: { require_admin_approval_after_user_signup: true } }
+
+      expect(response).to redirect_to(general_admin_application_settings_path)
+      expect(ApplicationSetting.current.require_admin_approval_after_user_signup).to eq(true)
     end
 
     it 'updates the password_authentication_enabled_for_git setting' do
@@ -104,6 +143,79 @@ describe Admin::ApplicationSettingsController do
       expect(ApplicationSetting.current.minimum_password_length).to eq(10)
     end
 
+    it 'updates repository_storages_weighted setting' do
+      put :update, params: { application_setting: { repository_storages_weighted: { default: 75 } } }
+
+      expect(response).to redirect_to(general_admin_application_settings_path)
+      expect(ApplicationSetting.current.repository_storages_weighted).to eq('default' => 75)
+    end
+
+    it 'updates kroki_formats setting' do
+      put :update, params: { application_setting: { kroki_formats_excalidraw: '1' } }
+
+      expect(response).to redirect_to(general_admin_application_settings_path)
+      expect(ApplicationSetting.current.kroki_formats_excalidraw).to eq(true)
+    end
+
+    it "updates default_branch_name setting" do
+      put :update, params: { application_setting: { default_branch_name: "example_branch_name" } }
+
+      expect(response).to redirect_to(general_admin_application_settings_path)
+      expect(ApplicationSetting.current.default_branch_name).to eq("example_branch_name")
+    end
+
+    it "updates admin_mode setting" do
+      put :update, params: { application_setting: { admin_mode: true } }
+
+      expect(response).to redirect_to(general_admin_application_settings_path)
+      expect(ApplicationSetting.current.admin_mode).to be(true)
+    end
+
+    it 'updates valid_runner_registrars setting' do
+      put :update, params: { application_setting: { valid_runner_registrars: ['project', ''] } }
+
+      expect(response).to redirect_to(general_admin_application_settings_path)
+      expect(ApplicationSetting.current.valid_runner_registrars).to eq(['project'])
+    end
+
+    context "personal access token prefix settings" do
+      let(:application_settings) { ApplicationSetting.current }
+
+      shared_examples "accepts prefix setting" do |prefix|
+        it "updates personal_access_token_prefix setting" do
+          put :update, params: { application_setting: { personal_access_token_prefix: prefix } }
+
+          expect(response).to redirect_to(general_admin_application_settings_path)
+          expect(application_settings.reload.personal_access_token_prefix).to eq(prefix)
+        end
+      end
+
+      shared_examples "rejects prefix setting" do |prefix|
+        it "does not update personal_access_token_prefix setting" do
+          put :update, params: { application_setting: { personal_access_token_prefix: prefix } }
+
+          expect(response).not_to redirect_to(general_admin_application_settings_path)
+          expect(application_settings.reload.personal_access_token_prefix).not_to eq(prefix)
+        end
+      end
+
+      context "with valid prefix" do
+        include_examples("accepts prefix setting", "a_prefix@")
+      end
+
+      context "with blank prefix" do
+        include_examples("accepts prefix setting", "")
+      end
+
+      context "with too long prefix" do
+        include_examples("rejects prefix setting", "a_prefix@" * 10)
+      end
+
+      context "with invalid characters prefix" do
+        include_examples("rejects prefix setting", "a_préfixñ:")
+      end
+    end
+
     context 'external policy classification settings' do
       let(:settings) do
         {
@@ -130,6 +242,39 @@ describe Admin::ApplicationSettingsController do
       Admin::ApplicationSettingsController::VALID_SETTING_PANELS.each do |valid_action|
         it_behaves_like 'renders correct panels' do
           let(:action) { valid_action }
+        end
+      end
+    end
+
+    describe 'EKS integration' do
+      let(:application_setting) { ApplicationSetting.current }
+      let(:settings_params) do
+        {
+          eks_integration_enabled: '1',
+          eks_account_id: '123456789012',
+          eks_access_key_id: 'dummy access key',
+          eks_secret_access_key: 'dummy secret key'
+        }
+      end
+
+      it 'updates EKS settings' do
+        put :update, params: { application_setting: settings_params }
+
+        expect(application_setting.eks_integration_enabled).to be_truthy
+        expect(application_setting.eks_account_id).to eq '123456789012'
+        expect(application_setting.eks_access_key_id).to eq 'dummy access key'
+        expect(application_setting.eks_secret_access_key).to eq 'dummy secret key'
+      end
+
+      context 'secret access key is blank' do
+        let(:settings_params) { { eks_secret_access_key: '' } }
+
+        it 'does not update the secret key' do
+          application_setting.update!(eks_secret_access_key: 'dummy secret key')
+
+          put :update, params: { application_setting: settings_params }
+
+          expect(application_setting.reload.eks_secret_access_key).to eq 'dummy secret key'
         end
       end
     end

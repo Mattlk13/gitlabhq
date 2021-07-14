@@ -2,8 +2,10 @@
 
 require 'spec_helper'
 
-describe Ci::Stage, :models do
-  let(:stage) { create(:ci_stage_entity) }
+RSpec.describe Ci::Stage, :models do
+  let_it_be(:pipeline) { create(:ci_empty_pipeline) }
+
+  let(:stage) { create(:ci_stage_entity, pipeline: pipeline, project: pipeline.project) }
 
   it_behaves_like 'having unique enum values'
 
@@ -23,6 +25,18 @@ describe Ci::Stage, :models do
       it 'returns only builds' do
         expect(stage.builds).to be_one
       end
+    end
+  end
+
+  describe '.by_name' do
+    it 'finds stages by name' do
+      a = create(:ci_stage_entity, name: 'a')
+      b = create(:ci_stage_entity, name: 'b')
+      c = create(:ci_stage_entity, name: 'c')
+
+      expect(described_class.by_name('a')).to contain_exactly(a)
+      expect(described_class.by_name('b')).to contain_exactly(b)
+      expect(described_class.by_name(%w[a c])).to contain_exactly(a, c)
     end
   end
 
@@ -51,6 +65,29 @@ describe Ci::Stage, :models do
       it 'sets the default value' do
         expect(described_class.find(stage.id).status)
           .to eq 'created'
+      end
+    end
+  end
+
+  describe '#set_status' do
+    where(:from_status, :to_status) do
+      from_status_names = described_class.state_machines[:status].states.map(&:name)
+      to_status_names = from_status_names - [:created] # we never want to transition into created
+
+      from_status_names.product(to_status_names)
+    end
+
+    with_them do
+      it do
+        stage.status = from_status.to_s
+
+        if from_status != to_status
+          expect(stage.set_status(to_status.to_s))
+            .to eq(true)
+        else
+          expect(stage.set_status(to_status.to_s))
+            .to eq(false), "loopback transitions are not allowed"
+        end
       end
     end
   end
@@ -148,7 +185,7 @@ describe Ci::Stage, :models do
 
       it 'raises an exception' do
         expect { stage.update_legacy_status }
-          .to raise_error(HasStatus::UnknownStatusError)
+          .to raise_error(Ci::HasStatus::UnknownStatusError)
       end
     end
   end
@@ -249,6 +286,18 @@ describe Ci::Stage, :models do
         end
       end
 
+      context 'when stage has statuses with nil idx' do
+        before do
+          create(:ci_build, :running, stage_id: stage.id, stage_idx: nil)
+          create(:ci_build, :running, stage_id: stage.id, stage_idx: 10)
+          create(:ci_build, :running, stage_id: stage.id, stage_idx: nil)
+        end
+
+        it 'sets index to a non-empty value' do
+          expect { stage.update_legacy_status }.to change { stage.reload.position }.from(nil).to(10)
+        end
+      end
+
       context 'when stage does not have statuses' do
         it 'fallbacks to zero' do
           expect(stage.reload.position).to be_nil
@@ -264,6 +313,7 @@ describe Ci::Stage, :models do
   context 'when stage has warnings' do
     before do
       create(:ci_build, :failed, :allowed_to_fail, stage_id: stage.id)
+      create(:ci_bridge, :failed, :allowed_to_fail, stage_id: stage.id)
     end
 
     describe '#has_warnings?' do
@@ -286,7 +336,7 @@ describe Ci::Stage, :models do
         expect(synced_queries.count).to eq 1
 
         expect(stage.number_of_warnings.inspect).to include 'BatchLoader'
-        expect(stage.number_of_warnings).to eq 1
+        expect(stage.number_of_warnings).to eq 2
       end
     end
   end

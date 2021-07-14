@@ -3,6 +3,10 @@
 module API
   module Entities
     class IssueBasic < IssuableEntity
+      format_with(:upcase) do |item|
+        item.upcase if item.respond_to?(:upcase)
+      end
+
       expose :closed_at
       expose :closed_by, using: Entities::UserBasic
 
@@ -16,18 +20,23 @@ module API
 
       expose :milestone, using: Entities::Milestone
       expose :assignees, :author, using: Entities::UserBasic
+      expose :issue_type,
+             as: :type,
+             format_with: :upcase,
+             documentation: { type: "String", desc: "One of #{::Issue.issue_types.keys.map(&:upcase)}" }
 
       expose :assignee, using: ::API::Entities::UserBasic do |issue|
         issue.assignees.first
       end
 
-      expose(:user_notes_count)     { |issue, options| issuable_metadata(issue, options, :user_notes_count) }
-      expose(:merge_requests_count) { |issue, options| issuable_metadata(issue, options, :merge_requests_count, options[:current_user]) }
-      expose(:upvotes)              { |issue, options| issuable_metadata(issue, options, :upvotes) }
-      expose(:downvotes)            { |issue, options| issuable_metadata(issue, options, :downvotes) }
+      expose(:user_notes_count)     { |issue, options| issuable_metadata.user_notes_count }
+      expose(:merge_requests_count) { |issue, options| issuable_metadata.merge_requests_count }
+      expose(:upvotes)              { |issue, options| issuable_metadata.upvotes }
+      expose(:downvotes)            { |issue, options| issuable_metadata.downvotes }
       expose :due_date
       expose :confidential
       expose :discussion_locked
+      expose :issue_type
 
       expose :web_url do |issue|
         Gitlab::UrlBuilder.build(issue)
@@ -42,4 +51,4 @@ module API
   end
 end
 
-API::Entities::IssueBasic.prepend_if_ee('EE::API::Entities::IssueBasic', with_descendants: true)
+API::Entities::IssueBasic.prepend_mod_with('API::Entities::IssueBasic', with_descendants: true)

@@ -2,7 +2,7 @@
 
 require 'spec_helper'
 
-describe PipelineHooksWorker do
+RSpec.describe PipelineHooksWorker do
   describe '#perform' do
     context 'when pipeline exists' do
       let(:pipeline) { create(:ci_pipeline) }
@@ -22,4 +22,8 @@ describe PipelineHooksWorker do
       end
     end
   end
+
+  it_behaves_like 'worker with data consistency',
+                  described_class,
+                  data_consistency: :delayed
 end

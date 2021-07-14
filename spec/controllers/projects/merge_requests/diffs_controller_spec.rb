@@ -2,18 +2,28 @@
 
 require 'spec_helper'
 
-describe Projects::MergeRequests::DiffsController do
+RSpec.describe Projects::MergeRequests::DiffsController do
   include ProjectForksHelper
 
   shared_examples '404 for unexistent diffable' do
     context 'when diffable does not exists' do
       it 'returns 404' do
-        unexistent_diff_id = 9999
+        go(diff_id: non_existing_record_id)
 
-        go(diff_id: unexistent_diff_id)
-
-        expect(MergeRequestDiff.find_by(id: unexistent_diff_id)).to be_nil
+        expect(MergeRequestDiff.find_by(id: non_existing_record_id)).to be_nil
         expect(response).to have_gitlab_http_status(:not_found)
+      end
+    end
+
+    context 'when the merge_request_diff.id is blank' do
+      it 'returns 404' do
+        allow_next_instance_of(MergeRequest) do |instance|
+          allow(instance).to receive(:merge_request_diff).and_return(MergeRequestDiff.new(merge_request_id: instance.id))
+
+          go
+
+          expect(response).to have_gitlab_http_status(:not_found)
+        end
       end
     end
   end
@@ -48,35 +58,27 @@ describe Projects::MergeRequests::DiffsController do
     end
   end
 
-  shared_examples 'persisted preferred diff view cookie' do
-    context 'with view param' do
-      before do
-        go(view: 'parallel')
-      end
+  shared_examples "diff note on-demand position creation" do
+    it "updates diff discussion positions" do
+      service = double("service")
 
-      it 'saves the preferred diff view in a cookie' do
-        expect(response.cookies['diff_view']).to eq('parallel')
-      end
+      expect(Discussions::CaptureDiffNotePositionsService).to receive(:new).with(merge_request).and_return(service)
+      expect(service).to receive(:execute)
 
-      it 'only renders the required view', :aggregate_failures do
-        diff_files_without_deletions = json_response['diff_files'].reject { |f| f['deleted_file'] }
-        have_no_inline_diff_lines = satisfy('have no inline diff lines') do |diff_file|
-          !diff_file.has_key?('highlighted_diff_lines')
-        end
-
-        expect(diff_files_without_deletions).to all(have_key('parallel_diff_lines'))
-        expect(diff_files_without_deletions).to all(have_no_inline_diff_lines)
-      end
+      go
     end
+  end
 
-    context 'when the user cannot view the merge request' do
-      before do
-        project.team.truncate
-        go
-      end
+  shared_examples 'show the right diff files with previous diff_id' do
+    context 'with previous diff_id' do
+      let!(:merge_request_diff_1) { merge_request.merge_request_diffs.create!(head_commit_sha: '6f6d7e7ed97bb5f0054f2b1df789b39ca89b6ff9') }
+      let!(:merge_request_diff_2) { merge_request.merge_request_diffs.create!(head_commit_sha: '5937ac0a7beb003549fc5fd26fc247adbce4a52e', diff_type: :merge_head) }
 
-      it 'returns a 404' do
-        expect(response).to have_gitlab_http_status(:not_found)
+      subject { go(diff_id: merge_request_diff_1.id, diff_head: true) }
+
+      it 'shows the right diff files' do
+        subject
+        expect(json_response["diff_files"].size).to eq(merge_request_diff_1.files_count)
       end
     end
   end
@@ -134,8 +136,8 @@ describe Projects::MergeRequests::DiffsController do
       it_behaves_like 'forked project with submodules'
     end
 
-    it_behaves_like 'persisted preferred diff view cookie'
     it_behaves_like 'cached diff collection'
+    it_behaves_like 'diff note on-demand position creation'
   end
 
   describe 'GET diffs_metadata' do
@@ -151,6 +153,8 @@ describe Projects::MergeRequests::DiffsController do
     end
 
     it_behaves_like '404 for unexistent diffable'
+
+    it_behaves_like 'show the right diff files with previous diff_id'
 
     context 'when not authorized' do
       let(:another_user) { create(:user) }
@@ -190,7 +194,8 @@ describe Projects::MergeRequests::DiffsController do
           start_version: nil,
           start_sha: nil,
           commit: nil,
-          latest_diff: true
+          latest_diff: true,
+          only_context_commits: false
         }
 
         expect_next_instance_of(DiffsMetadataSerializer) do |instance|
@@ -200,6 +205,29 @@ describe Projects::MergeRequests::DiffsController do
         end
 
         go(diff_id: merge_request.merge_request_diff.id)
+      end
+    end
+
+    context "with the :default_merge_ref_for_diffs flag on" do
+      let(:diffable_merge_ref) { true }
+
+      subject do
+        go(diff_head: true,
+           diff_id: merge_request.merge_request_diff.id,
+           start_sha: merge_request.merge_request_diff.start_commit_sha)
+      end
+
+      it "correctly generates the right diff between versions" do
+        MergeRequests::MergeToRefService.new(project: project, current_user: merge_request.author).execute(merge_request)
+
+        expect_next_instance_of(CompareService) do |service|
+          expect(service).to receive(:execute).with(
+            project,
+            merge_request.merge_request_diff.head_commit_sha,
+            straight: true)
+        end
+
+        subject
       end
     end
 
@@ -213,11 +241,7 @@ describe Projects::MergeRequests::DiffsController do
         let(:diffable_merge_ref) { true }
 
         it 'compares diffs with the head' do
-          MergeRequests::MergeToRefService.new(project, merge_request.author).execute(merge_request)
-
-          expect(CompareService).to receive(:new).with(
-            project, merge_request.merge_ref_head.sha
-          ).and_call_original
+          create(:merge_request_diff, :merge_head, merge_request: merge_request)
 
           go(diff_head: true)
 
@@ -229,8 +253,6 @@ describe Projects::MergeRequests::DiffsController do
         let(:diffable_merge_ref) { false }
 
         it 'compares diffs with the base' do
-          expect(CompareService).not_to receive(:new)
-
           go(diff_head: true)
 
           expect(response).to have_gitlab_http_status(:ok)
@@ -254,7 +276,8 @@ describe Projects::MergeRequests::DiffsController do
           start_version: nil,
           start_sha: nil,
           commit: nil,
-          latest_diff: true
+          latest_diff: true,
+          only_context_commits: false
         }
 
         expect_next_instance_of(DiffsMetadataSerializer) do |instance|
@@ -283,7 +306,8 @@ describe Projects::MergeRequests::DiffsController do
           start_version: nil,
           start_sha: nil,
           commit: merge_request.diff_head_commit,
-          latest_diff: nil
+          latest_diff: nil,
+          only_context_commits: false
         }
 
         expect_next_instance_of(DiffsMetadataSerializer) do |instance|
@@ -388,15 +412,66 @@ describe Projects::MergeRequests::DiffsController do
 
         expect(response).to have_gitlab_http_status(:ok)
       end
+
+      it 'tracks mr_diffs event' do
+        expect(Gitlab::UsageDataCounters::MergeRequestActivityUniqueCounter)
+          .to receive(:track_mr_diffs_action)
+          .with(merge_request: merge_request)
+
+        subject
+      end
+
+      context 'when DNT is enabled' do
+        before do
+          request.headers['DNT'] = '1'
+        end
+
+        it 'does not track any mr_diffs event' do
+          expect(Gitlab::UsageDataCounters::MergeRequestActivityUniqueCounter)
+            .not_to receive(:track_mr_diffs_action)
+
+          expect(Gitlab::UsageDataCounters::MergeRequestActivityUniqueCounter)
+            .not_to receive(:track_mr_diffs_single_file_action)
+
+          subject
+        end
+      end
+
+      context 'when user has view_diffs_file_by_file set to false' do
+        before do
+          user.update!(view_diffs_file_by_file: false)
+        end
+
+        it 'does not track single_file_diffs events' do
+          expect(Gitlab::UsageDataCounters::MergeRequestActivityUniqueCounter)
+            .not_to receive(:track_mr_diffs_single_file_action)
+
+          subject
+        end
+      end
+
+      context 'when user has view_diffs_file_by_file set to true' do
+        before do
+          user.update!(view_diffs_file_by_file: true)
+        end
+
+        it 'tracks single_file_diffs events' do
+          expect(Gitlab::UsageDataCounters::MergeRequestActivityUniqueCounter)
+            .to receive(:track_mr_diffs_single_file_action)
+            .with(merge_request: merge_request, user: user)
+
+          subject
+        end
+      end
     end
 
     def collection_arguments(pagination_data = {})
       {
+        environment: nil,
         merge_request: merge_request,
         diff_view: :inline,
+        merge_ref_head_diff: nil,
         pagination_data: {
-          current_page: nil,
-          next_page: nil,
           total_pages: nil
         }.merge(pagination_data)
       }
@@ -407,7 +482,7 @@ describe Projects::MergeRequests::DiffsController do
         namespace_id: project.namespace.to_param,
         project_id: project,
         id: merge_request.iid,
-        page: 1,
+        page: 0,
         per_page: 20,
         format: 'json'
       }
@@ -417,17 +492,7 @@ describe Projects::MergeRequests::DiffsController do
 
     it_behaves_like '404 for unexistent diffable'
 
-    context 'when feature is disabled' do
-      before do
-        stub_feature_flags(diffs_batch_load: false)
-      end
-
-      it 'returns 404' do
-        go
-
-        expect(response).to have_gitlab_http_status(:not_found)
-      end
-    end
+    it_behaves_like 'show the right diff files with previous diff_id'
 
     context 'when not authorized' do
       let(:other_user) { create(:user) }
@@ -448,7 +513,7 @@ describe Projects::MergeRequests::DiffsController do
 
       it_behaves_like 'serializes diffs with expected arguments' do
         let(:collection) { Gitlab::Diff::FileCollection::MergeRequestDiffBatch }
-        let(:expected_options) { collection_arguments(current_page: 1, total_pages: 1) }
+        let(:expected_options) { collection_arguments(total_pages: 20).merge(merge_ref_head_diff: false) }
       end
 
       it_behaves_like 'successful request'
@@ -471,10 +536,35 @@ describe Projects::MergeRequests::DiffsController do
 
       it_behaves_like 'serializes diffs with expected arguments' do
         let(:collection) { Gitlab::Diff::FileCollection::Compare }
-        let(:expected_options) { collection_arguments }
+        let(:expected_options) { collection_arguments.merge(merge_ref_head_diff: false) }
       end
 
       it_behaves_like 'successful request'
+    end
+
+    context 'with paths param' do
+      let(:example_file_path) { "README" }
+      let(:file_path_option) { { paths: [example_file_path] } }
+
+      subject do
+        go(file_path_option)
+      end
+
+      it_behaves_like 'serializes diffs with expected arguments' do
+        let(:collection) { Gitlab::Diff::FileCollection::MergeRequestDiffBatch }
+        let(:expected_options) do
+          collection_arguments(total_pages: 20)
+        end
+      end
+
+      it_behaves_like 'successful request'
+
+      it 'filters down the response to the expected file path' do
+        subject
+
+        expect(json_response["diff_files"].size).to eq(1)
+        expect(json_response["diff_files"].first["file_path"]).to eq(example_file_path)
+      end
     end
 
     context 'with default params' do
@@ -482,25 +572,24 @@ describe Projects::MergeRequests::DiffsController do
 
       it_behaves_like 'serializes diffs with expected arguments' do
         let(:collection) { Gitlab::Diff::FileCollection::MergeRequestDiffBatch }
-        let(:expected_options) { collection_arguments(current_page: 1, total_pages: 1) }
+        let(:expected_options) { collection_arguments(total_pages: 20) }
       end
 
       it_behaves_like 'successful request'
     end
 
     context 'with smaller diff batch params' do
-      subject { go(page: 2, per_page: 5) }
+      subject { go(page: 5, per_page: 5) }
 
       it_behaves_like 'serializes diffs with expected arguments' do
         let(:collection) { Gitlab::Diff::FileCollection::MergeRequestDiffBatch }
-        let(:expected_options) { collection_arguments(current_page: 2, next_page: 3, total_pages: 4) }
+        let(:expected_options) { collection_arguments(total_pages: 20) }
       end
 
       it_behaves_like 'successful request'
     end
 
     it_behaves_like 'forked project with submodules'
-    it_behaves_like 'persisted preferred diff view cookie'
     it_behaves_like 'cached diff collection'
 
     context 'diff unfolding' do

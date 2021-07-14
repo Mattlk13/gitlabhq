@@ -4,27 +4,24 @@ module Gitlab
   module Middleware
     class ReadOnly
       class Controller
-        prepend_if_ee('EE::Gitlab::Middleware::ReadOnly::Controller') # rubocop: disable Cop/InjectEnterpriseEditionModule
-
         DISALLOWED_METHODS = %w(POST PATCH PUT DELETE).freeze
         APPLICATION_JSON = 'application/json'
         APPLICATION_JSON_TYPES = %W{#{APPLICATION_JSON} application/vnd.git-lfs+json}.freeze
         ERROR_MESSAGE = 'You cannot perform write operations on a read-only instance'
 
-        WHITELISTED_GIT_ROUTES = {
-          'repositories/git_http' => %w{git_upload_pack git_receive_pack}
+        ALLOWLISTED_GIT_READ_ONLY_ROUTES = {
+          'repositories/git_http' => %w{git_upload_pack}
         }.freeze
 
-        WHITELISTED_GIT_LFS_ROUTES = {
-          'repositories/lfs_api' => %w{batch},
-          'repositories/lfs_locks_api' => %w{verify create unlock}
+        ALLOWLISTED_GIT_LFS_BATCH_ROUTES = {
+          'repositories/lfs_api' => %w{batch}
         }.freeze
 
-        WHITELISTED_GIT_REVISION_ROUTES = {
+        ALLOWLISTED_GIT_REVISION_ROUTES = {
           'projects/compare' => %w{create}
         }.freeze
 
-        WHITELISTED_SESSION_ROUTES = {
+        ALLOWLISTED_SESSION_ROUTES = {
           'sessions' => %w{destroy},
           'admin/sessions' => %w{create destroy}
         }.freeze
@@ -37,8 +34,8 @@ module Gitlab
         end
 
         def call
-          if disallowed_request? && Gitlab::Database.read_only?
-            Rails.logger.debug('GitLab ReadOnly: preventing possible non read-only operation') # rubocop:disable Gitlab/RailsLogger
+          if disallowed_request? && read_only?
+            Gitlab::AppLogger.debug('GitLab ReadOnly: preventing possible non read-only operation')
 
             if json_request?
               return [403, { 'Content-Type' => APPLICATION_JSON }, [{ 'message' => ERROR_MESSAGE }.to_json]]
@@ -57,7 +54,12 @@ module Gitlab
 
         def disallowed_request?
           DISALLOWED_METHODS.include?(@env['REQUEST_METHOD']) &&
-            !whitelisted_routes
+            !allowlisted_routes
+        end
+
+        # Overridden in EE module
+        def read_only?
+          Gitlab::Database.read_only?
         end
 
         def json_request?
@@ -81,7 +83,15 @@ module Gitlab
         end
 
         def route_hash
-          @route_hash ||= Rails.application.routes.recognize_path(request.url, { method: request.request_method }) rescue {}
+          @route_hash ||= Rails.application.routes.recognize_path(request_url, { method: request.request_method }) rescue {}
+        end
+
+        def request_url
+          request.url.chomp('/')
+        end
+
+        def request_path
+          @request_path ||= request.path.chomp('/')
         end
 
         def relative_url
@@ -89,16 +99,18 @@ module Gitlab
         end
 
         # Overridden in EE module
-        def whitelisted_routes
-          grack_route? || internal_route? || lfs_route? || compare_git_revisions_route? || sidekiq_route? || session_route? || graphql_query?
+        def allowlisted_routes
+          workhorse_passthrough_route? || internal_route? || lfs_batch_route? || compare_git_revisions_route? || sidekiq_route? || session_route? || graphql_query?
         end
 
-        def grack_route?
+        # URL for requests passed through gitlab-workhorse to rails-web
+        # https://gitlab.com/gitlab-org/gitlab-workhorse/-/merge_requests/12
+        def workhorse_passthrough_route?
           # Calling route_hash may be expensive. Only do it if we think there's a possible match
-          return false unless
-            request.path.end_with?('.git/git-upload-pack', '.git/git-receive-pack')
+          return false unless request.post? &&
+            request_path.end_with?('.git/git-upload-pack')
 
-          WHITELISTED_GIT_ROUTES[route_hash[:controller]]&.include?(route_hash[:action])
+          ALLOWLISTED_GIT_READ_ONLY_ROUTES[route_hash[:controller]]&.include?(route_hash[:action])
         end
 
         def internal_route?
@@ -109,26 +121,24 @@ module Gitlab
           # Calling route_hash may be expensive. Only do it if we think there's a possible match
           return false unless request.post? && request.path.end_with?('compare')
 
-          WHITELISTED_GIT_REVISION_ROUTES[route_hash[:controller]]&.include?(route_hash[:action])
+          ALLOWLISTED_GIT_REVISION_ROUTES[route_hash[:controller]]&.include?(route_hash[:action])
         end
 
-        def lfs_route?
+        # Batch upload requests are blocked in:
+        # https://gitlab.com/gitlab-org/gitlab/blob/master/app/controllers/repositories/lfs_api_controller.rb#L106
+        def lfs_batch_route?
           # Calling route_hash may be expensive. Only do it if we think there's a possible match
-          unless request.path.end_with?('/info/lfs/objects/batch',
-            '/info/lfs/locks', '/info/lfs/locks/verify') ||
-              %r{/info/lfs/locks/\d+/unlock\z}.match?(request.path)
-            return false
-          end
+          return unless request_path.end_with?('/info/lfs/objects/batch')
 
-          WHITELISTED_GIT_LFS_ROUTES[route_hash[:controller]]&.include?(route_hash[:action])
+          ALLOWLISTED_GIT_LFS_BATCH_ROUTES[route_hash[:controller]]&.include?(route_hash[:action])
         end
 
         def session_route?
           # Calling route_hash may be expensive. Only do it if we think there's a possible match
-          return false unless request.post? && request.path.end_with?('/users/sign_out',
+          return false unless request.post? && request_path.end_with?('/users/sign_out',
             '/admin/session', '/admin/session/destroy')
 
-          WHITELISTED_SESSION_ROUTES[route_hash[:controller]]&.include?(route_hash[:action])
+          ALLOWLISTED_SESSION_ROUTES[route_hash[:controller]]&.include?(route_hash[:action])
         end
 
         def sidekiq_route?
@@ -136,9 +146,11 @@ module Gitlab
         end
 
         def graphql_query?
-          request.post? && request.path.start_with?(GRAPHQL_URL)
+          request.post? && request.path.start_with?(File.join(relative_url, GRAPHQL_URL))
         end
       end
     end
   end
 end
+
+Gitlab::Middleware::ReadOnly::Controller.prepend_mod_with('Gitlab::Middleware::ReadOnly::Controller')

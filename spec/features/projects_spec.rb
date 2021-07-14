@@ -2,29 +2,39 @@
 
 require 'spec_helper'
 
-describe 'Project' do
+RSpec.describe 'Project' do
   include ProjectForksHelper
   include MobileHelpers
 
-  describe 'creating from template' do
+  describe 'template' do
     let(:user) { create(:user) }
-    let(:template) { Gitlab::ProjectTemplate.find(:rails) }
 
     before do
       sign_in user
       visit new_project_path
     end
 
-    it "allows creation from templates", :js do
-      find('#create-from-template-tab').click
-      find("label[for=#{template.name}]").click
-      fill_in("project_name", with: template.name)
+    shared_examples 'creates from template' do |template, sub_template_tab = nil|
+      it "is created from template", :js do
+        find('[data-qa-panel-name="create_from_template"]').click
+        find(".project-template #{sub_template_tab}").click if sub_template_tab
+        find("label[for=#{template.name}]").click
+        fill_in("project_name", with: template.name)
 
-      page.within '#content-body' do
-        click_button "Create project"
+        page.within '#content-body' do
+          click_button "Create project"
+        end
+
+        expect(page).to have_content template.name
       end
+    end
 
-      expect(page).to have_content template.name
+    context 'create with project template' do
+      it_behaves_like 'creates from template', Gitlab::ProjectTemplate.find(:rails)
+    end
+
+    context 'create with sample data template' do
+      it_behaves_like 'creates from template', Gitlab::SampleDataTemplate.find(:sample)
     end
   end
 
@@ -37,11 +47,9 @@ describe 'Project' do
     end
 
     it 'shows the command in a popover', :js do
-      page.within '.profile-settings-sidebar' do
-        click_link 'Show command'
-      end
+      click_link 'Show command'
 
-      expect(page).to have_css('.popover .push-to-create-popover #push_to_create_tip')
+      expect(page).to have_css('.popover #push-to-create-tip')
       expect(page).to have_content 'Private projects can be created in your personal namespace with:'
     end
   end
@@ -51,7 +59,7 @@ describe 'Project' do
     let(:path)    { project_path(project) }
 
     before do
-      sign_in(create(:admin))
+      sign_in(project.owner)
     end
 
     it 'parses Markdown' do
@@ -99,6 +107,15 @@ describe 'Project' do
         expect(page).to have_css('.home-panel-description .is-expanded')
       end
     end
+
+    context 'page description' do
+      before do
+        project.update_attribute(:description, '**Lorem** _ipsum_ dolor sit [amet](https://example.com)')
+        visit path
+      end
+
+      it_behaves_like 'page meta description', 'Lorem ipsum dolor sit amet'
+    end
   end
 
   describe 'project topics' do
@@ -106,28 +123,28 @@ describe 'Project' do
     let(:path)    { project_path(project) }
 
     before do
-      sign_in(create(:admin))
+      sign_in(project.owner)
       visit path
     end
 
     it 'shows project topics' do
-      project.update_attribute(:tag_list, 'topic1')
+      project.update_attribute(:topic_list, 'topic1')
 
       visit path
 
       expect(page).to have_css('.home-panel-topic-list')
-      expect(page).to have_link('Topic1', href: explore_projects_path(tag: 'topic1'))
+      expect(page).to have_link('Topic1', href: explore_projects_path(topic: 'topic1'))
     end
 
-    it 'shows up to 3 project tags' do
-      project.update_attribute(:tag_list, 'topic1, topic2, topic3, topic4')
+    it 'shows up to 3 project topics' do
+      project.update_attribute(:topic_list, 'topic1, topic2, topic3, topic4')
 
       visit path
 
       expect(page).to have_css('.home-panel-topic-list')
-      expect(page).to have_link('Topic1', href: explore_projects_path(tag: 'topic1'))
-      expect(page).to have_link('Topic2', href: explore_projects_path(tag: 'topic2'))
-      expect(page).to have_link('Topic3', href: explore_projects_path(tag: 'topic3'))
+      expect(page).to have_link('Topic1', href: explore_projects_path(topic: 'topic1'))
+      expect(page).to have_link('Topic2', href: explore_projects_path(topic: 'topic2'))
+      expect(page).to have_link('Topic3', href: explore_projects_path(topic: 'topic3'))
       expect(page).to have_content('+ 1 more')
     end
   end
@@ -137,7 +154,7 @@ describe 'Project' do
     let(:path)    { project_path(project) }
 
     before do
-      sign_in(create(:admin))
+      sign_in(project.owner)
       visit path
     end
 
@@ -154,26 +171,6 @@ describe 'Project' do
         expect(find('.mobile-git-clone')).to be_visible
         expect(find('.git-clone-holder', visible: false)).not_to be_visible
       end
-    end
-  end
-
-  describe 'remove forked relationship', :js do
-    let(:user)    { create(:user) }
-    let(:project) { fork_project(create(:project, :public), user, namespace_id: user.namespace) }
-
-    before do
-      sign_in user
-      visit edit_project_path(project)
-    end
-
-    it 'removes fork' do
-      expect(page).to have_content 'Remove fork relationship'
-
-      remove_with_confirm('Remove fork relationship', project.path)
-
-      expect(page).to have_content 'The fork relationship has been removed.'
-      expect(project.reload.forked?).to be_falsey
-      expect(page).not_to have_content 'Remove fork relationship'
     end
   end
 
@@ -254,13 +251,13 @@ describe 'Project' do
     end
 
     it 'focuses on the confirmation field' do
-      click_button 'Remove project'
+      click_button 'Delete project'
 
       expect(page).to have_selector '#confirm_name_input:focus'
     end
 
-    it 'removes a project', :sidekiq_might_not_need_inline do
-      expect { remove_with_confirm('Remove project', project.path) }.to change { Project.count }.by(-1)
+    it 'deletes a project', :sidekiq_might_not_need_inline do
+      expect { remove_with_confirm('Delete project', project.path, 'Yes, delete project') }.to change { Project.count }.by(-1)
       expect(page).to have_content "Project '#{project.full_name}' is in the process of being deleted."
       expect(Project.all.count).to be_zero
       expect(project.issues).to be_empty
@@ -386,9 +383,9 @@ describe 'Project' do
                                           { form: '.rspec-merge-request-settings', input: '#project_printing_merge_request_link_enabled' }]
   end
 
-  def remove_with_confirm(button_text, confirm_with)
+  def remove_with_confirm(button_text, confirm_with, confirm_button_text = 'Confirm')
     click_button button_text
     fill_in 'confirm_name_input', with: confirm_with
-    click_button 'Confirm'
+    click_button confirm_button_text
   end
 end

@@ -6,26 +6,28 @@ module Mutations
       graphql_name 'MergeRequestSetLabels'
 
       argument :label_ids,
-               [GraphQL::ID_TYPE],
+               [::Types::GlobalIDType[Label]],
                required: true,
                description: <<~DESC
-                            The Label IDs to set. Replaces existing labels by default.
+                 The Label IDs to set. Replaces existing labels by default.
                DESC
 
       argument :operation_mode,
                Types::MutationOperationModeEnum,
                required: false,
                description: <<~DESC
-                            Changes the operation mode. Defaults to REPLACE.
+                 Changes the operation mode. Defaults to REPLACE.
                DESC
 
       def resolve(project_path:, iid:, label_ids:, operation_mode: Types::MutationOperationModeEnum.enum[:replace])
         merge_request = authorized_find!(project_path: project_path, iid: iid)
         project = merge_request.project
 
-        label_ids = label_ids
-                      .select(&method(:label_descendant?))
-                      .map { |gid| GlobalID.parse(gid).model_id } # MergeRequests::UpdateService expects integers
+        # TODO: remove this line when the compatibility layer is removed:
+        # See: https://gitlab.com/gitlab-org/gitlab/-/issues/257883
+        label_ids = label_ids.map { |id| ::Types::GlobalIDType[::Label].coerce_isolated_input(id) }
+        # MergeRequests::UpdateService expects integers
+        label_ids = label_ids.compact.map(&:model_id)
 
         attribute_name = case operation_mode
                          when Types::MutationOperationModeEnum.enum[:append]
@@ -36,17 +38,13 @@ module Mutations
                            :label_ids
                          end
 
-        ::MergeRequests::UpdateService.new(project, current_user, attribute_name => label_ids)
+        ::MergeRequests::UpdateService.new(project: project, current_user: current_user, params: { attribute_name => label_ids })
           .execute(merge_request)
 
         {
           merge_request: merge_request,
-          errors: merge_request.errors.full_messages
+          errors: errors_on_object(merge_request)
         }
-      end
-
-      def label_descendant?(gid)
-        GlobalID.parse(gid)&.model_class&.ancestors&.include?(Label)
       end
     end
   end

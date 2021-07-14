@@ -1,6 +1,8 @@
 # frozen_string_literal: true
 
 class UserInteractedProject < ApplicationRecord
+  extend SuppressCompositePrimaryKeyWarning
+
   belongs_to :user
   belongs_to :project
 
@@ -8,9 +10,6 @@ class UserInteractedProject < ApplicationRecord
   validates :user_id, presence: true
 
   CACHE_EXPIRY_TIME = 1.day
-
-  # Schema version required for this model
-  REQUIRED_SCHEMA_VERSION = 20180223120443
 
   class << self
     def track(event)
@@ -24,7 +23,7 @@ class UserInteractedProject < ApplicationRecord
         user_id: event.author_id
       }
 
-      cached_exists?(attributes) do
+      cached_exists?(**attributes) do
         transaction(requires_new: true) do
           where(attributes).select(1).first || create!(attributes)
           true # not caching the whole record here for now
@@ -36,17 +35,6 @@ class UserInteractedProject < ApplicationRecord
           true
         end
       end
-    end
-
-    # Check if we can safely call .track (table exists)
-    def available?
-      @available_flag ||= ActiveRecord::Migrator.current_version >= REQUIRED_SCHEMA_VERSION # rubocop:disable Gitlab/PredicateMemoization
-    end
-
-    # Flushes cached information about schema
-    def reset_column_information
-      @available_flag = nil
-      super
     end
 
     private

@@ -8,6 +8,7 @@ module Banzai
       include Gitlab::Utils::StrongMemoize
 
       METRICS_CSS_CLASS = '.js-render-metrics'
+      XPATH = Gitlab::Utils::Nokogiri.css_to_xpath(METRICS_CSS_CLASS).freeze
       EMBED_LIMIT = 100
 
       Route = Struct.new(:regex, :permission)
@@ -41,7 +42,7 @@ module Banzai
       # @return [Nokogiri::XML::NodeSet]
       def nodes
         strong_memoize(:nodes) do
-          nodes = doc.css(METRICS_CSS_CLASS)
+          nodes = doc.xpath(XPATH)
           nodes.drop(EMBED_LIMIT).each(&:remove)
 
           nodes
@@ -77,6 +78,14 @@ module Banzai
           Route.new(
             ::Gitlab::Metrics::Dashboard::Url.grafana_regex,
             :read_project
+          ),
+          Route.new(
+            ::Gitlab::Metrics::Dashboard::Url.clusters_regex,
+            :read_cluster
+          ),
+          Route.new(
+            ::Gitlab::Metrics::Dashboard::Url.alert_regex,
+            :read_prometheus_alerts
           )
         ]
       end
@@ -143,5 +152,3 @@ module Banzai
     end
   end
 end
-
-Banzai::Filter::InlineMetricsRedactorFilter.prepend_if_ee('EE::Banzai::Filter::InlineMetricsRedactorFilter')

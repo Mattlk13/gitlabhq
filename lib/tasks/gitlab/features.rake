@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 namespace :gitlab do
   namespace :features do
     desc 'GitLab | Features | Enable direct Git access via Rugged for NFS'
@@ -21,7 +23,7 @@ namespace :gitlab do
     Gitlab::Git::RuggedImpl::Repository::FEATURE_FLAGS.each do |flag|
       case status
       when nil
-        Feature.get(flag).remove
+        Feature.remove(flag)
       when true
         Feature.enable(flag)
       when false

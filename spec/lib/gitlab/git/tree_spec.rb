@@ -2,7 +2,7 @@
 
 require "spec_helper"
 
-describe Gitlab::Git::Tree, :seed_helper do
+RSpec.describe Gitlab::Git::Tree, :seed_helper do
   let(:repository) { Gitlab::Git::Repository.new('default', TEST_REPO_PATH, '', 'group/project') }
 
   shared_examples :repo do
@@ -10,9 +10,9 @@ describe Gitlab::Git::Tree, :seed_helper do
 
     it { expect(tree).to be_kind_of Array }
     it { expect(tree.empty?).to be_falsey }
-    it { expect(tree.select(&:dir?).size).to eq(2) }
-    it { expect(tree.select(&:file?).size).to eq(10) }
-    it { expect(tree.select(&:submodule?).size).to eq(2) }
+    it { expect(tree.count(&:dir?)).to eq(2) }
+    it { expect(tree.count(&:file?)).to eq(10) }
+    it { expect(tree.count(&:submodule?)).to eq(2) }
 
     it 'returns an empty array when called with an invalid ref' do
       expect(described_class.where(repository, 'foobar-does-not-exist')).to eq([])
@@ -39,7 +39,10 @@ describe Gitlab::Git::Tree, :seed_helper do
       it { expect(dir.flat_path).to eq('encoding') }
 
       context :subdir do
+        # rubocop: disable Rails/FindBy
+        # This is not ActiveRecord where..first
         let(:subdir) { Gitlab::Git::Tree.where(repository, SeedRepo::Commit::ID, 'files').first }
+        # rubocop: enable Rails/FindBy
 
         it { expect(subdir).to be_kind_of Gitlab::Git::Tree }
         it { expect(subdir.id).to eq('a1e8f8d745cc87e3a9248358d9352bb7f9a0aeba') }
@@ -50,7 +53,10 @@ describe Gitlab::Git::Tree, :seed_helper do
       end
 
       context :subdir_file do
+        # rubocop: disable Rails/FindBy
+        # This is not ActiveRecord where..first
         let(:subdir_file) { Gitlab::Git::Tree.where(repository, SeedRepo::Commit::ID, 'files/ruby').first }
+        # rubocop: enable Rails/FindBy
 
         it { expect(subdir_file).to be_kind_of Gitlab::Git::Tree }
         it { expect(subdir_file.id).to eq('7e3e39ebb9b2bf433b4ad17313770fbe4051649c') }
@@ -63,7 +69,10 @@ describe Gitlab::Git::Tree, :seed_helper do
       context :flat_path do
         let(:filename) { 'files/flat/path/correct/content.txt' }
         let(:oid) { create_file(filename) }
+        # rubocop: disable Rails/FindBy
+        # This is not ActiveRecord where..first
         let(:subdir_file) { Gitlab::Git::Tree.where(repository, oid, 'files/flat').first }
+        # rubocop: enable Rails/FindBy
         let(:repository_rugged) { Rugged::Repository.new(File.join(SEED_STORAGE_PATH, TEST_REPO_PATH)) }
 
         it { expect(subdir_file.flat_path).to eq('files/flat/path/correct') }

@@ -19,7 +19,6 @@ module ProtectedRefAccess
   end
 
   included do
-    scope :master, -> { maintainer } # @deprecated
     scope :maintainer, -> { where(access_level: Gitlab::Access::MAINTAINER) }
     scope :developer, -> { where(access_level: Gitlab::Access::DEVELOPER) }
     scope :by_user, -> (user) { where(user_id: user ) }
@@ -37,13 +36,16 @@ module ProtectedRefAccess
     HUMAN_ACCESS_LEVELS[self.access_level]
   end
 
-  # CE access levels are always role-based,
-  # where as EE allows groups and users too
+  def type
+    :role
+  end
+
   def role?
-    true
+    type == :role
   end
 
   def check_access(user)
+    return false unless user
     return true if user.admin?
 
     user.can?(:push_code, project) &&
@@ -51,12 +53,12 @@ module ProtectedRefAccess
   end
 end
 
-ProtectedRefAccess.include_if_ee('EE::ProtectedRefAccess::Scopes') # rubocop: disable Cop/InjectEnterpriseEditionModule
-ProtectedRefAccess.prepend_if_ee('EE::ProtectedRefAccess') # rubocop: disable Cop/InjectEnterpriseEditionModule
+ProtectedRefAccess.include_mod_with('ProtectedRefAccess::Scopes')
+ProtectedRefAccess.prepend_mod_with('ProtectedRefAccess')
 
 # When using `prepend` (or `include` for that matter), the `ClassMethods`
 # constants are not merged. This means that `class_methods` in
 # `EE::ProtectedRefAccess` would be ignored.
 #
 # To work around this, we prepend the `ClassMethods` constant manually.
-ProtectedRefAccess::ClassMethods.prepend_if_ee('EE::ProtectedRefAccess::ClassMethods')
+ProtectedRefAccess::ClassMethods.prepend_mod_with('ProtectedRefAccess::ClassMethods')

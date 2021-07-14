@@ -3,17 +3,19 @@
 class ContainerRepositoriesFinder
   VALID_SUBJECTS = [Group, Project].freeze
 
-  def initialize(user:, subject:)
+  def initialize(user:, subject:, params: {})
     @user = user
     @subject = subject
+    @params = params
   end
 
   def execute
     raise ArgumentError, "invalid subject_type" unless valid_subject_type?
     return unless authorized?
 
-    return project_repositories if @subject.is_a?(Project)
-    return group_repositories if @subject.is_a?(Group)
+    repositories = @subject.is_a?(Project) ? project_repositories : group_repositories
+    repositories = filter_by_image_name(repositories)
+    sort(repositories)
   end
 
   private
@@ -30,6 +32,18 @@ class ContainerRepositoriesFinder
 
   def group_repositories
     ContainerRepository.for_group_and_its_subgroups(@subject)
+  end
+
+  def filter_by_image_name(repositories)
+    return repositories unless @params[:name]
+
+    repositories.search_by_name(@params[:name])
+  end
+
+  def sort(repositories)
+    return repositories unless @params[:sort]
+
+    repositories.order_by(@params[:sort])
   end
 
   def authorized?

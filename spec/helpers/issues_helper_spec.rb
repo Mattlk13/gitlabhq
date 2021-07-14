@@ -2,63 +2,10 @@
 
 require "spec_helper"
 
-describe IssuesHelper do
+RSpec.describe IssuesHelper do
   let(:project) { create(:project) }
   let(:issue) { create :issue, project: project }
   let(:ext_project) { create :redmine_project }
-
-  describe "url_for_issue" do
-    let(:issues_url) { ext_project.external_issue_tracker.issues_url}
-    let(:ext_expected) { issues_url.gsub(':id', issue.iid.to_s).gsub(':project_id', ext_project.id.to_s) }
-    let(:int_expected) { polymorphic_path([@project.namespace, @project, issue]) }
-
-    it "returns internal path if used internal tracker" do
-      @project = project
-
-      expect(url_for_issue(issue.iid)).to match(int_expected)
-    end
-
-    it "returns path to external tracker" do
-      @project = ext_project
-
-      expect(url_for_issue(issue.iid)).to match(ext_expected)
-    end
-
-    it "returns path to internal issue when internal option passed" do
-      @project = ext_project
-
-      expect(url_for_issue(issue.iid, ext_project, internal: true)).to match(int_expected)
-    end
-
-    it "returns empty string if project nil" do
-      @project = nil
-
-      expect(url_for_issue(issue.iid)).to eq ""
-    end
-
-    it 'returns an empty string if issue_url is invalid' do
-      expect(project).to receive_message_chain('issues_tracker.issue_url') { 'javascript:alert("foo");' }
-
-      expect(url_for_issue(issue.iid, project)).to eq ''
-    end
-
-    it 'returns an empty string if issue_path is invalid' do
-      expect(project).to receive_message_chain('issues_tracker.issue_path') { 'javascript:alert("foo");' }
-
-      expect(url_for_issue(issue.iid, project, only_path: true)).to eq ''
-    end
-
-    describe "when external tracker was enabled and then config removed" do
-      before do
-        @project = ext_project
-        allow(Gitlab.config).to receive(:issues_tracker).and_return(nil)
-      end
-
-      it "returns external path" do
-        expect(url_for_issue(issue.iid)).to match(ext_expected)
-      end
-    end
-  end
 
   describe '#award_user_list' do
     it "returns a comma-separated list of the first X users" do
@@ -200,7 +147,7 @@ describe IssuesHelper do
 
     shared_examples 'successfully displays link to issue and with css class' do |action|
       it 'returns link' do
-        link = "<a class=\"#{css_class}\" href=\"/#{new_issue.project.full_path}/issues/#{new_issue.iid}\">(#{action})</a>"
+        link = "<a class=\"#{css_class}\" href=\"/#{new_issue.project.full_path}/-/issues/#{new_issue.iid}\">(#{action})</a>"
 
         expect(helper.issue_closed_link(issue, user, css_class: css_class)).to match(link)
       end
@@ -215,7 +162,7 @@ describe IssuesHelper do
     context 'with linked issue' do
       context 'with moved issue' do
         before do
-          issue.update(moved_to: new_issue)
+          issue.update!(moved_to: new_issue)
         end
 
         context 'when user has permission to see new issue' do
@@ -234,7 +181,7 @@ describe IssuesHelper do
 
       context 'with duplicated issue' do
         before do
-          issue.update(duplicated_to: new_issue)
+          issue.update!(duplicated_to: new_issue)
         end
 
         context 'when user has permission to see new issue' do
@@ -256,10 +203,199 @@ describe IssuesHelper do
       let(:user) { project.owner }
 
       before do
-        issue.update(moved_to: nil, duplicated_to: nil)
+        issue.update!(moved_to: nil, duplicated_to: nil)
       end
 
       it_behaves_like 'does not display link'
+    end
+  end
+
+  describe '#show_moved_service_desk_issue_warning?' do
+    let(:project1) { create(:project, service_desk_enabled: true) }
+    let(:project2) { create(:project, service_desk_enabled: true) }
+    let!(:old_issue) { create(:issue, author: User.support_bot, project: project1) }
+    let!(:new_issue) { create(:issue, author: User.support_bot, project: project2) }
+
+    before do
+      allow(Gitlab::IncomingEmail).to receive(:enabled?) { true }
+      allow(Gitlab::IncomingEmail).to receive(:supports_wildcard?) { true }
+
+      old_issue.update!(moved_to: new_issue)
+    end
+
+    it 'is true when moved issue project has service desk disabled' do
+      project2.update!(service_desk_enabled: false)
+
+      expect(helper.show_moved_service_desk_issue_warning?(new_issue)).to be(true)
+    end
+
+    it 'is false when moved issue project has service desk enabled' do
+      expect(helper.show_moved_service_desk_issue_warning?(new_issue)).to be(false)
+    end
+  end
+
+  describe '#use_startup_call' do
+    it "returns false when a query param is present" do
+      allow(controller.request).to receive(:query_parameters).and_return({ foo: 'bar' })
+
+      expect(helper.use_startup_call?).to eq(false)
+    end
+
+    it "returns false when user has stored sort preference" do
+      controller.instance_variable_set(:@sort, 'updated_asc')
+
+      expect(helper.use_startup_call?).to eq(false)
+    end
+
+    it 'returns true when request.query_parameters is empty with default sorting preference' do
+      controller.instance_variable_set(:@sort, 'created_date')
+      allow(controller.request).to receive(:query_parameters).and_return({})
+
+      expect(helper.use_startup_call?).to eq(true)
+    end
+  end
+
+  describe '#issue_header_actions_data' do
+    let(:current_user) { create(:user) }
+
+    before do
+      allow(helper).to receive(:current_user).and_return(current_user)
+      allow(helper).to receive(:can?).and_return(true)
+    end
+
+    it 'returns expected result' do
+      expected = {
+        can_create_issue: "true",
+        can_reopen_issue: "true",
+        can_report_spam: "false",
+        can_update_issue: "true",
+        iid: issue.iid,
+        is_issue_author: "false",
+        issue_type: "issue",
+        new_issue_path: new_project_issue_path(project),
+        project_path: project.full_path,
+        report_abuse_path: new_abuse_report_path(user_id: issue.author.id, ref_url: issue_url(issue)),
+        submit_as_spam_path: mark_as_spam_project_issue_path(project, issue)
+      }
+
+      expect(helper.issue_header_actions_data(project, issue, current_user)).to include(expected)
+    end
+  end
+
+  shared_examples 'issues list data' do
+    it 'returns expected result' do
+      finder = double.as_null_object
+      allow(helper).to receive(:current_user).and_return(current_user)
+      allow(helper).to receive(:finder).and_return(finder)
+      allow(helper).to receive(:can?).and_return(true)
+      allow(helper).to receive(:image_path).and_return('#')
+      allow(helper).to receive(:import_csv_namespace_project_issues_path).and_return('#')
+      allow(helper).to receive(:url_for).and_return('#')
+
+      expected = {
+        autocomplete_award_emojis_path: autocomplete_award_emojis_path,
+        calendar_path: '#',
+        can_bulk_update: 'true',
+        can_edit: 'true',
+        can_import_issues: 'true',
+        email: current_user&.notification_email,
+        emails_help_page_path: help_page_path('development/emails', anchor: 'email-namespace'),
+        empty_state_svg_path: '#',
+        export_csv_path: export_csv_project_issues_path(project),
+        has_project_issues: project_issues(project).exists?.to_s,
+        import_csv_issues_path: '#',
+        initial_email: project.new_issuable_address(current_user, 'issue'),
+        is_signed_in: current_user.present?.to_s,
+        issues_path: project_issues_path(project),
+        jira_integration_path: help_page_url('integration/jira/', anchor: 'view-jira-issues'),
+        markdown_help_path: help_page_path('user/markdown'),
+        max_attachment_size: number_to_human_size(Gitlab::CurrentSettings.max_attachment_size.megabytes),
+        new_issue_path: new_project_issue_path(project, issue: { milestone_id: finder.milestones.first.id }),
+        project_import_jira_path: project_import_jira_path(project),
+        project_path: project.full_path,
+        quick_actions_help_path: help_page_path('user/project/quick_actions'),
+        reset_path: new_issuable_address_project_path(project, issuable_type: 'issue'),
+        rss_path: '#',
+        show_new_issue_link: 'true',
+        sign_in_path: new_user_session_path
+      }
+
+      expect(helper.issues_list_data(project, current_user, finder)).to include(expected)
+    end
+  end
+
+  describe '#issues_list_data' do
+    context 'when user is signed in' do
+      it_behaves_like 'issues list data' do
+        let(:current_user) { double.as_null_object }
+      end
+    end
+
+    context 'when user is anonymous' do
+      it_behaves_like 'issues list data' do
+        let(:current_user) { nil }
+      end
+    end
+  end
+
+  describe '#issue_manual_ordering_class' do
+    context 'when sorting by relative position' do
+      before do
+        assign(:sort, 'relative_position')
+      end
+
+      it 'returns manual ordering class' do
+        expect(helper.issue_manual_ordering_class).to eq("manual-ordering")
+      end
+
+      context 'when manual sorting disabled' do
+        before do
+          allow(helper).to receive(:issue_repositioning_disabled?).and_return(true)
+        end
+
+        it 'returns nil' do
+          expect(helper.issue_manual_ordering_class).to eq(nil)
+        end
+      end
+    end
+  end
+
+  describe '#issue_repositioning_disabled?' do
+    let_it_be(:group) { create(:group) }
+    let_it_be(:project) { create(:project, group: group) }
+
+    subject { helper.issue_repositioning_disabled? }
+
+    context 'for project' do
+      before do
+        assign(:project, project)
+      end
+
+      it { is_expected.to eq(false) }
+
+      context 'when block_issue_repositioning feature flag is enabled' do
+        before do
+          stub_feature_flags(block_issue_repositioning: group)
+        end
+
+        it { is_expected.to eq(true) }
+      end
+    end
+
+    context 'for group' do
+      before do
+        assign(:group, group)
+      end
+
+      it { is_expected.to eq(false) }
+
+      context 'when block_issue_repositioning feature flag is enabled' do
+        before do
+          stub_feature_flags(block_issue_repositioning: group)
+        end
+
+        it { is_expected.to eq(true) }
+      end
     end
   end
 end

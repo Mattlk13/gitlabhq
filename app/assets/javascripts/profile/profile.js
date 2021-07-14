@@ -1,7 +1,8 @@
 import $ from 'jquery';
+import createFlash from '~/flash';
 import axios from '~/lib/utils/axios_utils';
-import flash from '../flash';
 import { parseBoolean } from '~/lib/utils/common_utils';
+import { Rails } from '~/lib/utils/rails_ujs';
 import TimezoneDropdown, {
   formatTimezone,
 } from '~/pages/projects/pipeline_schedules/shared/components/timezone_dropdown';
@@ -19,7 +20,7 @@ export default class Profile {
     this.timezoneDropdown = new TimezoneDropdown({
       $inputEl: this.$inputEl,
       $dropdownEl: $('.js-timezone-dropdown'),
-      displayFormat: selectedItem => formatTimezone(selectedItem),
+      displayFormat: (selectedItem) => formatTimezone(selectedItem),
     });
   }
 
@@ -32,23 +33,28 @@ export default class Profile {
       uploadImageBtn: '.js-upload-user-avatar',
       modalCropImg: '.modal-profile-crop-image',
     };
-    this.avatarGlCrop = $('.js-user-avatar-input')
-      .glCrop(cropOpts)
-      .data('glcrop');
+    this.avatarGlCrop = $('.js-user-avatar-input').glCrop(cropOpts).data('glcrop');
   }
 
   bindEvents() {
     $('.js-preferences-form').on('change.preference', 'input[type=radio]', this.submitForm);
     $('.js-group-notification-email').on('change', this.submitForm);
-    $('#user_notification_email').on('change', this.submitForm);
+    $('#user_notification_email').on('select2-selecting', (event) => {
+      setTimeout(this.submitForm.bind(event.currentTarget));
+    });
+    $('#user_email_opted_in').on('change', this.submitForm);
     $('#user_notified_of_own_activity').on('change', this.submitForm);
     this.form.on('submit', this.onSubmitForm);
   }
 
   submitForm() {
-    return $(this)
-      .parents('form')
-      .submit();
+    const $form = $(this).parents('form');
+
+    if ($form.data('remote')) {
+      Rails.fire($form[0], 'submit');
+    } else {
+      $form.submit();
+    }
   }
 
   onSubmitForm(e) {
@@ -77,18 +83,26 @@ export default class Profile {
           this.updateHeaderAvatar();
         }
 
-        flash(data.message, 'notice');
+        createFlash({
+          message: data.message,
+          type: 'notice',
+        });
       })
       .then(() => {
         window.scrollTo(0, 0);
         // Enable submit button after requests ends
         self.form.find(':input[disabled]').enable();
       })
-      .catch(error => flash(error.message));
+      .catch((error) =>
+        createFlash({
+          message: error.message,
+        }),
+      );
   }
 
   updateHeaderAvatar() {
     $('.header-user-avatar').attr('src', this.avatarGlCrop.dataURL);
+    $('.js-sidebar-user-avatar').attr('src', this.avatarGlCrop.dataURL);
   }
 
   setRepoRadio() {

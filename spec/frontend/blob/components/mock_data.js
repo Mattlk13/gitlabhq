@@ -21,7 +21,21 @@ export const RichViewerMock = {
 export const Blob = {
   binary: false,
   name: 'dummy.md',
-  path: 'dummy.md',
+  path: 'foo/bar/dummy.md',
+  rawPath: '/flightjs/flight/snippets/51/raw',
+  size: 75,
+  simpleViewer: {
+    ...SimpleViewerMock,
+  },
+  richViewer: {
+    ...RichViewerMock,
+  },
+};
+
+export const BinaryBlob = {
+  binary: true,
+  name: 'dummy.png',
+  path: 'foo/bar/dummy.png',
   rawPath: '/flightjs/flight/snippets/51/raw',
   size: 75,
   simpleViewer: {
@@ -33,11 +47,11 @@ export const Blob = {
 };
 
 export const RichBlobContentMock = {
+  path: 'foo.md',
   richData: '<h1>Rich</h1>',
 };
 
 export const SimpleBlobContentMock = {
+  path: 'foo.js',
   plainData: 'Plain',
 };
-
-export default {};

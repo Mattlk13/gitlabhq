@@ -30,17 +30,25 @@
               "status_tooltip_html": { "type": ["string", "null"] },
               "path": { "type": "string" }
             },
-            "additionalProperties": false
+            "required": [
+              "id",
+              "state",
+              "avatar_url",
+              "path",
+              "name",
+              "username"
+            ]
           },
-          "created_at": { "type": "date" },
-          "updated_at": { "type": "date" },
+          "created_at": { "type": "string", "format": "date-time" },
+          "updated_at": { "type": "string", "format": "date-time" },
           "system": { "type": "boolean" },
           "noteable_id": { "type": "integer" },
-          "noteable_iid": { "type": "integer" },
+          "noteable_iid": { "type": ["integer", "null"] },
           "noteable_type": { "type": "string" },
           "resolved": { "type": "boolean" },
           "resolvable": { "type": "boolean" },
           "resolved_by": { "type": ["string", "null"] },
+          "resolved_at": { "type": ["string", "null"], "format": "date-time" },
           "note": { "type": "string" },
           "note_html": { "type": "string"  },
           "current_user": { "type": "object" },
@@ -53,8 +61,13 @@
           "resolve_with_issue_path": { "type": "string" },
           "cached_markdown_version": { "type": "integer" },
           "human_access": { "type": ["string", "null"] },
+          "is_noteable_author": { "type": "boolean" },
+          "is_contributor": { "type": "boolean" },
+          "project_name": { "type": "string" },
           "toggle_award_path": { "type": "string" },
-          "path": { "type": "string" }
+          "path": { "type": "string" },
+          "commands_changes": { "type": "object", "additionalProperties": true },
+          "confidential": { "type": ["boolean", "null"] }
         },
         "required": [
           "id", "attachment", "author", "created_at", "updated_at",

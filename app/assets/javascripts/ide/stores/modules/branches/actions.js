@@ -1,5 +1,5 @@
-import { __ } from '~/locale';
 import Api from '~/api';
+import { __ } from '~/locale';
 import * as types from './mutation_types';
 
 export const requestBranches = ({ commit }) => commit(types.REQUEST_BRANCHES);
@@ -8,7 +8,7 @@ export const receiveBranchesError = ({ commit, dispatch }, { search }) => {
     'setErrorMessage',
     {
       text: __('Error loading branches.'),
-      action: payload =>
+      action: (payload) =>
         dispatch('fetchBranches', payload).then(() =>
           dispatch('setErrorMessage', null, { root: true }),
         ),
@@ -32,5 +32,3 @@ export const fetchBranches = ({ dispatch, rootGetters }, { search = '' }) => {
 };
 
 export const resetBranches = ({ commit }) => commit(types.RESET_BRANCHES);
-
-export default () => {};

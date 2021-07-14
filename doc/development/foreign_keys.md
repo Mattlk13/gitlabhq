@@ -1,3 +1,9 @@
+---
+stage: Enablement
+group: Database
+info: To determine the technical writer assigned to the Stage/Group associated with this page, see https://about.gitlab.com/handbook/engineering/ux/technical-writing/#assignments
+---
+
 # Foreign Keys & Associations
 
 When adding an association to a model you must also add a foreign key. For
@@ -22,7 +28,8 @@ Guide](migration_style_guide.md) for more information.
 
 Keep in mind that you can only safely add foreign keys to existing tables after
 you have removed any orphaned rows. The method `add_concurrent_foreign_key`
-does not take care of this so you'll need to do so manually.
+does not take care of this so you'll need to do so manually. See
+[adding foreign key constraint to an existing column](database/add_foreign_key_to_existing_column.md).
 
 ## Cascading Deletes
 
@@ -34,6 +41,17 @@ this should be set to `CASCADE`.
 When adding a foreign key in PostgreSQL the column is not indexed automatically,
 thus you must also add a concurrent index. Not doing so will result in cascading
 deletes being very slow.
+
+## Naming foreign keys
+
+By default Ruby on Rails uses the `_id` suffix for foreign keys. So we should
+only use this suffix for associations between two tables. If you want to
+reference an ID on a third party platform the `_xid` suffix is recommended.
+
+The spec `spec/db/schema_spec.rb` will test if all columns with the `_id` suffix
+have a foreign key constraint. So if that spec fails, don't add the column to
+`IGNORED_FK_COLUMNS`, but instead add the FK constraint, or consider naming it
+differently.
 
 ## Dependent Removals
 
@@ -58,7 +76,7 @@ your models _unless_ absolutely required and only when approved by database
 specialists. For example, if each row in a table has a corresponding file on a
 file system it may be tempting to add a `after_destroy` hook. This however
 introduces non database logic to a model, and means we can no longer rely on
-foreign keys to remove the data as this would result in the filesystem data
+foreign keys to remove the data as this would result in the file system data
 being left behind. In such a case you should use a service class instead that
 takes care of removing non database data.
 
@@ -85,5 +103,17 @@ table:
 create_table :user_configs, id: false do |t|
   t.references :users, primary_key: true, default: nil, index: false, foreign_key: { on_delete: :cascade }
   ...
+end
+```
+
+Setting `default: nil` will ensure a primary key sequence is not created, and since the primary key
+will automatically get an index, we set `index: false` to avoid creating a duplicate.
+You will also need to add the new primary key to the model:
+
+```ruby
+class UserConfig < ActiveRecord::Base
+  self.primary_key = :user_id
+
+  belongs_to :user
 end
 ```

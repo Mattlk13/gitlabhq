@@ -1,6 +1,6 @@
 /* https://gist.github.com/qguv/7936275 */
 
-@import "../common";
+@import '../common';
 
 /*
 * Solarized light syntax colors
@@ -23,6 +23,8 @@ $solarized-light-hll-bg: #ddd8c5;
 $solarized-light-over-bg: #ded7fc;
 $solarized-light-expanded-border: #d2cdbd;
 $solarized-light-expanded-bg: #ece6d4;
+$solarized-light-coverage: #859900;
+$solarized-light-no-coverage: #cb4b16;
 $solarized-light-c: #93a1a1;
 $solarized-light-err: #586e75;
 $solarized-light-g: #586e75;
@@ -99,6 +101,10 @@ $solarized-light-il: #2aa198;
 
 .code.solarized-light {
   // Line numbers
+  .file-line-num {
+    @include line-number-link($solarized-light-line-color);
+  }
+
   .line-numbers,
   .diff-line-num {
     background-color: $solarized-light-line-bg;
@@ -134,13 +140,24 @@ $solarized-light-il: #2aa198;
       @include match-line;
     }
 
+    .diff-td.diff-line-num.hll:not(.empty-cell),
+    .diff-td.line-coverage.hll:not(.empty-cell),
+    .diff-td.line-codequality.hll:not(.empty-cell),
+    .diff-td.line_content.hll:not(.empty-cell),
     td.diff-line-num.hll:not(.empty-cell),
+    td.line-coverage.hll:not(.empty-cell),
     td.line_content.hll:not(.empty-cell) {
       background-color: $solarized-light-hll-bg;
       border-color: darken($solarized-light-hll-bg, 15%);
     }
 
+    .line-coverage {
+      @include line-coverage-border-color($solarized-light-coverage, $solarized-light-no-coverage);
+    }
+
     .diff-line-num.new,
+    .line-coverage.new,
+    .line-codequality.new,
     .line_content.new {
       @include diff-background($solarized-light-new-bg,
       $solarized-light-new-idiff, $solarized-light-border);
@@ -151,7 +168,16 @@ $solarized-light-il: #2aa198;
       }
     }
 
+    .diff-grid-left:hover,
+    .diff-grid-right:hover {
+      .diff-line-num:not(.empty-cell) {
+        @include line-number-hover($solarized-light-over-bg);
+      }
+    }
+
     .diff-line-num.old,
+    .line-coverage.old,
+    .line-codequality.old,
     .line_content.old {
       @include diff-background($solarized-light-old-bg, $solarized-light-old-idiff, $solarized-light-border);
 
@@ -164,12 +190,7 @@ $solarized-light-il: #2aa198;
     .diff-line-num {
       &.is-over,
       &.hll:not(.empty-cell).is-over {
-        background-color: $solarized-light-over-bg;
-        border-color: darken($solarized-light-over-bg, 5%);
-
-        a {
-          color: darken($solarized-light-over-bg, 15%);
-        }
+        @include line-number-hover($solarized-light-over-bg);
       }
     }
 
@@ -180,6 +201,7 @@ $solarized-light-il: #2aa198;
     &:not(.diff-expanded) + .diff-expanded,
     &.diff-expanded + .line_holder:not(.diff-expanded) {
       > .diff-line-num,
+      > .line-coverage,
       > .line_content {
         border-top: 1px solid $solarized-light-expanded-border;
       }
@@ -187,12 +209,15 @@ $solarized-light-il: #2aa198;
 
     &.diff-expanded {
       > .diff-line-num,
+      > .line-coverage,
       > .line_content {
         background: $solarized-light-expanded-bg;
         border-color: $solarized-light-expanded-bg;
       }
     }
   }
+
+  @include conflict-colors('solarized-light');
 
   // highlight line via anchor
   pre .hll {
@@ -241,13 +266,19 @@ $solarized-light-il: #2aa198;
   .c1 { color: $solarized-light-c1; } /* Comment.Single */
   .cs { color: $solarized-light-cs; } /* Comment.Special */
   .gd { color: $solarized-light-gd; } /* Generic.Deleted */
-  .ge { color: $solarized-light-ge; font-style: italic; } /* Generic.Emph */
+  .ge { /* Generic.Emph */
+    color: $solarized-light-ge;
+    font-style: italic;
+  }
   .gr { color: $solarized-light-gr; } /* Generic.Error */
   .gh { color: $solarized-light-gh; } /* Generic.Heading */
   .gi { color: $solarized-light-gi; } /* Generic.Inserted */
   .go { color: $solarized-light-go; } /* Generic.Output */
   .gp { color: $solarized-light-gp; } /* Generic.Prompt */
-  .gs { color: $solarized-light-gs; font-weight: $gl-font-weight-bold; } /* Generic.Strong */
+  .gs { /* Generic.Strong */
+    color: $solarized-light-gs;
+    font-weight: $gl-font-weight-bold;
+  }
   .gu { color: $solarized-light-gu; } /* Generic.Subheading */
   .gt { color: $solarized-light-gt; } /* Generic.Traceback */
   .kc { color: $solarized-light-kc; } /* Keyword.Constant */

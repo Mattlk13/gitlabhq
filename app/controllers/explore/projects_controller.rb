@@ -4,18 +4,26 @@ class Explore::ProjectsController < Explore::ApplicationController
   include PageLimiter
   include ParamsBackwardCompatibility
   include RendersMemberAccess
+  include RendersProjectsList
   include SortingHelper
   include SortingPreference
+
+  MIN_SEARCH_LENGTH = 3
+  PAGE_LIMIT = 50
 
   before_action :set_non_archived_param
   before_action :set_sorting
 
-  # Limit taken from https://gitlab.com/gitlab-org/gitlab/issues/38357
+  # For background information on the limit, see:
+  #   https://gitlab.com/gitlab-org/gitlab/-/issues/38357
+  #   https://gitlab.com/gitlab-org/gitlab/-/issues/262682
   before_action only: [:index, :trending, :starred] do
-    limit_pages(200)
+    limit_pages(PAGE_LIMIT)
   end
 
   rescue_from PageOutOfBoundsError, with: :page_out_of_bounds
+
+  feature_category :projects
 
   def index
     @projects = load_projects
@@ -66,17 +74,20 @@ class Explore::ProjectsController < Explore::ApplicationController
     @total_starred_projects_count = ProjectsFinder.new(params: { starred: true }, current_user: current_user).execute
   end
 
-  # rubocop: disable CodeReuse/ActiveRecord
   def load_projects
     load_project_counts
 
-    projects = ProjectsFinder.new(current_user: current_user, params: params)
-                 .execute
-                 .includes(:route, :creator, :group, namespace: [:route, :owner])
-                 .page(params[:page])
-                 .without_count
+    projects = ProjectsFinder.new(current_user: current_user, params: params.merge(minimum_search_length: MIN_SEARCH_LENGTH)).execute
+
+    projects = preload_associations(projects)
+    projects = projects.page(params[:page]).without_count
 
     prepare_projects_for_rendering(projects)
+  end
+
+  # rubocop: disable CodeReuse/ActiveRecord
+  def preload_associations(projects)
+    projects.includes(:route, :creator, :group, :project_feature, namespace: [:route, :owner])
   end
   # rubocop: enable CodeReuse/ActiveRecord
 
@@ -110,3 +121,5 @@ class Explore::ProjectsController < Explore::ApplicationController
     end
   end
 end
+
+Explore::ProjectsController.prepend_mod_with('Explore::ProjectsController')

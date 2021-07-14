@@ -75,24 +75,10 @@
   code {
     font-family: $monospace-font;
     white-space: pre-wrap;
-    word-wrap: normal;
+    // Safari
+    word-wrap: break-word;
+    overflow-wrap: break-word;
     word-break: keep-all;
-  }
-
-  kbd {
-    display: inline-block;
-    padding: 3px 5px;
-    font-size: 11px;
-    line-height: 10px;
-    color: $gl-gray-700;
-    vertical-align: middle;
-    background-color: $kdb-bg;
-    border-width: 1px;
-    border-style: solid;
-    border-color: $gl-gray-200 $gl-gray-200 $kdb-border-bottom;
-    border-image: none;
-    border-radius: 3px;
-    box-shadow: 0 -1px 0 $kdb-shadow inset;
   }
 
   h1 {
@@ -178,16 +164,16 @@
     overflow-x: auto;
 
     tbody {
-      background-color: $white-light;
+      background-color: $white;
 
       td {
-        border-color: $gray-200;
+        border-color: $gray-100;
       }
     }
 
     tr {
       th {
-        border-bottom: solid 2px $gray-300;
+        border-bottom: solid 2px $gray-200;
       }
     }
 
@@ -341,6 +327,9 @@
     // Multi-line code blocks should scroll horizontally
     code {
       white-space: pre;
+      // Safari
+      word-wrap: normal;
+      overflow-wrap: normal;
     }
 
     &.plain-readme {
@@ -427,22 +416,22 @@
     }
   }
 
+  a.with-attachment-icon,
   a[href*='/uploads/'],
   a[href*='storage.googleapis.com/google-code-attachments/'] {
     &::before {
       margin-right: 4px;
 
-      font: normal normal normal 14px/1 FontAwesome;
+      font-style: normal;
       font-size: inherit;
       text-rendering: auto;
       -webkit-font-smoothing: antialiased;
-      content: '\f0c6';
+      content: '📎';
     }
+  }
 
-    &:hover::before {
-      text-decoration: none;
-    }
-
+  a[href*='/uploads/'],
+  a[href*='storage.googleapis.com/google-code-attachments/'] {
     &.no-attachment-icon {
       &::before {
         display: none;
@@ -457,11 +446,9 @@
   h4,
   h5,
   h6 {
-    position: relative;
-
     a.anchor {
-      left: -16px;
-      position: absolute;
+      float: left;
+      margin-left: -20px;
       text-decoration: none;
       outline: none;
 
@@ -473,6 +460,11 @@
 
     &:hover > a.anchor::after {
       visibility: visible;
+    }
+
+    > a.anchor:focus::after {
+      visibility: visible;
+      outline: auto;
     }
   }
 
@@ -496,32 +488,56 @@
     text-decoration: line-through;
   }
 
+  // Custom Font Awesome styles that render emojis in asciidoc
+  .fa {
+    display: inline-block;
+    font-style: normal;
+    font-size: 14px;
+    text-rendering: auto;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  .fa-2x,
+  .admonitionblock td.icon [class^='fa icon-'] {
+    font-size: 2em;
+  }
+
+  .fa-exclamation-triangle::before,
+  .admonitionblock td.icon .icon-warning::before {
+    content: '⚠';
+  }
+
+  .fa-exclamation-circle::before,
+  .admonitionblock td.icon .icon-important::before {
+    content: '❗';
+  }
+
+  .fa-lightbulb-o::before,
+  .admonitionblock td.icon .icon-tip::before {
+    content: '💡';
+  }
+
+  .fa-thumb-tack::before,
+  .admonitionblock td.icon .icon-note::before {
+    content: '📌';
+  }
+
+  .fa-fire::before,
+  .admonitionblock td.icon .icon-caution::before {
+    content: '🔥';
+  }
+
+  .fa-square-o::before {
+    content: '\2610';
+  }
+
+  .fa-check-square-o::before {
+    content: '\2611';
+  }
+
   .admonitionblock td.icon {
     width: 1%;
-
-    [class^='fa icon-'] {
-      @extend .fa-2x;
-    }
-
-    .icon-note {
-      @extend .fa-thumb-tack;
-    }
-
-    .icon-tip {
-      @extend .fa-lightbulb-o;
-    }
-
-    .icon-warning {
-      @extend .fa-exclamation-triangle;
-    }
-
-    .icon-caution {
-      @extend .fa-fire;
-    }
-
-    .icon-important {
-      @extend .fa-exclamation-circle;
-    }
   }
 
   .metrics-embed {
@@ -533,6 +549,35 @@
       margin: 0;
       font-size: $gl-font-size-small;
     }
+
+    ul.dropdown-menu {
+      margin-top: 4px;
+      margin-bottom: 24px;
+      padding: 8px 0;
+
+      li {
+        margin: 0;
+        padding: 0 1px;
+      }
+    }
+  }
+
+  /* AsciiDoc(tor) built-in alignment roles */
+
+  .text-left {
+    text-align: left !important;
+  }
+
+  .text-right {
+    text-align: right !important;
+  }
+
+  .text-center {
+    text-align: center !important;
+  }
+
+  .text-justify {
+    text-align: justify !important;
   }
 }
 
@@ -550,10 +595,6 @@ body {
   font-size: 1.25em;
   font-weight: $gl-font-weight-bold;
 
-  &:last-child {
-    margin-bottom: 0;
-  }
-
   &.with-button {
     line-height: 34px;
   }
@@ -567,16 +608,6 @@ body {
   font-weight: $gl-font-weight-bold;
 }
 
-h1,
-h2,
-h3,
-h4,
-h5,
-h6 {
-  color: $gl-text-color;
-  font-weight: $gl-font-weight-bold;
-}
-
 .light-header {
   font-weight: $gl-font-weight-bold;
 }
@@ -587,12 +618,12 @@ pre {
   display: block;
   padding: $gl-padding-8 $input-horizontal-padding;
   margin: 0 0 $gl-padding-8;
-  font-size: 13px;
+  font-size: $gl-font-size-monospace;
   word-break: break-all;
   word-wrap: break-word;
   color: $gl-text-color;
   background-color: $gray-light;
-  border: 1px solid $border-color;
+  border: 1px solid $gray-100;
   border-radius: $border-radius-small;
 }
 
@@ -614,12 +645,13 @@ code {
 .commit-sha,
 .ref-name,
 .pipeline-number {
-  @extend .monospace;
+  font-family: $monospace-font;
   font-size: 95%;
 }
 
-.git-revision-dropdown .dropdown-content ul li a {
-  @extend .ref-name;
+.git-revision-dropdown .dropdown-content li:not(.dropdown-menu-empty-item) a {
+  font-family: $monospace-font;
+  font-size: 95%;
   word-break: break-all;
 }
 
@@ -629,7 +661,7 @@ code {
  */
 textarea.js-gfm-input {
   font-family: $monospace-font;
-  font-size: 13px;
+  font-size: $gl-font-size-monospace;
 }
 
 .strikethrough {
@@ -682,13 +714,11 @@ textarea {
     opacity: 1; // FF defaults to 0.54
   }
 
-  // scss-lint:disable PseudoElement
   // support Edge vendor prefix
   &::-ms-input-placeholder {
     color: $gl-text-color-tertiary;
   }
 
-  // scss-lint:disable PseudoElement
   // support IE vendor prefix
   &:-ms-input-placeholder {
     color: $gl-text-color-tertiary;

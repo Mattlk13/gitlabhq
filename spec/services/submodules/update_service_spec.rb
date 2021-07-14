@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 require 'spec_helper'
 
-describe Submodules::UpdateService do
+RSpec.describe Submodules::UpdateService do
   let(:project) { create(:project, :repository) }
   let(:repository) { project.repository }
   let(:user) { create(:user, :commit_email) }
@@ -90,7 +90,7 @@ describe Submodules::UpdateService do
             let(:submodule) { '../six' }
 
             it_behaves_like 'returns error result' do
-              let(:error_message) { 'Invalid parameters' }
+              let(:error_message) { 'Invalid submodule path' }
             end
           end
         end

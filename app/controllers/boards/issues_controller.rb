@@ -13,28 +13,26 @@ module Boards
 
     requires_cross_project_access if: -> { board&.group_board? }
 
-    before_action :whitelist_query_limiting, only: [:bulk_move]
+    before_action :disable_query_limiting, only: [:bulk_move]
     before_action :authorize_read_issue, only: [:index]
     before_action :authorize_create_issue, only: [:create]
     before_action :authorize_update_issue, only: [:update]
     skip_before_action :authenticate_user!, only: [:index]
     before_action :validate_id_list, only: [:bulk_move]
     before_action :can_move_issues?, only: [:bulk_move]
-    before_action do
-      push_frontend_feature_flag(:board_search_optimization, board.group)
-    end
 
-    # rubocop: disable CodeReuse/ActiveRecord
+    feature_category :boards
+
     def index
       list_service = Boards::Issues::ListService.new(board_parent, current_user, filter_params)
-      issues = list_service.execute
-      issues = issues.page(params[:page]).per(params[:per] || 20).without_count
-      Issue.move_nulls_to_end(issues) if Gitlab::Database.read_write?
-      issues = issues.preload(associations_to_preload)
+      issues = issues_from(list_service)
+
+      if Gitlab::Database.read_write? && !board.disabled_for?(current_user)
+        Issue.move_nulls_to_end(issues)
+      end
 
       render_issues(issues, list_service.metadata)
     end
-    # rubocop: enable CodeReuse/ActiveRecord
 
     def create
       service = Boards::Issues::CreateService.new(board_parent, project, current_user, issue_params)
@@ -66,6 +64,14 @@ module Boards
     end
 
     private
+
+    def issues_from(list_service)
+      issues = list_service.execute
+      issues.page(params[:page]).per(params[:per] || 20)
+            .without_count
+            .preload(associations_to_preload) # rubocop: disable CodeReuse/ActiveRecord
+            .load
+    end
 
     def associations_to_preload
       [
@@ -130,7 +136,7 @@ module Boards
     def issue_params
       params.require(:issue)
         .permit(:title, :milestone_id, :project_id)
-        .merge(board_id: params[:board_id], list_id: params[:list_id], request: request)
+        .merge(board_id: params[:board_id], list_id: params[:list_id])
     end
 
     def serializer
@@ -143,8 +149,8 @@ module Boards
       serializer.represent(resource, opts)
     end
 
-    def whitelist_query_limiting
-      Gitlab::QueryLimiting.whitelist('https://gitlab.com/gitlab-org/gitlab/issues/35174')
+    def disable_query_limiting
+      Gitlab::QueryLimiting.disable!('https://gitlab.com/gitlab-org/gitlab/issues/35174')
     end
 
     def validate_id_list
@@ -154,4 +160,4 @@ module Boards
   end
 end
 
-Boards::IssuesController.prepend_if_ee('EE::Boards::IssuesController')
+Boards::IssuesController.prepend_mod_with('Boards::IssuesController')

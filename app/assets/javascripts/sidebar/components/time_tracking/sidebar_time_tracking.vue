@@ -1,24 +1,35 @@
 <script>
 import $ from 'jquery';
-import _ from 'underscore';
+import { intersection } from 'lodash';
 
 import '~/smart_interval';
 
-import IssuableTimeTracker from './time_tracker.vue';
-
-import Store from '../../stores/sidebar_store';
-import Mediator from '../../sidebar_mediator';
 import eventHub from '../../event_hub';
+import IssuableTimeTracker from './time_tracker.vue';
 
 export default {
   components: {
     IssuableTimeTracker,
   },
-  data() {
-    return {
-      mediator: new Mediator(),
-      store: new Store(),
-    };
+  props: {
+    fullPath: {
+      type: String,
+      required: false,
+      default: '',
+    },
+    issuableId: {
+      type: String,
+      required: true,
+    },
+    issuableIid: {
+      type: String,
+      required: true,
+    },
+    limitToHours: {
+      type: Boolean,
+      required: false,
+      default: false,
+    },
   },
   mounted() {
     this.listenForQuickActions();
@@ -26,11 +37,14 @@ export default {
   methods: {
     listenForQuickActions() {
       $(document).on('ajax:success', '.gfm-form', this.quickActionListened);
-      eventHub.$on('timeTrackingUpdated', data => {
-        this.quickActionListened(null, data);
+
+      eventHub.$on('timeTrackingUpdated', (data) => {
+        this.quickActionListened({ detail: [data] });
       });
     },
-    quickActionListened(e, data) {
+    quickActionListened(e) {
+      const data = e.detail[0];
+
       const subscribedCommands = ['spend_time', 'time_estimate'];
       let changedCommands;
       if (data !== undefined) {
@@ -38,8 +52,8 @@ export default {
       } else {
         changedCommands = [];
       }
-      if (changedCommands && _.intersection(subscribedCommands, changedCommands).length) {
-        this.mediator.fetch();
+      if (changedCommands && intersection(subscribedCommands, changedCommands).length) {
+        eventHub.$emit('timeTracker:refresh');
       }
     },
   },
@@ -49,12 +63,10 @@ export default {
 <template>
   <div class="block">
     <issuable-time-tracker
-      :time-estimate="store.timeEstimate"
-      :time-spent="store.totalTimeSpent"
-      :human-time-estimate="store.humanTimeEstimate"
-      :human-time-spent="store.humanTotalTimeSpent"
-      :limit-to-hours="store.timeTrackingLimitToHours"
-      :root-path="store.rootPath"
+      :full-path="fullPath"
+      :issuable-id="issuableId"
+      :issuable-iid="issuableIid"
+      :limit-to-hours="limitToHours"
     />
   </div>
 </template>

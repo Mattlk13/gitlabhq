@@ -6,15 +6,17 @@ module Mutations
       field :snippet,
             Types::SnippetType,
             null: true,
-            description: 'The snippet after mutation'
+            description: 'The snippet after mutation.'
 
       private
 
       def find_object(id:)
-        GitlabSchema.object_from_id(id)
+        GitlabSchema.object_from_id(id, expected_type: ::Snippet)
       end
 
       def authorized_resource?(snippet)
+        return false if snippet.nil?
+
         Ability.allowed?(context[:current_user], ability_for(snippet), snippet)
       end
 

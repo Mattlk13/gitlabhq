@@ -12,10 +12,11 @@ module API
       def self.optional_attributes
         [*::ApplicationSettingsHelper.visible_attributes,
          *::ApplicationSettingsHelper.external_authorization_service_attributes,
+         *::ApplicationSettingsHelper.deprecated_attributes,
          :performance_bar_allowed_group_id].freeze
       end
     end
   end
 end
 
-API::Helpers::SettingsHelpers.prepend_if_ee('EE::API::Helpers::SettingsHelpers')
+API::Helpers::SettingsHelpers.prepend_mod_with('API::Helpers::SettingsHelpers')

@@ -2,9 +2,9 @@
 
 require 'spec_helper'
 
-require Rails.root.join('db', 'post_migrate', '20200214034836_remove_security_dashboard_feature_flag.rb')
+require_migration!
 
-describe RemoveSecurityDashboardFeatureFlag, :migration do
+RSpec.describe RemoveSecurityDashboardFeatureFlag do
   let(:feature_gates) { table(:feature_gates) }
 
   subject(:migration) { described_class.new }

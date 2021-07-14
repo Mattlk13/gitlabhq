@@ -1,25 +1,28 @@
 # frozen_string_literal: true
 
 class Admin::ServicesController < Admin::ApplicationController
-  include ServiceParams
+  include Integrations::Params
 
-  before_action :whitelist_query_limiting, only: [:index]
-  before_action :service, only: [:edit, :update]
+  before_action :integration, only: [:edit, :update]
+  before_action :disable_query_limiting, only: [:index]
+
+  feature_category :integrations
 
   def index
-    @services = services_templates
+    @activated_services = Integration.for_template.active.sort_by(&:title)
+    @existing_instance_types = Integration.for_instance.pluck(:type) # rubocop: disable CodeReuse/ActiveRecord
   end
 
   def edit
-    unless service.present?
+    if integration.nil? || Integration.instance_exists_for?(integration.type)
       redirect_to admin_application_settings_services_path,
         alert: "Service is unknown or it doesn't exist"
     end
   end
 
   def update
-    if service.update(service_params[:service])
-      PropagateServiceTemplateWorker.perform_async(service.id) if service.active? # rubocop:disable CodeReuse/Worker
+    if integration.update(integration_params[:integration])
+      PropagateServiceTemplateWorker.perform_async(integration.id) if integration.active? # rubocop:disable CodeReuse/Worker
 
       redirect_to admin_application_settings_services_path,
         notice: 'Application settings saved successfully'
@@ -31,21 +34,14 @@ class Admin::ServicesController < Admin::ApplicationController
   private
 
   # rubocop: disable CodeReuse/ActiveRecord
-  def services_templates
-    Service.available_services_names.map do |service_name|
-      service_template = "#{service_name}_service".camelize.constantize
-      service_template.where(template: true).first_or_create
-    end
+  def integration
+    @integration ||= Integration.find_by(id: params[:id], template: true)
+    @service ||= @integration # TODO: https://gitlab.com/gitlab-org/gitlab/-/issues/329759
   end
+  alias_method :service, :integration
   # rubocop: enable CodeReuse/ActiveRecord
 
-  # rubocop: disable CodeReuse/ActiveRecord
-  def service
-    @service ||= Service.where(id: params[:id], template: true).first
-  end
-  # rubocop: enable CodeReuse/ActiveRecord
-
-  def whitelist_query_limiting
-    Gitlab::QueryLimiting.whitelist('https://gitlab.com/gitlab-org/gitlab-foss/issues/42430')
+  def disable_query_limiting
+    Gitlab::QueryLimiting.disable!('https://gitlab.com/gitlab-org/gitlab/-/issues/220357')
   end
 end

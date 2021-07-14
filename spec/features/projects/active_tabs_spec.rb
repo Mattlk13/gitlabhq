@@ -2,14 +2,12 @@
 
 require 'spec_helper'
 
-describe 'Project active tab' do
-  let(:user) { create :user }
-  let(:project) { create(:project, :repository) }
+RSpec.describe 'Project active tab' do
+  let_it_be(:project) { create(:project, :repository) }
+
+  let(:user) { project.owner }
 
   before do
-    stub_feature_flags(analytics_pages_under_project_analytics_sidebar: { enabled: false, thing: project })
-
-    project.add_maintainer(user)
     sign_in(user)
   end
 
@@ -20,16 +18,29 @@ describe 'Project active tab' do
   end
 
   context 'on project Home' do
-    before do
+    it 'activates Project scope menu' do
       visit project_path(project)
+
+      expect(page).to have_selector('.sidebar-top-level-items > li.active', count: 1)
+      expect(find('.sidebar-top-level-items > li.active')).to have_content(project.name)
+    end
+  end
+
+  context 'on Project information' do
+    context 'default link' do
+      before do
+        visit project_path(project)
+
+        click_link('Project information', match: :first)
+      end
+
+      it_behaves_like 'page has active tab', 'Project'
+      it_behaves_like 'page has active sub tab', 'Activity'
     end
 
-    it_behaves_like 'page has active tab', 'Project'
-    it_behaves_like 'page has active sub tab', 'Details'
-
-    context 'on project Home/Activity' do
+    context 'on Project information/Activity' do
       before do
-        click_tab('Activity')
+        visit activity_project_path(project)
       end
 
       it_behaves_like 'page has active tab', 'Project'
@@ -45,7 +56,7 @@ describe 'Project active tab' do
 
     it_behaves_like 'page has active tab', 'Repository'
 
-    %w(Files Commits Graph Compare Charts Branches Tags).each do |sub_menu|
+    %w(Files Commits Graph Compare Branches Tags).each do |sub_menu|
       context "on project Repository/#{sub_menu}" do
         before do
           click_tab(sub_menu)
@@ -64,15 +75,13 @@ describe 'Project active tab' do
 
     it_behaves_like 'page has active tab', 'Issues'
 
-    %w(Milestones Labels).each do |sub_menu|
-      context "on project Issues/#{sub_menu}" do
-        before do
-          click_tab(sub_menu)
-        end
-
-        it_behaves_like 'page has active tab', 'Issues'
-        it_behaves_like 'page has active sub tab', sub_menu
+    context "on project Issues/Milestones" do
+      before do
+        click_tab('Milestones')
       end
+
+      it_behaves_like 'page has active tab', 'Issues'
+      it_behaves_like 'page has active sub tab', 'Milestones'
     end
   end
 
@@ -81,12 +90,12 @@ describe 'Project active tab' do
       visit project_merge_requests_path(project)
     end
 
-    it_behaves_like 'page has active tab', 'Merge Requests'
+    it_behaves_like 'page has active tab', 'Merge requests'
   end
 
   context 'on project Wiki' do
     before do
-      visit project_wiki_path(project, :home)
+      visit wiki_path(project.wiki)
     end
 
     it_behaves_like 'page has active tab', 'Wiki'
@@ -124,33 +133,73 @@ describe 'Project active tab' do
     end
   end
 
-  context 'when `analytics_pages_under_project_analytics_sidebar` feature flag is enabled' do
+  context 'on project Analytics' do
     before do
-      stub_feature_flags(analytics_pages_under_project_analytics_sidebar: { enabled: true, thing: project })
+      visit project_cycle_analytics_path(project)
     end
 
-    context 'on project Analytics' do
+    context 'on project Analytics/Value stream Analytics' do
+      it_behaves_like 'page has active tab', _('Analytics')
+      it_behaves_like 'page has active sub tab', _('Value stream')
+    end
+
+    context 'on project Analytics/"CI/CD"' do
       before do
-        visit charts_project_graph_path(project, 'master')
+        click_tab(_('CI/CD'))
       end
 
-      context 'on project Analytics/Repository Analytics' do
-        it_behaves_like 'page has active tab', _('Analytics')
-        it_behaves_like 'page has active sub tab', _('Repository Analytics')
-      end
+      it_behaves_like 'page has active tab', _('Analytics')
+      it_behaves_like 'page has active sub tab', _('CI/CD')
+    end
+  end
 
-      context 'on project Analytics/Repository Analytics' do
-        it_behaves_like 'page has active tab', _('Analytics')
-        it_behaves_like 'page has active sub tab', _('Repository Analytics')
-      end
+  context 'on project CI/CD' do
+    context 'browsing Pipelines tabs' do
+      let_it_be(:pipeline) { create(:ci_pipeline, project: project) }
 
-      context 'on project Analytics/Cycle Analytics' do
+      context 'Pipeline tab' do
         before do
-          click_tab(_('CI / CD Analytics'))
+          visit project_pipeline_path(project, pipeline)
         end
 
-        it_behaves_like 'page has active tab', _('Analytics')
-        it_behaves_like 'page has active sub tab', _('CI / CD Analytics')
+        it_behaves_like 'page has active tab', _('CI/CD')
+        it_behaves_like 'page has active sub tab', _('Pipelines')
+      end
+
+      context 'Needs tab' do
+        before do
+          visit dag_project_pipeline_path(project, pipeline)
+        end
+
+        it_behaves_like 'page has active tab', _('CI/CD')
+        it_behaves_like 'page has active sub tab', _('Pipelines')
+      end
+
+      context 'Builds tab' do
+        before do
+          visit builds_project_pipeline_path(project, pipeline)
+        end
+
+        it_behaves_like 'page has active tab', _('CI/CD')
+        it_behaves_like 'page has active sub tab', _('Pipelines')
+      end
+
+      context 'Failures tab' do
+        before do
+          visit failures_project_pipeline_path(project, pipeline)
+        end
+
+        it_behaves_like 'page has active tab', _('CI/CD')
+        it_behaves_like 'page has active sub tab', _('Pipelines')
+      end
+
+      context 'Test Report tab' do
+        before do
+          visit test_report_project_pipeline_path(project, pipeline)
+        end
+
+        it_behaves_like 'page has active tab', _('CI/CD')
+        it_behaves_like 'page has active sub tab', _('Pipelines')
       end
     end
   end

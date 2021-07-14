@@ -54,7 +54,7 @@ class FileMover
     updated_text = to_model.read_attribute(update_field)
                            .gsub(temp_file_uploader.markdown_link, uploader.markdown_link)
     to_model.update_attribute(update_field, updated_text)
-  rescue
+  rescue StandardError
     revert
     false
   end
@@ -98,7 +98,7 @@ class FileMover
   end
 
   def revert
-    Rails.logger.warn("Markdown not updated, file move reverted for #{to_model}") # rubocop:disable Gitlab/RailsLogger
+    Gitlab::AppLogger.warn("Markdown not updated, file move reverted for #{to_model}")
 
     if temp_file_uploader.file_storage?
       FileUtils.move(file_path, temp_file_path)

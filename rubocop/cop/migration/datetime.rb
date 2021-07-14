@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require_relative '../../migration_helpers'
 
 module RuboCop
@@ -7,14 +9,14 @@ module RuboCop
       class Datetime < RuboCop::Cop::Cop
         include MigrationHelpers
 
-        MSG = 'Do not use the `%s` data type, use `datetime_with_timezone` instead'.freeze
+        MSG = 'Do not use the `%s` data type, use `datetime_with_timezone` instead'
 
         # Check methods in table creation.
         def on_def(node)
           return unless in_migration?(node)
 
           node.each_descendant(:send) do |send_node|
-            method_name = node.children[1]
+            method_name = send_node.children[1]
 
             if method_name == :datetime || method_name == :timestamp
               add_offense(send_node, location: :selector, message: format(MSG, method_name))

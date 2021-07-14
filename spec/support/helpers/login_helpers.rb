@@ -40,7 +40,7 @@ module LoginHelpers
       if user_or_role.is_a?(User)
         user_or_role
       else
-        create(user_or_role)
+        create(user_or_role) # rubocop:disable Rails/SaveBang
       end
 
     gitlab_sign_in_with(user, **kwargs)
@@ -50,16 +50,20 @@ module LoginHelpers
 
   def gitlab_enable_admin_mode_sign_in(user)
     visit new_admin_session_path
-
-    fill_in 'password', with: user.password
-
+    fill_in 'user_password', with: user.password
     click_button 'Enter Admin Mode'
   end
 
   def gitlab_sign_in_via(provider, user, uid, saml_response = nil)
     mock_auth_hash_with_saml_xml(provider, uid, user.email, saml_response)
     visit new_user_session_path
-    click_link provider
+    click_button provider
+  end
+
+  def gitlab_enable_admin_mode_sign_in_via(provider, user, uid, saml_response = nil)
+    mock_auth_hash_with_saml_xml(provider, uid, user.email, saml_response)
+    visit new_admin_session_path
+    click_button provider
   end
 
   # Requires Javascript driver.
@@ -69,6 +73,15 @@ module LoginHelpers
     @current_user = nil
 
     expect(page).to have_button('Sign in')
+  end
+
+  # Requires Javascript driver.
+  def gitlab_disable_admin_mode
+    open_top_nav
+
+    within_top_nav do
+      click_on 'Leave Admin Mode'
+    end
   end
 
   private
@@ -94,12 +107,17 @@ module LoginHelpers
 
     check 'remember_me' if remember_me
 
-    click_link "oauth-login-#{provider}"
+    click_button "oauth-login-#{provider}"
   end
 
   def fake_successful_u2f_authentication
     allow(U2fRegistration).to receive(:authenticate).and_return(true)
     FakeU2fDevice.new(page, nil).fake_u2f_authentication
+  end
+
+  def fake_successful_webauthn_authentication
+    allow_any_instance_of(Webauthn::AuthenticateService).to receive(:execute).and_return(true)
+    FakeWebauthnDevice.new(page, nil).fake_webauthn_authentication
   end
 
   def mock_auth_hash_with_saml_xml(provider, uid, email, saml_response)
@@ -124,13 +142,15 @@ module LoginHelpers
         secret: 'mock_secret'
       },
       extra: {
-        raw_info: {
-          info: {
-            name: 'mockuser',
-            email: email,
-            image: 'mock_user_thumbnail_url'
+        raw_info: OneLogin::RubySaml::Attributes.new(
+          {
+            info: {
+              name: 'mockuser',
+              email: email,
+              image: 'mock_user_thumbnail_url'
+            }
           }
-        },
+        ),
         response_object: response_object
       }
     }).merge(additional_info) { |_, old_hash, new_hash| old_hash.merge(new_hash) }
@@ -184,7 +204,7 @@ module LoginHelpers
     env['omniauth.error.strategy'] = strategy
   end
 
-  def stub_omniauth_saml_config(messages, context: Rails.application)
+  def stub_omniauth_saml_config(context: Rails.application, **messages)
     set_devise_mapping(context: context)
     routes = Rails.application.routes
     routes.disable_clear_and_finalize = true
@@ -221,4 +241,4 @@ module LoginHelpers
   end
 end
 
-LoginHelpers.prepend_if_ee('EE::LoginHelpers')
+LoginHelpers.prepend_mod_with('LoginHelpers')

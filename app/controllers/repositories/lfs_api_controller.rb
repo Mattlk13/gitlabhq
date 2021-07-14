@@ -17,9 +17,9 @@ module Repositories
       end
 
       if download_request?
-        render json: { objects: download_objects! }
+        render json: { objects: download_objects! }, content_type: LfsRequest::CONTENT_TYPE
       elsif upload_request?
-        render json: { objects: upload_objects! }
+        render json: { objects: upload_objects! }, content_type: LfsRequest::CONTENT_TYPE
       else
         raise "Never reached"
       end
@@ -31,6 +31,7 @@ module Repositories
           message: _('Server supports batch API only, please update your Git LFS client to version 1.0.1 and up.'),
           documentation_url: "#{Gitlab.config.gitlab.url}/help"
         },
+        content_type: LfsRequest::CONTENT_TYPE,
         status: :not_implemented
       )
     end
@@ -45,15 +46,9 @@ module Repositories
       params[:operation] == 'upload'
     end
 
-    # rubocop: disable CodeReuse/ActiveRecord
-    def existing_oids
-      @existing_oids ||= begin
-        project.all_lfs_objects.where(oid: objects.map { |o| o['oid'].to_s }).pluck(:oid)
-      end
-    end
-    # rubocop: enable CodeReuse/ActiveRecord
-
     def download_objects!
+      existing_oids = project.lfs_objects_oids(oids: objects_oids)
+
       objects.each do |object|
         if existing_oids.include?(object[:oid])
           object[:actions] = download_actions(object)
@@ -68,13 +63,17 @@ module Repositories
           }
         end
       end
+
       objects
     end
 
     def upload_objects!
+      existing_oids = project.lfs_objects_oids(oids: objects_oids)
+
       objects.each do |object|
         object[:actions] = upload_actions(object) unless existing_oids.include?(object[:oid])
       end
+
       objects
     end
 
@@ -92,14 +91,24 @@ module Repositories
     def upload_actions(object)
       {
         upload: {
-          href: "#{project.http_url_to_repo}/gitlab-lfs/objects/#{object[:oid]}/#{object[:size]}",
-          header: {
-            Authorization: authorization_header,
-            # git-lfs v2.5.0 sets the Content-Type based on the uploaded file. This
-            # ensures that Workhorse can intercept the request.
-            'Content-Type': LFS_TRANSFER_CONTENT_TYPE
-          }.compact
+          href: "#{upload_http_url_to_repo}/gitlab-lfs/objects/#{object[:oid]}/#{object[:size]}",
+          header: upload_headers
         }
+      }
+    end
+
+    # Overridden in EE
+    def upload_http_url_to_repo
+      project.http_url_to_repo
+    end
+
+    def upload_headers
+      {
+        Authorization: authorization_header,
+        # git-lfs v2.5.0 sets the Content-Type based on the uploaded file. This
+        # ensures that Workhorse can intercept the request.
+        'Content-Type': LFS_TRANSFER_CONTENT_TYPE,
+        'Transfer-Encoding': 'chunked'
       }
     end
 
@@ -139,4 +148,4 @@ module Repositories
   end
 end
 
-Repositories::LfsApiController.prepend_if_ee('EE::Repositories::LfsApiController')
+Repositories::LfsApiController.prepend_mod_with('Repositories::LfsApiController')

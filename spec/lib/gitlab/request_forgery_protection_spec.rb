@@ -2,7 +2,7 @@
 
 require 'spec_helper'
 
-describe Gitlab::RequestForgeryProtection, :allow_forgery_protection do
+RSpec.describe Gitlab::RequestForgeryProtection, :allow_forgery_protection do
   let(:csrf_token) { SecureRandom.base64(ActionController::RequestForgeryProtection::AUTHENTICITY_TOKEN_LENGTH) }
   let(:env) do
     {
@@ -52,6 +52,11 @@ describe Gitlab::RequestForgeryProtection, :allow_forgery_protection do
   end
 
   describe '.verified?' do
+    it 'does not modify the env' do
+      env['REQUEST_METHOD'] = "GET"
+      expect { described_class.verified?(env) }.not_to change { env }
+    end
+
     context 'when the request method is GET' do
       before do
         env['REQUEST_METHOD'] = 'GET'

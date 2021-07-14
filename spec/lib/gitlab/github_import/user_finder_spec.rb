@@ -2,7 +2,7 @@
 
 require 'spec_helper'
 
-describe Gitlab::GithubImport::UserFinder, :clean_gitlab_redis_cache do
+RSpec.describe Gitlab::GithubImport::UserFinder, :clean_gitlab_redis_cache do
   let(:project) { create(:project) }
   let(:client) { double(:client) }
   let(:finder) { described_class.new(project, client) }
@@ -60,6 +60,10 @@ describe Gitlab::GithubImport::UserFinder, :clean_gitlab_redis_cache do
 
       expect(finder).to receive(:find).with(user.id, user.login).and_return(42)
       expect(finder.user_id_for(user)).to eq(42)
+    end
+
+    it 'does not fail with empty input' do
+      expect(finder.user_id_for(nil)).to eq(nil)
     end
   end
 
@@ -162,7 +166,7 @@ describe Gitlab::GithubImport::UserFinder, :clean_gitlab_redis_cache do
 
     context 'when an Email address is cached' do
       it 'reads the Email address from the cache' do
-        expect(Gitlab::GithubImport::Caching)
+        expect(Gitlab::Cache::Import::Caching)
           .to receive(:read)
           .and_return(email)
 
@@ -182,7 +186,7 @@ describe Gitlab::GithubImport::UserFinder, :clean_gitlab_redis_cache do
       it 'caches the Email address when an Email address is available' do
         expect(client).to receive(:user).with('kittens').and_return(user)
 
-        expect(Gitlab::GithubImport::Caching)
+        expect(Gitlab::Cache::Import::Caching)
           .to receive(:write)
           .with(an_instance_of(String), email)
 
@@ -195,7 +199,7 @@ describe Gitlab::GithubImport::UserFinder, :clean_gitlab_redis_cache do
           .with('kittens')
           .and_return(nil)
 
-        expect(Gitlab::GithubImport::Caching)
+        expect(Gitlab::Cache::Import::Caching)
           .not_to receive(:write)
 
         expect(finder.email_for_github_username('kittens')).to be_nil
@@ -207,7 +211,7 @@ describe Gitlab::GithubImport::UserFinder, :clean_gitlab_redis_cache do
     let(:id) { 4 }
 
     it 'reads a user ID from the cache' do
-      Gitlab::GithubImport::Caching
+      Gitlab::Cache::Import::Caching
         .write(described_class::ID_CACHE_KEY % id, 4)
 
       expect(finder.cached_id_for_github_id(id)).to eq([true, 4])
@@ -222,7 +226,7 @@ describe Gitlab::GithubImport::UserFinder, :clean_gitlab_redis_cache do
     let(:email) { 'kittens@example.com' }
 
     it 'reads a user ID from the cache' do
-      Gitlab::GithubImport::Caching
+      Gitlab::Cache::Import::Caching
         .write(described_class::ID_FOR_EMAIL_CACHE_KEY % email, 4)
 
       expect(finder.cached_id_for_github_email(email)).to eq([true, 4])
@@ -241,7 +245,7 @@ describe Gitlab::GithubImport::UserFinder, :clean_gitlab_redis_cache do
         .with(id)
         .and_return(42)
 
-      expect(Gitlab::GithubImport::Caching)
+      expect(Gitlab::Cache::Import::Caching)
         .to receive(:write)
         .with(described_class::ID_CACHE_KEY % id, 42)
 
@@ -253,7 +257,7 @@ describe Gitlab::GithubImport::UserFinder, :clean_gitlab_redis_cache do
         .with(id)
         .and_return(nil)
 
-      expect(Gitlab::GithubImport::Caching)
+      expect(Gitlab::Cache::Import::Caching)
         .to receive(:write)
         .with(described_class::ID_CACHE_KEY % id, nil)
 
@@ -269,7 +273,7 @@ describe Gitlab::GithubImport::UserFinder, :clean_gitlab_redis_cache do
         .with(email)
         .and_return(42)
 
-      expect(Gitlab::GithubImport::Caching)
+      expect(Gitlab::Cache::Import::Caching)
         .to receive(:write)
         .with(described_class::ID_FOR_EMAIL_CACHE_KEY % email, 42)
 
@@ -281,7 +285,7 @@ describe Gitlab::GithubImport::UserFinder, :clean_gitlab_redis_cache do
         .with(email)
         .and_return(nil)
 
-      expect(Gitlab::GithubImport::Caching)
+      expect(Gitlab::Cache::Import::Caching)
         .to receive(:write)
         .with(described_class::ID_FOR_EMAIL_CACHE_KEY % email, nil)
 
@@ -317,13 +321,13 @@ describe Gitlab::GithubImport::UserFinder, :clean_gitlab_redis_cache do
 
   describe '#read_id_from_cache' do
     it 'reads an ID from the cache' do
-      Gitlab::GithubImport::Caching.write('foo', 10)
+      Gitlab::Cache::Import::Caching.write('foo', 10)
 
       expect(finder.read_id_from_cache('foo')).to eq([true, 10])
     end
 
     it 'reads a cache key with an empty value' do
-      Gitlab::GithubImport::Caching.write('foo', nil)
+      Gitlab::Cache::Import::Caching.write('foo', nil)
 
       expect(finder.read_id_from_cache('foo')).to eq([true, nil])
     end

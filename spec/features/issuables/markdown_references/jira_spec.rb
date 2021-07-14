@@ -2,7 +2,7 @@
 
 require 'spec_helper'
 
-describe "Jira", :js do
+RSpec.describe "Jira", :js do
   let(:user) { create(:user) }
   let(:actual_project) { create(:project, :public, :repository) }
   let(:merge_request) { create(:merge_request, target_project: actual_project, source_project: actual_project) }
@@ -81,7 +81,7 @@ describe "Jira", :js do
 
     context "when both external and internal issues trackers are enabled for the actual project" do
       before do
-        create(:jira_service, project: actual_project)
+        create(:jira_integration, project: actual_project)
       end
 
       include_examples "correct references" do
@@ -94,7 +94,7 @@ describe "Jira", :js do
       let(:actual_project) { create(:project, :public, :repository, :issues_disabled) }
 
       before do
-        create(:jira_service, project: actual_project)
+        create(:jira_integration, project: actual_project)
       end
 
       include_examples "correct references" do
@@ -125,7 +125,7 @@ describe "Jira", :js do
 
     context "when both external and internal issues trackers are enabled for the actual project" do
       before do
-        create(:jira_service, project: actual_project)
+        create(:jira_integration, project: actual_project)
       end
 
       include_examples "correct references" do
@@ -138,7 +138,7 @@ describe "Jira", :js do
       let(:actual_project) { create(:project, :public, :repository, :issues_disabled) }
 
       before do
-        create(:jira_service, project: actual_project)
+        create(:jira_integration, project: actual_project)
       end
 
       include_examples "correct references" do
@@ -163,7 +163,7 @@ describe "Jira", :js do
     markdown = <<~HEREDOC
       Referencing internal issue #{issue_actual_project.to_reference},
       cross-project #{issue_other_project.to_reference(actual_project)} external JIRA-5
-      and non existing #999
+      and non existing ##{non_existing_record_iid}
     HEREDOC
 
     page.within("#diff-notes-app") do
@@ -186,6 +186,6 @@ describe "Jira", :js do
       expect(page).not_to have_link("JIRA-5", href: "https://jira.example.com/browse/JIRA-5")
     end
 
-    expect(page).not_to have_link("#999")
+    expect(page).not_to have_link("##{non_existing_record_iid}")
   end
 end

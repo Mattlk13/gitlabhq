@@ -2,14 +2,14 @@
 
 require 'spec_helper'
 
-describe UserSerializer do
+RSpec.describe UserSerializer do
   let(:user1) { create(:user) }
   let(:user2) { create(:user) }
 
   context 'serializer with merge request context' do
     let(:merge_request) { create(:merge_request) }
     let(:project) { merge_request.project }
-    let(:serializer) { described_class.new(merge_request_iid: merge_request.iid) }
+    let(:serializer) { described_class.new(current_user: user1, merge_request_iid: merge_request.iid) }
 
     before do
       allow(project).to(

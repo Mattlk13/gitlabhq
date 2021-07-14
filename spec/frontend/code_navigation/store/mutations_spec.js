@@ -11,14 +11,12 @@ describe('Code navigation mutations', () => {
   describe('SET_INITIAL_DATA', () => {
     it('sets initial data', () => {
       mutations.SET_INITIAL_DATA(state, {
-        projectPath: 'test',
-        commitId: '123',
-        blobPath: 'index.js',
+        blobs: ['test'],
+        definitionPathPrefix: 'https://test.com/blob/main',
       });
 
-      expect(state.projectPath).toBe('test');
-      expect(state.commitId).toBe('123');
-      expect(state.blobPath).toBe('index.js');
+      expect(state.blobs).toEqual(['test']);
+      expect(state.definitionPathPrefix).toBe('https://test.com/blob/main');
     });
   });
 
@@ -38,9 +36,9 @@ describe('Code navigation mutations', () => {
     });
 
     it('sets data', () => {
-      mutations.REQUEST_DATA_SUCCESS(state, ['test']);
+      mutations.REQUEST_DATA_SUCCESS(state, { path: 'index.js', normalizedData: ['test'] });
 
-      expect(state.data).toEqual(['test']);
+      expect(state.data).toEqual({ 'index.js': ['test'] });
     });
   });
 

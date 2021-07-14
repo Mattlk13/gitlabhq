@@ -3,14 +3,19 @@
 exports[`User Operation confirmation modal renders modal with form included 1`] = `
 <div>
   <p>
-    content
+    <gl-sprintf-stub
+      message="content"
+    />
   </p>
    
+  <oncall-schedules-list-stub
+    schedules="schedule1,schedule2"
+  />
+   
   <p>
-    To confirm, type 
-    <code>
-      username
-    </code>
+    <gl-sprintf-stub
+      message="To confirm, type %{username}"
+    />
   </p>
    
   <form
@@ -37,18 +42,23 @@ exports[`User Operation confirmation modal renders modal with form included 1`] 
       value=""
     />
   </form>
-   
   <gl-button-stub
-    size="md"
-    variant="secondary"
+    buttontextclasses=""
+    category="primary"
+    icon=""
+    size="medium"
+    variant="default"
   >
     Cancel
   </gl-button-stub>
    
   <gl-button-stub
+    buttontextclasses=""
+    category="secondary"
     disabled="true"
-    size="md"
-    variant="warning"
+    icon=""
+    size="medium"
+    variant="danger"
   >
     
       secondaryAction
@@ -56,8 +66,11 @@ exports[`User Operation confirmation modal renders modal with form included 1`] 
   </gl-button-stub>
    
   <gl-button-stub
+    buttontextclasses=""
+    category="primary"
     disabled="true"
-    size="md"
+    icon=""
+    size="medium"
     variant="danger"
   >
     action

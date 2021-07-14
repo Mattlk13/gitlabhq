@@ -1,9 +1,26 @@
 <script>
+import { GlLink, GlTooltipDirective } from '@gitlab/ui';
 import { mapGetters } from 'vuex';
+import { isTextFile, getFileEOL } from '~/ide/utils';
+import TerminalSyncStatusSafe from './terminal_sync/terminal_sync_status_safe.vue';
 
 export default {
+  components: {
+    GlLink,
+    TerminalSyncStatusSafe,
+  },
+  directives: {
+    GlTooltip: GlTooltipDirective,
+  },
   computed: {
     ...mapGetters(['activeFile']),
+    ...mapGetters('editor', ['activeFileEditor']),
+    activeFileEOL() {
+      return getFileEOL(this.activeFile.content);
+    },
+    activeFileIsText() {
+      return isTextFile(this.activeFile);
+    },
   },
 };
 </script>
@@ -11,13 +28,17 @@ export default {
 <template>
   <div class="ide-status-list d-flex">
     <template v-if="activeFile">
-      <div class="ide-status-file">{{ activeFile.name }}</div>
-      <div class="ide-status-file">{{ activeFile.eol }}</div>
-      <div v-if="!activeFile.binary" class="ide-status-file">
-        {{ activeFile.editorRow }}:{{ activeFile.editorColumn }}
+      <div>
+        <gl-link v-gl-tooltip.hover :href="activeFile.permalink" :title="__('Open in file view')">
+          {{ activeFile.name }}
+        </gl-link>
       </div>
-      <div class="ide-status-file">{{ activeFile.fileLanguage }}</div>
+      <div>{{ activeFileEOL }}</div>
+      <div v-if="activeFileIsText">
+        {{ activeFileEditor.editorRow }}:{{ activeFileEditor.editorColumn }}
+      </div>
+      <div>{{ activeFileEditor.fileLanguage }}</div>
     </template>
-    <slot></slot>
+    <terminal-sync-status-safe />
   </div>
 </template>

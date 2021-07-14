@@ -16,9 +16,12 @@ exports[`self monitor component When the self monitor project has not been creat
     </h4>
      
     <gl-button-stub
+      buttontextclasses=""
+      category="primary"
       class="js-settings-toggle"
-      size="md"
-      variant="secondary"
+      icon=""
+      size="medium"
+      variant="default"
     >
       Expand
     </gl-button-stub>
@@ -43,14 +46,11 @@ exports[`self monitor component When the self monitor project has not been creat
       </p>
        
       <gl-form-group-stub
-        label="Create Project"
-        label-for="self-monitor-toggle"
+        labeldescription=""
       >
         <gl-toggle-stub
-          labeloff="Toggle Status: OFF"
-          labelon="Toggle Status: ON"
-          labelposition="hidden"
-          name="self-monitor-toggle"
+          label="Create Project"
+          labelposition="top"
         />
       </gl-form-group-stub>
     </form>
@@ -58,6 +58,8 @@ exports[`self monitor component When the self monitor project has not been creat
    
   <gl-modal-stub
     cancel-title="Cancel"
+    category="primary"
+    dismisslabel="Close"
     modalclass=""
     modalid="delete-self-monitor-modal"
     ok-title="Delete project"

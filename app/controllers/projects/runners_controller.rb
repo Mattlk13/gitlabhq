@@ -6,6 +6,8 @@ class Projects::RunnersController < Projects::ApplicationController
 
   layout 'project_settings'
 
+  feature_category :runner
+
   def index
     redirect_to project_settings_ci_cd_path(@project, anchor: 'js-runners-settings')
   end
@@ -46,13 +48,17 @@ class Projects::RunnersController < Projects::ApplicationController
   end
 
   def show
-    render 'shared/runners/show'
   end
 
   def toggle_shared_runners
-    project.toggle!(:shared_runners_enabled)
+    update_params = { shared_runners_enabled: !project.shared_runners_enabled }
+    result = Projects::UpdateService.new(project, current_user, update_params).execute
 
-    redirect_to project_settings_ci_cd_path(@project, anchor: 'js-runners-settings')
+    if result[:status] == :success
+      render json: {}, status: :ok
+    else
+      render json: { error: result[:message] }, status: :unauthorized
+    end
   end
 
   def toggle_group_runners

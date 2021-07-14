@@ -13,11 +13,13 @@ module API
       expose :emails_disabled
       expose :mentions_disabled
       expose :lfs_enabled?, as: :lfs_enabled
+      expose :default_branch_protection
       expose :avatar_url do |group, options|
         group.avatar_url(only_path: false)
       end
       expose :request_access_enabled
       expose :full_name, :full_path
+      expose :created_at
       expose :parent_id
 
       expose :custom_attributes, using: 'API::Entities::CustomAttribute', if: :with_custom_attributes
@@ -29,10 +31,11 @@ module API
           expose :wiki_size
           expose :lfs_objects_size
           expose :build_artifacts_size, as: :job_artifacts_size
+          expose :snippets_size
         end
       end
     end
   end
 end
 
-API::Entities::Group.prepend_if_ee('EE::API::Entities::Group', with_descendants: true)
+API::Entities::Group.prepend_mod_with('API::Entities::Group', with_descendants: true)

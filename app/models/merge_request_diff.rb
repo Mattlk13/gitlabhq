@@ -7,6 +7,7 @@ class MergeRequestDiff < ApplicationRecord
   include EachBatch
   include Gitlab::Utils::StrongMemoize
   include ObjectStorage::BackgroundMove
+  include BulkInsertableAssociations
 
   # Don't display more than 100 commits at once
   COMMITS_SAFE_SIZE = 100
@@ -15,6 +16,10 @@ class MergeRequestDiff < ApplicationRecord
   # Applies to closed or merged MRs when determining whether to migrate their
   # diffs to external storage
   EXTERNAL_DIFF_CUTOFF = 7.days.freeze
+
+  # The files_count column is a 2-byte signed integer. Look up the true value
+  # from the database if this sentinel is seen
+  FILES_COUNT_SENTINEL = 2**15 - 1
 
   belongs_to :merge_request
 
@@ -27,6 +32,7 @@ class MergeRequestDiff < ApplicationRecord
   has_many :merge_request_diff_commits, -> { order(:merge_request_diff_id, :relative_order) }
 
   validates :base_commit_sha, :head_commit_sha, :start_commit_sha, sha: true
+  validates :merge_request_id, uniqueness: { scope: :diff_type }, if: :merge_head?
 
   state_machine :state, initial: :empty do
     event :clean do
@@ -45,19 +51,26 @@ class MergeRequestDiff < ApplicationRecord
     state :overflow_diff_lines_limit
   end
 
+  enum diff_type: {
+    regular: 1,
+    merge_head: 2
+  }
+
   scope :with_files, -> { without_states(:without_files, :empty) }
   scope :viewable, -> { without_state(:empty) }
   scope :by_commit_sha, ->(sha) do
     joins(:merge_request_diff_commits).where(merge_request_diff_commits: { sha: sha }).reorder(nil)
   end
-  scope :has_diff_files, -> { where(id: MergeRequestDiffFile.select(:merge_request_diff_id)) }
 
   scope :by_project_id, -> (project_id) do
     joins(:merge_request).where(merge_requests: { target_project_id: project_id })
   end
 
   scope :recent, -> { order(id: :desc).limit(100) }
-  scope :files_in_database, -> { has_diff_files.where(stored_externally: [false, nil]) }
+
+  scope :files_in_database, -> do
+    where(stored_externally: [false, nil]).where(arel_table[:files_count].gt(0))
+  end
 
   scope :not_latest_diffs, -> do
     merge_requests = MergeRequest.arel_table
@@ -65,6 +78,7 @@ class MergeRequestDiff < ApplicationRecord
 
     join_condition = merge_requests[:id].eq(mr_diffs[:merge_request_id])
       .and(mr_diffs[:id].not_eq(merge_requests[:latest_merge_request_diff_id]))
+      .and(mr_diffs[:diff_type].eq(diff_types[:regular]))
 
     arel_join = mr_diffs.join(merge_requests).on(join_condition)
     joins(arel_join.join_sources)
@@ -99,14 +113,51 @@ class MergeRequestDiff < ApplicationRecord
     joins(merge_request: :metrics).where(condition)
   end
 
-  def self.ids_for_external_storage_migration(limit:)
-    # No point doing any work unless the feature is enabled
-    return [] unless Gitlab.config.external_diffs.enabled
+  # This scope uses LATERAL JOIN to find the most recent MR diff association for the given merge requests.
+  # To avoid joining the merge_requests table, we build an in memory table using the merge request ids.
+  # Example:
+  # SELECT ...
+  # FROM (VALUES (MR_ID_1),(MR_ID_2)) merge_requests (id)
+  # INNER JOIN LATERAL (...)
+  scope :latest_diff_for_merge_requests, -> (merge_requests) do
+    mrs = Array(merge_requests)
+    return MergeRequestDiff.none if mrs.empty?
 
-    case Gitlab.config.external_diffs.when
-    when 'always'
+    merge_request_table = MergeRequest.arel_table
+    merge_request_diff_table = MergeRequestDiff.arel_table
+
+    join_query = MergeRequestDiff
+      .where(merge_request_table[:id].eq(merge_request_diff_table[:merge_request_id]))
+      .order(created_at: :desc)
+      .limit(1)
+
+    mr_id_list = mrs.map { |mr| "(#{Integer(mr.id)})" }.join(",")
+
+    MergeRequestDiff
+      .from("(VALUES #{mr_id_list}) merge_requests (id)")
+      .joins("INNER JOIN LATERAL (#{join_query.to_sql}) #{MergeRequestDiff.table_name} ON TRUE")
+      .includes(:merge_request_diff_commits)
+  end
+
+  class << self
+    def ids_for_external_storage_migration(limit:)
+      return [] unless Gitlab.config.external_diffs.enabled
+
+      case Gitlab.config.external_diffs.when
+      when 'always'
+        ids_for_external_storage_migration_strategy_always(limit: limit)
+      when 'outdated'
+        ids_for_external_storage_migration_strategy_outdated(limit: limit)
+      else
+        []
+      end
+    end
+
+    def ids_for_external_storage_migration_strategy_always(limit:)
       files_in_database.limit(limit).pluck(:id)
-    when 'outdated'
+    end
+
+    def ids_for_external_storage_migration_strategy_outdated(limit:)
       # Outdated is too complex to be a single SQL query, so split into three
       before = EXTERNAL_DIFF_CUTOFF.ago
 
@@ -128,8 +179,6 @@ class MergeRequestDiff < ApplicationRecord
         .not_latest_diffs
         .limit(limit - ids.size)
         .pluck(:id)
-    else
-      []
     end
   end
 
@@ -140,7 +189,8 @@ class MergeRequestDiff < ApplicationRecord
   after_create :save_git_content, unless: :importing?
   after_create_commit :set_as_latest_diff, unless: :importing?
 
-  after_save :update_external_diff_store, if: -> { !importing? && saved_change_to_external_diff? }
+  after_save :update_external_diff_store
+  after_save :set_count_columns
 
   def self.find_by_diff_refs(diff_refs)
     find_by(start_commit_sha: diff_refs.start_sha, head_commit_sha: diff_refs.head_sha, base_commit_sha: diff_refs.base_sha)
@@ -168,6 +218,10 @@ class MergeRequestDiff < ApplicationRecord
   end
 
   def set_as_latest_diff
+    # Don't set merge_head diff as latest so it won't get considered as the
+    # MergeRequest#merge_request_diff.
+    return if merge_head?
+
     MergeRequest
       .where('id = ? AND COALESCE(latest_merge_request_diff_id, 0) < ?', self.merge_request_id, self.id)
       .update_all(latest_merge_request_diff_id: self.id)
@@ -175,8 +229,16 @@ class MergeRequestDiff < ApplicationRecord
 
   def ensure_commit_shas
     self.start_commit_sha ||= merge_request.target_branch_sha
-    self.head_commit_sha  ||= merge_request.source_branch_sha
-    self.base_commit_sha  ||= find_base_sha
+
+    if merge_head? && merge_request.merge_ref_head.present?
+      diff_refs = merge_request.merge_ref_head.diff_refs
+
+      self.head_commit_sha  ||= diff_refs.head_sha
+      self.base_commit_sha  ||= diff_refs.base_sha
+    else
+      self.head_commit_sha  ||= merge_request.source_branch_sha
+      self.base_commit_sha  ||= find_base_sha
+    end
   end
 
   # Override head_commit_sha to keep compatibility with merge request diff
@@ -186,6 +248,17 @@ class MergeRequestDiff < ApplicationRecord
       last_commit_sha
     else
       super
+    end
+  end
+
+  def files_count
+    db_value = read_attribute(:files_count)
+
+    case db_value
+    when nil, FILES_COUNT_SENTINEL
+      merge_request_diff_files.count
+    else
+      db_value
     end
   end
 
@@ -252,7 +325,13 @@ class MergeRequestDiff < ApplicationRecord
   end
 
   def commit_shas(limit: nil)
-    merge_request_diff_commits.limit(limit).pluck(:sha)
+    if association(:merge_request_diff_commits).loaded?
+      sorted_diff_commits = merge_request_diff_commits.sort_by { |diff_commit| [diff_commit.id, diff_commit.relative_order] }
+      sorted_diff_commits = sorted_diff_commits.take(limit) if limit
+      sorted_diff_commits.map(&:sha)
+    else
+      merge_request_diff_commits.limit(limit).pluck(:sha)
+    end
   end
 
   def includes_any_commits?(shas)
@@ -310,10 +389,23 @@ class MergeRequestDiff < ApplicationRecord
 
   def diffs_in_batch(batch_page, batch_size, diff_options:)
     fetching_repository_diffs(diff_options) do |comparison|
+      reorder_diff_files!
+      diffs_batch = diffs_in_batch_collection(batch_page, batch_size, diff_options: diff_options)
+
       if comparison
-        comparison.diffs_in_batch(batch_page, batch_size, diff_options: diff_options)
+        if diff_options[:paths].blank? && !without_files?
+          # Return the empty MergeRequestDiffBatch for an out of bound batch request
+          break diffs_batch if diffs_batch.diff_file_paths.blank?
+
+          diff_options.merge!(
+            paths: diffs_batch.diff_file_paths,
+            pagination_data: diffs_batch.pagination_data
+          )
+        end
+
+        comparison.diffs(diff_options)
       else
-        diffs_in_batch_collection(batch_page, batch_size, diff_options: diff_options)
+        diffs_batch
       end
     end
   end
@@ -326,6 +418,7 @@ class MergeRequestDiff < ApplicationRecord
       if comparison
         comparison.diffs(diff_options)
       else
+        reorder_diff_files!
         diffs_collection(diff_options)
       end
     end
@@ -365,40 +458,30 @@ class MergeRequestDiff < ApplicationRecord
   end
   # rubocop: enable CodeReuse/ServiceClass
 
-  def modified_paths
-    strong_memoize(:modified_paths) do
-      merge_request_diff_files.pluck(:new_path, :old_path).flatten.uniq
+  def modified_paths(fallback_on_overflow: false)
+    if fallback_on_overflow && overflow?
+      # This is an extremely slow means to find the modified paths for a given
+      #   MergeRequestDiff. This should be avoided, except where the limit of
+      #   1_000 (as of %12.10) entries returned by the default behavior is an
+      #   issue.
+      strong_memoize(:overflowed_modified_paths) do
+        project.repository.diff_stats(
+          base_commit_sha,
+          head_commit_sha
+        ).paths
+      end
+    else
+      strong_memoize(:modified_paths) do
+        merge_request_diff_files.pluck(:new_path, :old_path).flatten.uniq
+      end
     end
   end
 
-  # Carrierwave defines `write_uploader` dynamically on this class, so `super`
-  # does not work. Alias the carrierwave method so we can call it when needed
-  alias_method :carrierwave_write_uploader, :write_uploader
-
-  # The `external_diff`, `external_diff_store`, and `stored_externally`
-  # columns were introduced in GitLab 11.8, but some background migration specs
-  # use factories that rely on current code with an old schema. Without these
-  # `has_attribute?` guards, they fail with a `MissingAttributeError`.
-  #
-  # For more details, see: https://gitlab.com/gitlab-org/gitlab-foss/issues/44990
-
-  def write_uploader(column, identifier)
-    carrierwave_write_uploader(column, identifier) if has_attribute?(column)
-  end
-
   def update_external_diff_store
-    update_column(:external_diff_store, external_diff.object_store) if
-      has_attribute?(:external_diff_store)
-  end
+    return unless saved_change_to_external_diff? || saved_change_to_stored_externally?
 
-  def saved_change_to_external_diff?
-    super if has_attribute?(:external_diff)
+    update_column(:external_diff_store, external_diff.object_store)
   end
-
-  def stored_externally
-    super if has_attribute?(:stored_externally)
-  end
-  alias_method :stored_externally?, :stored_externally
 
   # If enabled, yields the external file containing the diff. Otherwise, yields
   # nil. This method is not thread-safe, but it *is* re-entrant, which allows
@@ -420,20 +503,68 @@ class MergeRequestDiff < ApplicationRecord
   # external storage. If external storage isn't an option for this diff, the
   # method is a no-op.
   def migrate_files_to_external_storage!
-    return if stored_externally? || !use_external_diff? || merge_request_diff_files.count == 0
+    return if stored_externally? || !use_external_diff? || files_count == 0
 
     rows = build_merge_request_diff_files(merge_request_diff_files)
+    rows = build_external_merge_request_diff_files(rows)
+
+    # Perform carrierwave activity before entering the database transaction.
+    # This is safe as until the `external_diff_store` column is changed, we will
+    # continue to consult the in-database content.
+    self.external_diff.store!
 
     transaction do
       MergeRequestDiffFile.where(merge_request_diff_id: id).delete_all
-      create_merge_request_diff_files(rows)
+      Gitlab::Database.bulk_insert('merge_request_diff_files', rows) # rubocop:disable Gitlab/BulkInsert
       save!
     end
 
     merge_request_diff_files.reset
   end
 
+  # Transactionally migrate the current merge_request_diff_files entries from
+  # external storage, back to the database. This is the rollback operation for
+  # +migrate_files_to_external_storage!+
+  #
+  # If this diff isn't in external storage, the method is a no-op.
+  def migrate_files_to_database!
+    return unless stored_externally?
+    return if files_count == 0
+
+    rows = convert_external_diffs_to_database
+
+    transaction do
+      MergeRequestDiffFile.where(merge_request_diff_id: id).delete_all
+      Gitlab::Database.bulk_insert('merge_request_diff_files', rows) # rubocop:disable Gitlab/BulkInsert
+      update!(stored_externally: false)
+    end
+
+    # Only delete the external diff file after the contents have been saved to
+    # the database
+    remove_external_diff!
+    merge_request_diff_files.reset
+  end
+
   private
+
+  def convert_external_diffs_to_database
+    opening_external_diff do |external_file|
+      merge_request_diff_files.map do |diff_file|
+        row = diff_file.attributes.except('diff')
+
+        raise "Diff file lacks external diff offset or size: #{row.inspect}" unless
+          row['external_diff_offset'] && row['external_diff_size']
+
+        # The diff in the external file is already base64-encoded if necessary,
+        # matching the 'binary' attribute of the row. Reading it directly allows
+        # a cycle of decode-encode to be skipped
+        external_file.seek(row.delete('external_diff_offset'))
+        row['diff'] = external_file.read(row.delete('external_diff_size'))
+
+        row
+      end
+    end
+  end
 
   def diffs_in_batch_collection(batch_page, batch_size, diff_options:)
     Gitlab::Diff::FileCollection::MergeRequestDiffBatch.new(self,
@@ -443,6 +574,8 @@ class MergeRequestDiff < ApplicationRecord
   end
 
   def encode_in_base64?(diff_text)
+    return false if diff_text.nil?
+
     (diff_text.encoding == Encoding::BINARY && !diff_text.ascii_only?) ||
       diff_text.include?("\0")
   end
@@ -462,7 +595,7 @@ class MergeRequestDiff < ApplicationRecord
     rows = build_external_merge_request_diff_files(rows) if use_external_diff?
 
     # Faster inserts
-    Gitlab::Database.bulk_insert('merge_request_diff_files', rows)
+    Gitlab::Database.bulk_insert('merge_request_diff_files', rows) # rubocop:disable Gitlab/BulkInsert
   end
 
   def build_external_diff_tempfile(rows)
@@ -470,7 +603,7 @@ class MergeRequestDiff < ApplicationRecord
       rows.each do |row|
         data = row.delete(:diff)
         row[:external_diff_offset] = file.pos
-        row[:external_diff_size] = data.bytesize
+        row[:external_diff_size] = data&.bytesize || 0
 
         file.write(data)
       end
@@ -480,7 +613,7 @@ class MergeRequestDiff < ApplicationRecord
   end
 
   def build_merge_request_diff_files(diffs)
-    diffs.map.with_index do |diff, index|
+    sort_diffs(diffs).map.with_index do |diff, index|
       diff_hash = diff.to_hash.merge(
         binary: false,
         merge_request_diff_id: self.id,
@@ -519,7 +652,6 @@ class MergeRequestDiff < ApplicationRecord
   end
 
   def use_external_diff?
-    return false unless has_attribute?(:external_diff)
     return false unless Gitlab.config.external_diffs.enabled
 
     case Gitlab.config.external_diffs.when
@@ -560,10 +692,6 @@ class MergeRequestDiff < ApplicationRecord
     opening_external_diff do
       collection = merge_request_diff_files
 
-      if options[:include_context_commits]
-        collection += merge_request.merge_request_context_commit_diff_files
-      end
-
       if paths = options[:paths]
         collection = collection.where('old_path IN (?) OR new_path IN (?)', paths, paths)
       end
@@ -573,7 +701,7 @@ class MergeRequestDiff < ApplicationRecord
   end
 
   def load_commits(limit: nil)
-    commits = merge_request_diff_commits.limit(limit)
+    commits = merge_request_diff_commits.with_users.limit(limit)
       .map { |commit| Commit.from_hash(commit.to_hash, project) }
 
     CommitCollection
@@ -583,10 +711,10 @@ class MergeRequestDiff < ApplicationRecord
   def save_diffs
     new_attributes = {}
 
-    if compare.commits.size.zero?
+    if compare.commits.empty?
       new_attributes[:state] = :empty
     else
-      diff_collection = compare.diffs(Commit.max_diff_options)
+      diff_collection = compare.diffs(Commit.max_diff_options(project: merge_request.project))
       new_attributes[:real_size] = diff_collection.real_size
 
       if diff_collection.any?
@@ -594,6 +722,8 @@ class MergeRequestDiff < ApplicationRecord
 
         rows = build_merge_request_diff_files(diff_collection)
         create_merge_request_diff_files(rows)
+        new_attributes[:sorted] = true
+        self.class.uncached { merge_request_diff_files.reset }
       end
 
       # Set our state to 'overflow' to make the #empty? and #collected?
@@ -609,12 +739,14 @@ class MergeRequestDiff < ApplicationRecord
 
   def save_commits
     MergeRequestDiffCommit.create_bulk(self.id, compare.commits.reverse)
+    self.class.uncached { merge_request_diff_commits.reset }
+  end
 
-    # merge_request_diff_commits.reset is preferred way to reload associated
-    # objects but it returns cached result for some reason in this case
-    # we can circumvent that by specifying that we need an uncached reload
-    commits = self.class.uncached { merge_request_diff_commits.reset }
-    self.commits_count = commits.size
+  def set_count_columns
+    update_columns(
+      commits_count: merge_request_diff_commits.size,
+      files_count: [FILES_COUNT_SENTINEL, merge_request_diff_files.size].min
+    )
   end
 
   def repository
@@ -632,6 +764,28 @@ class MergeRequestDiff < ApplicationRecord
       repo.keep_around(start_commit_sha, head_commit_sha, base_commit_sha)
     end
   end
+
+  def reorder_diff_files!
+    return if sorted? || merge_request_diff_files.empty?
+
+    diff_files = sort_diffs(merge_request_diff_files)
+
+    diff_files.each_with_index do |diff_file, index|
+      diff_file.relative_order = index
+    end
+
+    transaction do
+      # The `merge_request_diff_files` table doesn't have an `id` column so
+      # we cannot use `Gitlab::Database::BulkUpdate`.
+      MergeRequestDiffFile.where(merge_request_diff_id: id).delete_all
+      MergeRequestDiffFile.bulk_insert!(diff_files)
+      update_column(:sorted, true)
+    end
+  end
+
+  def sort_diffs(diffs)
+    Gitlab::Diff::FileCollectionSorter.new(diffs).sort
+  end
 end
 
-MergeRequestDiff.prepend_if_ee('EE::MergeRequestDiff')
+MergeRequestDiff.prepend_mod_with('MergeRequestDiff')

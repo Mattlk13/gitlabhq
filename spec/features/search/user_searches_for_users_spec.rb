@@ -2,7 +2,7 @@
 
 require 'spec_helper'
 
-describe 'User searches for users' do
+RSpec.describe 'User searches for users' do
   let(:user1) { create(:user, username: 'gob_bluth', name: 'Gob Bluth') }
   let(:user2) { create(:user, username: 'michael_bluth', name: 'Michael Bluth') }
   let(:user3) { create(:user, username: 'gob_2018', name: 'George Oscar Bluth') }
@@ -10,6 +10,8 @@ describe 'User searches for users' do
   before do
     sign_in(user1)
   end
+
+  include_examples 'search timeouts', 'users'
 
   context 'when on the dashboard' do
     it 'finds the user', :js do

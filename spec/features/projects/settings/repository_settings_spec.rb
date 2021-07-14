@@ -2,7 +2,7 @@
 
 require 'spec_helper'
 
-describe 'Projects > Settings > Repository settings' do
+RSpec.describe 'Projects > Settings > Repository settings' do
   let(:project) { create(:project_empty_repo) }
   let(:user) { create(:user) }
   let(:role) { :developer }
@@ -25,9 +25,24 @@ describe 'Projects > Settings > Repository settings' do
   context 'for maintainer' do
     let(:role) { :maintainer }
 
+    context 'Deploy tokens' do
+      let!(:deploy_token) { create(:deploy_token, projects: [project]) }
+
+      before do
+        stub_container_registry_config(enabled: true)
+        stub_feature_flags(ajax_new_deploy_token: project)
+        visit project_settings_repository_path(project)
+      end
+
+      it_behaves_like 'a deploy token in settings' do
+        let(:entity_type) { 'project' }
+      end
+    end
+
     context 'Deploy Keys', :js do
-      let(:private_deploy_key) { create(:deploy_key, title: 'private_deploy_key', public: false) }
-      let(:public_deploy_key) { create(:another_deploy_key, title: 'public_deploy_key', public: true) }
+      let_it_be(:private_deploy_key) { create(:deploy_key, title: 'private_deploy_key', public: false) }
+      let_it_be(:public_deploy_key) { create(:another_deploy_key, title: 'public_deploy_key', public: true) }
+
       let(:new_ssh_key) { attributes_for(:key)[:key] }
 
       it 'get list of keys' do
@@ -49,34 +64,34 @@ describe 'Projects > Settings > Repository settings' do
         click_button 'Add key'
 
         expect(page).to have_content('new_deploy_key')
-        expect(page).to have_content('Write access allowed')
+        expect(page).to have_content('Grant write permissions to this key')
       end
 
       it 'edit an existing deploy key' do
         project.deploy_keys << private_deploy_key
         visit project_settings_repository_path(project)
 
-        find('.deploy-key', text: private_deploy_key.title).find('.ic-pencil').click
+        find('.deploy-key', text: private_deploy_key.title).find('[data-testid="pencil-icon"]').click
 
         fill_in 'deploy_key_title', with: 'updated_deploy_key'
         check 'deploy_key_deploy_keys_projects_attributes_0_can_push'
         click_button 'Save changes'
 
         expect(page).to have_content('updated_deploy_key')
-        expect(page).to have_content('Write access allowed')
+        expect(page).to have_content('Grant write permissions to this key')
       end
 
       it 'edit an existing public deploy key to be writable' do
         project.deploy_keys << public_deploy_key
         visit project_settings_repository_path(project)
 
-        find('.deploy-key', text: public_deploy_key.title).find('.ic-pencil').click
+        find('.deploy-key', text: public_deploy_key.title).find('[data-testid="pencil-icon"]').click
 
         check 'deploy_key_deploy_keys_projects_attributes_0_can_push'
         click_button 'Save changes'
 
         expect(page).to have_content('public_deploy_key')
-        expect(page).to have_content('Write access allowed')
+        expect(page).to have_content('Grant write permissions to this key')
       end
 
       it 'edit a deploy key from projects user has access to' do
@@ -88,7 +103,7 @@ describe 'Projects > Settings > Repository settings' do
 
         find('.js-deployKeys-tab-available_project_keys').click
 
-        find('.deploy-key', text: private_deploy_key.title).find('.ic-pencil').click
+        find('.deploy-key', text: private_deploy_key.title).find('[data-testid="pencil-icon"]').click
 
         fill_in 'deploy_key_title', with: 'updated_deploy_key'
         click_button 'Save changes'
@@ -102,18 +117,15 @@ describe 'Projects > Settings > Repository settings' do
         project.deploy_keys << private_deploy_key
         visit project_settings_repository_path(project)
 
-        accept_confirm { find('.deploy-key', text: private_deploy_key.title).find('.ic-remove').click }
+        click_button 'Remove'
+        click_button 'Remove deploy key'
 
         expect(page).not_to have_content(private_deploy_key.title)
       end
     end
 
     context 'remote mirror settings' do
-      let(:user2) { create(:user) }
-
       before do
-        project.add_maintainer(user2)
-
         visit project_settings_repository_path(project)
       end
 
@@ -159,6 +171,21 @@ describe 'Projects > Settings > Repository settings' do
         expect(project.remote_mirrors.first.only_protected_branches).to eq(true)
       end
 
+      it 'creates a push mirror that keeps divergent refs', :js do
+        select_direction
+
+        fill_in 'url', with: 'ssh://user@localhost/project.git'
+        fill_in 'Password', with: 'password'
+        check 'Keep divergent refs'
+
+        Sidekiq::Testing.fake! do
+          click_button 'Mirror repository'
+        end
+
+        expect(page).to have_content('Mirroring settings were successfully updated')
+        expect(project.reload.remote_mirrors.first.keep_divergent_refs).to eq(true)
+      end
+
       it 'generates an SSH public key on submission', :js do
         fill_in 'url', with: 'ssh://user@localhost/project.git'
         select 'SSH public key', from: 'Authentication method'
@@ -171,6 +198,18 @@ describe 'Projects > Settings > Repository settings' do
 
         expect(page).to have_content('Mirroring settings were successfully updated')
         expect(page).to have_selector('[title="Copy SSH public key"]')
+      end
+
+      context 'when project mirroring is disabled' do
+        before do
+          stub_application_setting(mirror_available: false)
+          visit project_settings_repository_path(project)
+        end
+
+        it 'hides remote mirror settings' do
+          expect(page.find('.project-mirror-settings')).not_to have_selector('form')
+          expect(page).to have_content('Mirror settings are only available to GitLab administrators.')
+        end
       end
 
       def select_direction(direction = 'push')
@@ -235,6 +274,33 @@ describe 'Projects > Settings > Repository settings' do
       expect(mirror).to have_selector('.rspec-delete-mirror')
       expect(mirror).to have_selector('.rspec-disabled-mirror-badge')
       expect(mirror).not_to have_selector('.rspec-update-now-button')
+    end
+  end
+
+  context 'for admin' do
+    shared_examples_for 'shows mirror settings' do
+      it 'shows mirror settings' do
+        expect(page.find('.project-mirror-settings')).to have_selector('form')
+        expect(page).not_to have_content('Changing mirroring setting is disabled for non-admin users.')
+      end
+    end
+
+    before do
+      stub_application_setting(mirror_available: mirror_available)
+      user.update!(admin: true)
+      visit project_settings_repository_path(project)
+    end
+
+    context 'when project mirroring is enabled', :enable_admin_mode do
+      let(:mirror_available) { true }
+
+      include_examples 'shows mirror settings'
+    end
+
+    context 'when project mirroring is disabled', :enable_admin_mode do
+      let(:mirror_available) { false }
+
+      include_examples 'shows mirror settings'
     end
   end
 end

@@ -18,3 +18,5 @@ module API
     end
   end
 end
+
+API::Entities::UserBasic.prepend_mod_with('API::Entities::UserBasic')

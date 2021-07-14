@@ -2,7 +2,9 @@
 
 require 'spec_helper'
 
-describe ContainerRepository do
+RSpec.describe ContainerRepository do
+  using RSpec::Parameterized::TableSyntax
+
   let(:group) { create(:group, name: 'group') }
   let(:project) { create(:project, path: 'test', group: group) }
 
@@ -19,7 +21,7 @@ describe ContainerRepository do
       .with(headers: { 'Accept' => ContainerRegistry::Client::ACCEPTED_TYPES.join(', ') })
       .to_return(
         status: 200,
-        body: JSON.dump(tags: ['test_tag']),
+        body: Gitlab::Json.dump(tags: ['test_tag']),
         headers: { 'Content-Type' => 'application/json' })
   end
 
@@ -66,6 +68,12 @@ describe ContainerRepository do
   describe '#tags' do
     it 'returns non-empty tags list' do
       expect(repository.tags).not_to be_empty
+    end
+  end
+
+  describe '#tags_count' do
+    it 'returns the count of tags' do
+      expect(repository.tags_count).to eq(1)
     end
   end
 
@@ -166,6 +174,33 @@ describe ContainerRepository do
     end
   end
 
+  describe '#start_expiration_policy!' do
+    subject { repository.start_expiration_policy! }
+
+    it 'sets the expiration policy started at to now' do
+      freeze_time do
+        expect { subject }
+          .to change { repository.expiration_policy_started_at }.from(nil).to(Time.zone.now)
+      end
+    end
+  end
+
+  describe '#reset_expiration_policy_started_at!' do
+    subject { repository.reset_expiration_policy_started_at! }
+
+    before do
+      repository.start_expiration_policy!
+    end
+
+    it 'resets the expiration policy started at' do
+      started_at = repository.expiration_policy_started_at
+
+      expect(started_at).not_to be_nil
+      expect { subject }
+          .to change { repository.expiration_policy_started_at }.from(started_at).to(nil)
+    end
+  end
+
   describe '.build_from_path' do
     let(:registry_path) do
       ContainerRegistry::Path.new(project.full_path + '/some/image')
@@ -246,6 +281,16 @@ describe ContainerRepository do
         expect(repository.name).to be_empty
       end
     end
+
+    context 'when repository already exists' do
+      let(:path) { project.full_path + '/some/image' }
+
+      it 'returns the existing repository' do
+        container_repository = create(:container_repository, project: project, name: 'some/image')
+
+        expect(repository.id).to eq(container_repository.id)
+      end
+    end
   end
 
   describe '.build_root_repository' do
@@ -276,16 +321,21 @@ describe ContainerRepository do
     end
 
     context 'with a subgroup' do
-      let(:test_group) { create(:group) }
-      let(:another_project) { create(:project, path: 'test', group: test_group) }
+      let_it_be(:test_group) { create(:group) }
+      let_it_be(:another_project) { create(:project, path: 'test', group: test_group) }
+      let_it_be(:project3) { create(:project, path: 'test3', group: test_group, container_registry_enabled: false) }
 
-      let(:another_repository) do
+      let_it_be(:another_repository) do
         create(:container_repository, name: 'my_image', project: another_project)
+      end
+
+      let_it_be(:repository3) do
+        create(:container_repository, name: 'my_image3', project: project3)
       end
 
       before do
         group.parent = test_group
-        group.save
+        group.save!
       end
 
       it { is_expected.to contain_exactly(repository, another_repository) }
@@ -295,6 +345,132 @@ describe ContainerRepository do
       let(:test_group) { create(:group) }
 
       it { is_expected.to eq([]) }
+    end
+  end
+
+  describe '.search_by_name' do
+    let!(:another_repository) do
+      create(:container_repository, name: 'my_foo_bar', project: project)
+    end
+
+    subject { described_class.search_by_name('my_image') }
+
+    it { is_expected.to contain_exactly(repository) }
+  end
+
+  describe '.for_project_id' do
+    subject { described_class.for_project_id(project.id) }
+
+    it { is_expected.to contain_exactly(repository) }
+  end
+
+  describe '.expiration_policy_started_at_nil_or_before' do
+    let_it_be(:repository1) { create(:container_repository, expiration_policy_started_at: nil) }
+    let_it_be(:repository2) { create(:container_repository, expiration_policy_started_at: 1.day.ago) }
+    let_it_be(:repository3) { create(:container_repository, expiration_policy_started_at: 2.hours.ago) }
+    let_it_be(:repository4) { create(:container_repository, expiration_policy_started_at: 1.week.ago) }
+
+    subject { described_class.expiration_policy_started_at_nil_or_before(3.hours.ago) }
+
+    it { is_expected.to contain_exactly(repository1, repository2, repository4) }
+  end
+
+  describe '.with_stale_ongoing_cleanup' do
+    let_it_be(:repository1) { create(:container_repository, :cleanup_ongoing, expiration_policy_started_at: 1.day.ago) }
+    let_it_be(:repository2) { create(:container_repository, :cleanup_ongoing, expiration_policy_started_at: 25.minutes.ago) }
+    let_it_be(:repository3) { create(:container_repository, :cleanup_ongoing, expiration_policy_started_at: 1.week.ago) }
+    let_it_be(:repository4) { create(:container_repository, :cleanup_unscheduled, expiration_policy_started_at: 25.minutes.ago) }
+
+    subject { described_class.with_stale_ongoing_cleanup(27.minutes.ago) }
+
+    it { is_expected.to contain_exactly(repository1, repository3) }
+  end
+
+  describe '.waiting_for_cleanup' do
+    let_it_be(:repository_cleanup_scheduled) { create(:container_repository, :cleanup_scheduled) }
+    let_it_be(:repository_cleanup_unfinished) { create(:container_repository, :cleanup_unfinished) }
+    let_it_be(:repository_cleanup_ongoing) { create(:container_repository, :cleanup_ongoing) }
+
+    subject { described_class.waiting_for_cleanup }
+
+    it { is_expected.to contain_exactly(repository_cleanup_scheduled, repository_cleanup_unfinished) }
+  end
+
+  describe '.exists_by_path?' do
+    it 'returns true for known container repository paths' do
+      path = ContainerRegistry::Path.new("#{project.full_path}/#{repository.name}")
+      expect(described_class.exists_by_path?(path)).to be_truthy
+    end
+
+    it 'returns false for unknown container repository paths' do
+      path = ContainerRegistry::Path.new('you/dont/know/me')
+      expect(described_class.exists_by_path?(path)).to be_falsey
+    end
+  end
+
+  describe '.with_enabled_policy' do
+    let_it_be(:repository) { create(:container_repository) }
+    let_it_be(:repository2) { create(:container_repository) }
+
+    subject { described_class.with_enabled_policy }
+
+    before do
+      repository.project.container_expiration_policy.update!(enabled: true)
+    end
+
+    it { is_expected.to eq([repository]) }
+  end
+
+  context 'with repositories' do
+    let_it_be_with_reload(:repository) { create(:container_repository, :cleanup_unscheduled) }
+    let_it_be(:other_repository) { create(:container_repository, :cleanup_unscheduled) }
+
+    let(:policy) { repository.project.container_expiration_policy }
+
+    before do
+      ContainerExpirationPolicy.update_all(enabled: true)
+    end
+
+    describe '.requiring_cleanup' do
+      subject { described_class.requiring_cleanup }
+
+      context 'with next_run_at in the future' do
+        before do
+          policy.update_column(:next_run_at, 10.minutes.from_now)
+        end
+
+        it { is_expected.to eq([]) }
+      end
+
+      context 'with next_run_at in the past' do
+        before do
+          policy.update_column(:next_run_at, 10.minutes.ago)
+        end
+
+        it { is_expected.to eq([repository]) }
+      end
+
+      context 'with repository cleanup started at after policy next run at' do
+        before do
+          repository.update!(expiration_policy_started_at: policy.next_run_at + 5.minutes)
+        end
+
+        it { is_expected.to eq([]) }
+      end
+    end
+
+    describe '.with_unfinished_cleanup' do
+      subject { described_class.with_unfinished_cleanup }
+
+      it { is_expected.to eq([]) }
+
+      context 'with an unfinished repository' do
+        before do
+          repository.cleanup_unfinished!
+        end
+
+        it { is_expected.to eq([repository]) }
+      end
     end
   end
 end

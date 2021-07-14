@@ -21,11 +21,17 @@ module Gitlab
         if import_file && check_version! && restorers.all?(&:restore) && overwrite_project
           project
         else
-          raise Projects::ImportService::Error.new(shared.errors.to_sentence)
+          raise Projects::ImportService::Error, shared.errors.to_sentence
         end
-      rescue => e
-        raise Projects::ImportService::Error.new(e.message)
+      rescue StandardError => e
+        # If some exception was raised could mean that the SnippetsRepoRestorer
+        # was not called. This would leave us with snippets without a repository.
+        # This is a state we don't want them to be, so we better delete them.
+        remove_non_migrated_snippets
+
+        raise Projects::ImportService::Error, e.message
       ensure
+        remove_base_tmp_dir
         remove_import_file
       end
 
@@ -34,8 +40,8 @@ module Gitlab
       attr_accessor :archive_file, :current_user, :project, :shared
 
       def restorers
-        [repo_restorer, wiki_restorer, project_tree, avatar_restorer,
-         uploads_restorer, lfs_restorer, statistics_restorer]
+        [repo_restorer, wiki_restorer, project_tree, avatar_restorer, design_repo_restorer,
+         uploads_restorer, lfs_restorer, statistics_restorer, snippets_repo_restorer]
       end
 
       def import_file
@@ -49,9 +55,17 @@ module Gitlab
       end
 
       def project_tree
-        @project_tree ||= Gitlab::ImportExport::Project::TreeRestorer.new(user: current_user,
-                                                                        shared: shared,
-                                                                        project: project)
+        @project_tree ||= project_tree_class.new(user: current_user,
+                                                 shared: shared,
+                                                 project: project)
+      end
+
+      def project_tree_class
+        sample_data_template? ? Gitlab::ImportExport::Project::Sample::TreeRestorer : Gitlab::ImportExport::Project::TreeRestorer
+      end
+
+      def sample_data_template?
+        project&.import_data&.data&.dig('sample_data')
       end
 
       def avatar_restorer
@@ -61,14 +75,19 @@ module Gitlab
       def repo_restorer
         Gitlab::ImportExport::RepoRestorer.new(path_to_bundle: repo_path,
                                                shared: shared,
-                                               project: project)
+                                               importable: project)
       end
 
       def wiki_restorer
-        Gitlab::ImportExport::WikiRestorer.new(path_to_bundle: wiki_repo_path,
+        Gitlab::ImportExport::RepoRestorer.new(path_to_bundle: wiki_repo_path,
                                                shared: shared,
-                                               project: ProjectWiki.new(project),
-                                               wiki_enabled: project.wiki_enabled?)
+                                               importable: ProjectWiki.new(project))
+      end
+
+      def design_repo_restorer
+        Gitlab::ImportExport::DesignRepoRestorer.new(path_to_bundle: design_repo_path,
+                                                     shared: shared,
+                                                     importable: project)
       end
 
       def uploads_restorer
@@ -77,6 +96,12 @@ module Gitlab
 
       def lfs_restorer
         Gitlab::ImportExport::LfsRestorer.new(project: project, shared: shared)
+      end
+
+      def snippets_repo_restorer
+        Gitlab::ImportExport::SnippetsRepoRestorer.new(project: project,
+                                                       shared: shared,
+                                                       user: current_user)
       end
 
       def statistics_restorer
@@ -95,6 +120,10 @@ module Gitlab
         File.join(shared.export_path, Gitlab::ImportExport.wiki_repo_bundle_filename)
       end
 
+      def design_repo_path
+        File.join(shared.export_path, Gitlab::ImportExport.design_repo_bundle_filename)
+      end
+
       def remove_import_file
         upload = project.import_export_upload
 
@@ -105,12 +134,16 @@ module Gitlab
       end
 
       def overwrite_project
-        return unless can?(current_user, :admin_namespace, project.namespace)
+        return true unless overwrite_project?
 
-        if overwrite_project?
-          ::Projects::OverwriteProjectService.new(project, current_user)
-                                             .execute(project_to_overwrite)
+        unless can?(current_user, :admin_namespace, project.namespace)
+          message = "User #{current_user&.username} (#{current_user&.id}) cannot overwrite a project in #{project.namespace.path}"
+          @shared.error(::Projects::ImportService::PermissionError.new(message))
+          return false
         end
+
+        ::Projects::OverwriteProjectService.new(project, current_user)
+                                            .execute(project_to_overwrite)
 
         true
       end
@@ -128,8 +161,18 @@ module Gitlab
           ::Project.find_by_full_path("#{project.namespace.full_path}/#{original_path}")
         end
       end
+
+      def remove_base_tmp_dir
+        FileUtils.rm_rf(@shared.base_path)
+      end
+
+      def remove_non_migrated_snippets
+        project
+          .snippets
+          .left_joins(:snippet_repository)
+          .where(snippet_repositories: { snippet_id: nil })
+          .delete_all
+      end
     end
   end
 end
-
-Gitlab::ImportExport::Importer.prepend_if_ee('EE::Gitlab::ImportExport::Importer')

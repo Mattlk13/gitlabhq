@@ -2,7 +2,7 @@
 
 require 'spec_helper'
 
-describe Gitlab::Auth::LDAP::Adapter do
+RSpec.describe Gitlab::Auth::Ldap::Adapter do
   include LdapHelpers
 
   let(:ldap) { double(:ldap) }
@@ -95,6 +95,40 @@ describe Gitlab::Auth::LDAP::Adapter do
   describe '#ldap_search' do
     subject { adapter.ldap_search(base: :dn, filter: :filter) }
 
+    shared_examples 'connection retry' do
+      before do
+        allow(adapter).to receive(:renew_connection_adapter).and_return(ldap)
+        allow(Gitlab::AppLogger).to receive(:warn)
+      end
+
+      context 'retries the operation' do
+        before do
+          stub_const("#{described_class}::MAX_SEARCH_RETRIES", 3)
+        end
+
+        it 'as many times as MAX_SEARCH_RETRIES' do
+          expect(ldap).to receive(:search).exactly(3).times
+          expect { subject }.to raise_error(Gitlab::Auth::Ldap::LdapConnectionError)
+        end
+
+        context 'when no more retries' do
+          before do
+            stub_const("#{described_class}::MAX_SEARCH_RETRIES", 1)
+          end
+
+          it 'raises the exception' do
+            expect { subject }.to raise_error(Gitlab::Auth::Ldap::LdapConnectionError)
+          end
+
+          it 'logs the error' do
+            expect { subject }.to raise_error(Gitlab::Auth::Ldap::LdapConnectionError)
+            expect(Gitlab::AppLogger).to have_received(:warn).with(
+              "LDAP search raised exception Net::LDAP::Error: #{err_message}")
+          end
+        end
+      end
+    end
+
     context "when the search is successful" do
       context "and the result is non-empty" do
         before do
@@ -110,6 +144,22 @@ describe Gitlab::Auth::LDAP::Adapter do
         end
 
         it { is_expected.to eq [] }
+
+        context 'when returned with expected code' do
+          let(:response_code) { 80 }
+          let(:response_message) { 'Other' }
+          let(:err_message) { "Got empty results with response code: #{response_code}, message: #{response_message}" }
+
+          before do
+            stub_ldap_config(retry_empty_result_with_codes: [response_code])
+            allow(ldap).to receive_messages(
+              search: nil,
+              get_operation_result: double(code: response_code, message: response_message)
+            )
+          end
+
+          it_behaves_like 'connection retry'
+        end
       end
     end
 
@@ -128,39 +178,22 @@ describe Gitlab::Auth::LDAP::Adapter do
       before do
         allow(adapter).to receive(:renew_connection_adapter).and_return(ldap)
         allow(ldap).to receive(:search) { raise Net::LDAP::Error, "some error" }
-        allow(Rails.logger).to receive(:warn)
+        allow(Gitlab::AppLogger).to receive(:warn)
       end
 
       context 'retries the operation' do
+        let(:err_message) { 'some error' }
+
         before do
-          stub_const("#{described_class}::MAX_SEARCH_RETRIES", 3)
+          allow(ldap).to receive(:search) { raise Net::LDAP::Error, err_message }
         end
 
-        it 'as many times as MAX_SEARCH_RETRIES' do
-          expect(ldap).to receive(:search).exactly(3).times
-          expect { subject }.to raise_error(Gitlab::Auth::LDAP::LDAPConnectionError)
-        end
-
-        context 'when no more retries' do
-          before do
-            stub_const("#{described_class}::MAX_SEARCH_RETRIES", 1)
-          end
-
-          it 'raises the exception' do
-            expect { subject }.to raise_error(Gitlab::Auth::LDAP::LDAPConnectionError)
-          end
-
-          it 'logs the error' do
-            expect { subject }.to raise_error(Gitlab::Auth::LDAP::LDAPConnectionError)
-            expect(Rails.logger).to have_received(:warn).with(
-              "LDAP search raised exception Net::LDAP::Error: some error")
-          end
-        end
+        it_behaves_like 'connection retry'
       end
     end
   end
 
   def ldap_attributes
-    Gitlab::Auth::LDAP::Person.ldap_attributes(Gitlab::Auth::LDAP::Config.new('ldapmain'))
+    Gitlab::Auth::Ldap::Person.ldap_attributes(Gitlab::Auth::Ldap::Config.new('ldapmain'))
   end
 end

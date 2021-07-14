@@ -8,9 +8,11 @@ module Gitlab
       MAX_MSG_SIZE = 128.kilobytes.freeze
 
       def self.exists?(remote_url)
-        request = Gitaly::FindRemoteRepositoryRequest.new(remote: remote_url)
+        storage = GitalyClient.random_storage
 
-        response = GitalyClient.call(GitalyClient.random_storage,
+        request = Gitaly::FindRemoteRepositoryRequest.new(remote: remote_url, storage_name: storage)
+
+        response = GitalyClient.call(storage,
                                      :remote_service,
                                      :find_remote_repository, request,
                                      timeout: GitalyClient.medium_timeout)
@@ -41,25 +43,11 @@ module Gitlab
         GitalyClient.call(@storage, :remote_service, :remove_remote, request, timeout: GitalyClient.long_timeout).result
       end
 
-      def fetch_internal_remote(repository)
-        request = Gitaly::FetchInternalRemoteRequest.new(
-          repository: @gitaly_repo,
-          remote_repository: repository.gitaly_repository
-        )
-
-        response = GitalyClient.call(@storage, :remote_service,
-                                     :fetch_internal_remote, request,
-                                     timeout: GitalyClient.long_timeout,
-                                     remote_storage: repository.storage)
-
-        response.result
-      end
-
-      def find_remote_root_ref(remote_name)
-        request = Gitaly::FindRemoteRootRefRequest.new(
-          repository: @gitaly_repo,
-          remote: remote_name
-        )
+      # The remote_name parameter is deprecated and will be removed soon.
+      def find_remote_root_ref(remote_name, remote_url, authorization)
+        request = Gitaly::FindRemoteRootRefRequest.new(repository: @gitaly_repo,
+                                                       remote_url: remote_url,
+                                                       http_authorization_header: authorization)
 
         response = GitalyClient.call(@storage, :remote_service,
                                      :find_remote_root_ref, request, timeout: GitalyClient.medium_timeout)
@@ -67,15 +55,21 @@ module Gitlab
         encode_utf8(response.ref)
       end
 
-      def update_remote_mirror(ref_name, only_branches_matching, ssh_key: nil, known_hosts: nil)
+      def update_remote_mirror(ref_name, remote_url, only_branches_matching, ssh_key: nil, known_hosts: nil, keep_divergent_refs: false)
         req_enum = Enumerator.new do |y|
           first_request = Gitaly::UpdateRemoteMirrorRequest.new(
-            repository: @gitaly_repo,
-            ref_name: ref_name
+            repository: @gitaly_repo
           )
+
+          if remote_url
+            first_request.remote = Gitaly::UpdateRemoteMirrorRequest::Remote.new(url: remote_url)
+          else
+            first_request.ref_name = ref_name
+          end
 
           first_request.ssh_key = ssh_key if ssh_key.present?
           first_request.known_hosts = known_hosts if known_hosts.present?
+          first_request.keep_divergent_refs = keep_divergent_refs
 
           y.yield(first_request)
 

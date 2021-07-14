@@ -1,8 +1,30 @@
 # frozen_string_literal: true
 
 module WebpackHelper
+  def prefetch_link_tag(source)
+    href = asset_path(source)
+
+    link_tag = tag.link(rel: 'prefetch', href: href)
+
+    early_hints_link = "<#{href}>; rel=prefetch"
+
+    request.send_early_hints("Link" => early_hints_link)
+
+    link_tag
+  end
+
   def webpack_bundle_tag(bundle)
     javascript_include_tag(*webpack_entrypoint_paths(bundle))
+  end
+
+  def webpack_preload_asset_tag(asset, options = {})
+    path = Gitlab::Webpack::Manifest.asset_paths(asset).first
+
+    if options.delete(:prefetch)
+      prefetch_link_tag(path)
+    else
+      preload_link_tag(path, options)
+    end
   end
 
   def webpack_controller_bundle_tags
@@ -57,10 +79,12 @@ module WebpackHelper
   end
 
   def webpack_public_host
-    if Rails.env.test? && Rails.configuration.webpack.dev_server.enabled
-      host = Rails.configuration.webpack.dev_server.host
-      port = Rails.configuration.webpack.dev_server.port
-      protocol = Rails.configuration.webpack.dev_server.https ? 'https' : 'http'
+    # We do not proxy the webpack output in the 'test' environment,
+    # so we must reference the webpack dev server directly.
+    if Rails.env.test? && Gitlab.config.webpack.dev_server.enabled
+      host = Gitlab.config.webpack.dev_server.host
+      port = Gitlab.config.webpack.dev_server.port
+      protocol = Gitlab.config.webpack.dev_server.https ? 'https' : 'http'
       "#{protocol}://#{host}:#{port}"
     else
       ActionController::Base.asset_host.try(:chomp, '/')
@@ -68,8 +92,8 @@ module WebpackHelper
   end
 
   def webpack_public_path
-    relative_path = Rails.application.config.relative_url_root
-    webpack_path = Rails.application.config.webpack.public_path
+    relative_path = Gitlab.config.gitlab.relative_url_root
+    webpack_path = Gitlab.config.webpack.public_path
     File.join(webpack_public_host.to_s, relative_path.to_s, webpack_path.to_s, '')
   end
 end

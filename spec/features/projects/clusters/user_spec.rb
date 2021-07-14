@@ -2,7 +2,7 @@
 
 require 'spec_helper'
 
-describe 'User Cluster', :js do
+RSpec.describe 'User Cluster', :js do
   include GoogleApi::CloudPlatformHelpers
 
   let(:project) { create(:project) }
@@ -25,8 +25,8 @@ describe 'User Cluster', :js do
     before do
       visit project_clusters_path(project)
 
-      click_link 'Add Kubernetes cluster'
-      click_link 'Add existing cluster'
+      click_link 'Integrate with a cluster certificate'
+      click_link 'Connect existing cluster'
     end
 
     context 'when user filled form with valid parameters' do
@@ -41,16 +41,20 @@ describe 'User Cluster', :js do
       it 'user sees a cluster details page' do
         subject
 
-        expect(page).to have_content('Kubernetes cluster integration')
+        expect(page).to have_content('GitLab Integration')
         expect(page.find_field('cluster[name]').value).to eq('dev-cluster')
         expect(page.find_field('cluster[platform_kubernetes_attributes][api_url]').value)
           .to have_content('http://example.com')
         expect(page.find_field('cluster[platform_kubernetes_attributes][token]').value)
-          .to have_content('my-token')
+          .to be_empty
       end
 
       it 'user sees RBAC is enabled by default' do
         expect(page).to have_checked_field('RBAC-enabled cluster')
+      end
+
+      it 'user sees namespace per environment is enabled by default' do
+        expect(page).to have_checked_field('Namespace per environment')
       end
     end
 
@@ -73,13 +77,14 @@ describe 'User Cluster', :js do
     end
 
     it 'user sees a cluster details page' do
+      expect(page).to have_content('GitLab Integration')
       expect(page).to have_button('Save changes')
     end
 
     context 'when user disables the cluster' do
       before do
         page.find(:css, '.js-cluster-enable-toggle-area .js-project-feature-toggle').click
-        page.within('#cluster-integration') { click_button 'Save changes' }
+        page.within('.js-cluster-details-form') { click_button 'Save changes' }
       end
 
       it 'user sees the successful message' do
@@ -91,7 +96,7 @@ describe 'User Cluster', :js do
       before do
         fill_in 'cluster_name', with: 'my-dev-cluster'
         fill_in 'cluster_platform_kubernetes_attributes_namespace', with: 'my-namespace'
-        page.within('#js-cluster-details') { click_button 'Save changes' }
+        page.within('.js-provider-details') { click_button 'Save changes' }
       end
 
       it 'user sees the successful message' do
@@ -103,6 +108,7 @@ describe 'User Cluster', :js do
 
     context 'when user destroys the cluster' do
       before do
+        click_link 'Advanced Settings'
         click_button 'Remove integration and resources'
         fill_in 'confirm_cluster_name_input', with: cluster.name
         click_button 'Remove integration'
@@ -110,7 +116,7 @@ describe 'User Cluster', :js do
 
       it 'user sees creation form with the successful message' do
         expect(page).to have_content('Kubernetes cluster integration was successfully removed.')
-        expect(page).to have_link('Add Kubernetes cluster')
+        expect(page).to have_link('Integrate with a cluster certificate')
       end
     end
   end

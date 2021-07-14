@@ -37,7 +37,7 @@ class VerifyPagesDomainService < BaseService
     # Prevent any pre-existing grace period from being truncated
     reverify = [domain.enabled_until, VERIFICATION_PERIOD.from_now].compact.max
 
-    domain.assign_attributes(verified_at: Time.now, enabled_until: reverify, remove_at: nil)
+    domain.assign_attributes(verified_at: Time.current, enabled_until: reverify, remove_at: nil)
     domain.save!(validate: false)
 
     if was_disabled
@@ -73,7 +73,7 @@ class VerifyPagesDomainService < BaseService
 
   # A domain is only expired until `disable!` has been called
   def expired?
-    domain.enabled_until && domain.enabled_until < Time.now
+    domain.enabled_until && domain.enabled_until < Time.current
   end
 
   def dns_record_present?
@@ -90,7 +90,7 @@ class VerifyPagesDomainService < BaseService
     records.any? do |record|
       record == domain.keyed_verification_code || record == domain.verification_code
     end
-  rescue => err
+  rescue StandardError => err
     log_error("Failed to check TXT records on #{domain_name} for #{domain.domain}: #{err}")
     false
   end

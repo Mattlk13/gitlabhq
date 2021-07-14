@@ -8,14 +8,19 @@
     background: $gray-normal;
   }
 
-  #editor {
-    border: 0;
-    border-radius: 0;
+  #editor,
+  .editor {
+    @include gl-border-0;
+    @include gl-m-0;
+    @include gl-p-0;
+    @include gl-relative;
+    @include gl-w-full;
     height: 500px;
-    margin: 0;
-    padding: 0;
-    position: relative;
-    width: 100%;
+
+    .editor-loading-content {
+      @include gl-h-full;
+      @include gl-border-0;
+    }
   }
 
   .ace_gutter-cell {
@@ -31,11 +36,7 @@
   }
 
   .file-title {
-    @extend .monospace;
-    line-height: 35px;
-    padding-top: 7px;
-    padding-bottom: 7px;
-    display: flex;
+    @include gl-font-monospace;
   }
 
   .editor-ref {
@@ -45,6 +46,7 @@
     display: block;
     float: left;
     margin-right: 10px;
+    max-width: 250px;
   }
 
   .new-file-name,
@@ -63,27 +65,15 @@
   }
 
   .file-buttons {
-    display: flex;
     flex: 1;
-    justify-content: flex-end;
   }
 
-  .select2 {
-    float: right;
-  }
-
-  .encoding-selector,
   .soft-wrap-toggle {
-    display: inline-block;
-    vertical-align: top;
     font-family: $regular-font;
-  }
-
-  .soft-wrap-toggle {
-    margin: 0 $btn-side-margin;
+    margin-left: $gl-padding-8;
 
     .soft-wrap {
-      display: block;
+      display: inline-flex;
     }
 
     .no-wrap {
@@ -96,7 +86,7 @@
       }
 
       .no-wrap {
-        display: block;
+        display: inline-flex;
       }
     }
   }
@@ -113,35 +103,26 @@
     .new-file-path {
       max-width: none;
       width: 100%;
-      margin-bottom: 3px;
+      margin-top: $gl-padding-8;
     }
 
     .file-buttons {
-      display: block;
+      display: flex;
+      flex-direction: column;
       width: 100%;
-      margin-bottom: 10px;
+
+      .md-header-toolbar {
+        margin: $gl-padding 0;
+      }
 
       .soft-wrap-toggle {
         width: 100%;
-        margin: 3px 0;
-      }
-
-      .encoding-selector {
-        display: block;
-        margin: 3px 0;
-
-        button {
-          width: 100%;
-        }
+        margin-left: 0;
       }
 
       @media(max-width: map-get($grid-breakpoints, md)-1) {
         clear: both;
       }
-    }
-
-    .editor-ref {
-      max-width: 250px;
     }
   }
 }
@@ -163,9 +144,8 @@
   vertical-align: top;
 
   @media(max-width: map-get($grid-breakpoints, lg)-1) {
-    display: block;
+    display: inline-block;
     width: 100%;
-    margin: 5px 0;
     padding: 0;
     border-left: 0;
   }
@@ -185,7 +165,8 @@
   .gitignore-selector,
   .gitlab-ci-yml-selector,
   .dockerfile-selector,
-  .template-type-selector {
+  .template-type-selector,
+  .metrics-dashboard-selector {
     display: inline-block;
     vertical-align: top;
     font-family: $regular_font;
@@ -218,6 +199,6 @@
   }
 }
 
-.editor-title-row {
-  margin-bottom: 20px;
+.popover.suggest-gitlab-ci-yml {
+  z-index: $header-zindex - 1;
 }

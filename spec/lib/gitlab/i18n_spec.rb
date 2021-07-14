@@ -2,8 +2,21 @@
 
 require 'spec_helper'
 
-describe Gitlab::I18n do
-  let(:user) { create(:user, preferred_language: 'es') }
+RSpec.describe Gitlab::I18n do
+  let(:user) { create(:user, preferred_language: :es) }
+
+  describe '.selectable_locales' do
+    include StubLanguagesTranslationPercentage
+
+    it 'does not return languages with low translation levels' do
+      stub_languages_translation_percentage(pt_BR: 0, en: 100, es: 65)
+
+      expect(described_class.selectable_locales).to eq({
+        'en' => 'English',
+        'es' => 'Spanish - español'
+      })
+    end
+  end
 
   describe '.locale=' do
     after do

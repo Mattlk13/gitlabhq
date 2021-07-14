@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 module API
-  class API < Grape::API
+  class API < ::API::Base
     include APIGuard
 
     LOG_FILENAME = Rails.root.join("log", "api_json.log")
@@ -24,10 +24,13 @@ module API
                     Gitlab::GrapeLogging::Loggers::ExceptionLogger.new,
                     Gitlab::GrapeLogging::Loggers::QueueDurationLogger.new,
                     Gitlab::GrapeLogging::Loggers::PerfLogger.new,
-                    Gitlab::GrapeLogging::Loggers::CorrelationIdLogger.new
+                    Gitlab::GrapeLogging::Loggers::CorrelationIdLogger.new,
+                    Gitlab::GrapeLogging::Loggers::ContextLogger.new,
+                    Gitlab::GrapeLogging::Loggers::ContentLogger.new
                   ]
 
     allow_access_with_scope :api
+    allow_access_with_scope :read_api, if: -> (request) { request.get? || request.head? }
     prefix :api
 
     version 'v3', using: :path do
@@ -44,12 +47,28 @@ module API
     end
 
     before do
+      coerce_nil_params_to_array!
+
+      api_endpoint = env['api.endpoint']
+      feature_category = api_endpoint.options[:for].try(:feature_category_for_app, api_endpoint).to_s
+
       Gitlab::ApplicationContext.push(
-        user: -> { current_user },
+        user: -> { @current_user },
         project: -> { @project },
         namespace: -> { @group },
-        caller_id: route.origin
+        runner: -> { @current_runner || @runner },
+        caller_id: api_endpoint.endpoint_id,
+        remote_ip: request.ip,
+        feature_category: feature_category
       )
+    end
+
+    before do
+      set_peek_enabled_for_current_request
+    end
+
+    after do
+      Gitlab::UsageDataCounters::VSCodeExtensionActivityUniqueCounter.track_api_request_when_trackable(user_agent: request&.user_agent, user: @current_user)
     end
 
     # The locale is set to the current user's locale when `current_user` is loaded
@@ -96,20 +115,35 @@ module API
       handle_api_exception(exception)
     end
 
+    # This is a specific exception raised by `rack-timeout` gem when Puma
+    # requests surpass its timeout. Given it inherits from Exception, we
+    # should rescue it separately. For more info, see:
+    # - https://github.com/sharpstone/rack-timeout/blob/master/doc/exceptions.md
+    # - https://github.com/ruby-grape/grape#exception-handling
+    rescue_from Rack::Timeout::RequestTimeoutException do |exception|
+      handle_api_exception(exception)
+    end
+
     format :json
-    content_type :txt, "text/plain"
+    formatter :json, Gitlab::Json::GrapeFormatter
+    content_type :json, 'application/json'
 
     # Ensure the namespace is right, otherwise we might load Grape::API::Helpers
     helpers ::API::Helpers
     helpers ::API::Helpers::CommonHelpers
+    helpers ::API::Helpers::PerformanceBarHelpers
 
     namespace do
       after do
-        ::Users::ActivityService.new(@current_user).execute if Feature.enabled?(:api_activity_logging)
+        ::Users::ActivityService.new(@current_user).execute
       end
 
       # Keep in alphabetical order
       mount ::API::AccessRequests
+      mount ::API::Admin::Ci::Variables
+      mount ::API::Admin::InstanceClusters
+      mount ::API::Admin::PlanLimits
+      mount ::API::Admin::Sidekiq
       mount ::API::Appearance
       mount ::API::Applications
       mount ::API::Avatar
@@ -118,16 +152,29 @@ module API
       mount ::API::Boards
       mount ::API::Branches
       mount ::API::BroadcastMessages
+      mount ::API::BulkImports
+      mount ::API::Ci::Pipelines
+      mount ::API::Ci::PipelineSchedules
+      mount ::API::Ci::Runner
+      mount ::API::Ci::Runners
       mount ::API::Commits
       mount ::API::CommitStatuses
+      mount ::API::ContainerRegistryEvent
+      mount ::API::ContainerRepositories
+      mount ::API::DependencyProxy
       mount ::API::DeployKeys
       mount ::API::DeployTokens
       mount ::API::Deployments
       mount ::API::Environments
       mount ::API::ErrorTracking
       mount ::API::Events
+      mount ::API::FeatureFlags
+      mount ::API::FeatureFlagsUserLists
       mount ::API::Features
       mount ::API::Files
+      mount ::API::FreezePeriods
+      mount ::API::Geo
+      mount ::API::GroupAvatar
       mount ::API::GroupBoards
       mount ::API::GroupClusters
       mount ::API::GroupExport
@@ -137,51 +184,80 @@ module API
       mount ::API::Groups
       mount ::API::GroupContainerRepositories
       mount ::API::GroupVariables
+      mount ::API::ImportBitbucketServer
       mount ::API::ImportGithub
+      mount ::API::IssueLinks
+      mount ::API::Invitations
       mount ::API::Issues
       mount ::API::JobArtifacts
       mount ::API::Jobs
       mount ::API::Keys
       mount ::API::Labels
       mount ::API::Lint
-      mount ::API::LsifData
       mount ::API::Markdown
       mount ::API::Members
       mount ::API::MergeRequestDiffs
       mount ::API::MergeRequests
+      mount ::API::MergeRequestApprovals
+      mount ::API::Metrics::Dashboard::Annotations
+      mount ::API::Metrics::UserStarredDashboards
       mount ::API::Namespaces
       mount ::API::Notes
       mount ::API::Discussions
       mount ::API::ResourceLabelEvents
+      mount ::API::ResourceMilestoneEvents
+      mount ::API::ResourceStateEvents
       mount ::API::NotificationSettings
+      mount ::API::ProjectPackages
+      mount ::API::GroupPackages
+      mount ::API::PackageFiles
+      mount ::API::NugetProjectPackages
+      mount ::API::NugetGroupPackages
+      mount ::API::PypiPackages
+      mount ::API::ComposerPackages
+      mount ::API::ConanProjectPackages
+      mount ::API::ConanInstancePackages
+      mount ::API::DebianGroupPackages
+      mount ::API::DebianProjectPackages
+      mount ::API::MavenPackages
+      mount ::API::NpmProjectPackages
+      mount ::API::NpmInstancePackages
+      mount ::API::GenericPackages
+      mount ::API::GoProxy
+      mount ::API::HelmPackages
       mount ::API::Pages
       mount ::API::PagesDomains
-      mount ::API::Pipelines
-      mount ::API::PipelineSchedules
       mount ::API::ProjectClusters
       mount ::API::ProjectContainerRepositories
+      mount ::API::ProjectDebianDistributions
       mount ::API::ProjectEvents
       mount ::API::ProjectExport
       mount ::API::ProjectImport
       mount ::API::ProjectHooks
       mount ::API::ProjectMilestones
+      mount ::API::ProjectRepositoryStorageMoves
       mount ::API::Projects
       mount ::API::ProjectSnapshots
       mount ::API::ProjectSnippets
       mount ::API::ProjectStatistics
       mount ::API::ProjectTemplates
+      mount ::API::Terraform::State
+      mount ::API::Terraform::StateVersion
+      mount ::API::Terraform::Modules::V1::Packages
+      mount ::API::PersonalAccessTokens
       mount ::API::ProtectedBranches
       mount ::API::ProtectedTags
       mount ::API::Releases
       mount ::API::Release::Links
       mount ::API::RemoteMirrors
       mount ::API::Repositories
-      mount ::API::Runner
-      mount ::API::Runners
+      mount ::API::ResourceAccessTokens
+      mount ::API::RubygemPackages
       mount ::API::Search
       mount ::API::Services
       mount ::API::Settings
       mount ::API::SidekiqMetrics
+      mount ::API::SnippetRepositoryStorageMoves
       mount ::API::Snippets
       mount ::API::Statistics
       mount ::API::Submodules
@@ -192,6 +268,10 @@ module API
       mount ::API::Templates
       mount ::API::Todos
       mount ::API::Triggers
+      mount ::API::Unleash
+      mount ::API::UsageData
+      mount ::API::UsageDataQueries
+      mount ::API::UsageDataNonSqlMetrics
       mount ::API::UserCounts
       mount ::API::Users
       mount ::API::Variables
@@ -200,12 +280,24 @@ module API
     end
 
     mount ::API::Internal::Base
+    mount ::API::Internal::Lfs
     mount ::API::Internal::Pages
+    mount ::API::Internal::Kubernetes
 
-    route :any, '*path' do
+    version 'v3', using: :path do
+      # Although the following endpoints are kept behind V3 namespace,
+      # they're not deprecated neither should be removed when V3 get
+      # removed.  They're needed as a layer to integrate with Jira
+      # Development Panel.
+      namespace '/', requirements: ::API::V3::Github::ENDPOINT_REQUIREMENTS do
+        mount ::API::V3::Github
+      end
+    end
+
+    route :any, '*path', feature_category: :not_owned do
       error!('404 Not Found', 404)
     end
   end
 end
 
-API::API.prepend_if_ee('::EE::API::API')
+API::API.prepend_mod

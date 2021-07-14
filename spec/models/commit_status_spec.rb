@@ -2,7 +2,7 @@
 
 require 'spec_helper'
 
-describe CommitStatus do
+RSpec.describe CommitStatus do
   let_it_be(:project) { create(:project, :repository) }
 
   let_it_be(:pipeline) do
@@ -61,41 +61,82 @@ describe CommitStatus do
         expect(commit_status.started_at).to be_present
       end
     end
+
+    describe 'transitioning to created from skipped or manual' do
+      let(:commit_status) { create(:commit_status, :skipped) }
+
+      it 'does not update user without parameter' do
+        commit_status.process!
+
+        expect { commit_status.process }.not_to change { commit_status.reload.user }
+      end
+
+      it 'updates user with user parameter' do
+        new_user = create(:user)
+
+        expect { commit_status.process(new_user) }.to change { commit_status.reload.user }.to(new_user)
+      end
+    end
+  end
+
+  describe '.updated_before' do
+    let!(:lookback) { 5.days.ago }
+    let!(:timeout) { 1.day.ago }
+    let!(:before_lookback) { lookback - 1.hour }
+    let!(:after_lookback) { lookback + 1.hour }
+    let!(:before_timeout) { timeout - 1.hour }
+    let!(:after_timeout) { timeout + 1.hour }
+
+    subject { described_class.updated_before(lookback: lookback, timeout: timeout) }
+
+    def create_build_with_set_timestamps(created_at:, updated_at:)
+      travel_to(created_at) { create(:ci_build, created_at: Time.current) }.tap do |build|
+        travel_to(updated_at) { build.update!(status: :failed) }
+      end
+    end
+
+    it 'finds builds updated and created in the window between lookback and timeout' do
+      build_in_lookback_timeout_window = create_build_with_set_timestamps(created_at: after_lookback, updated_at: before_timeout)
+      build_outside_lookback_window = create_build_with_set_timestamps(created_at: before_lookback, updated_at: before_timeout)
+      build_outside_timeout_window = create_build_with_set_timestamps(created_at: after_lookback, updated_at: after_timeout)
+
+      expect(subject).to contain_exactly(build_in_lookback_timeout_window)
+      expect(subject).not_to include(build_outside_lookback_window, build_outside_timeout_window)
+    end
   end
 
   describe '#processed' do
     subject { commit_status.processed }
 
-    context 'when ci_atomic_processing is disabled' do
+    context 'status is latest' do
       before do
-        stub_feature_flags(ci_atomic_processing: false)
-
-        commit_status.save!
+        commit_status.update!(retried: false, status: :pending)
       end
 
-      it { is_expected.to be_nil }
+      it { is_expected.to be_falsey }
     end
 
-    context 'when ci_atomic_processing is enabled' do
+    context 'status is retried' do
       before do
-        stub_feature_flags(ci_atomic_processing: true)
+        commit_status.update!(retried: true, status: :pending)
       end
 
-      context 'status is latest' do
-        before do
-          commit_status.update!(retried: false, status: :pending)
-        end
+      it { is_expected.to be_truthy }
+    end
 
-        it { is_expected.to be_falsey }
-      end
+    it "processed state is always persisted" do
+      commit_status.update!(retried: false, status: :pending)
 
-      context 'status is retried' do
-        before do
-          commit_status.update!(retried: true, status: :pending)
-        end
+      # another process does mark object as processed
+      CommitStatus.find(commit_status.id).update_column(:processed, true)
 
-        it { is_expected.to be_truthy }
-      end
+      # subsequent status transitions on the same instance
+      # always saves processed=false to DB even though
+      # the current value did not change
+      commit_status.update!(retried: false, status: :running)
+
+      # we look at a persisted state in DB
+      expect(CommitStatus.find(commit_status.id).processed).to eq(false)
     end
   end
 
@@ -198,12 +239,12 @@ describe CommitStatus do
 
     context 'when it is canceled' do
       before do
-        commit_status.update(status: 'canceled')
+        commit_status.update!(status: 'canceled')
       end
 
       context 'when there is auto_canceled_by' do
         before do
-          commit_status.update(auto_canceled_by: create(:ci_empty_pipeline))
+          commit_status.update!(auto_canceled_by: create(:ci_empty_pipeline))
         end
 
         it 'is auto canceled' do
@@ -235,12 +276,46 @@ describe CommitStatus do
 
     context 'if the building process has started' do
       before do
-        commit_status.started_at = Time.now - 1.minute
+        commit_status.started_at = Time.current - 1.minute
         commit_status.finished_at = nil
       end
 
       it { is_expected.to be_a(Float) }
       it { is_expected.to be > 0.0 }
+    end
+  end
+
+  describe '#queued_duration' do
+    subject { commit_status.queued_duration }
+
+    around do |example|
+      travel_to(Time.current) { example.run }
+    end
+
+    context 'when created, then enqueued, then started' do
+      before do
+        commit_status.queued_at = 30.seconds.ago
+        commit_status.started_at = 25.seconds.ago
+      end
+
+      it { is_expected.to eq(5.0) }
+    end
+
+    context 'when created but not yet enqueued' do
+      before do
+        commit_status.queued_at = nil
+      end
+
+      it { is_expected.to be_nil }
+    end
+
+    context 'when enqueued, but not started' do
+      before do
+        commit_status.queued_at = Time.current - 1.minute
+        commit_status.started_at = nil
+      end
+
+      it { is_expected.to eq(1.minute) }
     end
   end
 
@@ -423,7 +498,7 @@ describe CommitStatus do
       end
 
       it 'returns a correct compound status' do
-        expect(described_class.all.slow_composite_status).to eq 'running'
+        expect(described_class.all.composite_status).to eq 'running'
       end
     end
 
@@ -433,7 +508,7 @@ describe CommitStatus do
       end
 
       it 'returns status that indicates success' do
-        expect(described_class.all.slow_composite_status).to eq 'success'
+        expect(described_class.all.composite_status).to eq 'success'
       end
     end
 
@@ -444,8 +519,21 @@ describe CommitStatus do
       end
 
       it 'returns status according to the scope' do
-        expect(described_class.latest.slow_composite_status).to eq 'success'
+        expect(described_class.latest.composite_status).to eq 'success'
       end
+    end
+  end
+
+  describe '.match_id_and_lock_version' do
+    let(:status_1) { create_status(lock_version: 1) }
+    let(:status_2) { create_status(lock_version: 2) }
+
+    it 'returns statuses that match the given id and lock versions' do
+      params = [
+        { id: status_1.id, lock_version: 1 },
+        { id: status_2.id, lock_version: 3 }
+      ]
+      expect(described_class.match_id_and_lock_version(params)).to contain_exactly(status_1)
     end
   end
 
@@ -482,27 +570,54 @@ describe CommitStatus do
   end
 
   describe '#group_name' do
+    using RSpec::Parameterized::TableSyntax
+
+    let(:commit_status) do
+      build(:commit_status, pipeline: pipeline, stage: 'test')
+    end
+
     subject { commit_status.group_name }
 
-    tests = {
-      'rspec:windows' => 'rspec:windows',
-      'rspec:windows 0' => 'rspec:windows 0',
-      'rspec:windows 0 test' => 'rspec:windows 0 test',
-      'rspec:windows 0 1' => 'rspec:windows',
-      'rspec:windows 0 1 name' => 'rspec:windows name',
-      'rspec:windows 0/1' => 'rspec:windows',
-      'rspec:windows 0/1 name' => 'rspec:windows name',
-      'rspec:windows 0:1' => 'rspec:windows',
-      'rspec:windows 0:1 name' => 'rspec:windows name',
-      'rspec:windows 10000 20000' => 'rspec:windows',
-      'rspec:windows 0 : / 1' => 'rspec:windows',
-      'rspec:windows 0 : / 1 name' => 'rspec:windows name',
-      '0 1 name ruby' => 'name ruby',
-      '0 :/ 1 name ruby' => 'name ruby'
-    }
+    where(:name, :group_name) do
+      'rspec1'                                              | 'rspec1'
+      'rspec1 0 1'                                          | 'rspec1'
+      'rspec1 0/2'                                          | 'rspec1'
+      'rspec:windows'                                       | 'rspec:windows'
+      'rspec:windows 0'                                     | 'rspec:windows 0'
+      'rspec:windows 0 2/2'                                 | 'rspec:windows 0'
+      'rspec:windows 0 test'                                | 'rspec:windows 0 test'
+      'rspec:windows 0 test 2/2'                            | 'rspec:windows 0 test'
+      'rspec:windows 0 1 2/2'                               | 'rspec:windows'
+      'rspec:windows 0 1 [aws] 2/2'                         | 'rspec:windows'
+      'rspec:windows 0 1 name [aws] 2/2'                    | 'rspec:windows 0 1 name'
+      'rspec:windows 0 1 name'                              | 'rspec:windows 0 1 name'
+      'rspec:windows 0 1 name 1/2'                          | 'rspec:windows 0 1 name'
+      'rspec:windows 0/1'                                   | 'rspec:windows'
+      'rspec:windows 0/1 name'                              | 'rspec:windows 0/1 name'
+      'rspec:windows 0/1 name 1/2'                          | 'rspec:windows 0/1 name'
+      'rspec:windows 0:1'                                   | 'rspec:windows'
+      'rspec:windows 0:1 name'                              | 'rspec:windows 0:1 name'
+      'rspec:windows 10000 20000'                           | 'rspec:windows'
+      'rspec:windows 0 : / 1'                               | 'rspec:windows'
+      'rspec:windows 0 : / 1 name'                          | 'rspec:windows 0 : / 1 name'
+      '0 1 name ruby'                                       | '0 1 name ruby'
+      '0 :/ 1 name ruby'                                    | '0 :/ 1 name ruby'
+      'rspec: [aws]'                                        | 'rspec'
+      'rspec: [aws] 0/1'                                    | 'rspec'
+      'rspec: [aws, max memory]'                            | 'rspec'
+      'rspec:linux: [aws, max memory, data]'                | 'rspec:linux'
+      'rspec: [inception: [something, other thing], value]' | 'rspec'
+      'rspec:windows 0/1: [name, other]'                    | 'rspec:windows'
+      'rspec:windows: [name, other] 0/1'                    | 'rspec:windows'
+      'rspec:windows: [name, 0/1] 0/1'                      | 'rspec:windows'
+      'rspec:windows: [0/1, name]'                          | 'rspec:windows'
+      'rspec:windows: [, ]'                                 | 'rspec:windows'
+      'rspec:windows: [name]'                               | 'rspec:windows'
+      'rspec:windows: [name,other]'                         | 'rspec:windows'
+    end
 
-    tests.each do |name, group_name|
-      it "'#{name}' puts in '#{group_name}'" do
+    with_them do
+      it "#{params[:name]} puts in #{params[:group_name]}" do
         commit_status.name = name
 
         is_expected.to eq(group_name)
@@ -555,7 +670,7 @@ describe CommitStatus do
       end
 
       it "raise exception when trying to update" do
-        expect { commit_status.save }.to raise_error(ActiveRecord::StaleObjectError)
+        expect { commit_status.save! }.to raise_error(ActiveRecord::StaleObjectError)
       end
     end
 
@@ -574,30 +689,45 @@ describe CommitStatus do
     end
   end
 
-  describe 'set failure_reason when drop' do
+  describe '#drop' do
     let(:commit_status) { create(:commit_status, :created) }
+    let(:counter) { Gitlab::Metrics.counter(:gitlab_ci_job_failure_reasons, 'desc') }
+    let(:failure_reason) { reason.to_s }
 
     subject do
       commit_status.drop!(reason)
       commit_status
     end
 
+    shared_examples 'incrementing failure reason counter' do
+      it 'increments the counter with the failure_reason' do
+        expect { subject }.to change { counter.get(reason: failure_reason) }.by(1)
+      end
+    end
+
     context 'when failure_reason is nil' do
       let(:reason) { }
+      let(:failure_reason) { 'unknown_failure' }
 
       it { is_expected.to be_unknown_failure }
+
+      it_behaves_like 'incrementing failure reason counter'
     end
 
     context 'when failure_reason is script_failure' do
       let(:reason) { :script_failure }
 
       it { is_expected.to be_script_failure }
+
+      it_behaves_like 'incrementing failure reason counter'
     end
 
     context 'when failure_reason is unmet_prerequisites' do
       let(:reason) { :unmet_prerequisites }
 
       it { is_expected.to be_unmet_prerequisites }
+
+      it_behaves_like 'incrementing failure reason counter'
     end
   end
 
@@ -676,30 +806,13 @@ describe CommitStatus do
     let(:commit_status) { create(:commit_status) }
 
     it { is_expected.to eq(true) }
-
-    context 'when build requires a resource' do
-      before do
-        allow(commit_status).to receive(:requires_resource?) { true }
-      end
-
-      it { is_expected.to eq(false) }
-    end
-
-    context 'when build has a prerequisite' do
-      before do
-        allow(commit_status).to receive(:any_unmet_prerequisites?) { true }
-      end
-
-      it { is_expected.to eq(false) }
-    end
   end
 
   describe '#enqueue' do
-    let!(:current_time) { Time.new(2018, 4, 5, 14, 0, 0) }
+    let!(:current_time) { Time.zone.local(2018, 4, 5, 14, 0, 0) }
 
     before do
       allow(Time).to receive(:now).and_return(current_time)
-      expect(commit_status.any_unmet_prerequisites?).to eq false
     end
 
     shared_examples 'commit status enqueued' do
@@ -737,5 +850,68 @@ describe CommitStatus do
     subject { commit_status.present }
 
     it { is_expected.to be_a(CommitStatusPresenter) }
+  end
+
+  describe '#recoverable?' do
+    using RSpec::Parameterized::TableSyntax
+
+    let(:commit_status) { create(:commit_status, :pending) }
+
+    subject(:recoverable?) { commit_status.recoverable? }
+
+    context 'when commit status is failed' do
+      before do
+        commit_status.drop!
+      end
+
+      where(:failure_reason, :recoverable) do
+        :script_failure | false
+        :missing_dependency_failure | false
+        :archived_failure | false
+        :scheduler_failure | false
+        :data_integrity_failure | false
+        :unknown_failure | true
+        :api_failure | true
+        :stuck_or_timeout_failure | true
+        :runner_system_failure | true
+      end
+
+      with_them do
+        context "when failure reason is #{params[:failure_reason]}" do
+          before do
+            commit_status.update_attribute(:failure_reason, failure_reason)
+          end
+
+          it { is_expected.to eq(recoverable) }
+        end
+      end
+    end
+
+    context 'when commit status is not failed' do
+      before do
+        commit_status.success!
+      end
+
+      it { is_expected.to eq(false) }
+    end
+  end
+
+  describe '#update_older_statuses_retried!' do
+    let!(:build_old) { create_status(name: 'build') }
+    let!(:build_new) { create_status(name: 'build') }
+    let!(:test) { create_status(name: 'test') }
+    let!(:build_from_other_pipeline) do
+      new_pipeline = create(:ci_pipeline, project: project, sha: project.commit.id)
+      create_status(name: 'build', pipeline: new_pipeline)
+    end
+
+    it "updates 'retried' and 'status' columns of the latest status with the same name in the same pipeline" do
+      build_new.update_older_statuses_retried!
+
+      expect(build_new.reload).to have_attributes(retried: false, processed: false)
+      expect(build_old.reload).to have_attributes(retried: true, processed: true)
+      expect(test.reload).to have_attributes(retried: false, processed: false)
+      expect(build_from_other_pipeline.reload).to have_attributes(retried: false, processed: false)
+    end
   end
 end

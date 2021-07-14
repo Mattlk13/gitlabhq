@@ -1,21 +1,22 @@
 # frozen_string_literal: true
 
-require 'spec_helper.rb'
+require 'spec_helper'
 
-describe Issues::ResolveDiscussions do
-  class DummyService < Issues::BaseService
-    include ::Issues::ResolveDiscussions
-
-    def initialize(*args)
-      super
-      filter_resolve_discussion_params
-    end
-  end
-
+RSpec.describe Issues::ResolveDiscussions do
   let(:project) { create(:project, :repository) }
   let(:user) { create(:user) }
 
   before do
+    stub_const('DummyService', Class.new(Issues::BaseService))
+    DummyService.class_eval do
+      include ::Issues::ResolveDiscussions
+
+      def initialize(project:, current_user: nil, params: {})
+        super
+        filter_resolve_discussion_params
+      end
+    end
+
     project.add_developer(user)
   end
 
@@ -25,7 +26,7 @@ describe Issues::ResolveDiscussions do
     let(:other_merge_request) { create(:merge_request, source_project: project, source_branch: "fix") }
 
     describe "#merge_request_for_resolving_discussion" do
-      let(:service) { DummyService.new(project, user, merge_request_to_resolve_discussions_of: merge_request.iid) }
+      let(:service) { DummyService.new(project: project, current_user: user, params: { merge_request_to_resolve_discussions_of: merge_request.iid }) }
 
       it "finds the merge request" do
         expect(service.merge_request_to_resolve_discussions_of).to eq(merge_request)
@@ -44,10 +45,12 @@ describe Issues::ResolveDiscussions do
     describe "#discussions_to_resolve" do
       it "contains a single discussion when matching merge request and discussion are passed" do
         service = DummyService.new(
-          project,
-          user,
-          discussion_to_resolve: discussion.id,
-          merge_request_to_resolve_discussions_of: merge_request.iid
+          project: project,
+          current_user: user,
+          params: {
+            discussion_to_resolve: discussion.id,
+            merge_request_to_resolve_discussions_of: merge_request.iid
+          }
         )
         # We need to compare discussion id's because the Discussion-objects are rebuilt
         # which causes the object-id's not to be different.
@@ -62,9 +65,9 @@ describe Issues::ResolveDiscussions do
                                                   project: merge_request.target_project,
                                                   line_number: 15)])
         service = DummyService.new(
-          project,
-          user,
-          merge_request_to_resolve_discussions_of: merge_request.iid
+          project: project,
+          current_user: user,
+          params: { merge_request_to_resolve_discussions_of: merge_request.iid }
         )
         # We need to compare discussion id's because the Discussion-objects are rebuilt
         # which causes the object-id's not to be different.
@@ -78,11 +81,11 @@ describe Issues::ResolveDiscussions do
                                                    noteable: merge_request,
                                                    project: merge_request.target_project,
                                                    line_number: 15
-                                                   )])
+        )])
         service = DummyService.new(
-          project,
-          user,
-          merge_request_to_resolve_discussions_of: merge_request.iid
+          project: project,
+          current_user: user,
+          params: { merge_request_to_resolve_discussions_of: merge_request.iid }
         )
         # We need to compare discussion id's because the Discussion-objects are rebuilt
         # which causes the object-id's not to be different.
@@ -93,10 +96,12 @@ describe Issues::ResolveDiscussions do
 
       it "is empty when a discussion and another merge request are passed" do
         service = DummyService.new(
-          project,
-          user,
-          discussion_to_resolve: discussion.id,
-          merge_request_to_resolve_discussions_of: other_merge_request.iid
+          project: project,
+          current_user: user,
+          params: {
+            discussion_to_resolve: discussion.id,
+            merge_request_to_resolve_discussions_of: other_merge_request.iid
+          }
         )
 
         expect(service.discussions_to_resolve).to be_empty

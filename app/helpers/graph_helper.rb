@@ -17,9 +17,15 @@ module GraphHelper
   end
 
   def success_ratio(counts)
-    return 100 if counts[:failed].zero?
+    return 100 if counts[:failed] == 0
 
     ratio = (counts[:success].to_f / (counts[:success] + counts[:failed])) * 100
     ratio.to_i
   end
+
+  def should_render_dora_charts
+    false
+  end
 end
+
+GraphHelper.prepend_mod_with('GraphHelper')

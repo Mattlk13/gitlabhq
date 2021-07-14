@@ -20,8 +20,13 @@ module ContainerExpirationPoliciesHelper
   def older_than_options
     ContainerExpirationPolicy.older_than_options.map do |key, val|
       { key: key.to_s, label: val }.tap do |base|
-        base[:default] = true if key.to_s == '30d'
+        base[:default] = true if key.to_s == '90d'
       end
     end
+  end
+
+  def container_expiration_policies_historic_entry_enabled?(project)
+    Gitlab::CurrentSettings.container_expiration_policies_enable_historic_entries ||
+      Feature.enabled?(:container_expiration_policies_historic_entry, project)
   end
 end

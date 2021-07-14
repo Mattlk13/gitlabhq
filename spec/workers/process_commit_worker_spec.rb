@@ -2,7 +2,7 @@
 
 require 'spec_helper'
 
-describe ProcessCommitWorker do
+RSpec.describe ProcessCommitWorker do
   let(:worker) { described_class.new }
   let(:user) { create(:user) }
   let(:project) { create(:project, :public, :repository) }
@@ -22,16 +22,26 @@ describe ProcessCommitWorker do
       worker.perform(project.id, -1, commit.to_hash)
     end
 
-    it 'processes the commit message' do
-      expect(worker).to receive(:process_commit_message).and_call_original
+    include_examples 'an idempotent worker' do
+      subject do
+        perform_multiple([project.id, user.id, commit.to_hash], worker: worker)
+      end
 
-      worker.perform(project.id, user.id, commit.to_hash)
-    end
+      it 'processes the commit message' do
+        expect(worker).to receive(:process_commit_message)
+          .exactly(IdempotentWorkerHelper::WORKER_EXEC_TIMES)
+          .and_call_original
 
-    it 'updates the issue metrics' do
-      expect(worker).to receive(:update_issue_metrics).and_call_original
+        subject
+      end
 
-      worker.perform(project.id, user.id, commit.to_hash)
+      it 'updates the issue metrics' do
+        expect(worker).to receive(:update_issue_metrics)
+          .exactly(IdempotentWorkerHelper::WORKER_EXEC_TIMES)
+          .and_call_original
+
+        subject
+      end
     end
   end
 
@@ -84,7 +94,7 @@ describe ProcessCommitWorker do
         project.repository.after_create_branch
 
         MergeRequests::MergeService
-          .new(project, merge_request.author, { sha: merge_request.diff_head_sha })
+          .new(project: project, current_user: merge_request.author, params: { sha: merge_request.diff_head_sha })
           .execute(merge_request)
 
         merge_request.reload.merge_commit
@@ -128,7 +138,7 @@ describe ProcessCommitWorker do
     end
   end
 
-  describe '#update_issue_metrics' do
+  describe '#update_issue_metrics', :clean_gitlab_redis_cache do
     context 'when commit has issue reference' do
       subject(:update_metrics_and_reload) do
         -> {
@@ -150,7 +160,7 @@ describe ProcessCommitWorker do
 
       context 'when issue has first_mentioned_in_commit_at earlier than given committed_date' do
         before do
-          issue.metrics.update(first_mentioned_in_commit_at: commit.committed_date - 1.day)
+          issue.metrics.update!(first_mentioned_in_commit_at: commit.committed_date - 1.day)
         end
 
         it "doesn't update issue metrics" do
@@ -160,7 +170,7 @@ describe ProcessCommitWorker do
 
       context 'when issue has first_mentioned_in_commit_at later than given committed_date' do
         before do
-          issue.metrics.update(first_mentioned_in_commit_at: commit.committed_date + 1.day)
+          issue.metrics.update!(first_mentioned_in_commit_at: commit.committed_date + 1.day)
         end
 
         it "doesn't update issue metrics" do
@@ -190,9 +200,9 @@ describe ProcessCommitWorker do
     it 'parses date strings into Time instances' do
       commit = worker.build_commit(project,
                                    id: '123',
-                                   authored_date: Time.now.to_s)
+                                   authored_date: Time.current.to_s)
 
-      expect(commit.authored_date).to be_an_instance_of(Time)
+      expect(commit.authored_date).to be_a_kind_of(Time)
     end
   end
 end

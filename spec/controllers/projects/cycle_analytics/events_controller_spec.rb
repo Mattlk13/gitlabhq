@@ -2,7 +2,7 @@
 
 require 'spec_helper'
 
-describe Projects::CycleAnalytics::EventsController do
+RSpec.describe Projects::CycleAnalytics::EventsController do
   let(:project) { create(:project, :repository) }
   let(:user) { create(:user) }
 
@@ -11,13 +11,13 @@ describe Projects::CycleAnalytics::EventsController do
     project.add_maintainer(user)
   end
 
-  describe 'cycle analytics not set up flag' do
+  describe 'value stream analytics not set up flag' do
     context 'with no data' do
       it 'is empty' do
         get_issue
 
         expect(response).to be_successful
-        expect(JSON.parse(response.body)['events']).to be_empty
+        expect(Gitlab::Json.parse(response.body)['events']).to be_empty
       end
     end
 
@@ -26,7 +26,7 @@ describe Projects::CycleAnalytics::EventsController do
       let(:issue) { create(:issue, project: project, created_at: 9.days.ago) }
 
       before do
-        issue.update(milestone: milestone)
+        issue.update!(milestone: milestone)
       end
 
       it 'is not empty' do
@@ -38,7 +38,7 @@ describe Projects::CycleAnalytics::EventsController do
       it 'contains event detais' do
         get_issue
 
-        events = JSON.parse(response.body)['events']
+        events = Gitlab::Json.parse(response.body)['events']
 
         expect(events).not_to be_empty
         expect(events.first).to include('title', 'author', 'iid', 'total_time', 'created_at', 'url')
@@ -51,11 +51,13 @@ describe Projects::CycleAnalytics::EventsController do
 
           expect(response).to be_successful
 
-          expect(JSON.parse(response.body)['events']).to be_empty
+          expect(Gitlab::Json.parse(response.body)['events']).to be_empty
         end
       end
     end
   end
+
+  include_examples GracefulTimeoutHandling
 
   def get_issue(additional_params: {})
     params = additional_params.merge(namespace_id: project.namespace, project_id: project)

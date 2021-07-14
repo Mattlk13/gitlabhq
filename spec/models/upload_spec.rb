@@ -2,7 +2,7 @@
 
 require 'spec_helper'
 
-describe Upload do
+RSpec.describe Upload do
   describe 'associations' do
     it { is_expected.to belong_to(:model) }
   end
@@ -127,6 +127,36 @@ describe Upload do
       expect(uploader.mounted_as).to eq(subject.send(:mount_point))
       expect(uploader.file).not_to be_nil
     end
+
+    context 'when upload has mount_point nil' do
+      context 'when an upload belongs to a note' do
+        it 'mounts it as attachment' do
+          project = create(:project, :legacy_storage)
+          merge_request = create(:merge_request, source_project: project)
+          note = create(:legacy_diff_note_on_merge_request, note: 'some note', project: project, noteable: merge_request)
+
+          subject = build(:upload, :with_file, :attachment_upload, model: note, mount_point: nil)
+          uploader = subject.retrieve_uploader
+
+          expect(uploader.upload).to eq(subject)
+          expect(uploader.path).to include('attachment')
+          expect(uploader.file).not_to be_nil
+        end
+      end
+
+      context 'when an upload does not belong to a note' do
+        it 'does not mount it as attachment' do
+          appearance = create(:appearance)
+
+          subject = build(:upload, :with_file, :attachment_upload, model: appearance, mount_point: nil)
+          uploader = subject.retrieve_uploader
+
+          expect(uploader.upload).to eq(subject)
+          expect(uploader.path).not_to include('attachment')
+          expect(uploader.file).not_to be_nil
+        end
+      end
+    end
   end
 
   describe '#needs_checksum?' do
@@ -191,7 +221,7 @@ describe Upload do
         it 'does not send a message to Sentry' do
           upload = described_class.new(path: "#{__FILE__}-nope", store: ObjectStorage::Store::LOCAL)
 
-          expect(Raven).not_to receive(:capture_message)
+          expect(Gitlab::ErrorTracking).not_to receive(:track_exception)
 
           upload.exist?
         end

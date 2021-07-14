@@ -2,7 +2,7 @@
 
 require 'spec_helper'
 
-describe 'User filters issues' do
+RSpec.describe 'User filters issues', :js do
   let_it_be(:user) { create(:user) }
   let_it_be(:project) { create(:project_empty_repo, :public) }
 
@@ -18,13 +18,13 @@ describe 'User filters issues' do
     @issue = Issue.find_by(title: 'foobar')
     @issue.milestone = create(:milestone, project: project)
     @issue.assignees = []
-    @issue.save
+    @issue.save!
   end
 
   let(:issue) { @issue }
 
   it 'allows filtering by issues with no specified assignee' do
-    visit project_issues_path(project, assignee_id: IssuableFinder::FILTER_NONE)
+    visit project_issues_path(project, assignee_id: IssuableFinder::Params::FILTER_NONE)
 
     expect(page).to have_content 'foobar'
     expect(page).not_to have_content 'barbaz'

@@ -2,10 +2,11 @@
 
 require 'spec_helper'
 
-describe Commit do
+RSpec.describe Commit do
   let_it_be(:project) { create(:project, :public, :repository) }
   let_it_be(:personal_snippet) { create(:personal_snippet, :repository) }
   let_it_be(:project_snippet) { create(:project_snippet, :repository) }
+
   let(:commit) { project.commit }
 
   describe 'modules' do
@@ -400,6 +401,19 @@ eos
       allow(commit).to receive(:safe_message).and_return(message + "\n" + message)
       expect(commit.full_title).to eq(message)
     end
+
+    it 'truncates html representation if more than 1KiB' do
+      # Commit title is over 2KiB on a single line
+      huge_commit_title = ('panic ' * 350) + 'trailing text'
+
+      allow(commit).to receive(:safe_message).and_return(huge_commit_title)
+
+      commit.refresh_markdown_cache
+      full_title_html = commit.full_title_html
+
+      expect(full_title_html.bytesize).to be < 2.kilobytes
+      expect(full_title_html).not_to include('trailing text')
+    end
   end
 
   describe 'description' do
@@ -428,6 +442,19 @@ eos
       allow(commit).to receive(:safe_message).and_return(message)
       expect(commit.description).to eq(message)
     end
+
+    it 'truncates html representation if more than 1Mib' do
+      # Commit message is over 2MiB
+      huge_commit_message = ['panic', ('panic ' * 350000), 'trailing text'].join("\n")
+
+      allow(commit).to receive(:safe_message).and_return(huge_commit_message)
+
+      commit.refresh_markdown_cache
+      description_html = commit.description_html
+
+      expect(description_html.bytesize).to be < 2.megabytes
+      expect(description_html).not_to include('trailing text')
+    end
   end
 
   describe "delegation" do
@@ -444,72 +471,26 @@ eos
     it { is_expected.to respond_to(:id) }
   end
 
-  describe '#closes_issues' do
-    let(:issue) { create :issue, project: project }
-    let(:other_project) { create(:project, :public) }
-    let(:other_issue) { create :issue, project: other_project }
-    let(:committer) { create :user }
-
-    before do
-      project.add_developer(committer)
-      other_project.add_developer(committer)
-    end
-
-    it 'detects issues that this commit is marked as closing' do
-      ext_ref = "#{other_project.full_path}##{other_issue.iid}"
-
-      allow(commit).to receive_messages(
-        safe_message: "Fixes ##{issue.iid} and #{ext_ref}",
-        committer_email: committer.email
-      )
-
-      expect(commit.closes_issues).to include(issue)
-      expect(commit.closes_issues).to include(other_issue)
-    end
-
-    it 'ignores referenced issues when auto-close is disabled' do
-      project.update!(autoclose_referenced_issues: false)
-
-      allow(commit).to receive_messages(
-        safe_message: "Fixes ##{issue.iid}",
-        committer_email: committer.email
-      )
-
-      expect(commit.closes_issues).to be_empty
-    end
-
-    context 'with personal snippet' do
-      let(:commit) { personal_snippet.commit }
-
-      it 'does not call Gitlab::ClosingIssueExtractor' do
-        expect(Gitlab::ClosingIssueExtractor).not_to receive(:new)
-
-        commit.closes_issues
-      end
-    end
-
-    context 'with project snippet' do
-      let(:commit) { project_snippet.commit }
-
-      it 'does not call Gitlab::ClosingIssueExtractor' do
-        expect(Gitlab::ClosingIssueExtractor).not_to receive(:new)
-
-        commit.closes_issues
-      end
-    end
-  end
-
   it_behaves_like 'a mentionable' do
-    subject { create(:project, :repository).commit }
+    subject(:commit) { create(:project, :repository).commit }
 
     let(:author) { create(:user, email: subject.author_email) }
     let(:backref_text) { "commit #{subject.id}" }
     let(:set_mentionable_text) do
-      ->(txt) { allow(subject).to receive(:safe_message).and_return(txt) }
+      ->(txt) { allow(commit).to receive(:safe_message).and_return(txt) }
     end
 
     # Include the subject in the repository stub.
-    let(:extra_commits) { [subject] }
+    let(:extra_commits) { [commit] }
+
+    it 'uses the CachedMarkdownField cache instead of the Mentionable cache', :use_clean_rails_redis_caching do
+      expect(commit.title_html).not_to be_present
+
+      commit.all_references(project.owner).all
+
+      expect(commit.title_html).to be_present
+      expect(Rails.cache.read("banzai/commit:#{commit.id}/safe_message/single_line")).to be_nil
+    end
   end
 
   describe '#hook_attrs' do
@@ -555,7 +536,7 @@ eos
       context 'that is found' do
         before do
           # Artificially mark as completed.
-          merge_request.update(merge_commit_sha: merge_commit.id)
+          merge_request.update!(merge_commit_sha: merge_commit.id)
         end
 
         it do
@@ -692,6 +673,92 @@ eos
     it_behaves_like '#uri_type'
   end
 
+  describe '.diff_max_files' do
+    subject(:diff_max_files) { described_class.diff_max_files }
+
+    let(:increased_diff_limits) { false }
+    let(:configurable_diff_limits) { false }
+
+    before do
+      stub_feature_flags(increased_diff_limits: increased_diff_limits, configurable_diff_limits: configurable_diff_limits)
+    end
+
+    context 'when increased_diff_limits is enabled' do
+      let(:increased_diff_limits) { true }
+
+      it 'returns 3000' do
+        expect(diff_max_files).to eq(3000)
+      end
+    end
+
+    context 'when configurable_diff_limits is enabled' do
+      let(:configurable_diff_limits) { true }
+
+      it 'returns the current settings' do
+        Gitlab::CurrentSettings.update!(diff_max_files: 1234)
+        expect(diff_max_files).to eq(1234)
+      end
+    end
+
+    context 'when neither feature flag is enabled' do
+      it 'returns 1000' do
+        expect(diff_max_files).to eq(1000)
+      end
+    end
+  end
+
+  describe '.diff_max_lines' do
+    subject(:diff_max_lines) { described_class.diff_max_lines }
+
+    let(:increased_diff_limits) { false }
+    let(:configurable_diff_limits) { false }
+
+    before do
+      stub_feature_flags(increased_diff_limits: increased_diff_limits, configurable_diff_limits: configurable_diff_limits)
+    end
+
+    context 'when increased_diff_limits is enabled' do
+      let(:increased_diff_limits) { true }
+
+      it 'returns 100000' do
+        expect(diff_max_lines).to eq(100000)
+      end
+    end
+
+    context 'when configurable_diff_limits is enabled' do
+      let(:configurable_diff_limits) { true }
+
+      it 'returns the current settings' do
+        Gitlab::CurrentSettings.update!(diff_max_lines: 65321)
+        expect(diff_max_lines).to eq(65321)
+      end
+    end
+
+    context 'when neither feature flag is enabled' do
+      it 'returns 50000' do
+        expect(diff_max_lines).to eq(50000)
+      end
+    end
+  end
+
+  describe '.diff_safe_max_files' do
+    subject(:diff_safe_max_files) { described_class.diff_safe_max_files }
+
+    it 'returns the commit diff max divided by the limit factor of 10' do
+      expect(::Commit).to receive(:diff_max_files).and_return(10)
+      expect(diff_safe_max_files).to eq(1)
+    end
+  end
+
+  describe '.diff_safe_max_lines' do
+    subject(:diff_safe_max_lines) { described_class.diff_safe_max_lines }
+
+    it 'returns the commit diff max divided by the limit factor of 10' do
+      expect(::Commit).to receive(:diff_max_lines).and_return(100)
+      expect(diff_safe_max_lines).to eq(10)
+    end
+  end
+
   describe '.from_hash' do
     subject { described_class.from_hash(commit.to_hash, container) }
 
@@ -730,7 +797,10 @@ eos
   end
 
   describe '#work_in_progress?' do
-    ['squash! ', 'fixup! ', 'wip: ', 'WIP: ', '[WIP] '].each do |wip_prefix|
+    [
+      'squash! ', 'fixup! ', 'wip: ', 'WIP: ', '[WIP] ',
+      'draft: ', 'Draft - ', '[Draft] ', '(draft) ', 'Draft: '
+    ].each do |wip_prefix|
       it "detects the '#{wip_prefix}' prefix" do
         commit.message = "#{wip_prefix}#{commit.message}"
 
@@ -740,6 +810,12 @@ eos
 
     it "detects WIP for a commit just saying 'wip'" do
       commit.message = "wip"
+
+      expect(commit).to be_work_in_progress
+    end
+
+    it "detects WIP for a commit just saying 'draft'" do
+      commit.message = "draft"
 
       expect(commit).to be_work_in_progress
     end
@@ -775,32 +851,6 @@ eos
     end
   end
 
-  describe '#merge_requests' do
-    let!(:project) { create(:project, :repository) }
-    let!(:merge_request1) { create(:merge_request, source_project: project, source_branch: 'master', target_branch: 'feature') }
-    let!(:merge_request2) { create(:merge_request, source_project: project, source_branch: 'merged-target', target_branch: 'feature') }
-    let(:commit1) { merge_request1.merge_request_diff.commits.last }
-    let(:commit2) { merge_request1.merge_request_diff.commits.first }
-
-    it 'returns merge_requests that introduced that commit' do
-      expect(commit1.merge_requests).to contain_exactly(merge_request1, merge_request2)
-      expect(commit2.merge_requests).to contain_exactly(merge_request1)
-    end
-
-    context 'with personal snippet' do
-      it 'returns empty relation' do
-        expect(personal_snippet.repository.commit.merge_requests).to eq MergeRequest.none
-      end
-    end
-
-    context 'with project snippet' do
-      it 'returns empty relation' do
-        expect(project_snippet.project).not_to receive(:merge_requests)
-        expect(project_snippet.repository.commit.merge_requests).to eq MergeRequest.none
-      end
-    end
-  end
-
   describe 'signed commits' do
     let(:gpg_signed_commit) { project.commit_by(oid: '0b4bc9a49b562e85de7cc9e834518ea6828729b9') }
     let(:x509_signed_commit) { project.commit_by(oid: '189a6c924013fc3fe40d6f1ec1dc20214183bc97') }
@@ -819,6 +869,31 @@ eos
       expect(x509_signed_commit.has_signature?).to be_truthy
       expect(unsigned_commit.has_signature?).to be_falsey
       expect(commit.has_signature?).to be_falsey
+    end
+  end
+
+  describe '#has_been_reverted?' do
+    let(:user) { create(:user) }
+    let(:issue) { create(:issue, author: user, project: project) }
+
+    it 'returns true if the commit has been reverted' do
+      create(:note_on_issue,
+             noteable: issue,
+             system: true,
+             note: commit.revert_description(user),
+             project: issue.project)
+
+      expect_next_instance_of(Commit) do |revert_commit|
+        expect(revert_commit).to receive(:reverts_commit?)
+          .with(commit, user)
+          .and_return(true)
+      end
+
+      expect(commit.has_been_reverted?(user, issue.notes_with_associations)).to eq(true)
+    end
+
+    it 'returns false if the commit has not been reverted' do
+      expect(commit.has_been_reverted?(user, issue.notes_with_associations)).to eq(false)
     end
   end
 end

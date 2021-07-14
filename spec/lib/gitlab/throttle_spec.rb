@@ -2,86 +2,60 @@
 
 require 'spec_helper'
 
-describe Gitlab::Throttle do
+RSpec.describe Gitlab::Throttle do
   describe '.protected_paths_enabled?' do
     subject { described_class.protected_paths_enabled? }
 
-    context 'when omnibus protected paths throttle should be used' do
-      before do
-        expect(described_class).to receive(:should_use_omnibus_protected_paths?).and_return(true)
-      end
+    it 'returns Application Settings throttle_protected_paths_enabled?' do
+      expect(Gitlab::CurrentSettings.current_application_settings).to receive(:throttle_protected_paths_enabled?)
 
-      it { is_expected.to be_falsey }
+      subject
+    end
+  end
+
+  describe '.bypass_header' do
+    subject { described_class.bypass_header }
+
+    it 'is nil' do
+      expect(subject).to be_nil
     end
 
-    context 'when omnibus protected paths throttle should not be used' do
+    context 'when a header is configured' do
       before do
-        expect(described_class).to receive(:should_use_omnibus_protected_paths?).and_return(false)
+        stub_env('GITLAB_THROTTLE_BYPASS_HEADER', 'My-Custom-Header')
       end
 
-      it 'returns Application Settings throttle_protected_paths_enabled?' do
-        expect(Gitlab::CurrentSettings.current_application_settings).to receive(:throttle_protected_paths_enabled?)
-
-        subject
+      it 'is a funny upper case rack key' do
+        expect(subject).to eq('HTTP_MY_CUSTOM_HEADER')
       end
     end
   end
 
-  describe '.should_use_omnibus_protected_paths?' do
-    subject { described_class.should_use_omnibus_protected_paths? }
+  describe '.rate_limiting_response_text' do
+    subject { described_class.rate_limiting_response_text }
 
-    context 'when rack_attack.admin_area_protected_paths_enabled config is unspecified' do
-      context 'when the omnibus protected paths throttle has been recently used (it has data)' do
-        before do
-          expect(described_class).to receive(:omnibus_protected_paths_present?).and_return(true)
-        end
-
-        it { is_expected.to be_truthy }
+    context 'when the setting is not present' do
+      before do
+        stub_application_setting(rate_limiting_response_text: '')
       end
 
-      context 'when the omnibus protected paths throttle has not been recently used' do
-        before do
-          expect(described_class).to receive(:omnibus_protected_paths_present?).and_return(false)
-        end
-
-        it { is_expected.to be_falsey }
+      it 'returns the default value with a trailing newline' do
+        expect(subject).to eq(described_class::DEFAULT_RATE_LIMITING_RESPONSE_TEXT + "\n")
       end
     end
 
-    context 'when rack_attack.admin_area_protected_paths_enabled config is false' do
+    context 'when the setting is present' do
+      let(:response_text) do
+        'Rate limit exceeded; see https://docs.gitlab.com/ee/user/gitlab_com/#gitlabcom-specific-rate-limits for more details'
+      end
+
       before do
-        stub_config(rack_attack: {
-          admin_area_protected_paths_enabled: false
-        })
+        stub_application_setting(rate_limiting_response_text: response_text)
       end
 
-      context 'when the omnibus protected paths throttle has been recently used (it has data)' do
-        before do
-          expect(described_class).to receive(:omnibus_protected_paths_present?).and_return(true)
-        end
-
-        it { is_expected.to be_truthy }
+      it 'returns the default value with a trailing newline' do
+        expect(subject).to eq(response_text + "\n")
       end
-
-      context 'when the omnibus protected paths throttle has not been recently used' do
-        before do
-          expect(described_class).to receive(:omnibus_protected_paths_present?).and_return(false)
-        end
-
-        it { is_expected.to be_falsey }
-      end
-    end
-
-    context 'when rack_attack.admin_area_protected_paths_enabled config is true' do
-      before do
-        stub_config(rack_attack: {
-          admin_area_protected_paths_enabled: true
-        })
-
-        expect(described_class).not_to receive(:omnibus_protected_paths_present?)
-      end
-
-      it { is_expected.to be_falsey }
     end
   end
 end

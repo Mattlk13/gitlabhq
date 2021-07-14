@@ -1,12 +1,11 @@
 <script>
-import { GlTooltipDirective } from '@gitlab/ui';
-import Icon from '~/vue_shared/components/icon.vue';
-import { __, sprintf } from '~/locale';
-import { getCommitIconMap } from '~/ide/utils';
+import { GlTooltipDirective, GlIcon } from '@gitlab/ui';
+import getCommitIconMap from '~/ide/commit_icon';
+import { __ } from '~/locale';
 
 export default {
   components: {
-    Icon,
+    GlIcon,
   },
   directives: {
     GlTooltip: GlTooltipDirective,
@@ -40,7 +39,7 @@ export default {
   computed: {
     changedIcon() {
       // False positive i18n lint: https://gitlab.com/gitlab-org/frontend/eslint-plugin-i18n/issues/26
-      // eslint-disable-next-line @gitlab/i18n/no-non-i18n-strings
+      // eslint-disable-next-line @gitlab/require-i18n-strings
       const suffix = this.file.staged && this.showStagedIcon ? '-solid' : '';
 
       return `${getCommitIconMap(this.file).icon}${suffix}`;
@@ -49,19 +48,17 @@ export default {
       return `${this.changedIcon} float-left d-block`;
     },
     tooltipTitle() {
-      if (!this.showTooltip || !this.file.changed) return undefined;
-
-      const type = this.file.tempFile ? 'addition' : 'modification';
-
-      if (this.file.staged) {
-        return sprintf(__('Staged %{type}'), {
-          type,
-        });
+      if (!this.showTooltip) {
+        return undefined;
+      } else if (this.file.deleted) {
+        return __('Deleted');
+      } else if (this.file.tempFile) {
+        return __('Added');
+      } else if (this.file.changed) {
+        return __('Modified');
       }
 
-      return sprintf(__('Unstaged %{type}'), {
-        type,
-      });
+      return undefined;
     },
     showIcon() {
       return (
@@ -82,8 +79,10 @@ export default {
     :title="tooltipTitle"
     :class="{ 'ml-auto': isCentered }"
     class="file-changed-icon d-inline-block"
+    data-qa-selector="changed_file_icon_content"
+    :data-qa-title="tooltipTitle"
   >
-    <icon v-if="showIcon" :name="changedIcon" :size="size" :class="changedIconClass" />
+    <gl-icon v-if="showIcon" :name="changedIcon" :size="size" :class="changedIconClass" />
   </span>
 </template>
 

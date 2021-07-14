@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'active_record/fixtures'
 
 namespace :gitlab do
@@ -17,9 +19,16 @@ namespace :gitlab do
       Rake::Task['gitlab:backup:registry:create'].invoke
 
       backup = Backup::Manager.new(progress)
-      backup.pack
-      backup.cleanup
-      backup.remove_old
+      backup.write_info
+
+      if ENV['SKIP'] && ENV['SKIP'].include?('tar')
+        backup.upload
+      else
+        backup.pack
+        backup.upload
+        backup.cleanup
+        backup.remove_old
+      end
 
       progress.puts "Warning: Your gitlab.rb and gitlab-secrets.json files contain sensitive data \n" \
            "and are not included in this backup. You will need these files to restore a backup.\n" \
@@ -33,12 +42,18 @@ namespace :gitlab do
       warn_user_is_not_gitlab
 
       backup = Backup::Manager.new(progress)
-      backup.unpack
+      cleanup_required = backup.unpack
+      backup.verify_backup_version
 
       unless backup.skipped?('db')
         begin
           unless ENV['force'] == 'yes'
             warning = <<-MSG.strip_heredoc
+              Be sure to stop Puma, Sidekiq, and any other process that
+              connects to the database before proceeding. For Omnibus
+              installs, see the following link for more information:
+              https://docs.gitlab.com/ee/raketasks/backup_restore.html#restore-for-omnibus-gitlab-installations
+
               Before restoring the database, we will remove all existing
               tables to avoid future upgrade problems. Be aware that if you have
               custom tables in the GitLab database these tables and all data will be
@@ -72,7 +87,10 @@ namespace :gitlab do
       Rake::Task['gitlab:shell:setup'].invoke
       Rake::Task['cache:clear'].invoke
 
-      backup.cleanup
+      if cleanup_required
+        backup.cleanup
+      end
+
       puts "Warning: Your gitlab.rb and gitlab-secrets.json files contain sensitive data \n" \
            "and are not included in this backup. You will need to restore these files manually.".color(:red)
       puts "Restore task is done."
@@ -82,17 +100,26 @@ namespace :gitlab do
       task create: :gitlab_environment do
         puts_time "Dumping repositories ...".color(:blue)
 
+        max_concurrency = ENV.fetch('GITLAB_BACKUP_MAX_CONCURRENCY', 1).to_i
+        max_storage_concurrency = ENV.fetch('GITLAB_BACKUP_MAX_STORAGE_CONCURRENCY', 1).to_i
+
         if ENV["SKIP"] && ENV["SKIP"].include?("repositories")
           puts_time "[SKIPPED]".color(:cyan)
+        elsif max_concurrency < 1 || max_storage_concurrency < 1
+          puts "GITLAB_BACKUP_MAX_CONCURRENCY and GITLAB_BACKUP_MAX_STORAGE_CONCURRENCY must have a value of at least 1".color(:red)
+          exit 1
         else
-          Backup::Repository.new(progress).dump
+          Backup::Repositories.new(progress, strategy: repository_backup_strategy).dump(
+            max_concurrency: max_concurrency,
+            max_storage_concurrency: max_storage_concurrency
+          )
           puts_time "done".color(:green)
         end
       end
 
       task restore: :gitlab_environment do
         puts_time "Restoring repositories ...".color(:blue)
-        Backup::Repository.new(progress).restore
+        Backup::Repositories.new(progress, strategy: repository_backup_strategy).restore
         puts_time "done".color(:green)
       end
     end
@@ -111,7 +138,21 @@ namespace :gitlab do
 
       task restore: :gitlab_environment do
         puts_time "Restoring database ... ".color(:blue)
-        Backup::Database.new(progress).restore
+        errors = Backup::Database.new(progress).restore
+
+        if errors.present?
+          warning = <<~MSG
+            There were errors in restoring the schema. This may cause
+            issues if this results in missing indexes, constraints, or
+            columns. Please record the errors above and contact GitLab
+            Support if you have questions:
+            https://about.gitlab.com/support/
+          MSG
+
+          warn warning.color(:red)
+          ask_to_continue
+        end
+
         puts_time "done".color(:green)
       end
     end
@@ -241,6 +282,7 @@ namespace :gitlab do
 
     def puts_time(msg)
       progress.puts "#{Time.now} -- #{msg}"
+      Gitlab::BackupLogger.info(message: "#{Rainbow.uncolor(msg)}")
     end
 
     def progress
@@ -253,5 +295,17 @@ namespace :gitlab do
         $stdout
       end
     end
-  end # namespace end: backup
-end # namespace end: gitlab
+
+    def repository_backup_strategy
+      if Feature.enabled?(:gitaly_backup)
+        max_concurrency = ENV['GITLAB_BACKUP_MAX_CONCURRENCY'].presence
+        max_storage_concurrency = ENV['GITLAB_BACKUP_MAX_STORAGE_CONCURRENCY'].presence
+        Backup::GitalyBackup.new(progress, parallel: max_concurrency, parallel_storage: max_storage_concurrency)
+      else
+        Backup::GitalyRpcBackup.new(progress)
+      end
+    end
+  end
+  # namespace end: backup
+end
+# namespace end: gitlab

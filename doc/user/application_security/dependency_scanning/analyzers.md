@@ -1,6 +1,13 @@
+---
+type: reference, howto
+stage: Secure
+group: Composition Analysis
+info: To determine the technical writer assigned to the Stage/Group associated with this page, see https://about.gitlab.com/handbook/engineering/ux/technical-writing/#assignments
+---
+
 # Dependency Scanning Analyzers **(ULTIMATE)**
 
-Dependency Scanning relies on underlying third party tools that are wrapped into
+Dependency Scanning relies on underlying third-party tools that are wrapped into
 what we call "Analyzers". An analyzer is a
 [dedicated project](https://gitlab.com/gitlab-org/security-products/analyzers)
 that wraps a particular tool to:
@@ -19,7 +26,7 @@ Dependency Scanning supports the following official analyzers:
 - [`gemnasium-python`](https://gitlab.com/gitlab-org/security-products/analyzers/gemnasium-python)
 - [`retire.js`](https://gitlab.com/gitlab-org/security-products/analyzers/retire.js)
 
-The analyzers are published as Docker images that Dependency Scanning will use
+The analyzers are published as Docker images, which Dependency Scanning uses
 to launch dedicated containers for each analysis.
 
 Dependency Scanning is pre-configured with a set of **default images** that are
@@ -27,8 +34,8 @@ maintained by GitLab, but users can also integrate their own **custom images**.
 
 ## Official default analyzers
 
-Any custom change to the official analyzers can be achieved by using an
-[environment variable in your `.gitlab-ci.yml`](index.md#customizing-the-dependency-scanning-settings).
+Any custom change to the official analyzers can be achieved by using a
+[CI/CD variable in your `.gitlab-ci.yml`](index.md#customizing-the-dependency-scanning-settings).
 
 ### Using a custom Docker mirror
 
@@ -43,16 +50,16 @@ include:
   template: Dependency-Scanning.gitlab-ci.yml
 
 variables:
-  DS_ANALYZER_IMAGE_PREFIX: my-docker-registry/gl-images
+  SECURE_ANALYZERS_PREFIX: my-docker-registry/gl-images
 ```
 
 This configuration requires that your custom registry provides images for all
 the official analyzers.
 
-### Selecting specific analyzers
+### Disable specific analyzers
 
-You can select the official analyzers you want to run. Here's how to enable
-`bundler-audit` and `gemnasium` while disabling all the other default ones.
+You can select the official analyzers you don't want to run. Here's how to disable
+`bundler-audit` and `gemnasium` analyzers.
 In `.gitlab-ci.yml` define:
 
 ```yaml
@@ -60,31 +67,12 @@ include:
   template: Dependency-Scanning.gitlab-ci.yml
 
 variables:
-  DS_DEFAULT_ANALYZERS: "bundler-audit,gemnasium"
+  DS_EXCLUDED_ANALYZERS: "bundler-audit, gemnasium"
 ```
-
-`bundler-audit` runs first. When merging the reports, Dependency Scanning will
-remove the duplicates and will keep the `bundler-audit` entries.
 
 ### Disabling default analyzers
 
-Setting `DS_DEFAULT_ANALYZERS` to an empty string will disable all the official
-default analyzers. In `.gitlab-ci.yml` define:
-
-```yaml
-include:
-  template: Dependency-Scanning.gitlab-ci.yml
-
-variables:
-  DS_DEFAULT_ANALYZERS: ""
-```
-
-That's needed when one totally relies on [custom analyzers](#custom-analyzers).
-
-## Custom analyzers
-
-You can provide your own analyzers as a comma separated list of Docker images.
-Here's how to add `analyzers/nugget` and `analyzers/perl` to the default images.
+Setting `DS_EXCLUDED_ANALYZERS` to a list of the official analyzers disables them.
 In `.gitlab-ci.yml` define:
 
 ```yaml
@@ -92,16 +80,32 @@ include:
   template: Dependency-Scanning.gitlab-ci.yml
 
 variables:
-  DS_ANALYZER_IMAGES: "my-docker-registry/analyzers/nugget,amy-docker-registry/nalyzers/perl"
+  DS_EXCLUDED_ANALYZERS: "gemnasium, gemnasium-maven, gemnasium-python, bundler-audit, retire.js"
 ```
 
-The values must be the full path to the container registry images,
-like what you would feed to the `docker pull` command.
+This is used when one totally relies on [custom analyzers](#custom-analyzers).
 
-NOTE: **Note:**
-This configuration doesn't benefit from the integrated detection step. Dependency
-Scanning has to fetch and spawn each Docker image to establish whether the
-custom analyzer can scan the source code.
+## Custom analyzers
+
+You can provide your own analyzers by
+defining CI jobs in your CI configuration. For consistency, you should suffix your custom Dependency
+Scanning jobs with `-dependency_scanning`. Here's how to add a scanning job that's based on the
+Docker image `my-docker-registry/analyzers/nuget` and generates a Dependency Scanning report
+`gl-dependency-scanning-report.json` when `/analyzer run` is executed. Define the following in
+`.gitlab-ci.yml`:
+
+```yaml
+nuget-dependency_scanning:
+  image:
+    name: "my-docker-registry/analyzers/nuget"
+  script:
+    - /analyzer run
+  artifacts:
+    reports:
+      dependency_scanning: gl-dependency-scanning-report.json
+```
+
+The [Security Scanner Integration](../../../development/integrations/secure.md) documentation explains how to integrate custom security scanners into GitLab.
 
 ## Analyzers data
 
@@ -126,8 +130,8 @@ The following table lists the data available for each official analyzer.
 | Credits                               | ✓                  | 𐄂                  | 𐄂                  |
 
 - ✓ => we have that data
-- ⚠ => we have that data but it's partially reliable, or we need to extract that data from unstructured content
-- 𐄂 => we don't have that data or it would need to develop specific or inefficient/unreliable logic to obtain it.
+- ⚠ => we have that data, but it's partially reliable, or we need to extract that data from unstructured content
+- 𐄂 => we don't have that data, or it would need to develop specific or inefficient/unreliable logic to obtain it.
 
-The values provided by these tools are heterogeneous so they are sometimes
+The values provided by these tools are heterogeneous, so they are sometimes
 normalized into common values (e.g., `severity`, `confidence`, etc).

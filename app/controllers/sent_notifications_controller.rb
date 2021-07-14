@@ -3,6 +3,8 @@
 class SentNotificationsController < ApplicationController
   skip_before_action :authenticate_user!
 
+  feature_category :users
+
   def unsubscribe
     @sent_notification = SentNotification.for(params[:id])
 
@@ -51,4 +53,4 @@ class SentNotificationsController < ApplicationController
   end
 end
 
-SentNotificationsController.prepend_if_ee('EE::SentNotificationsController')
+SentNotificationsController.prepend_mod_with('SentNotificationsController')

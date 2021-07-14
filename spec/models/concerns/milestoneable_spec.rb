@@ -2,7 +2,7 @@
 
 require 'spec_helper'
 
-describe Milestoneable do
+RSpec.describe Milestoneable do
   let(:user) { create(:user) }
   let(:milestone) { create(:milestone, project: project) }
 
@@ -50,33 +50,37 @@ describe Milestoneable do
       it 'returns true with a milestone from the issue project' do
         milestone = create(:milestone, project: project)
 
-        expect(build_milestoneable(milestone.id).milestone_available?).to be_truthy
+        expect(build_milestoneable(milestone.id).milestone_available?).to be(true)
       end
 
       it 'returns true with a milestone from the issue project group' do
         milestone = create(:milestone, group: group)
 
-        expect(build_milestoneable(milestone.id).milestone_available?).to be_truthy
+        expect(build_milestoneable(milestone.id).milestone_available?).to be(true)
       end
 
       it 'returns true with a milestone from the the parent of the issue project group' do
         parent = create(:group)
-        group.update(parent: parent)
+        group.update!(parent: parent)
         milestone = create(:milestone, group: parent)
 
-        expect(build_milestoneable(milestone.id).milestone_available?).to be_truthy
+        expect(build_milestoneable(milestone.id).milestone_available?).to be(true)
+      end
+
+      it 'returns true with a blank milestone' do
+        expect(build_milestoneable('').milestone_available?).to be(true)
       end
 
       it 'returns false with a milestone from another project' do
         milestone = create(:milestone)
 
-        expect(build_milestoneable(milestone.id).milestone_available?).to be_falsey
+        expect(build_milestoneable(milestone.id).milestone_available?).to be(false)
       end
 
       it 'returns false with a milestone from another group' do
         milestone = create(:milestone, group: create(:group))
 
-        expect(build_milestoneable(milestone.id).milestone_available?).to be_falsey
+        expect(build_milestoneable(milestone.id).milestone_available?).to be(false)
       end
     end
   end
@@ -100,10 +104,18 @@ describe Milestoneable do
         expect(merge_request.supports_milestone?).to be_truthy
       end
     end
+
+    context "for incidents" do
+      let(:incident) { build(:incident) }
+
+      it 'returns true' do
+        expect(incident.supports_milestone?).to be_truthy
+      end
+    end
   end
 
   describe 'release scopes' do
-    let_it_be(:project) { create(:project) }
+    let_it_be(:project) { create(:project, :repository) }
 
     let_it_be(:release_1) { create(:release, tag: 'v1.0', project: project) }
     let_it_be(:release_2) { create(:release, tag: 'v2.0', project: project) }
@@ -125,6 +137,22 @@ describe Milestoneable do
     let_it_be(:issue_6) { create(:issue, project: project) }
 
     let_it_be(:items) { Issue.all }
+
+    describe '#any_milestone' do
+      context 'when milestone filter is present and related closing issues are joined' do
+        let_it_be(:merge_request_1) { create(:merge_request, source_project: project, source_branch: 'feature-1') }
+        let_it_be(:merge_request_2) { create(:merge_request, source_project: project, source_branch: 'feature-2') }
+
+        let_it_be(:mrc_issue_1) { create(:merge_requests_closing_issues, issue: issue_1, merge_request: merge_request_1) }
+        let_it_be(:mrc_issue_2) { create(:merge_requests_closing_issues, issue: issue_2, merge_request: merge_request_2) }
+
+        it 'returns merge request closing issues of any milestone' do
+          relation = items.joins(merge_requests_closing_issues: :issue).any_milestone
+
+          expect(relation).to contain_exactly(issue_1, issue_2)
+        end
+      end
+    end
 
     describe '#without_release' do
       it 'returns the issues not tied to any milestone and the ones tied to milestone with no release' do

@@ -1,9 +1,9 @@
 # frozen_string_literal: true
 
 require 'spec_helper'
-require Rails.root.join('db', 'post_migrate', '20190606163724_migrate_legacy_managed_clusters_to_unmanaged.rb')
+require_migration!
 
-describe MigrateLegacyManagedClustersToUnmanaged, :migration do
+RSpec.describe MigrateLegacyManagedClustersToUnmanaged do
   let(:cluster_type) { 'project_type' }
   let(:created_at) { 1.hour.ago }
 

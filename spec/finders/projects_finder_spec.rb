@@ -2,26 +2,26 @@
 
 require 'spec_helper'
 
-describe ProjectsFinder, :do_not_mock_admin_mode do
+RSpec.describe ProjectsFinder do
   include AdminModeHelper
 
   describe '#execute' do
-    let(:user) { create(:user) }
-    let(:group) { create(:group, :public) }
+    let_it_be(:user) { create(:user) }
+    let_it_be(:group) { create(:group, :public) }
 
-    let!(:private_project) do
+    let_it_be(:private_project) do
       create(:project, :private, name: 'A', path: 'A')
     end
 
-    let!(:internal_project) do
+    let_it_be(:internal_project) do
       create(:project, :internal, group: group, name: 'B', path: 'B')
     end
 
-    let!(:public_project) do
+    let_it_be(:public_project) do
       create(:project, :public, group: group, name: 'C', path: 'C')
     end
 
-    let!(:shared_project) do
+    let_it_be(:shared_project) do
       create(:project, :private, name: 'D', path: 'D')
     end
 
@@ -85,6 +85,24 @@ describe ProjectsFinder, :do_not_mock_admin_mode do
         end
       end
 
+      describe 'regression: Combination of id_before/id_after and joins requires fully qualified column names' do
+        context 'only returns projects with a project id less than given and matching search' do
+          subject { finder.execute.joins(:route) }
+
+          let(:params) { { id_before: public_project.id }}
+
+          it { is_expected.to eq([internal_project]) }
+        end
+
+        context 'only returns projects with a project id greater than given and matching search' do
+          subject { finder.execute.joins(:route) }
+
+          let(:params) { { id_after: internal_project.id }}
+
+          it { is_expected.to eq([public_project]) }
+        end
+      end
+
       describe 'filter by visibility_level' do
         before do
           private_project.add_maintainer(user)
@@ -107,17 +125,54 @@ describe ProjectsFinder, :do_not_mock_admin_mode do
 
           it { is_expected.to eq([public_project]) }
         end
+
+        context 'as string' do
+          let(:params) { { visibility_level: Gitlab::VisibilityLevel::INTERNAL.to_s } }
+
+          it { is_expected.to eq([internal_project]) }
+        end
       end
 
-      describe 'filter by tags' do
+      describe 'filter by tags (deprecated)' do
         before do
-          public_project.tag_list.add('foo')
+          public_project.topic_list = 'foo'
           public_project.save!
         end
 
         let(:params) { { tag: 'foo' } }
 
         it { is_expected.to eq([public_project]) }
+      end
+
+      describe 'filter by topics' do
+        before do
+          public_project.topic_list = 'foo, bar'
+          public_project.save!
+        end
+
+        context 'single topic' do
+          let(:params) { { topic: 'foo' } }
+
+          it { is_expected.to eq([public_project]) }
+        end
+
+        context 'multiple topics' do
+          let(:params) { { topic: 'bar, foo' } }
+
+          it { is_expected.to eq([public_project]) }
+        end
+
+        context 'one topic matches, other one does not' do
+          let(:params) { { topic: 'foo, xyz' } }
+
+          it { is_expected.to eq([]) }
+        end
+
+        context 'no matching topic' do
+          let(:params) { { topic: 'xyz' } }
+
+          it { is_expected.to eq([]) }
+        end
       end
 
       describe 'filter by personal' do
@@ -137,6 +192,35 @@ describe ProjectsFinder, :do_not_mock_admin_mode do
         let(:params) { { name: 'C' } }
 
         it { is_expected.to eq([public_project]) }
+      end
+
+      describe 'filter by search with minimum search length' do
+        context 'when search term is shorter than minimum length' do
+          let(:params) { { search: 'C', minimum_search_length: 3 } }
+
+          it { is_expected.to be_empty }
+        end
+
+        context 'when search term is longer than minimum length' do
+          let(:project) { create(:project, :public, group: group, name: 'test_project') }
+          let(:params) { { search: 'test', minimum_search_length: 3 } }
+
+          it { is_expected.to eq([project]) }
+        end
+
+        context 'when minimum length is invalid' do
+          let(:params) { { search: 'C', minimum_search_length: 'x' } }
+
+          it 'ignores the minimum length param' do
+            is_expected.to eq([public_project])
+          end
+        end
+      end
+
+      describe 'filter by group name' do
+        let(:params) { { name: group.name, search_namespaces: true } }
+
+        it { is_expected.to eq([public_project, internal_project]) }
       end
 
       describe 'filter by archived' do
@@ -210,16 +294,99 @@ describe ProjectsFinder, :do_not_mock_admin_mode do
       end
 
       describe 'filter by without_deleted' do
-        let(:params) { { without_deleted: true } }
-        let!(:pending_delete_project) { create(:project, :public, pending_delete: true) }
+        let_it_be(:pending_delete_project) { create(:project, :public, pending_delete: true) }
 
-        it { is_expected.to match_array([public_project, internal_project]) }
+        let(:params) { { without_deleted: without_deleted } }
+
+        shared_examples 'returns all projects' do
+          it { expect(subject).to include(public_project, internal_project, pending_delete_project) }
+        end
+
+        context 'when without_deleted is true' do
+          let(:without_deleted) { true }
+
+          it 'returns projects that are not pending_delete' do
+            expect(subject).not_to include(pending_delete_project)
+            expect(subject).to include(public_project, internal_project)
+          end
+        end
+
+        context 'when without_deleted is false' do
+          let(:without_deleted) { false }
+
+          it_behaves_like 'returns all projects'
+        end
+
+        context 'when without_deleted is nil' do
+          let(:without_deleted) { nil }
+
+          it_behaves_like 'returns all projects'
+        end
+
+        context 'when without_deleted is not present' do
+          let(:params) { {} }
+
+          it_behaves_like 'returns all projects'
+        end
+      end
+
+      describe 'filter by last_activity_after' do
+        let(:params) { { last_activity_after: 60.minutes.ago } }
+
+        before do
+          internal_project.update!(last_activity_at: Time.now)
+          public_project.update!(last_activity_at: 61.minutes.ago)
+        end
+
+        it { is_expected.to match_array([internal_project]) }
+      end
+
+      describe 'filter by last_activity_before' do
+        let(:params) { { last_activity_before: 60.minutes.ago } }
+
+        before do
+          internal_project.update!(last_activity_at: Time.now)
+          public_project.update!(last_activity_at: 61.minutes.ago)
+        end
+
+        it { is_expected.to match_array([public_project]) }
+      end
+
+      describe 'filter by repository_storage' do
+        let(:params) { { repository_storage: 'nfs-05' } }
+        let!(:project) { create(:project, :public) }
+
+        before do
+          project.update_columns(repository_storage: 'nfs-05')
+        end
+
+        it { is_expected.to match_array([project]) }
       end
 
       describe 'sorting' do
-        let(:params) { { sort: 'name_asc' } }
+        let_it_be(:more_projects) do
+          [
+            create(:project, :internal, group: group, name: 'projA', path: 'projA'),
+            create(:project, :internal, group: group, name: 'projABC', path: 'projABC'),
+            create(:project, :internal, group: group, name: 'projAB', path: 'projAB')
+          ]
+        end
 
-        it { is_expected.to eq([internal_project, public_project]) }
+        context 'when sorting by a field' do
+          let(:params) { { sort: 'name_asc' } }
+
+          it { is_expected.to eq(([internal_project, public_project] + more_projects).sort_by { |p| p[:name] }) }
+        end
+
+        context 'when sorting by similarity' do
+          let(:params) { { sort: 'similarity', search: 'pro' } }
+
+          it { is_expected.to eq([more_projects[0], more_projects[2], more_projects[1]]) }
+        end
+
+        context 'when no sort is provided' do
+          it { is_expected.to eq(([internal_project, public_project] + more_projects).sort_by { |p| p[:id] }.reverse) }
+        end
       end
 
       describe 'with admin user' do

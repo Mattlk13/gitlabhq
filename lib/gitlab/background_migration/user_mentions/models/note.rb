@@ -6,7 +6,8 @@ module Gitlab
     module UserMentions
       module Models
         class Note < ActiveRecord::Base
-          include IsolatedMentionable
+          include EachBatch
+          include Concerns::IsolatedMentionable
           include CacheMarkdownField
 
           self.table_name = 'notes'
@@ -15,16 +16,16 @@ module Gitlab
           attr_mentionable :note, pipeline: :note
           cache_markdown_field :note, pipeline: :note, issuable_state_filter_enabled: true
 
-          belongs_to :author, class_name: "User"
+          belongs_to :author, class_name: "::Gitlab::BackgroundMigration::UserMentions::Models::User"
           belongs_to :noteable, polymorphic: true
-          belongs_to :project
+          belongs_to :project, class_name: "::Gitlab::BackgroundMigration::UserMentions::Models::Project"
 
           def for_personal_snippet?
-            noteable.class.name == 'PersonalSnippet'
+            noteable && noteable.instance_of?(PersonalSnippet)
           end
 
           def for_project_noteable?
-            !for_personal_snippet?
+            !for_personal_snippet? && !for_epic?
           end
 
           def skip_project_check?
@@ -32,7 +33,7 @@ module Gitlab
           end
 
           def for_epic?
-            noteable.class.name == 'Epic'
+            noteable && noteable_type == 'Epic'
           end
 
           def user_mention_resource_id
@@ -41,6 +42,14 @@ module Gitlab
 
           def user_mention_note_id
             id
+          end
+
+          def noteable
+            super unless for_commit?
+          end
+
+          def for_commit?
+            noteable_type == "Commit"
           end
 
           private
@@ -52,6 +61,8 @@ module Gitlab
           end
 
           def banzai_context_params
+            return {} unless noteable
+
             { group: noteable.group, label_url_method: :group_epics_url }
           end
         end

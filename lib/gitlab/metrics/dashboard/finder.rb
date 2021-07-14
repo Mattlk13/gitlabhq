@@ -7,6 +7,11 @@ module Gitlab
   module Metrics
     module Dashboard
       class Finder
+        PREDEFINED_DASHBOARD_LIST = [
+          ::Metrics::Dashboard::PodDashboardService,
+          ::Metrics::Dashboard::SystemDashboardService
+        ].freeze
+
         class << self
           # Returns a formatted dashboard packed with DB info.
           # @param project [Project]
@@ -29,9 +34,11 @@ module Gitlab
           #         Used by embedded dashboards.
           # @param options - y_label [String] Y-Axis label of
           #         a panel. Used by embedded dashboards.
-          # @param options - cluster [Cluster]
+          # @param options - cluster [Cluster]. Used by
+          #         embedded and un-embedded dashboards.
           # @param options - cluster_type [Symbol] The level of
-          #         cluster, one of [:admin, :project, :group]
+          #         cluster, one of [:admin, :project, :group]. Used by
+          #         embedded and un-embedded dashboards.
           # @param options - grafana_url [String] URL pointing
           #         to a grafana dashboard panel
           # @param options - prometheus_alert_id [Integer] ID of
@@ -57,38 +64,40 @@ module Gitlab
           #                              display_name: String,
           #                              default: Boolean }]
           def find_all_paths(project)
-            project.repository.metrics_dashboard_paths
-          end
+            dashboards = user_facing_dashboard_services(project).flat_map do |service|
+              service.all_dashboard_paths(project)
+            end
 
-          # Summary of all known dashboards. Used to populate repo cache.
-          # Prefer #find_all_paths.
-          def find_all_paths_from_source(project)
-            Gitlab::Metrics::Dashboard::Cache.delete_all!
-
-            default_dashboard_path(project)
-            .+ project_service.all_dashboard_paths(project)
+            Gitlab::Utils.stable_sort_by(dashboards) { |dashboard| dashboard[:display_name].downcase }
           end
 
           private
+
+          def user_facing_dashboard_services(project)
+            predefined_dashboard_services_for(project) + [project_service]
+          end
+
+          def predefined_dashboard_services_for(project)
+            # Only list the self monitoring dashboard on the self monitoring project,
+            # since it is the only dashboard (at time of writing) that shows data
+            # about GitLab itself.
+            if project.self_monitoring?
+              return [self_monitoring_service]
+            end
+
+            PREDEFINED_DASHBOARD_LIST
+          end
 
           def system_service
             ::Metrics::Dashboard::SystemDashboardService
           end
 
           def project_service
-            ::Metrics::Dashboard::ProjectDashboardService
+            ::Metrics::Dashboard::CustomDashboardService
           end
 
           def self_monitoring_service
             ::Metrics::Dashboard::SelfMonitoringDashboardService
-          end
-
-          def default_dashboard_path(project)
-            if project.self_monitoring?
-              self_monitoring_service.all_dashboard_paths(project)
-            else
-              system_service.all_dashboard_paths(project)
-            end
           end
 
           def service_for(options)

@@ -2,7 +2,7 @@
 
 require 'spec_helper'
 
-describe Banzai::ReferenceRedactor do
+RSpec.describe Banzai::ReferenceRedactor do
   let(:user) { create(:user) }
   let(:project) { build(:project) }
   let(:redactor) { described_class.new(Banzai::RenderContext.new(project, user)) }
@@ -64,7 +64,7 @@ describe Banzai::ReferenceRedactor do
       let(:redactor) { described_class.new(Banzai::RenderContext.new(project, user)) }
 
       before do
-        project.update(pending_delete: true)
+        project.update!(pending_delete: true)
       end
 
       it 'redacts an issue attached' do
@@ -181,6 +181,13 @@ describe Banzai::ReferenceRedactor do
       end
 
       expect(redactor.nodes_visible_to_user([node])).to eq(Set.new([node]))
+    end
+
+    it 'handles invalid references gracefully' do
+      doc = Nokogiri::HTML.fragment('<a data-reference-type="some_invalid_type"></a>')
+      node = doc.children[0]
+
+      expect(redactor.nodes_visible_to_user([node])).to be_empty
     end
   end
 end

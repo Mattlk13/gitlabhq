@@ -10,12 +10,27 @@ module Gitlab
       @expires_in = expires_in
     end
 
-    def cache_key(key)
+    # NOTE Remove as part of https://gitlab.com/gitlab-org/gitlab/-/issues/331319
+    def old_cache_key(key)
       "#{key}:set"
     end
 
-    def expire(key)
-      with { |redis| redis.del(cache_key(key)) }
+    def cache_key(key)
+      "#{cache_namespace}:#{key}:set"
+    end
+
+    # Returns the number of keys deleted by Redis
+    def expire(*keys)
+      return 0 if keys.empty?
+
+      with do |redis|
+        keys_to_expire = keys.map { |key| cache_key(key) }
+        keys_to_expire += keys.map { |key| old_cache_key(key) } # NOTE Remove as part of #331319
+
+        Gitlab::Instrumentation::RedisClusterValidator.allow_cross_slot_commands do
+          redis.unlink(*keys_to_expire)
+        end
+      end
     end
 
     def exist?(key)
@@ -42,6 +57,19 @@ module Gitlab
       with { |redis| redis.sismember(cache_key(key), value) }
     end
 
+    # Like include?, but also tells us if the cache was populated when it ran
+    # by returning two booleans: [member_exists, set_exists]
+    def try_include?(key, value)
+      full_key = cache_key(key)
+
+      with do |redis|
+        redis.multi do
+          redis.sismember(full_key, value)
+          redis.exists(full_key)
+        end
+      end
+    end
+
     def ttl(key)
       with { |redis| redis.ttl(cache_key(key)) }
     end
@@ -50,6 +78,10 @@ module Gitlab
 
     def with(&blk)
       Gitlab::Redis::Cache.with(&blk) # rubocop:disable CodeReuse/ActiveRecord
+    end
+
+    def cache_namespace
+      Gitlab::Redis::Cache::CACHE_NAMESPACE
     end
   end
 end

@@ -2,7 +2,7 @@
 
 require 'spec_helper'
 
-describe Gitlab::GithubImport::ParallelImporter do
+RSpec.describe Gitlab::GithubImport::ParallelImporter do
   describe '.async?' do
     it 'returns true' do
       expect(described_class).to be_async
@@ -27,7 +27,7 @@ describe Gitlab::GithubImport::ParallelImporter do
     end
 
     it 'sets the JID in Redis' do
-      expect(Gitlab::Import::SetAsyncJid).to receive(:set_jid).with(project).and_call_original
+      expect(Gitlab::Import::SetAsyncJid).to receive(:set_jid).with(project.import_state).and_call_original
 
       importer.execute
     end

@@ -1,6 +1,6 @@
 .edit-cluster-form {
   .clipboard-addon {
-    background-color: $white-light;
+    background-color: $white;
   }
 }
 
@@ -35,11 +35,11 @@
 }
 
 .cluster-application-logo {
-  border: 3px solid $white-light;
+  border: 3px solid $white;
   box-shadow: 0 0 0 1px $gray-normal;
 
   &.avatar:hover {
-    border-color: $white-light;
+    border-color: $white;
   }
 }
 
@@ -56,22 +56,6 @@
     width: 40px;
     height: 40px;
   }
-}
-
-.cluster-application-banner {
-  height: 45px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-
-.cluster-application-banner-close {
-  align-self: flex-start;
-  font-weight: 500;
-  font-size: 20px;
-  color: $orange-900;
-  opacity: 1;
-  margin: $gl-padding-8 14px 0 0;
 }
 
 .cluster-application-description {
@@ -103,6 +87,20 @@
     width: 145px;
   }
 
+  .empty-state--agent {
+    .text-content {
+      @include gl-max-w-full;
+      @include media-breakpoint-up(lg) {
+        max-width: 70%;
+      }
+    }
+
+    .gl-alert-actions {
+      @include gl-mt-0;
+      @include gl-flex-wrap;
+    }
+  }
+
   .top-area .nav-controls > .btn.btn-add-cluster {
     margin-right: 0;
   }
@@ -121,10 +119,11 @@
     border: 0;
 
     &.table-row-header {
+      // stylelint-disable-next-line
       background-color: none;
       border: 0;
       font-weight: bold;
-      color: $gl-gray-500;
+      color: $gray-500;
     }
   }
 }
@@ -156,10 +155,16 @@
 }
 
 .cluster-deployments-warning {
-  color: $orange-600;
+  color: $orange-500;
 }
 
 .badge.pods-badge {
   color: $black;
   font-weight: $gl-font-weight-bold;
+}
+
+.cluster-status-indicator {
+  &.disabled {
+    background-color: $gray-400;
+  }
 }

@@ -1,8 +1,8 @@
-@import "framework/variables";
+@import 'framework/variables';
 
 .gitlab-embed-snippets {
-  @import "highlight/embedded";
-  @import "framework/images";
+  @import 'highlight/embedded';
+  @import 'framework/images';
 
   $border-style: 1px solid $border-color;
 
@@ -15,6 +15,7 @@
 
   .gl-snippet-icon {
     display: inline-block;
+    /* stylelint-disable-next-line function-url-quotes */
     background: url(asset_path('ext_snippet_icons/ext_snippet_icons.png')) no-repeat;
     overflow: hidden;
     text-align: left;
@@ -28,7 +29,7 @@
   }
 
   .blob-viewer {
-    background-color: $white-light;
+    background-color: $white;
     text-align: left;
   }
 
@@ -40,12 +41,10 @@
     margin: 0;
     padding: 0;
     table-layout: fixed;
+    overflow-x: auto;
 
     .blob-content {
-      overflow-x: auto;
-
       pre {
-        height: 100%;
         padding: 10px;
         border: 0;
         border-radius: 0;
@@ -61,6 +60,7 @@
         font-family: $monospace-font;
         font-size: $code-font-size;
         line-height: $code-line-height;
+        display: inline-block;
       }
     }
 
@@ -73,7 +73,7 @@
         font-family: $monospace-font;
         display: block;
         font-size: $code-font-size;
-        min-height: $code-line-height;
+        line-height: $code-line-height;
         white-space: nowrap;
         color: $black-transparent;
         min-width: 30px;
@@ -131,7 +131,7 @@
 
   .btn-group {
     a.btn {
-      background-color: $white-light;
+      background-color: $white;
       text-decoration: none;
       padding: 8px 9px;
       border: $border-style;

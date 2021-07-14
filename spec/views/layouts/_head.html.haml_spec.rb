@@ -2,7 +2,7 @@
 
 require 'spec_helper'
 
-describe 'layouts/_head' do
+RSpec.describe 'layouts/_head' do
   include StubConfiguration
 
   before do
@@ -34,36 +34,23 @@ describe 'layouts/_head' do
     expect(rendered).to match(%{content="foo&quot; http-equiv=&quot;refresh"})
   end
 
-  context 'when an asset_host is set and feature is activated in the config it will' do
+  context 'when an asset_host is set' do
     let(:asset_host) { 'http://assets' }
 
     before do
-      stub_feature_flags(asset_host_prefetch: true)
       allow(ActionController::Base).to receive(:asset_host).and_return(asset_host)
     end
 
-    it 'add a link dns-prefetch tag' do
+    it 'adds a link dns-prefetch tag' do
       render
-      expect(rendered).to match('<link href="http://assets" rel="dns-prefetch">')
+
+      expect(rendered).to match(%Q(<link href="#{asset_host}" rel="dns-prefetch">))
     end
 
-    it 'add a link preconnect tag' do
+    it 'adds a link preconnect tag' do
       render
-      expect(rendered).to match('<link crossorigin="" href="http://assets" rel="preconnnect">')
-    end
-  end
 
-  context 'when an asset_host is set and feature is not activated in the config it will' do
-    let(:asset_host) { 'http://assets' }
-
-    before do
-      stub_feature_flags(asset_host_prefetch: false)
-      allow(ActionController::Base).to receive(:asset_host).and_return(asset_host)
-    end
-
-    it 'not add a link dns-prefetch tag' do
-      render
-      expect(rendered).not_to match('<link href="http://assets" rel="dns-prefetch">')
+      expect(rendered).to match(%Q(<link crossorigin="" href="#{asset_host}" rel="preconnect">))
     end
   end
 
@@ -72,41 +59,62 @@ describe 'layouts/_head' do
 
     render
 
-    expect(rendered).to match('<link rel="stylesheet" media="all" href="/stylesheets/highlight/themes/solarised-light.css" />')
+    expect(rendered).to match('<link rel="stylesheet" media="print" href="/stylesheets/highlight/themes/solarised-light.css" />')
   end
 
   context 'when an asset_host is set and snowplow url is set' do
     let(:asset_host) { 'http://test.host' }
+    let(:snowplow_collector_hostname) { 'www.snow.plow' }
 
     before do
       allow(ActionController::Base).to receive(:asset_host).and_return(asset_host)
       allow(Gitlab::CurrentSettings).to receive(:snowplow_enabled?).and_return(true)
-      allow(Gitlab::CurrentSettings).to receive(:snowplow_collector_hostname).and_return('www.snow.plow')
+      allow(Gitlab::CurrentSettings).to receive(:snowplow_collector_hostname).and_return(snowplow_collector_hostname)
     end
 
     it 'adds a snowplow script tag with asset host' do
       render
       expect(rendered).to match('http://test.host/assets/snowplow/')
       expect(rendered).to match('window.snowplow')
-      expect(rendered).to match('www.snow.plow')
+      expect(rendered).to match(snowplow_collector_hostname)
+    end
+
+    it 'adds a link preconnect tag' do
+      render
+
+      expect(rendered).to match(%Q(<link crossorigin="" href="#{snowplow_collector_hostname}" rel="preconnect">))
     end
   end
 
-  context 'when a Piwik config is set' do
-    let(:piwik_host) { 'piwik.example.com' }
+  context 'when a Matomo config is set' do
+    let(:matomo_host) { 'matomo.example.com' }
 
     before do
       stub_config(extra: {
-                    piwik_url: piwik_host,
-                    piwik_site_id: 12345
+                    matomo_url: matomo_host,
+                    matomo_site_id: 12345,
+                    matomo_disable_cookies: false
                   })
     end
 
-    it 'add a Piwik Javascript' do
+    it 'add a Matomo Javascript' do
       render
 
-      expect(rendered).to match(/<script.*>.*var u="\/\/#{piwik_host}\/".*<\/script>/m)
-      expect(rendered).to match(%r(<noscript>.*<img src="//#{piwik_host}/piwik.php.*</noscript>))
+      expect(rendered).to match(%r{<script.*>.*var u="//#{matomo_host}/".*</script>}m)
+      expect(rendered).to match(%r(<noscript>.*<img src="//#{matomo_host}/matomo.php.*</noscript>))
+      expect(rendered).not_to include('_paq.push(["disableCookies"])')
+    end
+
+    context 'when matomo_disable_cookies is true' do
+      before do
+        stub_config(extra: { matomo_url: matomo_host, matomo_site_id: 12345, matomo_disable_cookies: true })
+      end
+
+      it 'disables cookies' do
+        render
+
+        expect(rendered).to include('_paq.push(["disableCookies"])')
+      end
     end
   end
 

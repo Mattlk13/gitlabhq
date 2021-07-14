@@ -7,9 +7,11 @@ describe('Pagination links component', () => {
   let glPaginatedList;
 
   const template = `
-    <div class="slot" slot-scope="{ listItem }">
-      <span class="item">Item Name: {{listItem.id}}</span>
-    </div>
+    <template #default="{ listItem }">
+      <div class="slot">
+        <span class="item">Item Name: {{ listItem.id }}</span>
+      </div>
+    </template>
   `;
 
   const props = {
@@ -48,7 +50,7 @@ describe('Pagination links component', () => {
 
     describe('rendering', () => {
       it('it renders the gl-paginated-list', () => {
-        expect(wrapper.contains('ul.list-group')).toBe(true);
+        expect(wrapper.find('ul.list-group').exists()).toBe(true);
         expect(wrapper.findAll('li.list-group-item').length).toBe(2);
       });
     });

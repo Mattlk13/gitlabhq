@@ -2,14 +2,14 @@
 
 require 'spec_helper'
 
-describe Gitlab::DatabaseImporters::SelfMonitoring::Project::CreateService do
+RSpec.describe Gitlab::DatabaseImporters::SelfMonitoring::Project::CreateService do
   describe '#execute' do
     let(:result) { subject.execute }
 
     let(:prometheus_settings) do
       {
-        enable: true,
-        listen_address: 'localhost:9090'
+        enabled: true,
+        server_address: 'localhost:9090'
       }
     end
 
@@ -50,7 +50,7 @@ describe Gitlab::DatabaseImporters::SelfMonitoring::Project::CreateService do
       end
     end
 
-    context 'with application settings and admin users' do
+    context 'with application settings and admin users', :request_store do
       let(:project) { result[:project] }
       let(:group) { result[:group] }
       let(:application_setting) { Gitlab::CurrentSettings.current_application_settings }
@@ -58,23 +58,24 @@ describe Gitlab::DatabaseImporters::SelfMonitoring::Project::CreateService do
       let!(:user) { create(:user, :admin) }
 
       before do
-        allow(ApplicationSetting).to receive(:current_without_cache) { application_setting }
-        application_setting.allow_local_requests_from_web_hooks_and_services = true
+        stub_env('IN_MEMORY_APPLICATION_SETTINGS', 'false')
+
+        application_setting.update(allow_local_requests_from_web_hooks_and_services: true)
       end
 
-      shared_examples 'has prometheus service' do |listen_address|
+      shared_examples 'has prometheus integration' do |server_address|
         it do
           expect(result[:status]).to eq(:success)
 
-          prometheus = project.prometheus_service
+          prometheus = project.prometheus_integration
           expect(prometheus).not_to eq(nil)
-          expect(prometheus.api_url).to eq(listen_address)
+          expect(prometheus.api_url).to eq(server_address)
           expect(prometheus.active).to eq(true)
           expect(prometheus.manual_configuration).to eq(true)
         end
       end
 
-      it_behaves_like 'has prometheus service', 'http://localhost:9090'
+      it_behaves_like 'has prometheus integration', 'http://localhost:9090'
 
       it 'is idempotent' do
         result1 = subject.execute
@@ -85,10 +86,10 @@ describe Gitlab::DatabaseImporters::SelfMonitoring::Project::CreateService do
       end
 
       it "tracks successful install" do
-        expect(::Gitlab::Tracking).to receive(:event).twice
-        expect(::Gitlab::Tracking).to receive(:event).with('self_monitoring', 'project_created')
+        expect(::Gitlab::Tracking).to receive(:event).with("instance_administrators_group", "group_created", namespace: project.namespace)
+        expect(::Gitlab::Tracking).to receive(:event).with('self_monitoring', 'project_created', project: project, namespace: project.namespace)
 
-        result
+        subject.execute
       end
 
       it 'creates group' do
@@ -117,8 +118,8 @@ describe Gitlab::DatabaseImporters::SelfMonitoring::Project::CreateService do
         expect(result[:status]).to eq(:success)
         expect(project.name).to eq(described_class::PROJECT_NAME)
         expect(project.description).to eq(
-          'This project is automatically generated and will be used to help monitor this GitLab instance. ' \
-          "[More information](#{docs_path})"
+          'This project is automatically generated and helps monitor this GitLab instance. ' \
+          "[Learn more](#{docs_path})."
         )
         expect(File).to exist("doc/#{path}.md")
       end
@@ -130,12 +131,17 @@ describe Gitlab::DatabaseImporters::SelfMonitoring::Project::CreateService do
 
       it 'saves the project id' do
         expect(result[:status]).to eq(:success)
-        expect(application_setting.self_monitoring_project_id).to eq(project.id)
+        expect(application_setting.reload.self_monitoring_project_id).to eq(project.id)
       end
 
-      it 'expires application_setting cache' do
-        expect(Gitlab::CurrentSettings).to receive(:expire_current_application_settings)
+      it 'creates a Prometheus integration' do
         expect(result[:status]).to eq(:success)
+
+        integrations = result[:project].reload.integrations
+
+        expect(integrations.count).to eq(1)
+        # Ensures Integrations::Prometheus#self_monitoring_project? is true
+        expect(integrations.first.allow_local_api_url?).to be_truthy
       end
 
       it 'creates an environment for the project' do
@@ -158,8 +164,8 @@ describe Gitlab::DatabaseImporters::SelfMonitoring::Project::CreateService do
       end
 
       it 'returns error when saving project ID fails' do
-        allow(application_setting).to receive(:update).and_call_original
-        allow(application_setting).to receive(:update)
+        allow(subject.application_settings).to receive(:update).and_call_original
+        allow(subject.application_settings).to receive(:update)
           .with(self_monitoring_project_id: anything)
           .and_return(false)
 
@@ -175,8 +181,8 @@ describe Gitlab::DatabaseImporters::SelfMonitoring::Project::CreateService do
         let(:existing_project) { create(:project, namespace: existing_group) }
 
         before do
-          application_setting.instance_administrators_group_id = existing_group.id
-          application_setting.self_monitoring_project_id = existing_project.id
+          application_setting.update(instance_administrators_group_id: existing_group.id,
+                                     self_monitoring_project_id: existing_project.id)
         end
 
         it 'returns success' do
@@ -187,36 +193,36 @@ describe Gitlab::DatabaseImporters::SelfMonitoring::Project::CreateService do
         end
       end
 
-      context 'when local requests from hooks and services are not allowed' do
+      context 'when local requests from hooks and integrations are not allowed' do
         before do
-          application_setting.allow_local_requests_from_web_hooks_and_services = false
+          application_setting.update(allow_local_requests_from_web_hooks_and_services: false)
         end
 
-        it_behaves_like 'has prometheus service', 'http://localhost:9090'
+        it_behaves_like 'has prometheus integration', 'http://localhost:9090'
       end
 
       context 'with non default prometheus address' do
-        let(:listen_address) { 'https://localhost:9090' }
+        let(:server_address) { 'https://localhost:9090' }
 
         let(:prometheus_settings) do
           {
-            enable: true,
-            listen_address: listen_address
+            enabled: true,
+            server_address: server_address
           }
         end
 
-        it_behaves_like 'has prometheus service', 'https://localhost:9090'
+        it_behaves_like 'has prometheus integration', 'https://localhost:9090'
 
         context 'with :9090 symbol' do
-          let(:listen_address) { :':9090' }
+          let(:server_address) { :':9090' }
 
-          it_behaves_like 'has prometheus service', 'http://localhost:9090'
+          it_behaves_like 'has prometheus integration', 'http://localhost:9090'
         end
 
         context 'with 0.0.0.0:9090' do
-          let(:listen_address) { '0.0.0.0:9090' }
+          let(:server_address) { '0.0.0.0:9090' }
 
-          it_behaves_like 'has prometheus service', 'http://localhost:9090'
+          it_behaves_like 'has prometheus integration', 'http://localhost:9090'
         end
       end
 
@@ -227,7 +233,7 @@ describe Gitlab::DatabaseImporters::SelfMonitoring::Project::CreateService do
 
         it 'does not fail' do
           expect(result).to include(status: :success)
-          expect(project.prometheus_service).to be_nil
+          expect(project.prometheus_integration).to be_nil
         end
       end
 
@@ -238,30 +244,30 @@ describe Gitlab::DatabaseImporters::SelfMonitoring::Project::CreateService do
 
         it 'does not fail' do
           expect(result).to include(status: :success)
-          expect(project.prometheus_service).to be_nil
+          expect(project.prometheus_integration).to be_nil
         end
       end
 
       context 'when prometheus setting is disabled in gitlab.yml' do
         let(:prometheus_settings) do
           {
-            enable: false,
-            listen_address: 'http://localhost:9090'
+            enabled: false,
+            server_address: 'http://localhost:9090'
           }
         end
 
         it 'does not configure prometheus' do
           expect(result).to include(status: :success)
-          expect(project.prometheus_service).to be_nil
+          expect(project.prometheus_integration).to be_nil
         end
       end
 
-      context 'when prometheus listen address is blank in gitlab.yml' do
-        let(:prometheus_settings) { { enable: true, listen_address: '' } }
+      context 'when prometheus server address is blank in gitlab.yml' do
+        let(:prometheus_settings) { { enabled: true, server_address: '' } }
 
         it 'does not configure prometheus' do
           expect(result).to include(status: :success)
-          expect(project.prometheus_service).to be_nil
+          expect(project.prometheus_integration).to be_nil
         end
       end
 
@@ -290,8 +296,8 @@ describe Gitlab::DatabaseImporters::SelfMonitoring::Project::CreateService do
       context 'when prometheus manual configuration cannot be saved' do
         let(:prometheus_settings) do
           {
-            enable: true,
-            listen_address: 'httpinvalid://localhost:9090'
+            enabled: true,
+            server_address: 'httpinvalid://localhost:9090'
           }
         end
 

@@ -1,6 +1,13 @@
-# Project Aliases API **(PREMIUM ONLY)**
+---
+stage: Create
+group: Source Code
+info: "To determine the technical writer assigned to the Stage/Group associated with this page, see https://about.gitlab.com/handbook/engineering/ux/technical-writing/#assignments"
+type: reference, api
+---
 
-> [Introduced](https://gitlab.com/gitlab-org/gitlab/issues/3264) in [GitLab Premium](https://about.gitlab.com/pricing/) 12.1.
+# Project Aliases API **(PREMIUM SELF)**
+
+> [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/3264) in [GitLab Premium](https://about.gitlab.com/pricing/) 12.1.
 
 All methods require administrator authorization.
 
@@ -61,8 +68,8 @@ Example response:
 
 ## Create a project alias
 
-Add a new alias for a project. Responds with a 201 when successful,
-400 when there are validation errors (e.g. alias already exists):
+Add a new alias for a project. When successful, responds with `201 Created`.
+When there are validation errors, for example, when the alias already exists, responds with `400 Bad Request`:
 
 ```plaintext
 POST /project_aliases
@@ -74,13 +81,15 @@ POST /project_aliases
 | `name`       | string         | yes      | The name of the alias. Must be unique. |
 
 ```shell
-curl --request POST --header "PRIVATE-TOKEN: <your_access_token>" "https://gitlab.example.com/api/v4/project_aliases" --form "project_id=1" --form "name=gitlab"
+curl --request POST --header "PRIVATE-TOKEN: <your_access_token>" \
+     "https://gitlab.example.com/api/v4/project_aliases" --form "project_id=1" --form "name=gitlab"
 ```
 
 or
 
 ```shell
-curl --request POST --header "PRIVATE-TOKEN: <your_access_token>" "https://gitlab.example.com/api/v4/project_aliases" --form "project_id=gitlab-org/gitlab" --form "name=gitlab"
+curl --request POST --header "PRIVATE-TOKEN: <your_access_token>" \
+     "https://gitlab.example.com/api/v4/project_aliases" --form "project_id=gitlab-org/gitlab" --form "name=gitlab"
 ```
 
 Example response:

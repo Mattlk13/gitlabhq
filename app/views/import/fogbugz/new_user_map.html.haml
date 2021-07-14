@@ -1,7 +1,10 @@
 - page_title _('User map'), _('FogBugz import')
-- header_title _("Projects"), root_path
-%h3.page-title
-  %i.fa.fa-bug
+- header_title _("New project"), new_project_path
+- add_to_breadcrumbs s_('ProjectsNew|Import project'), new_projects_path(anchor: 'import_project')
+
+%h3.page-title.d-flex
+  .gl-display-flex.gl-align-items-center.gl-justify-content-center
+    = sprite_icon('bug', css_class: 'gl-mr-2')
   = _('Import projects from FogBugz')
 %hr
 
@@ -18,7 +21,7 @@
     %li
       %strong= _("Map a FogBugz account ID to a GitLab user")
       %p
-        = _('Selecting a GitLab user will add a link to the GitLab user in the descriptions of issues and comments (e.g. "By <a href="#">@johnsmith</a>"). It will also associate and/or assign these issues and comments with the selected user.').html_safe
+        = html_escape(_('Selecting a GitLab user will add a link to the GitLab user in the descriptions of issues and comments (e.g. "By %{link_open}@johnsmith%{link_close}"). It will also associate and/or assign these issues and comments with the selected user.')) % { link_open: '<a href="#">'.html_safe, link_close: '</a>'.html_safe }
 
   .table-holder
     %table.table
@@ -31,7 +34,7 @@
       %tbody
         - @user_map.each do |id, user|
           %tr
-            %td= (id)
+            %td= id
             %td= text_field_tag "users[#{id}][name]", user[:name], class: 'form-control'
             %td= text_field_tag "users[#{id}][email]", user[:email], class: 'form-control'
             %td
@@ -39,4 +42,4 @@
                 scope: :all, email_user: true, selected: user[:gitlab_user])
 
   .form-actions
-    = submit_tag _('Continue to the next step'), class: 'btn btn-success'
+    = submit_tag _('Continue to the next step'), class: 'gl-button btn btn-confirm'

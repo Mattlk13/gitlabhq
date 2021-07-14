@@ -1,16 +1,11 @@
 /* eslint-disable */
 
-import { template as _template } from 'underscore';
+import { template as _template } from 'lodash';
 import { DATA_TRIGGER, DATA_DROPDOWN, TEMPLATE_REGEX } from './constants';
 
 const utils = {
   toCamelCase(attr) {
-    return this.camelize(
-      attr
-        .split('-')
-        .slice(1)
-        .join(' '),
-    );
+    return this.camelize(attr.split('-').slice(1).join(' '));
   },
 
   template(templateString, data) {

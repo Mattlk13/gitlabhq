@@ -1,23 +1,25 @@
-import { GlSkeletonLoading } from '@gitlab/ui';
-import { shallowMount } from '@vue/test-utils';
+import { GlSkeletonLoader, GlIcon } from '@gitlab/ui';
+import { mountExtended } from 'helpers/vue_test_utils_helper';
+import { AVAILABILITY_STATUS } from '~/set_status_modal/utils';
+import UserNameWithStatus from '~/sidebar/components/assignees/user_name_with_status.vue';
 import UserPopover from '~/vue_shared/components/user_popover/user_popover.vue';
-import Icon from '~/vue_shared/components/icon.vue';
 
 const DEFAULT_PROPS = {
-  loaded: true,
   user: {
     username: 'root',
     name: 'Administrator',
     location: 'Vienna',
+    bot: false,
     bio: null,
-    organization: null,
+    workInformation: null,
     status: null,
+    pronouns: 'they/them',
+    loaded: true,
   },
 };
 
 describe('User Popover Component', () => {
   const fixtureTemplate = 'merge_requests/diff_comment.html';
-  preloadFixtures(fixtureTemplate);
 
   let wrapper;
 
@@ -31,9 +33,11 @@ describe('User Popover Component', () => {
 
   const findUserStatus = () => wrapper.find('.js-user-status');
   const findTarget = () => document.querySelector('.js-user-link');
+  const findUserName = () => wrapper.find(UserNameWithStatus);
+  const findSecurityBotDocsLink = () => wrapper.findByTestId('user-popover-bot-docs-link');
 
   const createWrapper = (props = {}, options = {}) => {
-    wrapper = shallowMount(UserPopover, {
+    wrapper = mountExtended(UserPopover, {
       propsData: {
         ...DEFAULT_PROPS,
         target: findTarget(),
@@ -43,28 +47,21 @@ describe('User Popover Component', () => {
     });
   };
 
-  describe('Empty', () => {
-    beforeEach(() => {
-      createWrapper(
-        {},
-        {
-          propsData: {
-            target: findTarget(),
-            user: {
-              name: null,
-              username: null,
-              location: null,
-              bio: null,
-              organization: null,
-              status: null,
-            },
-          },
+  describe('when user is loading', () => {
+    it('displays skeleton loader', () => {
+      createWrapper({
+        user: {
+          name: null,
+          username: null,
+          location: null,
+          bio: null,
+          workInformation: null,
+          status: null,
+          loaded: false,
         },
-      );
-    });
+      });
 
-    it('should return skeleton loaders', () => {
-      expect(wrapper.find(GlSkeletonLoading).exists()).toBe(true);
+      expect(wrapper.find(GlSkeletonLoader).exists()).toBe(true);
     });
   });
 
@@ -78,59 +75,94 @@ describe('User Popover Component', () => {
     });
 
     it('shows icon for location', () => {
-      const iconEl = wrapper.find(Icon);
+      createWrapper();
+      const iconEl = wrapper.find(GlIcon);
 
       expect(iconEl.props('name')).toEqual('location');
+    });
+
+    it("should not show a link to bot's documentation", () => {
+      createWrapper();
+      const securityBotDocsLink = findSecurityBotDocsLink();
+      expect(securityBotDocsLink.exists()).toBe(false);
     });
   });
 
   describe('job data', () => {
-    it('should show only bio if no organization is available', () => {
-      const user = { ...DEFAULT_PROPS.user, bio: 'Engineer' };
+    const findWorkInformation = () => wrapper.find({ ref: 'workInformation' });
+    const findBio = () => wrapper.find({ ref: 'bio' });
+    const bio = 'My super interesting bio';
+
+    it('should show only bio if work information is not available', () => {
+      const user = { ...DEFAULT_PROPS.user, bio, bioHtml: bio };
 
       createWrapper({ user });
 
-      expect(wrapper.text()).toContain('Engineer');
+      expect(findBio().text()).toBe('My super interesting bio');
+      expect(findWorkInformation().exists()).toBe(false);
     });
 
-    it('should show only organization if no bio is available', () => {
-      const user = { ...DEFAULT_PROPS.user, organization: 'GitLab' };
-
-      createWrapper({ user });
-
-      expect(wrapper.text()).toContain('GitLab');
-    });
-
-    it('should display bio and organization in separate lines', () => {
-      const user = { ...DEFAULT_PROPS.user, bio: 'Engineer', organization: 'GitLab' };
-
-      createWrapper({ user });
-
-      expect(wrapper.find('.js-bio').text()).toContain('Engineer');
-      expect(wrapper.find('.js-organization').text()).toContain('GitLab');
-    });
-
-    it('should not encode special characters in bio and organization', () => {
+    it('should show work information when it is available', () => {
       const user = {
         ...DEFAULT_PROPS.user,
-        bio: 'Manager & Team Lead',
-        organization: 'Me & my <funky> Company',
+        workInformation: 'Frontend Engineer at GitLab',
       };
 
       createWrapper({ user });
 
-      expect(wrapper.find('.js-bio').text()).toContain('Manager & Team Lead');
-      expect(wrapper.find('.js-organization').text()).toContain('Me & my <funky> Company');
+      expect(findWorkInformation().text()).toBe('Frontend Engineer at GitLab');
+    });
+
+    it('should display bio and work information in separate lines', () => {
+      const user = {
+        ...DEFAULT_PROPS.user,
+        bio,
+        bioHtml: bio,
+        workInformation: 'Frontend Engineer at GitLab',
+      };
+
+      createWrapper({ user });
+
+      expect(findBio().text()).toBe('My super interesting bio');
+      expect(findWorkInformation().text()).toBe('Frontend Engineer at GitLab');
+    });
+
+    it('should not encode special characters in bio', () => {
+      const user = {
+        ...DEFAULT_PROPS.user,
+        bio: 'I like CSS',
+        bioHtml: 'I like <b>CSS</b>',
+      };
+
+      createWrapper({ user });
+
+      expect(findBio().html()).toContain('I like <b>CSS</b>');
     });
 
     it('shows icon for bio', () => {
-      expect(wrapper.findAll(Icon).filter(icon => icon.props('name') === 'profile').length).toEqual(
-        1,
-      );
+      const user = {
+        ...DEFAULT_PROPS.user,
+        bio: 'My super interesting bio',
+      };
+
+      createWrapper({ user });
+
+      expect(
+        wrapper.findAll(GlIcon).filter((icon) => icon.props('name') === 'profile').length,
+      ).toEqual(1);
     });
 
-    it('shows icon for organization', () => {
-      expect(wrapper.findAll(Icon).filter(icon => icon.props('name') === 'work').length).toEqual(1);
+    it('shows icon for work information', () => {
+      const user = {
+        ...DEFAULT_PROPS.user,
+        workInformation: 'GitLab',
+      };
+
+      createWrapper({ user });
+
+      expect(
+        wrapper.findAll(GlIcon).filter((icon) => icon.props('name') === 'work').length,
+      ).toEqual(1);
     });
   });
 
@@ -171,6 +203,53 @@ describe('User Popover Component', () => {
       createWrapper({ user });
 
       expect(findUserStatus().exists()).toBe(false);
+    });
+
+    it('should show the busy status if user set to busy', () => {
+      const user = {
+        ...DEFAULT_PROPS.user,
+        status: { availability: AVAILABILITY_STATUS.BUSY },
+      };
+
+      createWrapper({ user });
+
+      expect(findUserName().exists()).toBe(true);
+      expect(wrapper.text()).toContain(user.name);
+      expect(wrapper.text()).toContain('(Busy)');
+    });
+
+    it('should hide the busy status for any other status', () => {
+      const user = {
+        ...DEFAULT_PROPS.user,
+        status: { availability: AVAILABILITY_STATUS.NOT_SET },
+      };
+
+      createWrapper({ user });
+
+      expect(wrapper.text()).not.toContain('(Busy)');
+    });
+
+    it('passes `pronouns` prop to `UserNameWithStatus` component', () => {
+      createWrapper();
+
+      expect(findUserName().props('pronouns')).toBe('they/them');
+    });
+  });
+
+  describe('bot user', () => {
+    const SECURITY_BOT_USER = {
+      ...DEFAULT_PROPS.user,
+      name: 'GitLab Security Bot',
+      username: 'GitLab-Security-Bot',
+      websiteUrl: '/security/bot/docs',
+      bot: true,
+    };
+
+    it("shows a link to the bot's documentation", () => {
+      createWrapper({ user: SECURITY_BOT_USER });
+      const securityBotDocsLink = findSecurityBotDocsLink();
+      expect(securityBotDocsLink.exists()).toBe(true);
+      expect(securityBotDocsLink.attributes('href')).toBe(SECURITY_BOT_USER.websiteUrl);
     });
   });
 });

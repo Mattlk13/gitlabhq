@@ -1,8 +1,8 @@
-import * as types from './mutation_types';
-import axios from '~/lib/utils/axios_utils';
 import Api from '~/api';
 import createFlash from '~/flash';
+import axios from '~/lib/utils/axios_utils';
 import { __ } from '~/locale';
+import * as types from './mutation_types';
 import { prepareDataForApi, prepareDataForDisplay, prepareEnvironments } from './utils';
 
 export const toggleValues = ({ commit }, valueState) => {
@@ -18,6 +18,10 @@ export const resetEditing = ({ commit, dispatch }) => {
   // without saving changes, to cover use case of reactivity in the table
   dispatch('fetchVariables');
   commit(types.RESET_EDITING);
+};
+
+export const setVariableProtected = ({ commit }) => {
+  commit(types.SET_VARIABLE_PROTECTED);
 };
 
 export const requestAddVariable = ({ commit }) => {
@@ -43,8 +47,10 @@ export const addVariable = ({ state, dispatch }) => {
       dispatch('receiveAddVariableSuccess');
       dispatch('fetchVariables');
     })
-    .catch(error => {
-      createFlash(error.response.data[0]);
+    .catch((error) => {
+      createFlash({
+        message: error.response.data[0],
+      });
       dispatch('receiveAddVariableError', error);
     });
 };
@@ -61,10 +67,10 @@ export const receiveUpdateVariableError = ({ commit }, error) => {
   commit(types.RECEIVE_UPDATE_VARIABLE_ERROR, error);
 };
 
-export const updateVariable = ({ state, dispatch }, variable) => {
+export const updateVariable = ({ state, dispatch }) => {
   dispatch('requestUpdateVariable');
 
-  const updatedVariable = prepareDataForApi(variable);
+  const updatedVariable = prepareDataForApi(state.variable);
   updatedVariable.secrect_value = updateVariable.value;
 
   return axios
@@ -73,8 +79,10 @@ export const updateVariable = ({ state, dispatch }, variable) => {
       dispatch('receiveUpdateVariableSuccess');
       dispatch('fetchVariables');
     })
-    .catch(error => {
-      createFlash(error.response.data[0]);
+    .catch((error) => {
+      createFlash({
+        message: error.response.data[0],
+      });
       dispatch('receiveUpdateVariableError', error);
     });
 };
@@ -101,7 +109,9 @@ export const fetchVariables = ({ dispatch, state }) => {
       dispatch('receiveVariablesSuccess', prepareDataForDisplay(data.variables));
     })
     .catch(() => {
-      createFlash(__('There was an error fetching the variables.'));
+      createFlash({
+        message: __('There was an error fetching the variables.'),
+      });
     });
 };
 
@@ -117,19 +127,21 @@ export const receiveDeleteVariableError = ({ commit }, error) => {
   commit(types.RECEIVE_DELETE_VARIABLE_ERROR, error);
 };
 
-export const deleteVariable = ({ dispatch, state }, variable) => {
+export const deleteVariable = ({ dispatch, state }) => {
   dispatch('requestDeleteVariable');
 
   const destroy = true;
 
   return axios
-    .patch(state.endpoint, { variables_attributes: [prepareDataForApi(variable, destroy)] })
+    .patch(state.endpoint, { variables_attributes: [prepareDataForApi(state.variable, destroy)] })
     .then(() => {
       dispatch('receiveDeleteVariableSuccess');
       dispatch('fetchVariables');
     })
-    .catch(error => {
-      createFlash(error.response.data[0]);
+    .catch((error) => {
+      createFlash({
+        message: error.response.data[0],
+      });
       dispatch('receiveDeleteVariableError', error);
     });
 };
@@ -146,10 +158,51 @@ export const fetchEnvironments = ({ dispatch, state }) => {
   dispatch('requestEnvironments');
 
   return Api.environments(state.projectId)
-    .then(res => {
+    .then((res) => {
       dispatch('receiveEnvironmentsSuccess', prepareEnvironments(res.data));
     })
     .catch(() => {
-      createFlash(__('There was an error fetching the environments information.'));
+      createFlash({
+        message: __('There was an error fetching the environments information.'),
+      });
     });
+};
+
+export const setEnvironmentScope = ({ commit, dispatch }, environment) => {
+  commit(types.SET_ENVIRONMENT_SCOPE, environment);
+  dispatch('setSelectedEnvironment', environment);
+};
+
+export const addWildCardScope = ({ commit, dispatch }, environment) => {
+  commit(types.ADD_WILD_CARD_SCOPE, environment);
+  commit(types.SET_ENVIRONMENT_SCOPE, environment);
+  dispatch('setSelectedEnvironment', environment);
+};
+
+export const resetSelectedEnvironment = ({ commit }) => {
+  commit(types.RESET_SELECTED_ENVIRONMENT);
+};
+
+export const setSelectedEnvironment = ({ commit }, environment) => {
+  commit(types.SET_SELECTED_ENVIRONMENT, environment);
+};
+
+export const updateVariableKey = ({ commit }, { key }) => {
+  commit(types.UPDATE_VARIABLE_KEY, key);
+};
+
+export const updateVariableValue = ({ commit }, { secret_value }) => {
+  commit(types.UPDATE_VARIABLE_VALUE, secret_value);
+};
+
+export const updateVariableType = ({ commit }, { variable_type }) => {
+  commit(types.UPDATE_VARIABLE_TYPE, variable_type);
+};
+
+export const updateVariableProtected = ({ commit }, { protected_variable }) => {
+  commit(types.UPDATE_VARIABLE_PROTECTED, protected_variable);
+};
+
+export const updateVariableMasked = ({ commit }, { masked }) => {
+  commit(types.UPDATE_VARIABLE_MASKED, masked);
 };

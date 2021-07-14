@@ -2,7 +2,7 @@
 
 require 'spec_helper'
 
-describe Gitlab::Profiler do
+RSpec.describe Gitlab::Profiler do
   let(:null_logger) { Logger.new('/dev/null') }
   let(:private_token) { 'private' }
 
@@ -78,13 +78,8 @@ describe Gitlab::Profiler do
       end
 
       it 'strips out the private token' do
-        expect(custom_logger).to receive(:add) do |severity, _progname, message|
-          next if message.include?('spec/')
-
-          expect(severity).to eq(Logger::DEBUG)
-          expect(message).to include('public').and include(described_class::FILTERED_STRING)
-          expect(message).not_to include(private_token)
-        end.at_least(1) # This spec could be wrapped in more blocks in the future
+        allow(custom_logger).to receive(:add).and_call_original
+        expect(custom_logger).to receive(:add).with(Logger::DEBUG, anything, 'public [FILTERED]').at_least(1)
 
         custom_logger.debug("public #{private_token}")
       end
@@ -211,8 +206,12 @@ describe Gitlab::Profiler do
       end
     end
 
-    before do
-      stub_const('STDOUT', stdout)
+    around do |example|
+      original_stdout = $stdout
+
+      $stdout = stdout # rubocop: disable RSpec/ExpectOutput
+      example.run
+      $stdout = original_stdout # rubocop: disable RSpec/ExpectOutput
     end
 
     it 'prints a profile result sorted by total time' do
@@ -229,7 +228,6 @@ describe Gitlab::Profiler do
             .map { |(total)| total.to_f }
 
         expect(total_times).to eq(total_times.sort.reverse)
-        expect(total_times).not_to eq(total_times.uniq)
       end
     end
 

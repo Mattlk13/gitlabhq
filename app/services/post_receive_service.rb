@@ -4,10 +4,11 @@
 #
 # Used for scheduling related jobs after a push action has been performed
 class PostReceiveService
-  attr_reader :user, :project, :params
+  attr_reader :user, :repository, :project, :params
 
-  def initialize(user, project, params)
+  def initialize(user, repository, project, params)
     @user = user
+    @repository = repository
     @project = project
     @params = params
   end
@@ -24,33 +25,38 @@ class PostReceiveService
 
     mr_options = push_options.get(:merge_request)
     if mr_options.present?
-      message = process_mr_push_options(mr_options, project, user, params[:changes])
+      message = process_mr_push_options(mr_options, params[:changes])
       response.add_alert_message(message)
     end
 
-    broadcast_message = BroadcastMessage.current&.last&.message
     response.add_alert_message(broadcast_message)
-
     response.add_merge_request_urls(merge_request_urls)
 
-    # Neither User nor Project are guaranteed to be returned; an orphaned write deploy
+    # Neither User nor Repository are guaranteed to be returned; an orphaned write deploy
     # key could be used
-    if user && project
-      redirect_message = Gitlab::Checks::ProjectMoved.fetch_message(user.id, project.id)
-      project_created_message = Gitlab::Checks::ProjectCreated.fetch_message(user.id, project.id)
+    if user && repository
+      redirect_message = Gitlab::Checks::ContainerMoved.fetch_message(user, repository)
+      project_created_message = Gitlab::Checks::ProjectCreated.fetch_message(user, repository)
 
       response.add_basic_message(redirect_message)
       response.add_basic_message(project_created_message)
+
+      record_onboarding_progress
     end
 
     response
   end
 
-  def process_mr_push_options(push_options, project, user, changes)
-    Gitlab::QueryLimiting.whitelist('https://gitlab.com/gitlab-org/gitlab-foss/issues/61359')
+  def process_mr_push_options(push_options, changes)
+    Gitlab::QueryLimiting.disable!('https://gitlab.com/gitlab-org/gitlab/-/issues/28494')
+    return unless repository
+
+    unless repository.repo_type.project?
+      return push_options_warning('Push options are only supported for projects')
+    end
 
     service = ::MergeRequests::PushOptionsHandlerService.new(
-      project, user, changes, push_options
+      project: project, current_user: user, changes: changes, push_options: push_options
     ).execute
 
     if service.errors.present?
@@ -64,6 +70,34 @@ class PostReceiveService
   end
 
   def merge_request_urls
-    ::MergeRequests::GetUrlsService.new(project).execute(params[:changes])
+    return [] unless repository&.repo_type&.project?
+
+    ::MergeRequests::GetUrlsService.new(project: project).execute(params[:changes])
+  end
+
+  private
+
+  def broadcast_message
+    banner = nil
+
+    if project
+      scoped_messages = BroadcastMessage.current_banner_messages(project.full_path).select do |message|
+        message.target_path.present? && message.matches_current_path(project.full_path)
+      end
+
+      banner = scoped_messages.last
+    end
+
+    banner ||= BroadcastMessage.current_banner_messages.last
+
+    banner&.message
+  end
+
+  def record_onboarding_progress
+    return unless project
+
+    OnboardingProgressService.new(project.namespace).execute(action: :git_write)
   end
 end
+
+PostReceiveService.prepend_mod_with('PostReceiveService')

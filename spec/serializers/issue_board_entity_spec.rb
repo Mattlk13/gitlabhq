@@ -2,19 +2,20 @@
 
 require 'spec_helper'
 
-describe IssueBoardEntity do
+RSpec.describe IssueBoardEntity do
   let_it_be(:project)   { create(:project) }
   let_it_be(:resource)  { create(:issue, project: project) }
   let_it_be(:user)      { create(:user) }
   let_it_be(:milestone) { create(:milestone, project: project) }
   let_it_be(:label)     { create(:label, project: project, title: 'Test Label') }
+
   let(:request)         { double('request', current_user: user) }
 
   subject { described_class.new(resource, request: request).as_json }
 
   it 'has basic attributes' do
     expect(subject).to include(:id, :iid, :title, :confidential, :due_date, :project_id, :relative_position,
-                               :labels, :assignees, project: hash_including(:id, :path))
+                               :labels, :assignees, project: hash_including(:id, :path, :path_with_namespace))
   end
 
   it 'has path and endpoints' do

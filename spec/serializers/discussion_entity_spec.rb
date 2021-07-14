@@ -2,7 +2,7 @@
 
 require 'spec_helper'
 
-describe DiscussionEntity do
+RSpec.describe DiscussionEntity do
   include RepoHelpers
 
   let(:user) { create(:user) }
@@ -34,8 +34,13 @@ describe DiscussionEntity do
       :discussion_path,
       :resolved_at,
       :for_commit,
-      :commit_id
+      :commit_id,
+      :confidential
     )
+  end
+
+  it 'does not include base discussion in the notes' do
+    expect(subject[:notes].first.keys).not_to include(:base_discussion)
   end
 
   it 'resolved_by matches note_user_entity schema' do
@@ -72,6 +77,8 @@ describe DiscussionEntity do
         :diff_file,
         :truncated_diff_lines,
         :position,
+        :positions,
+        :line_codes,
         :line_code,
         :active
       )

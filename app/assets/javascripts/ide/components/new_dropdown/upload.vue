@@ -1,4 +1,5 @@
 <script>
+import { isTextFile } from '~/ide/utils';
 import ItemButton from './button.vue';
 
 export default {
@@ -23,57 +24,38 @@ export default {
     },
   },
   methods: {
-    isText(content, fileType) {
-      const knownBinaryFileTypes = ['image/'];
-      const knownTextFileTypes = ['text/'];
-      const isKnownBinaryFileType = knownBinaryFileTypes.find(type => fileType.includes(type));
-      const isKnownTextFileType = knownTextFileTypes.find(type => fileType.includes(type));
-      const asciiRegex = /^[ -~\t\n\r]+$/; // tests whether a string contains ascii characters only (ranges from space to tilde, tabs and new lines)
-
-      if (isKnownBinaryFileType) {
-        return false;
-      }
-
-      if (isKnownTextFileType) {
-        return true;
-      }
-
-      // if it's not a known file type, determine the type by evaluating the file contents
-      return asciiRegex.test(content);
-    },
     createFile(target, file) {
-      const { name } = file;
+      const { name, type: mimeType } = file;
       const encodedContent = target.result.split('base64,')[1];
       const rawContent = encodedContent ? atob(encodedContent) : '';
-      const isText = this.isText(rawContent, file.type);
+      const isText = isTextFile({ content: rawContent, mimeType, name });
 
-      const emitCreateEvent = content =>
+      const emitCreateEvent = (content) =>
         this.$emit('create', {
           name: `${this.path ? `${this.path}/` : ''}${name}`,
           type: 'blob',
           content,
-          base64: !isText,
-          binary: !isText,
-          rawPath: !isText ? target.result : '',
+          rawPath: !isText ? URL.createObjectURL(file) : '',
+          mimeType,
         });
 
       if (isText) {
         const reader = new FileReader();
 
-        reader.addEventListener('load', e => emitCreateEvent(e.target.result), { once: true });
+        reader.addEventListener('load', (e) => emitCreateEvent(e.target.result), { once: true });
         reader.readAsText(file);
       } else {
-        emitCreateEvent(encodedContent);
+        emitCreateEvent(rawContent);
       }
     },
     readFile(file) {
       const reader = new FileReader();
 
-      reader.addEventListener('load', e => this.createFile(e.target, file), { once: true });
+      reader.addEventListener('load', (e) => this.createFile(e.target, file), { once: true });
       reader.readAsDataURL(file);
     },
     openFile() {
-      Array.from(this.$refs.fileUpload.files).forEach(file => this.readFile(file));
+      Array.from(this.$refs.fileUpload.files).forEach((file) => this.readFile(file));
     },
     startFileUpload() {
       this.$refs.fileUpload.click();
@@ -99,6 +81,7 @@ export default {
       type="file"
       class="hidden"
       multiple
+      data-qa-selector="file_upload_field"
       @change="openFile"
     />
   </div>

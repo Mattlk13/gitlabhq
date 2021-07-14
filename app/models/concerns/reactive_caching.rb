@@ -1,12 +1,18 @@
 # frozen_string_literal: true
 
 # The usage of the ReactiveCaching module is documented here:
-# https://docs.gitlab.com/ee/development/utilities.html#reactivecaching
+# https://docs.gitlab.com/ee/development/reactive_caching.html
+#
 module ReactiveCaching
   extend ActiveSupport::Concern
 
   InvalidateReactiveCache = Class.new(StandardError)
   ExceededReactiveCacheLimit = Class.new(StandardError)
+
+  WORK_TYPE = {
+    no_dependency: ReactiveCachingWorker,
+    external_dependency: ExternalServiceReactiveCachingWorker
+  }.freeze
 
   included do
     extend ActiveModel::Naming
@@ -16,6 +22,7 @@ module ReactiveCaching
     class_attribute :reactive_cache_refresh_interval
     class_attribute :reactive_cache_lifetime
     class_attribute :reactive_cache_hard_limit
+    class_attribute :reactive_cache_work_type
     class_attribute :reactive_cache_worker_finder
 
     # defaults
@@ -23,7 +30,7 @@ module ReactiveCaching
     self.reactive_cache_lease_timeout = 2.minutes
     self.reactive_cache_refresh_interval = 1.minute
     self.reactive_cache_lifetime = 10.minutes
-    self.reactive_cache_hard_limit = 1.megabyte
+    self.reactive_cache_hard_limit = nil # this value should be set in megabytes. E.g: 1.megabyte
     self.reactive_cache_worker_finder = ->(id, *_args) do
       find_by(primary_key => id)
     end
@@ -112,7 +119,7 @@ module ReactiveCaching
     def refresh_reactive_cache!(*args)
       clear_reactive_cache!(*args)
       keep_alive_reactive_cache!(*args)
-      ReactiveCachingWorker.perform_async(self.class, id, *args)
+      worker_class.perform_async(self.class, id, *args)
     end
 
     def keep_alive_reactive_cache!(*args)
@@ -145,15 +152,23 @@ module ReactiveCaching
     def enqueuing_update(*args)
       yield
 
-      ReactiveCachingWorker.perform_in(self.class.reactive_cache_refresh_interval, self.class, id, *args)
+      worker_class.perform_in(self.class.reactive_cache_refresh_interval, self.class, id, *args)
+    end
+
+    def worker_class
+      WORK_TYPE.fetch(self.class.reactive_cache_work_type.to_sym)
+    end
+
+    def reactive_cache_limit_enabled?
+      !!self.reactive_cache_hard_limit
     end
 
     def check_exceeded_reactive_cache_limit!(data)
-      return unless Feature.enabled?(:reactive_cache_limit)
+      return unless reactive_cache_limit_enabled?
 
       data_deep_size = Gitlab::Utils::DeepSize.new(data, max_size: self.class.reactive_cache_hard_limit)
 
-      raise ExceededReactiveCacheLimit.new unless data_deep_size.valid?
+      raise ExceededReactiveCacheLimit unless data_deep_size.valid?
     end
   end
 end

@@ -2,8 +2,9 @@
 
 require 'spec_helper'
 
-describe Releases::Source do
+RSpec.describe Releases::Source do
   let_it_be(:project) { create(:project, :repository, name: 'finance-cal') }
+
   let(:tag_name) { 'v1.0' }
 
   describe '.all' do

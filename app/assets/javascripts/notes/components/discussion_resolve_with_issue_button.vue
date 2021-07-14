@@ -1,11 +1,13 @@
 <script>
 import { GlTooltipDirective, GlButton } from '@gitlab/ui';
-import Icon from '~/vue_shared/components/icon.vue';
+import { s__ } from '~/locale';
 
 export default {
+  i18n: {
+    buttonLabel: s__('MergeRequests|Resolve this thread in a new issue'),
+  },
   name: 'ResolveWithIssueButton',
   components: {
-    Icon,
     GlButton,
   },
   directives: {
@@ -25,10 +27,10 @@ export default {
     <gl-button
       v-gl-tooltip
       :href="url"
-      :title="s__('MergeRequests|Resolve this thread in a new issue')"
+      :title="$options.i18n.buttonLabel"
+      :aria-label="$options.i18n.buttonLabel"
       class="new-issue-for-discussion discussion-create-issue-btn"
-    >
-      <icon name="issue-new" />
-    </gl-button>
+      icon="issue-new"
+    />
   </div>
 </template>

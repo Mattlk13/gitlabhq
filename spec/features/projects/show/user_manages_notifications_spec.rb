@@ -2,36 +2,40 @@
 
 require 'spec_helper'
 
-describe 'Projects > Show > User manages notifications', :js do
+RSpec.describe 'Projects > Show > User manages notifications', :js do
   let(:project) { create(:project, :public, :repository) }
 
   before do
     sign_in(project.owner)
-    visit project_path(project)
   end
 
   def click_notifications_button
-    first('.notifications-btn').click
+    first('[data-testid="notification-dropdown"]').click
   end
 
   it 'changes the notification setting' do
+    visit project_path(project)
     click_notifications_button
-    click_link 'On mention'
+    click_button 'On mention'
 
     wait_for_requests
 
     click_notifications_button
-    expect(find('.update-notification.is-active')).to have_content('On mention')
-    expect(find('.notifications-icon use')[:'xlink:href']).to end_with('#notifications')
+
+    page.within first('[data-testid="notification-dropdown"]') do
+      expect(page.find('.gl-new-dropdown-item.is-active')).to have_content('On mention')
+      expect(page).to have_css('[data-testid="notifications-icon"]')
+    end
   end
 
   it 'changes the notification setting to disabled' do
+    visit project_path(project)
     click_notifications_button
-    click_link 'Disabled'
+    click_button 'Disabled'
 
-    wait_for_requests
-
-    expect(find('.notifications-icon use')[:'xlink:href']).to end_with('#notifications-off')
+    page.within first('[data-testid="notification-dropdown"]') do
+      expect(page).to have_css('[data-testid="notifications-off-icon"]')
+    end
   end
 
   context 'custom notification settings' do
@@ -50,17 +54,22 @@ describe 'Projects > Show > User manages notifications', :js do
         :reassign_merge_request,
         :merge_merge_request,
         :failed_pipeline,
-        :success_pipeline
+        :fixed_pipeline,
+        :success_pipeline,
+        :moved_project
       ]
     end
 
     it 'shows notification settings checkbox' do
+      visit project_path(project)
       click_notifications_button
-      page.find('a[data-notification-level="custom"]').click
+      click_button 'Custom'
 
-      page.within('.custom-notifications-form') do
+      wait_for_requests
+
+      page.within('#custom-notifications-modal') do
         email_events.each do |event_name|
-          expect(page).to have_selector("input[name='notification_setting[#{event_name}]']")
+          expect(page).to have_selector("[data-testid='notification-setting-#{event_name}']")
         end
       end
     end
@@ -70,7 +79,8 @@ describe 'Projects > Show > User manages notifications', :js do
     let(:project) { create(:project, :public, :repository, emails_disabled: true) }
 
     it 'is disabled' do
-      expect(page).to have_selector('.notifications-btn.disabled', visible: true)
+      visit project_path(project)
+      expect(page).to have_selector('[data-testid="notification-dropdown"] .disabled', visible: true)
     end
   end
 end

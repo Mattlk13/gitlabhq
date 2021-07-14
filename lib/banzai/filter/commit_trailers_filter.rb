@@ -36,7 +36,7 @@ module Banzai
 
           next if html == content
 
-          node.replace(html)
+          node.replace("\n\n#{html}")
         end
 
         doc
@@ -144,10 +144,7 @@ module Banzai
       end
 
       def data_attributes_from_hash(data = {})
-        data.reject! {|_, value| value.nil?}
-        data.map do |key, value|
-          [%(data-#{key.to_s.dasherize}), value]
-        end.to_h
+        data.compact.transform_keys { |key| %(data-#{key.to_s.dasherize}) }
       end
     end
   end

@@ -2,7 +2,7 @@
 
 require 'spec_helper'
 
-describe Gitlab::Ci::Pipeline::Chain::Validate::Abilities do
+RSpec.describe Gitlab::Ci::Pipeline::Chain::Validate::Abilities do
   let_it_be(:project, reload: true) { create(:project, :repository) }
   let_it_be(:user) { create(:user) }
 
@@ -73,6 +73,14 @@ describe Gitlab::Ci::Pipeline::Chain::Validate::Abilities do
 
     it 'does not break the chain' do
       expect(step.break?).to eq false
+    end
+
+    context 'when project is deleted' do
+      before do
+        project.update!(pending_delete: true)
+      end
+
+      specify { expect(step.perform!).to contain_exactly('Project is deleted!') }
     end
   end
 

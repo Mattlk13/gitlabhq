@@ -20,8 +20,10 @@ module Labels
         label.save
         label
       else
-        Rails.logger.warn("target_params should contain :project or :group or :template, actual value: #{target_params}") # rubocop:disable Gitlab/RailsLogger
+        Gitlab::AppLogger.warn("target_params should contain :project or :group or :template, actual value: #{target_params}")
       end
     end
   end
 end
+
+Labels::CreateService.prepend_mod_with('Labels::CreateService')

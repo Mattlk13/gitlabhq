@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'gettext_i18n_rails/haml_parser'
 require 'gettext_i18n_rails_js/parser/javascript'
 require 'json'
@@ -45,7 +47,7 @@ module GettextI18nRailsJs
       private
 
       def gettext_messages_by_file
-        @gettext_messages_by_file ||= JSON.parse(load_messages)
+        @gettext_messages_by_file ||= Gitlab::Json.parse(load_messages)
       end
 
       def load_messages

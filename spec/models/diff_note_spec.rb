@@ -2,7 +2,7 @@
 
 require 'spec_helper'
 
-describe DiffNote do
+RSpec.describe DiffNote do
   include RepoHelpers
 
   let_it_be(:merge_request) { create(:merge_request) }
@@ -35,7 +35,29 @@ describe DiffNote do
   subject { create(:diff_note_on_merge_request, project: project, position: position, noteable: merge_request) }
 
   describe 'validations' do
-    it_behaves_like 'a valid diff positionable note', :diff_note_on_commit
+    it_behaves_like 'a valid diff positionable note' do
+      subject { build(:diff_note_on_commit, project: project, commit_id: commit_id, position: position) }
+    end
+
+    it "is not valid when noteable is empty" do
+      note = build(:diff_note_on_merge_request, project: project, noteable: nil)
+
+      note.valid?
+
+      expect(note.errors[:noteable]).to include("doesn't support new-style diff notes")
+    end
+
+    context 'when importing' do
+      it "does not check if it's supported" do
+        note = build(:diff_note_on_merge_request, project: project, noteable: nil)
+        note.importing = true
+        note.valid?
+
+        expect(note.errors.full_messages).not_to include(
+          "Noteable doesn't support new-style diff notes"
+        )
+      end
+    end
   end
 
   describe "#position=" do
@@ -145,7 +167,7 @@ describe DiffNote do
               end
 
               it 'creates a diff note file' do
-                subject.save
+                subject.save!
                 expect(subject.note_diff_file).to be_present
               end
             end
@@ -166,7 +188,7 @@ describe DiffNote do
               end
 
               it 'raises an error' do
-                expect { subject.save }.to raise_error(::DiffNote::NoteDiffFileCreationError,
+                expect { subject.save! }.to raise_error(::DiffNote::NoteDiffFileCreationError,
                                                        "Failed to find diff line for: #{diff_file.file_path}, "\
                                                        "old_line: #{position.old_line}"\
                                                        ", new_line: #{position.new_line}")
@@ -179,7 +201,7 @@ describe DiffNote do
               end
 
               it 'creates a diff note file' do
-                subject.save
+                subject.save!
                 expect(subject.reload.note_diff_file).to be_present
               end
             end
@@ -238,12 +260,32 @@ describe DiffNote do
     end
 
     context 'when the discussion was created in the diff' do
-      it 'returns correct diff file' do
-        diff_file = subject.diff_file
+      context 'when file_identifier_hash is disabled' do
+        before do
+          stub_feature_flags(file_identifier_hash: false)
+        end
 
-        expect(diff_file.old_path).to eq(position.old_path)
-        expect(diff_file.new_path).to eq(position.new_path)
-        expect(diff_file.diff_refs).to eq(position.diff_refs)
+        it 'returns correct diff file' do
+          diff_file = subject.diff_file
+
+          expect(diff_file.old_path).to eq(position.old_path)
+          expect(diff_file.new_path).to eq(position.new_path)
+          expect(diff_file.diff_refs).to eq(position.diff_refs)
+        end
+      end
+
+      context 'when file_identifier_hash is enabled' do
+        before do
+          stub_feature_flags(file_identifier_hash: true)
+        end
+
+        it 'returns correct diff file' do
+          diff_file = subject.diff_file
+
+          expect(diff_file.old_path).to eq(position.old_path)
+          expect(diff_file.new_path).to eq(position.new_path)
+          expect(diff_file.diff_refs).to eq(position.diff_refs)
+        end
       end
     end
 
@@ -285,6 +327,24 @@ describe DiffNote do
         expect(CreateNoteDiffFileWorker).not_to receive(:perform_async).with(reply_diff_note.id)
 
         reply_diff_note.reload.diff_file
+      end
+    end
+
+    context 'when noteable is a Design' do
+      it 'does not return a diff file' do
+        diff_note = create(:diff_note_on_design)
+
+        expect(diff_note.diff_file).to be_nil
+      end
+    end
+  end
+
+  describe '#latest_diff_file' do
+    context 'when noteable is a Design' do
+      it 'does not return a diff file' do
+        diff_note = create(:diff_note_on_design)
+
+        expect(diff_note.latest_diff_file).to be_nil
       end
     end
   end
@@ -484,7 +544,7 @@ describe DiffNote do
       it "does not update the position" do
         expect(subject).not_to receive(:update_position)
 
-        subject.save
+        subject.save!
       end
     end
 

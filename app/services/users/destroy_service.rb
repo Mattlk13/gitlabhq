@@ -26,12 +26,12 @@ module Users
     def execute(user, options = {})
       delete_solo_owned_groups = options.fetch(:delete_solo_owned_groups, options[:hard_delete])
 
-      unless Ability.allowed?(current_user, :destroy_user, user)
+      unless Ability.allowed?(current_user, :destroy_user, user) || options[:skip_authorization]
         raise Gitlab::Access::AccessDeniedError, "#{current_user} tried to destroy user #{user}!"
       end
 
       if !delete_solo_owned_groups && user.solo_owned_groups.present?
-        user.errors[:base] << 'You must transfer ownership or delete groups before you can remove user'
+        user.errors.add(:base, 'You must transfer ownership or delete groups before you can remove user')
         return user
       end
 
@@ -56,7 +56,7 @@ module Users
 
       MigrateToGhostUserService.new(user).execute unless options[:hard_delete]
 
-      response = Snippets::BulkDestroyService.new(current_user, user.snippets).execute
+      response = Snippets::BulkDestroyService.new(current_user, user.snippets).execute(options)
       raise DestroyError, response.message if response.error?
 
       # Rails attempts to load all related records into memory before
@@ -73,4 +73,4 @@ module Users
   end
 end
 
-Users::DestroyService.prepend_if_ee('EE::Users::DestroyService')
+Users::DestroyService.prepend_mod_with('Users::DestroyService')

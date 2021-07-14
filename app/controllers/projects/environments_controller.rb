@@ -1,10 +1,22 @@
 # frozen_string_literal: true
 
 class Projects::EnvironmentsController < Projects::ApplicationController
+  # Metrics dashboard code is getting decoupled from environments and is being moved
+  # into app/controllers/projects/metrics_dashboard_controller.rb
+  # See https://gitlab.com/gitlab-org/gitlab/-/issues/226002 for more details.
+
   include MetricsDashboard
 
   layout 'project'
-  before_action :authorize_read_environment!
+
+  before_action only: [:metrics, :additional_metrics, :metrics_dashboard] do
+    authorize_metrics_dashboard!
+
+    push_frontend_feature_flag(:prometheus_computed_alerts)
+    push_frontend_feature_flag(:disable_metric_dashboard_refresh_rate)
+  end
+
+  before_action :authorize_read_environment!, except: [:metrics, :additional_metrics, :metrics_dashboard, :metrics_redirect]
   before_action :authorize_create_environment!, only: [:new, :create]
   before_action :authorize_stop_environment!, only: [:stop]
   before_action :authorize_update_environment!, only: [:edit, :update, :cancel_auto_stop]
@@ -12,13 +24,9 @@ class Projects::EnvironmentsController < Projects::ApplicationController
   before_action :environment, only: [:show, :edit, :update, :stop, :terminal, :terminal_websocket_authorize, :metrics, :cancel_auto_stop]
   before_action :verify_api_request!, only: :terminal_websocket_authorize
   before_action :expire_etag_cache, only: [:index], unless: -> { request.format.json? }
-  before_action only: [:metrics, :additional_metrics, :metrics_dashboard] do
-    push_frontend_feature_flag(:prometheus_computed_alerts)
-  end
-  before_action do
-    push_frontend_feature_flag(:auto_stop_environments, default_enabled: true)
-  end
   after_action :expire_etag_cache, only: [:cancel_auto_stop]
+
+  feature_category :continuous_delivery
 
   def index
     @environments = project.environments
@@ -29,12 +37,13 @@ class Projects::EnvironmentsController < Projects::ApplicationController
       format.html
       format.json do
         Gitlab::PollingInterval.set_header(response, interval: 3_000)
+        environments_count_by_state = project.environments.count_by_state
 
         render json: {
           environments: serialize_environments(request, response, params[:nested]),
           review_app: serialize_review_app,
-          available_count: project.environments.available.count,
-          stopped_count: project.environments.stopped.count
+          available_count: environments_count_by_state[:available],
+          stopped_count: environments_count_by_state[:stopped]
         }
       end
     end
@@ -99,7 +108,7 @@ class Projects::EnvironmentsController < Projects::ApplicationController
 
     action_or_env_url =
       if stop_action
-        polymorphic_url([project.namespace.becomes(Namespace), project, stop_action])
+        polymorphic_url([project, stop_action])
       else
         project_environment_url(project, @environment)
       end
@@ -153,18 +162,14 @@ class Projects::EnvironmentsController < Projects::ApplicationController
   end
 
   def metrics_redirect
-    environment = project.default_environment
-
-    if environment
-      redirect_to environment_metrics_path(environment)
-    else
-      render :empty_metrics
-    end
+    redirect_to project_metrics_dashboard_path(project)
   end
 
   def metrics
     respond_to do |format|
-      format.html
+      format.html do
+        redirect_to project_metrics_dashboard_path(project, environment: environment )
+      end
       format.json do
         # Currently, this acts as a hint to load the metrics details into the cache
         # if they aren't there already
@@ -222,7 +227,7 @@ class Projects::EnvironmentsController < Projects::ApplicationController
 
   def metrics_dashboard_params
     params
-      .permit(:embedded, :group, :title, :y_label, :dashboard_path, :environment, :sample_metrics)
+      .permit(:embedded, :group, :title, :y_label, :dashboard_path, :environment, :sample_metrics, :embed_json)
       .merge(dashboard_path: params[:dashboard], environment: environment)
   end
 
@@ -257,4 +262,4 @@ class Projects::EnvironmentsController < Projects::ApplicationController
   end
 end
 
-Projects::EnvironmentsController.prepend_if_ee('EE::Projects::EnvironmentsController')
+Projects::EnvironmentsController.prepend_mod_with('Projects::EnvironmentsController')

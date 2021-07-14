@@ -1,9 +1,14 @@
-# Project clusters API
+---
+stage: Configure
+group: Configure
+info: To determine the technical writer assigned to the Stage/Group associated with this page, see https://about.gitlab.com/handbook/engineering/ux/technical-writing/#assignments
+---
+
+# Project clusters API **(FREE)**
 
 > [Introduced](https://gitlab.com/gitlab-org/gitlab-foss/-/merge_requests/23922) in GitLab 11.7.
 
-NOTE: **Note:**
-User will need at least maintainer access to use these endpoints.
+Users need at least the [Maintainer](../user/permissions.md) role to use these endpoints.
 
 ## List project clusters
 
@@ -15,14 +20,14 @@ GET /projects/:id/clusters
 
 Parameters:
 
-| Attribute | Type | Required | Description |
-| --------- | ---- | -------- | ----------- |
-| `id` | integer | yes | The ID of the project owned by the authenticated user |
+| Attribute | Type    | Required | Description                                           |
+| --------- | ------- | -------- | ----------------------------------------------------- |
+| `id`      | integer or string | yes      | The ID or [URL-encoded path of the project](index.md#namespaced-path-encoding) owned by the authenticated user |
 
 Example request:
 
 ```shell
-curl --header 'Private-Token: <your_access_token>' https://gitlab.example.com/api/v4/projects/26/clusters
+curl --header "Private-Token: <your_access_token>" "https://gitlab.example.com/api/v4/projects/26/clusters"
 ```
 
 Example response:
@@ -34,6 +39,8 @@ Example response:
     "name":"cluster-1",
     "domain":"example.com",
     "created_at":"2019-01-02T20:18:12.563Z",
+    "managed": true,
+    "enabled": true,
     "provider_type":"user",
     "platform_type":"kubernetes",
     "environment_scope":"*",
@@ -83,15 +90,15 @@ GET /projects/:id/clusters/:cluster_id
 
 Parameters:
 
-| Attribute | Type | Required | Description |
-| --------- | ---- | -------- | ----------- |
-| `id` | integer | yes | The ID of the project owned by the authenticated user |
-| `cluster_id` | integer | yes | The ID of the cluster |
+| Attribute    | Type    | Required | Description                                           |
+| ------------ | ------- | -------- | ----------------------------------------------------- |
+| `id`         | integer or string | yes      | The ID or [URL-encoded path of the project](index.md#namespaced-path-encoding) owned by the authenticated user |
+| `cluster_id` | integer | yes      | The ID of the cluster                                 |
 
 Example request:
 
 ```shell
-curl --header 'Private-Token: <your_access_token>' https://gitlab.example.com/api/v4/projects/26/clusters/18
+curl --header "Private-Token: <your_access_token>" "https://gitlab.example.com/api/v4/projects/26/clusters/18"
 ```
 
 Example response:
@@ -102,6 +109,8 @@ Example response:
   "name":"cluster-1",
   "domain":"example.com",
   "created_at":"2019-01-02T20:18:12.563Z",
+  "managed": true,
+  "enabled": true,
   "provider_type":"user",
   "platform_type":"kubernetes",
   "environment_scope":"*",
@@ -142,7 +151,8 @@ Example response:
     "path_with_namespace":"root/project-with-clusters-api",
     "created_at":"2019-01-02T20:13:32.600Z",
     "default_branch":null,
-    "tag_list":[],
+    "tag_list":[], //deprecated, use `topics` instead
+    "topics":[],
     "ssh_url_to_repo":"ssh://gitlab.example.com/root/project-with-clusters-api.git",
     "http_url_to_repo":"https://gitlab.example.com/root/project-with-clusters-api.git",
     "web_url":"https://gitlab.example.com/root/project-with-clusters-api",
@@ -174,24 +184,25 @@ POST /projects/:id/clusters/user
 
 Parameters:
 
-| Attribute | Type | Required | Description |
-| --------- | ---- | -------- | ----------- |
-| `id` | integer | yes | The ID of the project owned by the authenticated user |
-| `name` | String | yes | The name of the cluster |
-| `domain` | String | no | The [base domain](../user/project/clusters/index.md#base-domain) of the cluster |
-| `enabled` | Boolean | no | Determines if cluster is active or not, defaults to true |
-| `managed` | Boolean | no | Determines if GitLab will manage namespaces and service accounts for this cluster, defaults to true |
-| `platform_kubernetes_attributes[api_url]` | String | yes | The URL to access the Kubernetes API |
-| `platform_kubernetes_attributes[token]` | String | yes | The token to authenticate against Kubernetes |
-| `platform_kubernetes_attributes[ca_cert]` | String | no | TLS certificate (needed if API is using a self-signed TLS certificate |
-| `platform_kubernetes_attributes[namespace]` | String | no | The unique namespace related to the project |
-| `platform_kubernetes_attributes[authorization_type]` | String | no | The cluster authorization type: `rbac`, `abac` or `unknown_authorization`. Defaults to `rbac`. |
-| `environment_scope` | String | no | The associated environment to the cluster. Defaults to `*` **(PREMIUM)** |
+| Attribute                                            | Type    | Required | Description                                                                                           |
+| ---------------------------------------------------- | ------- | -------- | ----------------------------------------------------------------------------------------------------- |
+| `id`                                                 | integer or string | yes      | The ID or [URL-encoded path of the project](index.md#namespaced-path-encoding) owned by the authenticated user                                                 |
+| `name`                                               | string  | yes      | The name of the cluster                                                                               |
+| `domain`                                             | string  | no       | The [base domain](../user/project/clusters/gitlab_managed_clusters.md#base-domain) of the cluster                       |
+| `management_project_id`                              | integer | no       | The ID of the [management project](../user/clusters/management_project.md) for the cluster            |
+| `enabled`                                            | boolean | no       | Determines if cluster is active or not, defaults to `true`                                            |
+| `managed`                                            | boolean | no       | Determines if GitLab manages namespaces and service accounts for this cluster. Defaults to `true` |
+| `platform_kubernetes_attributes[api_url]`            | string  | yes      | The URL to access the Kubernetes API                                                                  |
+| `platform_kubernetes_attributes[token]`              | string  | yes      | The token to authenticate against Kubernetes                                                          |
+| `platform_kubernetes_attributes[ca_cert]`            | string  | no       | TLS certificate. Required if API is using a self-signed TLS certificate.                              |
+| `platform_kubernetes_attributes[namespace]`          | string  | no       | The unique namespace related to the project                                                           |
+| `platform_kubernetes_attributes[authorization_type]` | string  | no       | The cluster authorization type: `rbac`, `abac` or `unknown_authorization`. Defaults to `rbac`.        |
+| `environment_scope`                                  | string  | no       | The associated environment to the cluster. Defaults to `*` **(PREMIUM)**                              |
 
 Example request:
 
 ```shell
-curl --header 'Private-Token: <your_access_token>' https://gitlab.example.com/api/v4/projects/26/clusters/user \
+curl --header "Private-Token: <your_access_token>" "https://gitlab.example.com/api/v4/projects/26/clusters/user" \
 -H "Accept: application/json" \
 -H "Content-Type:application/json" \
 -X POST --data '{"name":"cluster-5", "platform_kubernetes_attributes":{"api_url":"https://35.111.51.20","token":"12345","namespace":"cluster-5-namespace","ca_cert":"-----BEGIN CERTIFICATE-----\r\nhFiK1L61owwDQYJKoZIhvcNAQELBQAw\r\nLzEtMCsGA1UEAxMkZDA1YzQ1YjctNzdiMS00NDY0LThjNmEtMTQ0ZDJkZjM4ZDBj\r\nMB4XDTE4MTIyNzIwMDM1MVoXDTIzMTIyNjIxMDM1MVowLzEtMCsGA1UEAxMkZDA1\r\nYzQ1YjctNzdiMS00NDY0LThjNmEtMTQ0ZDJkZjM.......-----END CERTIFICATE-----"}}'
@@ -204,6 +215,8 @@ Example response:
   "id":24,
   "name":"cluster-5",
   "created_at":"2019-01-03T21:53:40.610Z",
+  "managed": true,
+  "enabled": true,
   "provider_type":"user",
   "platform_type":"kubernetes",
   "environment_scope":"*",
@@ -235,7 +248,8 @@ Example response:
     "path_with_namespace":"root/project-with-clusters-api",
     "created_at":"2019-01-02T20:13:32.600Z",
     "default_branch":null,
-    "tag_list":[],
+    "tag_list":[], //deprecated, use `topics` instead
+    "topics":[],
     "ssh_url_to_repo":"ssh:://gitlab.example.com/root/project-with-clusters-api.git",
     "http_url_to_repo":"https://gitlab.example.com/root/project-with-clusters-api.git",
     "web_url":"https://gitlab.example.com/root/project-with-clusters-api",
@@ -267,20 +281,22 @@ PUT /projects/:id/clusters/:cluster_id
 
 Parameters:
 
-| Attribute | Type | Required | Description |
-| --------- | ---- | -------- | ----------- |
-| `id` | integer | yes | The ID of the project owned by the authenticated user |
-| `cluster_id` | integer | yes | The ID of the cluster |
-| `name` | String | no | The name of the cluster |
-| `domain` | String | no | The [base domain](../user/project/clusters/index.md#base-domain) of the cluster |
-| `management_project_id` | integer | no | The ID of the [management project](../user/clusters/management_project.md) for the cluster |
-| `platform_kubernetes_attributes[api_url]` | String | no | The URL to access the Kubernetes API |
-| `platform_kubernetes_attributes[token]` | String | no | The token to authenticate against Kubernetes |
-| `platform_kubernetes_attributes[ca_cert]` | String | no | TLS certificate (needed if API is using a self-signed TLS certificate |
-| `platform_kubernetes_attributes[namespace]` | String | no | The unique namespace related to the project |
-| `environment_scope` | String | no | The associated environment to the cluster **(PREMIUM)** |
+| Attribute                                   | Type    | Required | Description                                                                                |
+| ------------------------------------------- | ------- | -------- | ------------------------------------------------------------------------------------------ |
+| `id`                                        | integer or string | yes      | The ID or [URL-encoded path of the project](index.md#namespaced-path-encoding) owned by the authenticated user                                      |
+| `cluster_id`                                | integer | yes      | The ID of the cluster                                                                      |
+| `name`                                      | string  | no       | The name of the cluster                                                                    |
+| `domain`                                    | string  | no       | The [base domain](../user/project/clusters/gitlab_managed_clusters.md#base-domain) of the cluster            |
+| `management_project_id`                     | integer | no       | The ID of the [management project](../user/clusters/management_project.md) for the cluster |
+| `enabled`                                   | boolean | no       | Determines if cluster is active or not                                                     |
+| `managed`                                   | boolean | no       | Determines if GitLab manages namespaces and service accounts for this cluster          |
+| `platform_kubernetes_attributes[api_url]`   | string  | no       | The URL to access the Kubernetes API                                                       |
+| `platform_kubernetes_attributes[token]`     | string  | no       | The token to authenticate against Kubernetes                                               |
+| `platform_kubernetes_attributes[ca_cert]`   | string  | no       | TLS certificate. Required if API is using a self-signed TLS certificate.                   |
+| `platform_kubernetes_attributes[namespace]` | string  | no       | The unique namespace related to the project                                                |
+| `environment_scope`                         | string  | no       | The associated environment to the cluster **(PREMIUM)**                                    |
 
-NOTE: **Note:**
+NOTE:
 `name`, `api_url`, `ca_cert` and `token` can only be updated if the cluster was added
 through the ["Add existing Kubernetes cluster"](../user/project/clusters/add_remove_clusters.md#add-existing-cluster) option or
 through the ["Add existing cluster to project"](#add-existing-cluster-to-project) endpoint.
@@ -288,7 +304,7 @@ through the ["Add existing cluster to project"](#add-existing-cluster-to-project
 Example request:
 
 ```shell
-curl --header 'Private-Token: <your_access_token>' https://gitlab.example.com/api/v4/projects/26/clusters/24 \
+curl --header "Private-Token: <your_access_token>" "https://gitlab.example.com/api/v4/projects/26/clusters/24" \
 -H "Content-Type:application/json" \
 -X PUT --data '{"name":"new-cluster-name","domain":"new-domain.com","api_url":"https://new-api-url.com"}'
 ```
@@ -301,6 +317,8 @@ Example response:
   "name":"new-cluster-name",
   "domain":"new-domain.com",
   "created_at":"2019-01-03T21:53:40.610Z",
+  "managed": true,
+  "enabled": true,
   "provider_type":"user",
   "platform_type":"kubernetes",
   "environment_scope":"*",
@@ -341,7 +359,8 @@ Example response:
     "path_with_namespace":"root/project-with-clusters-api",
     "created_at":"2019-01-02T20:13:32.600Z",
     "default_branch":null,
-    "tag_list":[],
+    "tag_list":[], //deprecated, use `topics` instead
+    "topics":[],
     "ssh_url_to_repo":"ssh:://gitlab.example.com/root/project-with-clusters-api.git",
     "http_url_to_repo":"https://gitlab.example.com/root/project-with-clusters-api.git",
     "web_url":"https://gitlab.example.com/root/project-with-clusters-api",
@@ -374,13 +393,13 @@ DELETE /projects/:id/clusters/:cluster_id
 
 Parameters:
 
-| Attribute | Type | Required | Description |
-| --------- | ---- | -------- | ----------- |
-| `id` | integer | yes | The ID of the project owned by the authenticated user |
-| `cluster_id` | integer | yes | The ID of the cluster |
+| Attribute    | Type    | Required | Description                                           |
+| ------------ | ------- | -------- | ----------------------------------------------------- |
+| `id`         | integer or string | yes      | The ID or [URL-encoded path of the project](index.md#namespaced-path-encoding) owned by the authenticated user |
+| `cluster_id` | integer | yes      | The ID of the cluster                                 |
 
 Example request:
 
 ```shell
-curl --request DELETE --header 'Private-Token: <your_access_token>' https://gitlab.example.com/api/v4/projects/26/clusters/23
+curl --request DELETE --header "Private-Token: <your_access_token>" "https://gitlab.example.com/api/v4/projects/26/clusters/23"
 ```

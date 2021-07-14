@@ -1,7 +1,9 @@
 # frozen_string_literal: true
 
 class HelpController < ApplicationController
-  skip_before_action :authenticate_user!
+  skip_before_action :authenticate_user!, unless: :public_visibility_restricted?
+  skip_before_action :check_two_factor_requirement
+  feature_category :not_owned
 
   layout 'help'
 
@@ -11,7 +13,7 @@ class HelpController < ApplicationController
 
   def index
     # Remove YAML frontmatter so that it doesn't look weird
-    @help_index = File.read(Rails.root.join('doc', 'README.md')).sub(YAML_FRONT_MATTER_REGEXP, '')
+    @help_index = File.read(Rails.root.join('doc', 'index.md')).sub(YAML_FRONT_MATTER_REGEXP, '')
 
     # Prefix Markdown links with `help/` unless they are external links.
     # '//' not necessarily part of URL, e.g., mailto:mail@example.com
@@ -26,23 +28,16 @@ class HelpController < ApplicationController
 
     respond_to do |format|
       format.any(:markdown, :md, :html) do
-        # Note: We are purposefully NOT using `Rails.root.join`
-        path = File.join(Rails.root, 'doc', "#{@path}.md")
-
-        if File.exist?(path)
-          # Remove YAML frontmatter so that it doesn't look weird
-          @markdown = File.read(path).gsub(YAML_FRONT_MATTER_REGEXP, '')
-
-          render 'show.html.haml'
+        if redirect_to_documentation_website?
+          redirect_to documentation_url
         else
-          # Force template to Haml
-          render 'errors/not_found.html.haml', layout: 'errors', status: :not_found
+          render_documentation
         end
       end
 
       # Allow access to specific media files in the doc folder
       format.any(:png, :gif, :jpeg, :mp4, :mp3) do
-        # Note: We are purposefully NOT using `Rails.root.join`
+        # Note: We are purposefully NOT using `Rails.root.join` because of https://gitlab.com/gitlab-org/gitlab/-/issues/216028.
         path = File.join(Rails.root, 'doc', "#{@path}.#{params[:format]}")
 
         if File.exist?(path)
@@ -74,5 +69,57 @@ class HelpController < ApplicationController
     params.require(:path)
 
     params
+  end
+
+  def redirect_to_documentation_website?
+    return false unless Feature.enabled?(:help_page_documentation_redirect)
+    return false unless Gitlab::UrlSanitizer.valid_web?(documentation_url)
+
+    true
+  end
+
+  def documentation_url
+    return unless documentation_base_url
+
+    @documentation_url ||= Gitlab::Utils.append_path(documentation_base_url, documentation_file_path)
+  end
+
+  def documentation_base_url
+    @documentation_base_url ||= documentation_base_url_from_yml_configuration || documentation_base_url_from_db
+  end
+
+  # DEPRECATED
+  def documentation_base_url_from_db
+    Gitlab::CurrentSettings.current_application_settings.help_page_documentation_base_url.presence
+  end
+
+  def documentation_base_url_from_yml_configuration
+    ::Gitlab.config.gitlab_docs.host.presence if ::Gitlab.config.gitlab_docs.enabled
+  end
+
+  def documentation_file_path
+    @documentation_file_path ||= [version_segment, 'ee', "#{@path}.html"].compact.join('/')
+  end
+
+  def version_segment
+    return if Gitlab.pre_release?
+
+    version = Gitlab.version_info
+    [version.major, version.minor].join('.')
+  end
+
+  def render_documentation
+    # Note: We are purposefully NOT using `Rails.root.join` because of https://gitlab.com/gitlab-org/gitlab/-/issues/216028.
+    path = File.join(Rails.root, 'doc', "#{@path}.md")
+
+    if File.exist?(path)
+      # Remove YAML frontmatter so that it doesn't look weird
+      @markdown = File.read(path).gsub(YAML_FRONT_MATTER_REGEXP, '')
+
+      render 'show.html.haml'
+    else
+      # Force template to Haml
+      render 'errors/not_found.html.haml', layout: 'errors', status: :not_found
+    end
   end
 end

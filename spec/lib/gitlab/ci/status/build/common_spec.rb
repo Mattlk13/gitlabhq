@@ -2,7 +2,7 @@
 
 require 'spec_helper'
 
-describe Gitlab::Ci::Status::Build::Common do
+RSpec.describe Gitlab::Ci::Status::Build::Common do
   let(:user) { create(:user) }
   let(:build) { create(:ci_build) }
   let(:project) { build.project }
@@ -28,7 +28,7 @@ describe Gitlab::Ci::Status::Build::Common do
 
     context 'when user does not have access to read build' do
       before do
-        project.update(public_builds: false)
+        project.update!(public_builds: false)
       end
 
       it { is_expected.not_to have_details }

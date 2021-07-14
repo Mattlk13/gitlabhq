@@ -3,12 +3,16 @@
 class SnippetPresenter < Gitlab::View::Presenter::Delegated
   presents :snippet
 
-  def web_url
-    Gitlab::UrlBuilder.build(snippet)
+  def raw_url
+    url_builder.build(snippet, raw: true)
   end
 
-  def raw_url
-    Gitlab::UrlBuilder.build(snippet, raw: true)
+  def ssh_url_to_repo
+    snippet.ssh_url_to_repo if snippet.repository_exists?
+  end
+
+  def http_url_to_repo
+    snippet.http_url_to_repo if snippet.repository_exists?
   end
 
   def can_read_snippet?
@@ -28,11 +32,9 @@ class SnippetPresenter < Gitlab::View::Presenter::Delegated
   end
 
   def blob
-    if Feature.enabled?(:version_snippets, current_user) && !snippet.repository.empty?
-      snippet.blobs.first
-    else
-      snippet.blob
-    end
+    return snippet.blob if snippet.empty_repo?
+
+    blobs.first
   end
 
   private

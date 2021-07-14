@@ -2,7 +2,7 @@
 
 require 'spec_helper'
 
-describe Gitlab::Git::WrapsGitalyErrors do
+RSpec.describe Gitlab::Git::WrapsGitalyErrors do
   subject(:wrapper) do
     klazz = Class.new { include Gitlab::Git::WrapsGitalyErrors }
     klazz.new
@@ -17,7 +17,7 @@ describe Gitlab::Git::WrapsGitalyErrors do
 
     mapping.each do |grpc_error, error|
       it "wraps #{grpc_error} in a #{error}" do
-        expect { wrapper.wrapped_gitaly_errors { raise grpc_error.new('wrapped') } }
+        expect { wrapper.wrapped_gitaly_errors { raise grpc_error, 'wrapped' } }
           .to raise_error(error)
       end
     end

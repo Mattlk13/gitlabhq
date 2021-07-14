@@ -2,7 +2,7 @@
 
 require 'spec_helper'
 
-describe QualifiedDomainArrayValidator do
+RSpec.describe QualifiedDomainArrayValidator do
   let(:qualified_domain_array_validator_test_class) do
     Class.new do
       include ActiveModel::Validations
@@ -14,6 +14,7 @@ describe QualifiedDomainArrayValidator do
       end
     end
   end
+
   let!(:record) do
     qualified_domain_array_validator_test_class.new(['gitlab.com'])
   end
@@ -51,7 +52,7 @@ describe QualifiedDomainArrayValidator do
       subject
 
       expect(record.errors).to be_present
-      expect(record.errors.first[1]).to eq('entries cannot be nil')
+      expect(record.errors.added?(:domain_array, "entries cannot be nil")).to be true
     end
 
     it 'allows when domain is valid' do
@@ -66,7 +67,7 @@ describe QualifiedDomainArrayValidator do
       subject
 
       expect(record.errors).to be_present
-      expect(record.errors.first[1]).to eq 'unicode domains should use IDNA encoding'
+      expect(record.errors.added?(:domain_array, 'unicode domains should use IDNA encoding')).to be true
     end
 
     it 'returns error when entry is larger than 255 chars' do
@@ -75,7 +76,7 @@ describe QualifiedDomainArrayValidator do
       subject
 
       expect(record.errors).to be_present
-      expect(record.errors.first[1]).to eq 'entries cannot be larger than 255 characters'
+      expect(record.errors.added?(:domain_array, 'entries cannot be larger than 255 characters')).to be true
     end
 
     it 'returns error when entry contains HTML tags' do
@@ -84,7 +85,7 @@ describe QualifiedDomainArrayValidator do
       subject
 
       expect(record.errors).to be_present
-      expect(record.errors.first[1]).to eq 'entries cannot contain HTML tags'
+      expect(record.errors.added?(:domain_array, 'entries cannot contain HTML tags')).to be true
     end
   end
 

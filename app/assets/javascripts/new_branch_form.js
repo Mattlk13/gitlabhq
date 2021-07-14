@@ -1,4 +1,4 @@
-/* eslint-disable func-names, consistent-return, no-return-assign, no-else-return, @gitlab/i18n/no-non-i18n-strings */
+/* eslint-disable func-names, consistent-return, no-return-assign, @gitlab/require-i18n-strings */
 
 import $ from 'jquery';
 import RefSelectDropdown from './ref_select_dropdown';
@@ -53,14 +53,14 @@ export default class NewBranchForm {
     const { indexOf } = [];
 
     this.branchNameError.empty();
-    const unique = function(values, value) {
+    const unique = function (values, value) {
       if (indexOf.call(values, value) === -1) {
         values.push(value);
       }
       return values;
     };
-    const formatter = function(values, restriction) {
-      const formatted = values.map(value => {
+    const formatter = function (values, restriction) {
+      const formatted = values.map((value) => {
         switch (false) {
           case !/\s/.test(value):
             return 'spaces';
@@ -76,9 +76,8 @@ export default class NewBranchForm {
       const matched = this.name.val().match(restriction.pattern);
       if (matched) {
         return errors.concat(formatter(matched.reduce(unique, []), restriction));
-      } else {
-        return errors;
       }
+      return errors;
     };
     const errors = this.restrictions.reduce(validator, []);
     if (errors.length > 0) {

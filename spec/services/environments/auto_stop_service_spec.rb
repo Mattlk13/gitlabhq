@@ -2,12 +2,13 @@
 
 require 'spec_helper'
 
-describe Environments::AutoStopService, :clean_gitlab_redis_shared_state do
+RSpec.describe Environments::AutoStopService, :clean_gitlab_redis_shared_state do
   include CreateEnvironmentsHelpers
   include ExclusiveLeaseHelpers
 
   let_it_be(:project) { create(:project, :repository) }
   let_it_be(:user) { create(:user) }
+
   let(:service) { described_class.new }
 
   before_all do
@@ -19,6 +20,7 @@ describe Environments::AutoStopService, :clean_gitlab_redis_shared_state do
 
     let_it_be(:project) { create(:project, :repository) }
     let_it_be(:user) { create(:user) }
+
     let(:environments) { Environment.all }
 
     before_all do
@@ -38,18 +40,6 @@ describe Environments::AutoStopService, :clean_gitlab_redis_shared_state do
         .from(['available']).to(['stopped'])
 
       expect(Ci::Build.where(name: 'stop_review_app').map(&:status).uniq).to eq(['pending'])
-    end
-
-    context 'when auto_stop_environments feature flag is disabled' do
-      before do
-        stub_feature_flags(auto_stop_environments: false)
-      end
-
-      it 'does not execute Ci::StopEnvironmentsService' do
-        expect(Ci::StopEnvironmentsService).not_to receive(:execute_in_batch)
-
-        subject
-      end
     end
 
     context 'when the other sidekiq worker has already been running' do

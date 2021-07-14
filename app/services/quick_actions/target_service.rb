@@ -17,12 +17,16 @@ module QuickActions
 
     # rubocop: disable CodeReuse/ActiveRecord
     def issue(type_id)
+      return project.issues.build if type_id.nil?
+
       IssuesFinder.new(current_user, project_id: project.id).find_by(iid: type_id) || project.issues.build
     end
     # rubocop: enable CodeReuse/ActiveRecord
 
     # rubocop: disable CodeReuse/ActiveRecord
     def merge_request(type_id)
+      return project.merge_requests.build if type_id.nil?
+
       MergeRequestsFinder.new(current_user, project_id: project.id).find_by(iid: type_id) || project.merge_requests.build
     end
     # rubocop: enable CodeReuse/ActiveRecord
@@ -33,4 +37,4 @@ module QuickActions
   end
 end
 
-QuickActions::TargetService.prepend_if_ee('EE::QuickActions::TargetService')
+QuickActions::TargetService.prepend_mod_with('QuickActions::TargetService')

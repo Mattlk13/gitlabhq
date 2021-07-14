@@ -1,5 +1,5 @@
-import _ from 'underscore';
 import $ from 'jquery';
+import { throttle } from 'lodash';
 import { Terminal } from 'xterm';
 import * as fit from 'xterm/lib/addons/fit/fit';
 import * as webLinks from 'xterm/lib/addons/webLinks/webLinks';
@@ -13,14 +13,11 @@ Terminal.applyAddon(webLinks);
 
 export default class GLTerminal {
   constructor(element, options = {}) {
-    this.options = Object.assign(
-      {},
-      {
-        cursorBlink: true,
-        screenKeys: true,
-      },
-      options,
-    );
+    this.options = {
+      cursorBlink: true,
+      screenKeys: true,
+      ...options,
+    };
 
     this.container = element;
     this.onDispose = [];
@@ -28,6 +25,7 @@ export default class GLTerminal {
     this.setSocketUrl();
     this.createTerminal();
 
+    // eslint-disable-next-line @gitlab/no-global-event-off
     $(window)
       .off('resize.terminal')
       .on('resize.terminal', () => {
@@ -66,11 +64,11 @@ export default class GLTerminal {
     const decoder = new TextDecoder('utf-8');
     const encoder = new TextEncoder('utf-8');
 
-    this.terminal.on('data', data => {
+    this.terminal.on('data', (data) => {
       this.socket.send(encoder.encode(data));
     });
 
-    this.socket.addEventListener('message', ev => {
+    this.socket.addEventListener('message', (ev) => {
       this.terminal.write(decoder.decode(ev.data));
     });
 
@@ -85,7 +83,7 @@ export default class GLTerminal {
 
   addScrollListener(onScrollLimit) {
     const viewport = this.container.querySelector('.xterm-viewport');
-    const listener = _.throttle(() => {
+    const listener = throttle(() => {
       onScrollLimit({
         canScrollUp: canScrollUp(viewport, SCROLL_MARGIN),
         canScrollDown: canScrollDown(viewport, SCROLL_MARGIN),
@@ -107,11 +105,12 @@ export default class GLTerminal {
   }
 
   dispose() {
+    // eslint-disable-next-line @gitlab/no-global-event-off
     this.terminal.off('data');
     this.terminal.dispose();
     this.socket.close();
 
-    this.onDispose.forEach(fn => fn());
+    this.onDispose.forEach((fn) => fn());
     this.onDispose.length = 0;
   }
 

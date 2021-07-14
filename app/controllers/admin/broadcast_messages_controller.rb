@@ -5,6 +5,8 @@ class Admin::BroadcastMessagesController < Admin::ApplicationController
 
   before_action :finder, only: [:edit, :update, :destroy]
 
+  feature_category :navigation
+
   # rubocop: disable CodeReuse/ActiveRecord
   def index
     @broadcast_messages = BroadcastMessage.order(ends_at: :desc).page(params[:page])
@@ -62,6 +64,7 @@ class Admin::BroadcastMessagesController < Admin::ApplicationController
       starts_at
       target_path
       broadcast_type
+      dismissable
     ))
   end
 end

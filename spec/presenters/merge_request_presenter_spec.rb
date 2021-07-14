@@ -2,26 +2,26 @@
 
 require 'spec_helper'
 
-describe MergeRequestPresenter do
-  let(:resource) { create(:merge_request, source_project: project) }
-  let(:project) { create(:project) }
-  let(:user) { create(:user) }
+RSpec.describe MergeRequestPresenter do
+  let_it_be(:project) { create(:project, :repository) }
+  let_it_be(:resource) { create(:merge_request, source_project: project) }
+  let_it_be(:user) { create(:user) }
 
   describe '#ci_status' do
     subject { described_class.new(resource).ci_status }
 
     context 'when no head pipeline' do
-      it 'return status using CiService' do
-        ci_service = double(MockCiService)
+      it 'return status from Ci integration' do
+        ci_integration = double(Integrations::MockCi)
         ci_status = double
 
         allow(resource.source_project)
-          .to receive(:ci_service)
-          .and_return(ci_service)
+          .to receive(:ci_integration)
+          .and_return(ci_integration)
 
         allow(resource).to receive(:head_pipeline).and_return(nil)
 
-        expect(ci_service).to receive(:commit_status)
+        expect(ci_integration).to receive(:commit_status)
           .with(resource.diff_head_sha, resource.source_branch)
           .and_return(ci_status)
 
@@ -73,8 +73,6 @@ describe MergeRequestPresenter do
   end
 
   describe '#conflict_resolution_path' do
-    let(:project) { create :project }
-    let(:user) { create :user }
     let(:presenter) { described_class.new(resource, current_user: user) }
     let(:path) { presenter.conflict_resolution_path }
 
@@ -107,18 +105,21 @@ describe MergeRequestPresenter do
   end
 
   context 'issues links' do
-    let(:project) { create(:project, :private, :repository, creator: user, namespace: user.namespace) }
-    let(:issue_a) { create(:issue, project: project) }
-    let(:issue_b) { create(:issue, project: project) }
+    let_it_be(:project) { create(:project, :private, :repository, creator: user, namespace: user.namespace) }
+    let_it_be(:issue_a) { create(:issue, project: project) }
+    let_it_be(:issue_b) { create(:issue, project: project) }
 
-    let(:resource) do
+    let_it_be(:resource) do
       create(:merge_request,
              source_project: project, target_project: project,
              description: "Fixes #{issue_a.to_reference} Related #{issue_b.to_reference}")
     end
 
-    before do
+    before_all do
       project.add_developer(user)
+    end
+
+    before do
       allow(resource.project).to receive(:default_branch)
         .and_return(resource.target_branch)
       resource.cache_merge_request_closes_issues!
@@ -128,11 +129,11 @@ describe MergeRequestPresenter do
       subject { described_class.new(resource, current_user: user).closing_issues_links }
 
       it 'presents closing issues links' do
-        is_expected.to match("#{project.full_path}/issues/#{issue_a.iid}")
+        is_expected.to match("#{project.full_path}/-/issues/#{issue_a.iid}")
       end
 
       it 'does not present related issues links' do
-        is_expected.not_to match("#{project.full_path}/issues/#{issue_b.iid}")
+        is_expected.not_to match("#{project.full_path}/-/issues/#{issue_b.iid}")
       end
 
       it 'appends status when closing issue is already closed' do
@@ -148,11 +149,11 @@ describe MergeRequestPresenter do
       end
 
       it 'presents related issues links' do
-        is_expected.to match("#{project.full_path}/issues/#{issue_b.iid}")
+        is_expected.to match("#{project.full_path}/-/issues/#{issue_b.iid}")
       end
 
       it 'does not present closing issues links' do
-        is_expected.not_to match("#{project.full_path}/issues/#{issue_a.iid}")
+        is_expected.not_to match("#{project.full_path}/-/issues/#{issue_a.iid}")
       end
 
       it 'appends status when mentioned issue is already closed' do
@@ -275,7 +276,7 @@ describe MergeRequestPresenter do
         project.add_maintainer(user)
 
         is_expected
-          .to eq("/#{resource.project.full_path}/issues/new?merge_request_to_resolve_discussions_of=#{resource.iid}")
+          .to eq("/#{resource.project.full_path}/-/issues/new?merge_request_to_resolve_discussions_of=#{resource.iid}")
       end
     end
 
@@ -612,5 +613,23 @@ describe MergeRequestPresenter do
         is_expected.to eq(false)
       end
     end
+  end
+
+  describe '#api_approvals_path' do
+    subject { described_class.new(resource, current_user: user).api_approvals_path }
+
+    it { is_expected.to eq(expose_path("/api/v4/projects/#{project.id}/merge_requests/#{resource.iid}/approvals")) }
+  end
+
+  describe '#api_approve_path' do
+    subject { described_class.new(resource, current_user: user).api_approve_path }
+
+    it { is_expected.to eq(expose_path("/api/v4/projects/#{project.id}/merge_requests/#{resource.iid}/approve")) }
+  end
+
+  describe '#api_unapprove_path' do
+    subject { described_class.new(resource, current_user: user).api_unapprove_path }
+
+    it { is_expected.to eq(expose_path("/api/v4/projects/#{project.id}/merge_requests/#{resource.iid}/unapprove")) }
   end
 end

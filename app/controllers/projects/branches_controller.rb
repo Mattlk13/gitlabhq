@@ -13,11 +13,13 @@ class Projects::BranchesController < Projects::ApplicationController
   before_action :redirect_for_legacy_index_sort_or_search, only: [:index]
   before_action :limit_diverging_commit_counts!, only: [:diverging_commit_counts]
 
+  feature_category :source_code_management
+
   def index
     respond_to do |format|
       format.html do
-        @sort = params[:sort].presence || sort_value_recently_updated
         @mode = params[:state].presence || 'overview'
+        @sort = sort_value_for_mode
         @overview_max_branches = 5
 
         # Fetch branches for the specified mode
@@ -25,8 +27,9 @@ class Projects::BranchesController < Projects::ApplicationController
 
         @refs_pipelines = @project.ci_pipelines.latest_successful_for_refs(@branches.map(&:name))
         @merged_branch_names = repository.merged_branch_names(@branches.map(&:name))
+        @branch_pipeline_statuses = Ci::CommitStatusesFinder.new(@project, repository, current_user, @branches).execute
 
-        # https://gitlab.com/gitlab-org/gitlab-foss/issues/48097
+        # https://gitlab.com/gitlab-org/gitlab/-/issues/22851
         Gitlab::GitalyClient.allow_n_plus_1_calls do
           render
         end
@@ -39,10 +42,6 @@ class Projects::BranchesController < Projects::ApplicationController
     end
   end
 
-  def recent
-    @branches = @repository.recent_branches
-  end
-
   def diverging_commit_counts
     respond_to do |format|
       format.json do
@@ -50,7 +49,7 @@ class Projects::BranchesController < Projects::ApplicationController
         branches = BranchesFinder.new(repository, params.permit(names: [])).execute
 
         Gitlab::GitalyClient.allow_n_plus_1_calls do
-          render json: branches.map { |branch| [branch.name, service.call(branch)] }.to_h
+          render json: branches.to_h { |branch| [branch.name, service.call(branch)] }
         end
       end
     end
@@ -126,6 +125,12 @@ class Projects::BranchesController < Projects::ApplicationController
 
   private
 
+  def sort_value_for_mode
+    return params[:sort] if params[:sort].present?
+
+    'stale' == @mode ? sort_value_oldest_updated : sort_value_recently_updated
+  end
+
   # It can be expensive to calculate the diverging counts for each
   # branch. Normally the frontend should be specifying a set of branch
   # names, but prior to
@@ -147,7 +152,7 @@ class Projects::BranchesController < Projects::ApplicationController
       ref_escaped = strip_tags(sanitize(params[:ref]))
       Addressable::URI.unescape(ref_escaped)
     else
-      @project.default_branch || 'master'
+      @project.default_branch_or_main
     end
   end
 
@@ -170,23 +175,27 @@ class Projects::BranchesController < Projects::ApplicationController
   end
 
   def fetch_branches_by_mode
-    if @mode == 'overview'
-      # overview mode
-      @active_branches, @stale_branches = BranchesFinder.new(@repository, sort: sort_value_recently_updated).execute.partition(&:active?)
-      # Here we get one more branch to indicate if there are more data we're not showing
-      @active_branches = @active_branches.first(@overview_max_branches + 1)
-      @stale_branches = @stale_branches.first(@overview_max_branches + 1)
-      @branches = @active_branches + @stale_branches
-    else
-      # active/stale/all view mode
-      @branches = BranchesFinder.new(@repository, params.merge(sort: @sort)).execute
-      @branches = @branches.select { |b| b.state.to_s == @mode } if %w[active stale].include?(@mode)
-      @branches = Kaminari.paginate_array(@branches).page(params[:page])
-    end
+    return fetch_branches_for_overview if @mode == 'overview'
+
+    @branches, @prev_path, @next_path =
+      Projects::BranchesByModeService.new(@project, params.merge(sort: @sort, mode: @mode)).execute
+  end
+
+  def fetch_branches_for_overview
+    # Here we get one more branch to indicate if there are more data we're not showing
+    limit = @overview_max_branches + 1
+
+    @active_branches =
+      BranchesFinder.new(@repository, { per_page: limit, sort: sort_value_recently_updated })
+        .execute(gitaly_pagination: true).select(&:active?)
+    @stale_branches =
+      BranchesFinder.new(@repository, { per_page: limit, sort: sort_value_oldest_updated })
+        .execute(gitaly_pagination: true).select(&:stale?)
+
+    @branches = @active_branches + @stale_branches
   end
 
   def confidential_issue_project
-    return unless helpers.create_confidential_merge_request_enabled?
     return if params[:confidential_issue_project_id].blank?
 
     confidential_issue_project = Project.find(params[:confidential_issue_project_id])

@@ -1,73 +1,33 @@
-import Wikis from '~/pages/projects/wikis/wikis';
-import { setHTMLFixture } from './helpers/fixtures';
+import { escape } from 'lodash';
+import { setHTMLFixture } from 'helpers/fixtures';
+import Wikis from '~/pages/shared/wikis/wikis';
+import Tracking from '~/tracking';
 
 describe('Wikis', () => {
-  describe('setting the commit message when the title changes', () => {
-    const editFormHtmlFixture = args => `<form class="wiki-form ${
-      args.newPage ? 'js-new-wiki-page' : ''
-    }">
-        <input type="text" id="wiki_title" value="My title" />
-        <input type="text" id="wiki_message" />
-      </form>`;
+  describe('trackPageView', () => {
+    const trackingPage = 'projects:wikis:show';
+    const trackingContext = { foo: 'bar' };
+    const showPageHtmlFixture = `
+      <div class="js-wiki-page-content" data-tracking-context="${escape(
+        JSON.stringify(trackingContext),
+      )}"></div>
+    `;
 
-    let wikis;
-    let titleInput;
-    let messageInput;
+    beforeEach(() => {
+      setHTMLFixture(showPageHtmlFixture);
+      document.body.dataset.page = trackingPage;
+      jest.spyOn(Tracking, 'event').mockImplementation();
 
-    describe('when the wiki page is being created', () => {
-      const formHtmlFixture = editFormHtmlFixture({ newPage: true });
-
-      beforeEach(() => {
-        setHTMLFixture(formHtmlFixture);
-
-        titleInput = document.getElementById('wiki_title');
-        messageInput = document.getElementById('wiki_message');
-        wikis = new Wikis();
-      });
-
-      it('binds an event listener to the title input', () => {
-        wikis.handleWikiTitleChange = jest.fn();
-
-        titleInput.dispatchEvent(new Event('keyup'));
-
-        expect(wikis.handleWikiTitleChange).toHaveBeenCalled();
-      });
-
-      it('sets the commit message when title changes', () => {
-        titleInput.value = 'My title';
-        messageInput.value = '';
-
-        titleInput.dispatchEvent(new Event('keyup'));
-
-        expect(messageInput.value).toEqual('Create My title');
-      });
-
-      it('replaces hyphens with spaces', () => {
-        titleInput.value = 'my-hyphenated-title';
-        titleInput.dispatchEvent(new Event('keyup'));
-
-        expect(messageInput.value).toEqual('Create my hyphenated title');
-      });
+      Wikis.trackPageView();
     });
 
-    describe('when the wiki page is being updated', () => {
-      const formHtmlFixture = editFormHtmlFixture({ newPage: false });
-
-      beforeEach(() => {
-        setHTMLFixture(formHtmlFixture);
-
-        titleInput = document.getElementById('wiki_title');
-        messageInput = document.getElementById('wiki_message');
-        wikis = new Wikis();
-      });
-
-      it('sets the commit message when title changes, prefixing with "Update"', () => {
-        titleInput.value = 'My title';
-        messageInput.value = '';
-
-        titleInput.dispatchEvent(new Event('keyup'));
-
-        expect(messageInput.value).toEqual('Update My title');
+    it('sends the tracking event and context', () => {
+      expect(Tracking.event).toHaveBeenCalledWith(trackingPage, 'view_wiki_page', {
+        label: 'view_wiki_page',
+        context: {
+          schema: 'iglu:com.gitlab/wiki_page_context/jsonschema/1-0-1',
+          data: trackingContext,
+        },
       });
     });
   });

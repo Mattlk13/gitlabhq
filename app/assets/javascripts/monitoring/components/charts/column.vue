@@ -1,10 +1,12 @@
 <script>
 import { GlResizeObserverDirective } from '@gitlab/ui';
 import { GlColumnChart } from '@gitlab/ui/dist/charts';
+import { makeDataSeries } from '~/helpers/monitor_helper';
 import { getSvgIconPathContent } from '~/lib/utils/icon_utils';
 import { chartHeight } from '../../constants';
-import { makeDataSeries } from '~/helpers/monitor_helper';
+import { timezones } from '../../format_date';
 import { graphDataValidatorForValues } from '../../utils';
+import { getTimeAxisOptions, getYAxisOptions, getChartGrid } from './options';
 
 export default {
   components: {
@@ -19,6 +21,11 @@ export default {
       required: true,
       validator: graphDataValidatorForValues.bind(null, false),
     },
+    timezone: {
+      type: String,
+      required: false,
+      default: timezones.LOCAL,
+    },
   },
   data() {
     return {
@@ -28,17 +35,28 @@ export default {
     };
   },
   computed: {
-    chartData() {
-      const queryData = this.graphData.metrics.reduce((acc, query) => {
+    barChartData() {
+      return this.graphData.metrics.reduce((acc, query) => {
         const series = makeDataSeries(query.result || [], {
           name: this.formatLegendLabel(query),
         });
 
         return acc.concat(series);
       }, []);
+    },
+    chartOptions() {
+      const xAxis = getTimeAxisOptions({ timezone: this.timezone });
+
+      const yAxis = {
+        ...getYAxisOptions(this.graphData.yAxis),
+        scale: false,
+      };
 
       return {
-        values: queryData[0].data,
+        grid: getChartGrid(),
+        xAxis,
+        yAxis,
+        dataZoom: [this.dataZoomConfig],
       };
     },
     xAxisTitle() {
@@ -47,9 +65,7 @@ export default {
         : '';
     },
     yAxisTitle() {
-      return this.graphData.metrics[0].result[0].y_label !== undefined
-        ? this.graphData.metrics[0].result[0].y_label
-        : '';
+      return this.chartOptions.yAxis.name;
     },
     xAxisType() {
       return this.graphData.x_type !== undefined ? this.graphData.x_type : 'category';
@@ -59,18 +75,13 @@ export default {
 
       return handleIcon ? { handleIcon } : {};
     },
-    chartOptions() {
-      return {
-        dataZoom: this.dataZoomConfig,
-      };
-    },
   },
   created() {
     this.setSvg('scroll-handle');
   },
   methods: {
     formatLegendLabel(query) {
-      return `${query.label}`;
+      return query.label;
     },
     onResize() {
       if (!this.$refs.columnChart) return;
@@ -79,7 +90,7 @@ export default {
     },
     setSvg(name) {
       getSvgIconPathContent(name)
-        .then(path => {
+        .then((path) => {
           if (path) {
             this.$set(this.svgs, name, `path://${path}`);
           }
@@ -94,7 +105,7 @@ export default {
     <gl-column-chart
       ref="columnChart"
       v-bind="$attrs"
-      :data="chartData"
+      :bars="barChartData"
       :option="chartOptions"
       :width="width"
       :height="height"

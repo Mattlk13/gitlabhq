@@ -2,7 +2,7 @@
 
 require 'spec_helper'
 
-describe 'User uploads avatar to profile' do
+RSpec.describe 'User uploads avatar to profile' do
   let!(:user) { create(:user) }
   let(:avatar_file_path) { Rails.root.join('spec', 'fixtures', 'dk.png') }
 
@@ -23,7 +23,7 @@ describe 'User uploads avatar to profile' do
     expect(user.reload.avatar.file).to exist
   end
 
-  it 'their new avatar is immediately visible in the header', :js do
+  it 'their new avatar is immediately visible in the header and setting sidebar', :js do
     find('.js-user-avatar-input', visible: false).set(avatar_file_path)
 
     click_button 'Set new profile picture'
@@ -33,5 +33,6 @@ describe 'User uploads avatar to profile' do
 
     data_uri = find('.avatar-image .avatar')['src']
     expect(page.find('.header-user-avatar')['src']).to eq data_uri
+    expect(page.find('[data-testid="sidebar-user-avatar"]')['src']).to eq data_uri
   end
 end

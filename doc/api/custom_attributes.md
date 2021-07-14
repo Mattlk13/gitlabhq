@@ -1,9 +1,15 @@
+---
+stage: Create
+group: Ecosystem
+info: To determine the technical writer assigned to the Stage/Group associated with this page, see https://about.gitlab.com/handbook/engineering/ux/technical-writing/#assignments
+---
+
 # Custom Attributes API
 
 Every API call to custom attributes must be authenticated as administrator.
 
 Custom attributes are currently available on users, groups, and projects,
-which will be referred to as "resource" in this documentation.
+which is referred to as "resource" in this documentation.
 
 ## List custom attributes
 
@@ -20,7 +26,7 @@ GET /projects/:id/custom_attributes
 | `id` | integer | yes | The ID of a resource |
 
 ```shell
-curl --header "PRIVATE-TOKEN: <your_access_token>" https://gitlab.example.com/api/v4/users/42/custom_attributes
+curl --header "PRIVATE-TOKEN: <your_access_token>" "https://gitlab.example.com/api/v4/users/42/custom_attributes"
 ```
 
 Example response:
@@ -54,7 +60,7 @@ GET /projects/:id/custom_attributes/:key
 | `key` | string | yes | The key of the custom attribute |
 
 ```shell
-curl --header "PRIVATE-TOKEN: <your_access_token>" https://gitlab.example.com/api/v4/users/42/custom_attributes/location
+curl --header "PRIVATE-TOKEN: <your_access_token>" "https://gitlab.example.com/api/v4/users/42/custom_attributes/location"
 ```
 
 Example response:
@@ -68,7 +74,7 @@ Example response:
 
 ## Set custom attribute
 
-Set a custom attribute on a resource. The attribute will be updated if it already exists,
+Set a custom attribute on a resource. The attribute is updated if it already exists,
 or newly created otherwise.
 
 ```plaintext
@@ -84,7 +90,8 @@ PUT /projects/:id/custom_attributes/:key
 | `value` | string | yes | The value of the custom attribute |
 
 ```shell
-curl --request PUT --header "PRIVATE-TOKEN: <your_access_token>" --data "value=Greenland" https://gitlab.example.com/api/v4/users/42/custom_attributes/location
+curl --request PUT --header "PRIVATE-TOKEN: <your_access_token>" \
+     --data "value=Greenland" "https://gitlab.example.com/api/v4/users/42/custom_attributes/location"
 ```
 
 Example response:
@@ -112,5 +119,5 @@ DELETE /projects/:id/custom_attributes/:key
 | `key` | string | yes | The key of the custom attribute |
 
 ```shell
-curl --request DELETE --header "PRIVATE-TOKEN: <your_access_token>" https://gitlab.example.com/api/v4/users/42/custom_attributes/location
+curl --request DELETE --header "PRIVATE-TOKEN: <your_access_token>" "https://gitlab.example.com/api/v4/users/42/custom_attributes/location"
 ```

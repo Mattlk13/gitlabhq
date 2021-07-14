@@ -1,7 +1,7 @@
 <script>
 import PaginationLinks from '~/vue_shared/components/pagination_links.vue';
+import { getParameterByName } from '../../lib/utils/url_utility';
 import eventHub from '../event_hub';
-import { getParameterByName } from '../../lib/utils/common_utils';
 
 export default {
   components: {
@@ -32,7 +32,7 @@ export default {
   },
   methods: {
     change(page) {
-      const filterGroupsParam = getParameterByName('filter_groups');
+      const filterGroupsParam = getParameterByName('filter');
       const sortParam = getParameterByName('sort');
       const archivedParam = getParameterByName('archived');
       eventHub.$emit(`${this.action}fetchPage`, page, filterGroupsParam, sortParam, archivedParam);
@@ -49,7 +49,7 @@ export default {
       <pagination-links
         :change="change"
         :page-info="pageInfo"
-        class="d-flex justify-content-center prepend-top-default"
+        class="d-flex justify-content-center gl-mt-3"
       />
     </template>
   </div>

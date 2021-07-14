@@ -1,9 +1,9 @@
 # frozen_string_literal: true
 
 require 'spec_helper'
-require Rails.root.join('db', 'post_migrate', '20191128162854_drop_project_ci_cd_settings_merge_trains_enabled.rb')
+require_migration!
 
-describe DropProjectCiCdSettingsMergeTrainsEnabled, :migration do
+RSpec.describe DropProjectCiCdSettingsMergeTrainsEnabled do
   let!(:project_ci_cd_setting) { table(:project_ci_cd_settings) }
 
   it 'correctly migrates up and down' do

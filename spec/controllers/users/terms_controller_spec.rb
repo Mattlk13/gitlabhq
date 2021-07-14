@@ -2,10 +2,11 @@
 
 require 'spec_helper'
 
-describe Users::TermsController do
+RSpec.describe Users::TermsController do
   include TermsHelper
 
   let_it_be(:user) { create(:user) }
+
   let(:term) { create(:term) }
 
   before do

@@ -1,9 +1,10 @@
 <script>
-import { flattenDeep, isNumber } from 'lodash';
 import { GlChartSeriesLabel } from '@gitlab/ui/dist/charts';
-import { roundOffFloat } from '~/lib/utils/common_utils';
+import produce from 'immer';
+import { flattenDeep, isNumber } from 'lodash';
 import { hexToRgb } from '~/lib/utils/color_utils';
-import { areaOpacityValues, symbolSizes, colorValues } from '../../constants';
+import { roundOffFloat } from '~/lib/utils/common_utils';
+import { areaOpacityValues, symbolSizes, colorValues, panelTypes } from '../../constants';
 import { graphDataValidatorForAnomalyValues } from '../../utils';
 import MonitorTimeSeriesChart from './time_series.vue';
 
@@ -61,7 +62,7 @@ export default {
   },
   computed: {
     series() {
-      return this.graphData.metrics.map(metric => {
+      return this.graphData.metrics.map((metric) => {
         const values = metric.result && metric.result[0] ? metric.result[0].values : [];
         return {
           label: metric.label,
@@ -77,21 +78,22 @@ export default {
      * This offset is the lowest value.
      */
     yOffset() {
-      const values = flattenDeep(this.series.map(ser => ser.data.map(([, y]) => y)));
+      const values = flattenDeep(this.series.map((ser) => ser.data.map(([, y]) => y)));
       const min = values.length ? Math.floor(Math.min(...values)) : 0;
       return min < 0 ? -min : 0;
     },
     metricData() {
       const originalMetricQuery = this.graphData.metrics[0];
 
-      const metricQuery = { ...originalMetricQuery };
-      metricQuery.result[0].values = metricQuery.result[0].values.map(([x, y]) => [
-        x,
-        y + this.yOffset,
-      ]);
+      const metricQuery = produce(originalMetricQuery, (draftQuery) => {
+        draftQuery.result[0].values = draftQuery.result[0].values.map(([x, y]) => [
+          x,
+          y + this.yOffset,
+        ]);
+      });
       return {
         ...this.graphData,
-        type: 'line-chart',
+        type: panelTypes.LINE_CHART,
         metrics: [metricQuery],
       };
     },
@@ -109,7 +111,7 @@ export default {
         },
         showSymbol: true,
         itemStyle: {
-          color: params => {
+          color: (params) => {
             if (this.isDatapointAnomaly(params.dataIndex)) {
               return colorValues.anomalySymbol;
             }
@@ -128,7 +130,7 @@ export default {
 
       const yAxisWithOffset = {
         axisLabel: {
-          formatter: num => roundOffFloat(num - this.yOffset, 3).toString(),
+          formatter: (num) => roundOffFloat(num - this.yOffset, 3).toString(),
         },
       };
 
@@ -153,7 +155,7 @@ export default {
         boundarySeries.push(
           this.makeBoundarySeries({
             name: this.formatLegendLabel(upperSeries),
-            data: calcOffsetY(upperSeries.data, i => -this.yValue(LOWER, i)),
+            data: calcOffsetY(upperSeries.data, (i) => -this.yValue(LOWER, i)),
             areaStyle: {
               color: AREA_COLOR,
               opacity: AREA_OPACITY,
@@ -209,7 +211,7 @@ export default {
     :series-config="metricSeriesConfig"
   >
     <slot></slot>
-    <template v-slot:tooltipContent="slotProps">
+    <template #tooltip-content="slotProps">
       <div
         v-for="(content, seriesIndex) in slotProps.tooltip.content"
         :key="seriesIndex"
@@ -218,7 +220,7 @@ export default {
         <gl-chart-series-label :color="content.color">
           {{ content.name }}
         </gl-chart-series-label>
-        <div class="prepend-left-32">
+        <div class="gl-ml-7">
           {{ yValueFormatted(seriesIndex, content.dataIndex) }}
         </div>
       </div>

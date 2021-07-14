@@ -1,7 +1,7 @@
 <script>
-import _ from 'underscore';
-import { pixeliseValue } from '../../../lib/utils/dom_utils';
+import { throttle } from 'lodash';
 import ImageViewer from '../../../content_viewer/viewers/image_viewer.vue';
+import { pixeliseValue } from '../../../lib/utils/dom_utils';
 
 export default {
   components: {
@@ -98,7 +98,7 @@ export default {
       this.swipeOldImgInfo = imgInfo;
       this.prepareSwipe();
     },
-    resize: _.throttle(function throttledResize() {
+    resize: throttle(function throttledResize() {
       this.swipeBarPos = 0;
       this.swipeWrapWidth = 0;
       this.prepareSwipe();
@@ -143,7 +143,13 @@ export default {
           class="frame added"
           @imgLoaded="swipeNewImgLoaded"
         >
-          <slot slot="image-overlay" name="image-overlay"> </slot>
+          <template #image-overlay="{ renderedWidth, renderedHeight }">
+            <slot
+              :rendered-width="renderedWidth"
+              :rendered-height="renderedHeight"
+              name="image-overlay"
+            ></slot>
+          </template>
         </image-viewer>
       </div>
       <span

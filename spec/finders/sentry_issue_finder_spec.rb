@@ -2,7 +2,7 @@
 
 require 'spec_helper'
 
-describe SentryIssueFinder do
+RSpec.describe SentryIssueFinder do
   let(:user)          { create(:user) }
   let(:project)       { create(:project, :repository) }
   let(:issue)         { create(:issue, project: project) }
@@ -27,7 +27,7 @@ describe SentryIssueFinder do
       it { is_expected.to eq(sentry_issue) }
 
       context 'when identifier is incorrect' do
-        let(:identifier) { 1234 }
+        let(:identifier) { non_existing_record_id }
 
         it { is_expected.to be_nil }
       end

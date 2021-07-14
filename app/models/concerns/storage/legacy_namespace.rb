@@ -10,7 +10,7 @@ module Storage
       proj_with_tags = first_project_with_container_registry_tags
 
       if proj_with_tags
-        raise Gitlab::UpdatePathError.new("Namespace #{name} (#{id}) cannot be moved because at least one project (e.g. #{proj_with_tags.name} (#{proj_with_tags.id})) has tags in container registry")
+        raise Gitlab::UpdatePathError, "Namespace #{name} (#{id}) cannot be moved because at least one project (e.g. #{proj_with_tags.name} (#{proj_with_tags.id})) has tags in container registry"
       end
 
       parent_was = if saved_change_to_parent? && parent_id_before_last_save.present?
@@ -23,10 +23,22 @@ module Storage
         former_parent_full_path = parent_was&.full_path
         parent_full_path = parent&.full_path
         Gitlab::UploadsTransfer.new.move_namespace(path, former_parent_full_path, parent_full_path)
-        Gitlab::PagesTransfer.new.move_namespace(path, former_parent_full_path, parent_full_path)
+
+        if any_project_with_pages_deployed?
+          run_after_commit do
+            Gitlab::PagesTransfer.new.async.move_namespace(path, former_parent_full_path, parent_full_path)
+          end
+        end
       else
         Gitlab::UploadsTransfer.new.rename_namespace(full_path_before_last_save, full_path)
-        Gitlab::PagesTransfer.new.rename_namespace(full_path_before_last_save, full_path)
+
+        if any_project_with_pages_deployed?
+          full_path_was = full_path_before_last_save
+
+          run_after_commit do
+            Gitlab::PagesTransfer.new.async.rename_namespace(full_path_was, full_path)
+          end
+        end
       end
 
       # If repositories moved successfully we need to
@@ -36,7 +48,7 @@ module Storage
       begin
         send_update_instructions
         write_projects_repository_config
-      rescue => e
+      rescue StandardError => e
         Gitlab::ErrorTracking.track_and_raise_for_dev_exception(e,
           full_path_before_last_save: full_path_before_last_save,
           full_path: full_path,
@@ -67,18 +79,18 @@ module Storage
 
           unless gitlab_shell.mv_namespace(repository_storage, full_path_before_last_save, full_path)
 
-            Rails.logger.error "Exception moving path #{repository_storage} from #{full_path_before_last_save} to #{full_path}" # rubocop:disable Gitlab/RailsLogger
+            Gitlab::AppLogger.error("Exception moving path #{repository_storage} from #{full_path_before_last_save} to #{full_path}")
 
             # if we cannot move namespace directory we should rollback
             # db changes in order to prevent out of sync between db and fs
-            raise Gitlab::UpdatePathError.new('namespace directory cannot be moved')
+            raise Gitlab::UpdatePathError, 'namespace directory cannot be moved'
           end
         end
       end
     end
 
     def old_repository_storages
-      @old_repository_storage_paths ||= repository_storages
+      @old_repository_storage_paths ||= repository_storages(legacy_only: true)
     end
 
     def repository_storages(legacy_only: false)

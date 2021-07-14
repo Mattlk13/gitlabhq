@@ -4,14 +4,6 @@ module Gitlab
   module Email
     module Handler
       module ReplyProcessing
-        private
-
-        attr_reader :project_id, :project_slug, :project_path, :incoming_email_token
-
-        def author
-          raise NotImplementedError
-        end
-
         # rubocop:disable Gitlab/ModuleWithInstanceVariables
         def project
           return @project if instance_variable_defined?(:@project)
@@ -27,6 +19,14 @@ module Gitlab
         end
         # rubocop:enable Gitlab/ModuleWithInstanceVariables
 
+        private
+
+        attr_reader :project_id, :project_slug, :project_path, :incoming_email_token
+
+        def author
+          raise NotImplementedError
+        end
+
         def message
           @message ||= process_message
         end
@@ -37,11 +37,15 @@ module Gitlab
 
         def process_message(**kwargs)
           message = ReplyParser.new(mail, **kwargs).execute.strip
-          add_attachments(message)
+          message_with_attachments = add_attachments(message)
+
+          # Support bot is specifically forbidden
+          # from using slash commands.
+          strip_quick_actions(message_with_attachments)
         end
 
         def add_attachments(reply)
-          attachments = Email::AttachmentUploader.new(mail).execute(upload_params)
+          attachments = Email::AttachmentUploader.new(mail).execute(**upload_params)
 
           reply + attachments.map do |link|
             "\n\n#{link[:markdown]}"
@@ -80,11 +84,22 @@ module Gitlab
         end
 
         def valid_project_slug?(found_project)
+          return false unless found_project
+
           project_slug == found_project.full_path_slug
+        end
+
+        def strip_quick_actions(content)
+          return content unless author.support_bot?
+
+          command_definitions = ::QuickActions::InterpretService.command_definitions
+          extractor = ::Gitlab::QuickActions::Extractor.new(command_definitions)
+
+          extractor.redact_commands(content)
         end
       end
     end
   end
 end
 
-Gitlab::Email::Handler::ReplyProcessing.prepend_if_ee('::EE::Gitlab::Email::Handler::ReplyProcessing')
+Gitlab::Email::Handler::ReplyProcessing.prepend_mod_with('Gitlab::Email::Handler::ReplyProcessing')

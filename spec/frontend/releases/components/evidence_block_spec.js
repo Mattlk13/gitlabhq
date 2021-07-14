@@ -1,11 +1,12 @@
+import { GlLink, GlIcon } from '@gitlab/ui';
 import { mount } from '@vue/test-utils';
-import { GlLink } from '@gitlab/ui';
+import { getJSONFixture } from 'helpers/fixtures';
+import { convertObjectPropsToCamelCase } from '~/lib/utils/common_utils';
 import { truncateSha } from '~/lib/utils/text_utility';
-import Icon from '~/vue_shared/components/icon.vue';
-import { release as originalRelease } from '../mock_data';
 import EvidenceBlock from '~/releases/components/evidence_block.vue';
 import ClipboardButton from '~/vue_shared/components/clipboard_button.vue';
-import { convertObjectPropsToCamelCase } from '~/lib/utils/common_utils';
+
+const originalRelease = getJSONFixture('api/releases/release.json');
 
 describe('Evidence Block', () => {
   let wrapper;
@@ -32,11 +33,11 @@ describe('Evidence Block', () => {
   });
 
   it('renders the evidence icon', () => {
-    expect(wrapper.find(Icon).props('name')).toBe('review-list');
+    expect(wrapper.find(GlIcon).props('name')).toBe('review-list');
   });
 
   it('renders the title for the dowload link', () => {
-    expect(wrapper.find(GlLink).text()).toBe(`${release.tagName}-evidence.json`);
+    expect(wrapper.find(GlLink).text()).toBe(`v1.1-evidences-1.json`);
   });
 
   it('renders the correct hover text for the download', () => {
@@ -44,19 +45,19 @@ describe('Evidence Block', () => {
   });
 
   it('renders the correct file link for download', () => {
-    expect(wrapper.find(GlLink).attributes().download).toBe(`${release.tagName}-evidence.json`);
+    expect(wrapper.find(GlLink).attributes().download).toBe(`v1.1-evidences-1.json`);
   });
 
   describe('sha text', () => {
     it('renders the short sha initially', () => {
-      expect(wrapper.find('.js-short').text()).toBe(truncateSha(release.evidenceSha));
+      expect(wrapper.find('.js-short').text()).toBe(truncateSha(release.evidences[0].sha));
     });
 
     it('renders the long sha after expansion', () => {
       wrapper.find('.js-text-expander-prepend').trigger('click');
 
       return wrapper.vm.$nextTick().then(() => {
-        expect(wrapper.find('.js-expanded').text()).toBe(release.evidenceSha);
+        expect(wrapper.find('.js-expanded').text()).toBe(release.evidences[0].sha);
       });
     });
   });
@@ -67,12 +68,12 @@ describe('Evidence Block', () => {
     });
 
     it('renders the correct hover text', () => {
-      expect(wrapper.find(ClipboardButton).attributes('title')).toBe('Copy commit SHA');
+      expect(wrapper.find(ClipboardButton).attributes('title')).toBe('Copy evidence SHA');
     });
 
     it('copies the sha', () => {
       expect(wrapper.find(ClipboardButton).attributes('data-clipboard-text')).toBe(
-        release.evidenceSha,
+        release.evidences[0].sha,
       );
     });
   });

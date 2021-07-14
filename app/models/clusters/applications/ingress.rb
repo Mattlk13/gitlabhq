@@ -2,9 +2,11 @@
 
 module Clusters
   module Applications
+    # DEPRECATED for removal in %14.0
+    # See https://gitlab.com/groups/gitlab-org/-/epics/4280
     class Ingress < ApplicationRecord
-      VERSION = '1.29.3'
-      MODSECURITY_LOG_CONTAINER_NAME = 'modsecurity-log'
+      VERSION = '1.40.2'
+      INGRESS_CONTAINER_NAME = 'nginx-ingress-controller'
 
       self.table_name = 'clusters_applications_ingress'
 
@@ -13,17 +15,20 @@ module Clusters
       include ::Clusters::Concerns::ApplicationVersion
       include ::Clusters::Concerns::ApplicationData
       include AfterCommitQueue
+      include UsageStatistics
+      include IgnorableColumns
 
       default_value_for :ingress_type, :nginx
-      default_value_for :modsecurity_enabled, false
       default_value_for :version, VERSION
+
+      ignore_column :modsecurity_enabled, remove_with: '14.2', remove_after: '2021-07-22'
+      ignore_column :modsecurity_mode, remove_with: '14.2', remove_after: '2021-07-22'
 
       enum ingress_type: {
         nginx: 1
       }
 
       FETCH_IP_ADDRESS_DELAY = 30.seconds
-      MODSEC_SIDECAR_INITIAL_DELAY_SECONDS = 10
 
       state_machine :status do
         after_transition any => [:installed] do |application|
@@ -35,7 +40,11 @@ module Clusters
       end
 
       def chart
-        'stable/nginx-ingress'
+        "#{name}/nginx-ingress"
+      end
+
+      def repository
+        'https://gitlab-org.gitlab.io/cluster-integration/helm-stable-archive'
       end
 
       def values
@@ -43,12 +52,13 @@ module Clusters
       end
 
       def allowed_to_uninstall?
-        external_ip_or_hostname? && application_jupyter_nil_or_installable?
+        external_ip_or_hostname? && !application_jupyter_installed?
       end
 
       def install_command
-        Gitlab::Kubernetes::Helm::InstallCommand.new(
+        helm_command_module::InstallCommand.new(
           name: name,
+          repository: repository,
           version: VERSION,
           rbac: cluster.platform_kubernetes_rbac?,
           chart: chart,
@@ -69,92 +79,17 @@ module Clusters
       end
 
       def ingress_service
-        cluster.kubeclient.get_service('ingress-nginx-ingress-controller', Gitlab::Kubernetes::Helm::NAMESPACE)
+        cluster.kubeclient.get_service("ingress-#{INGRESS_CONTAINER_NAME}", Gitlab::Kubernetes::Helm::NAMESPACE)
       end
 
       private
 
-      def specification
-        return {} unless modsecurity_enabled
-
-        {
-          "controller" => {
-            "config" => {
-              "enable-modsecurity" => "true",
-              "enable-owasp-modsecurity-crs" => "true",
-              "modsecurity.conf" => modsecurity_config_content
-            },
-            "extraContainers" => [
-              {
-                "name" => MODSECURITY_LOG_CONTAINER_NAME,
-                "image" => "busybox",
-                "args" => [
-                  "/bin/sh",
-                  "-c",
-                  "tail -f /var/log/modsec/audit.log"
-                ],
-                "volumeMounts" => [
-                  {
-                    "name" => "modsecurity-log-volume",
-                    "mountPath" => "/var/log/modsec",
-                    "readOnly" => true
-                  }
-                ],
-                "startupProbe" => {
-                  "exec" => {
-                    "command" => ["ls", "/var/log/modsec"]
-                  },
-                  "initialDelaySeconds" => MODSEC_SIDECAR_INITIAL_DELAY_SECONDS
-                }
-              }
-            ],
-            "extraVolumeMounts" => [
-              {
-                "name" => "modsecurity-template-volume",
-                "mountPath" => "/etc/nginx/modsecurity/modsecurity.conf",
-                "subPath" => "modsecurity.conf"
-              },
-              {
-                "name" => "modsecurity-log-volume",
-                "mountPath" => "/var/log/modsec"
-              }
-            ],
-            "extraVolumes" => [
-              {
-                "name" => "modsecurity-template-volume",
-                "configMap" => {
-                  "name" => "ingress-nginx-ingress-controller",
-                  "items" => [
-                    {
-                      "key" => "modsecurity.conf",
-                      "path" => "modsecurity.conf"
-                    }
-                  ]
-                }
-              },
-              {
-                "name" => "modsecurity-log-volume",
-                "emptyDir" => {}
-              }
-            ]
-          }
-        }
-      end
-
-      def modsecurity_config_content
-        File.read(modsecurity_config_file_path)
-      end
-
-      def modsecurity_config_file_path
-        Rails.root.join('vendor', 'ingress', 'modsecurity.conf')
-      end
-
       def content_values
-        YAML.load_file(chart_values_file).deep_merge!(specification)
+        YAML.load_file(chart_values_file)
       end
 
-      def application_jupyter_nil_or_installable?
-        cluster.application_jupyter.nil? || cluster.application_jupyter&.installable?
+      def application_jupyter_installed?
+        cluster.application_jupyter&.installed?
       end
     end
   end

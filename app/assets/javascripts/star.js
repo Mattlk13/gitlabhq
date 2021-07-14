@@ -1,8 +1,8 @@
 import $ from 'jquery';
-import Flash from './flash';
-import { __, s__ } from './locale';
-import { spriteIcon } from './lib/utils/common_utils';
+import createFlash from './flash';
 import axios from './lib/utils/axios_utils';
+import { spriteIcon } from './lib/utils/common_utils';
+import { __, s__ } from './locale';
 
 export default class Star {
   constructor(container = '.project-home-panel') {
@@ -16,10 +16,7 @@ export default class Star {
         .post($this.data('endpoint'))
         .then(({ data }) => {
           const isStarred = $starSpan.hasClass('starred');
-          $this
-            .parent()
-            .find('.count')
-            .text(data.star_count);
+          $this.parent().find('.count').text(data.star_count);
 
           if (isStarred) {
             $starSpan.removeClass('starred').text(s__('StarProject|Star'));
@@ -31,7 +28,11 @@ export default class Star {
             $this.prepend(spriteIcon('star', iconClasses));
           }
         })
-        .catch(() => Flash(__('Star toggle failed. Try again later.')));
+        .catch(() =>
+          createFlash({
+            message: __('Star toggle failed. Try again later.'),
+          }),
+        );
     });
   }
 }

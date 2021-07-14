@@ -2,10 +2,8 @@
 
 require 'spec_helper'
 
-describe ApplicationSetting::Term do
-  describe 'validations' do
-    it { is_expected.to validate_presence_of(:terms) }
-  end
+RSpec.describe ApplicationSetting::Term do
+  it { is_expected.to nullify_if_blank(:terms) }
 
   describe '.latest' do
     it 'finds the latest terms' do
@@ -17,12 +15,17 @@ describe ApplicationSetting::Term do
 
   describe '#accepted_by_user?' do
     let(:user) { create(:user) }
+    let(:project_bot) { create(:user, :project_bot) }
     let(:term) { create(:term) }
 
     it 'is true when the user accepted the terms' do
       accept_terms(term, user)
 
       expect(term.accepted_by_user?(user)).to be(true)
+    end
+
+    it 'is true when user is a bot' do
+      expect(term.accepted_by_user?(project_bot)).to be(true)
     end
 
     it 'is false when the user declined the terms' do

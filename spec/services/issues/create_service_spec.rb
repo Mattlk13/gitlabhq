@@ -2,21 +2,30 @@
 
 require 'spec_helper'
 
-describe Issues::CreateService do
-  let(:project) { create(:project) }
-  let(:user) { create(:user) }
+RSpec.describe Issues::CreateService do
+  include AfterNextHelpers
+
+  let_it_be_with_reload(:project) { create(:project) }
+  let_it_be(:user) { create(:user) }
+
+  let(:spam_params) { double }
 
   describe '#execute' do
-    let(:issue) { described_class.new(project, user, opts).execute }
-    let(:assignee) { create(:user) }
-    let(:milestone) { create(:milestone, project: project) }
+    let_it_be(:assignee) { create(:user) }
+    let_it_be(:milestone) { create(:milestone, project: project) }
+
+    let(:issue) { described_class.new(project: project, current_user: user, params: opts, spam_params: spam_params).execute }
+
+    before do
+      stub_spam_services
+    end
 
     context 'when params are valid' do
-      let(:labels) { create_pair(:label, project: project) }
+      let_it_be(:labels) { create_pair(:label, project: project) }
 
-      before do
-        project.add_maintainer(user)
-        project.add_maintainer(assignee)
+      before_all do
+        project.add_guest(user)
+        project.add_guest(assignee)
       end
 
       let(:opts) do
@@ -25,10 +34,13 @@ describe Issues::CreateService do
           assignee_ids: [assignee.id],
           label_ids: labels.map(&:id),
           milestone_id: milestone.id,
+          milestone: milestone,
           due_date: Date.tomorrow }
       end
 
       it 'creates the issue with the given params' do
+        expect(Issuable::CommonSystemNotesService).to receive_message_chain(:new, :execute)
+
         expect(issue).to be_persisted
         expect(issue.title).to eq('Awesome issue')
         expect(issue.assignees).to eq [assignee]
@@ -37,19 +49,56 @@ describe Issues::CreateService do
         expect(issue.due_date).to eq Date.tomorrow
       end
 
+      context 'when skip_system_notes is true' do
+        let(:issue) { described_class.new(project: project, current_user: user, params: opts, spam_params: spam_params).execute(skip_system_notes: true) }
+
+        it 'does not call Issuable::CommonSystemNotesService' do
+          expect(Issuable::CommonSystemNotesService).not_to receive(:new)
+
+          issue
+        end
+      end
+
+      it_behaves_like 'not an incident issue'
+
+      context 'issue is incident type' do
+        before do
+          opts.merge!(issue_type: 'incident')
+        end
+
+        let(:current_user) { user }
+        let(:incident_label_attributes) { attributes_for(:label, :incident) }
+
+        subject { issue }
+
+        it_behaves_like 'incident issue'
+        it_behaves_like 'has incident label'
+
+        it 'does create an incident label' do
+          expect { subject }
+            .to change { Label.where(incident_label_attributes).count }.by(1)
+        end
+
+        context 'when invalid' do
+          before do
+            opts.merge!(title: '')
+          end
+
+          it 'does not apply an incident label prematurely' do
+            expect { subject }.to not_change(LabelLink, :count).and not_change(Issue, :count)
+          end
+        end
+      end
+
       it 'refreshes the number of open issues', :use_clean_rails_memory_store_caching do
         expect { issue }.to change { project.open_issues_count }.from(0).to(1)
       end
 
-      context 'when current user cannot admin issues in the project' do
-        let(:guest) { create(:user) }
+      context 'when current user cannot set issue metadata in the project' do
+        let_it_be(:non_member) { create(:user) }
 
-        before do
-          project.add_guest(guest)
-        end
-
-        it 'filters out params that cannot be set without the :admin_issue permission' do
-          issue = described_class.new(project, guest, opts).execute
+        it 'filters out params that cannot be set without the :set_issue_metadata permission' do
+          issue = described_class.new(project: project, current_user: non_member, params: opts, spam_params: spam_params).execute
 
           expect(issue).to be_persisted
           expect(issue.title).to eq('Awesome issue')
@@ -59,20 +108,18 @@ describe Issues::CreateService do
           expect(issue.milestone).to be_nil
           expect(issue.due_date).to be_nil
         end
+
+        it 'can create confidential issues' do
+          issue = described_class.new(project: project, current_user: non_member, params: { confidential: true }, spam_params: spam_params).execute
+
+          expect(issue.confidential).to be_truthy
+        end
       end
 
-      it 'creates a pending todo for new assignee' do
-        attributes = {
-          project: project,
-          author: user,
-          user: assignee,
-          target_id: issue.id,
-          target_type: issue.class.name,
-          action: Todo::ASSIGNED,
-          state: :pending
-        }
+      it 'moves the issue to the end, in an asynchronous worker' do
+        expect(IssuePlacementWorker).to receive(:perform_async).with(be_nil, Integer)
 
-        expect(Todo.where(attributes).count).to eq 1
+        described_class.new(project: project, current_user: user, params: opts, spam_params: spam_params).execute
       end
 
       context 'when label belongs to project group' do
@@ -88,7 +135,7 @@ describe Issues::CreateService do
         end
 
         before do
-          project.update(group: group)
+          project.update!(group: group)
         end
 
         it 'assigns group labels' do
@@ -107,6 +154,31 @@ describe Issues::CreateService do
 
         it 'does not assign label' do
           expect(issue.labels).not_to include label
+        end
+      end
+
+      context 'when labels is nil' do
+        let(:opts) do
+          { title: 'Title',
+            description: 'Description',
+            labels: nil }
+        end
+
+        it 'does not assign label' do
+          expect(issue.labels).to be_empty
+        end
+      end
+
+      context 'when labels is nil and label_ids is present' do
+        let(:opts) do
+          { title: 'Title',
+            description: 'Description',
+            labels: nil,
+            label_ids: labels.map(&:id) }
+        end
+
+        it 'assigns group labels' do
+          expect(issue.labels).to match_array labels
         end
       end
 
@@ -134,7 +206,7 @@ describe Issues::CreateService do
         it 'invalidates open issues counter for assignees when issue is assigned' do
           project.add_maintainer(assignee)
 
-          described_class.new(project, user, opts).execute
+          described_class.new(project: project, current_user: user, params: opts, spam_params: spam_params).execute
 
           expect(assignee.assigned_open_issues_count).to eq 1
         end
@@ -158,18 +230,18 @@ describe Issues::CreateService do
         opts = { title: 'Title', description: 'Description', confidential: false }
 
         expect(project).to receive(:execute_hooks).with(an_instance_of(Hash), :issue_hooks)
-        expect(project).to receive(:execute_services).with(an_instance_of(Hash), :issue_hooks)
+        expect(project).to receive(:execute_integrations).with(an_instance_of(Hash), :issue_hooks)
 
-        described_class.new(project, user, opts).execute
+        described_class.new(project: project, current_user: user, params: opts, spam_params: spam_params).execute
       end
 
       it 'executes confidential issue hooks when issue is confidential' do
         opts = { title: 'Title', description: 'Description', confidential: true }
 
         expect(project).to receive(:execute_hooks).with(an_instance_of(Hash), :confidential_issue_hooks)
-        expect(project).to receive(:execute_services).with(an_instance_of(Hash), :confidential_issue_hooks)
+        expect(project).to receive(:execute_integrations).with(an_instance_of(Hash), :confidential_issue_hooks)
 
-        described_class.new(project, user, opts).execute
+        described_class.new(project: project, current_user: user, params: opts, spam_params: spam_params).execute
       end
 
       context 'after_save callback to store_mentions' do
@@ -196,18 +268,24 @@ describe Issues::CreateService do
           end
         end
       end
+
+      it 'schedules a namespace onboarding create action worker' do
+        expect(Namespaces::OnboardingIssueCreatedWorker).to receive(:perform_async).with(project.namespace.id)
+
+        issue
+      end
     end
 
     context 'issue create service' do
       context 'assignees' do
-        before do
+        before_all do
           project.add_maintainer(user)
         end
 
         it 'removes assignee when user id is invalid' do
           opts = { title: 'Title', description: 'Description', assignee_ids: [-1] }
 
-          issue = described_class.new(project, user, opts).execute
+          issue = described_class.new(project: project, current_user: user, params: opts, spam_params: spam_params).execute
 
           expect(issue.assignees).to be_empty
         end
@@ -215,7 +293,7 @@ describe Issues::CreateService do
         it 'removes assignee when user id is 0' do
           opts = { title: 'Title', description: 'Description', assignee_ids: [0] }
 
-          issue = described_class.new(project, user, opts).execute
+          issue = described_class.new(project: project, current_user: user, params: opts, spam_params: spam_params).execute
 
           expect(issue.assignees).to be_empty
         end
@@ -224,14 +302,14 @@ describe Issues::CreateService do
           project.add_maintainer(assignee)
           opts = { title: 'Title', description: 'Description', assignee_ids: [assignee.id] }
 
-          issue = described_class.new(project, user, opts).execute
+          issue = described_class.new(project: project, current_user: user, params: opts, spam_params: spam_params).execute
 
           expect(issue.assignees).to eq([assignee])
         end
 
         context "when issuable feature is private" do
           before do
-            project.project_feature.update(issues_access_level: ProjectFeature::PRIVATE,
+            project.project_feature.update!(issues_access_level: ProjectFeature::PRIVATE,
                                            merge_requests_access_level: ProjectFeature::PRIVATE)
           end
 
@@ -239,10 +317,10 @@ describe Issues::CreateService do
 
           levels.each do |level|
             it "removes not authorized assignee when project is #{Gitlab::VisibilityLevel.level_name(level)}" do
-              project.update(visibility_level: level)
+              project.update!(visibility_level: level)
               opts = { title: 'Title', description: 'Description', assignee_ids: [assignee.id] }
 
-              issue = described_class.new(project, user, opts).execute
+              issue = described_class.new(project: project, current_user: user, params: opts, spam_params: spam_params).execute
 
               expect(issue.assignees).to be_empty
             end
@@ -251,7 +329,9 @@ describe Issues::CreateService do
       end
     end
 
-    it_behaves_like 'new issuable record that supports quick actions'
+    it_behaves_like 'issuable record that supports quick actions' do
+      let(:issuable) { described_class.new(project: project, current_user: user, params: params, spam_params: spam_params).execute }
+    end
 
     context 'Quick actions' do
       context 'with assignee and milestone in params and command' do
@@ -264,7 +344,7 @@ describe Issues::CreateService do
           }
         end
 
-        before do
+        before_all do
           project.add_maintainer(user)
           project.add_maintainer(assignee)
         end
@@ -278,11 +358,11 @@ describe Issues::CreateService do
     end
 
     context 'resolving discussions' do
-      let(:discussion) { create(:diff_note_on_merge_request).to_discussion }
-      let(:merge_request) { discussion.noteable }
-      let(:project) { merge_request.source_project }
+      let_it_be(:discussion) { create(:diff_note_on_merge_request).to_discussion }
+      let_it_be(:merge_request) { discussion.noteable }
+      let_it_be(:project) { merge_request.source_project }
 
-      before do
+      before_all do
         project.add_maintainer(user)
       end
 
@@ -290,14 +370,14 @@ describe Issues::CreateService do
         let(:opts) { { discussion_to_resolve: discussion.id, merge_request_to_resolve_discussions_of: merge_request.iid } }
 
         it 'resolves the discussion' do
-          described_class.new(project, user, opts).execute
+          described_class.new(project: project, current_user: user, params: opts, spam_params: spam_params).execute
           discussion.first_note.reload
 
           expect(discussion.resolved?).to be(true)
         end
 
         it 'added a system note to the discussion' do
-          described_class.new(project, user, opts).execute
+          described_class.new(project: project, current_user: user, params: opts, spam_params: spam_params).execute
 
           reloaded_discussion = MergeRequest.find(merge_request.id).discussions.first
 
@@ -305,17 +385,20 @@ describe Issues::CreateService do
         end
 
         it 'assigns the title and description for the issue' do
-          issue = described_class.new(project, user, opts).execute
+          issue = described_class.new(project: project, current_user: user, params: opts, spam_params: spam_params).execute
 
           expect(issue.title).not_to be_nil
           expect(issue.description).not_to be_nil
         end
 
         it 'can set nil explicitly to the title and description' do
-          issue = described_class.new(project, user,
-                                      merge_request_to_resolve_discussions_of: merge_request,
-                                      description: nil,
-                                      title: nil).execute
+          issue = described_class.new(project: project, current_user: user,
+                                      params: {
+                                        merge_request_to_resolve_discussions_of: merge_request,
+                                        description: nil,
+                                        title: nil
+                                      },
+                                      spam_params: spam_params).execute
 
           expect(issue.description).to be_nil
           expect(issue.title).to be_nil
@@ -326,14 +409,14 @@ describe Issues::CreateService do
         let(:opts) { { merge_request_to_resolve_discussions_of: merge_request.iid } }
 
         it 'resolves the discussion' do
-          described_class.new(project, user, opts).execute
+          described_class.new(project: project, current_user: user, params: opts, spam_params: spam_params).execute
           discussion.first_note.reload
 
           expect(discussion.resolved?).to be(true)
         end
 
         it 'added a system note to the discussion' do
-          described_class.new(project, user, opts).execute
+          described_class.new(project: project, current_user: user, params: opts, spam_params: spam_params).execute
 
           reloaded_discussion = MergeRequest.find(merge_request.id).discussions.first
 
@@ -341,17 +424,20 @@ describe Issues::CreateService do
         end
 
         it 'assigns the title and description for the issue' do
-          issue = described_class.new(project, user, opts).execute
+          issue = described_class.new(project: project, current_user: user, params: opts, spam_params: spam_params).execute
 
           expect(issue.title).not_to be_nil
           expect(issue.description).not_to be_nil
         end
 
         it 'can set nil explicitly to the title and description' do
-          issue = described_class.new(project, user,
-                                      merge_request_to_resolve_discussions_of: merge_request,
-                                      description: nil,
-                                      title: nil).execute
+          issue = described_class.new(project: project, current_user: user,
+                                      params: {
+                                        merge_request_to_resolve_discussions_of: merge_request,
+                                        description: nil,
+                                        title: nil
+                                      },
+                                      spam_params: spam_params).execute
 
           expect(issue.description).to be_nil
           expect(issue.title).to be_nil
@@ -360,130 +446,30 @@ describe Issues::CreateService do
     end
 
     context 'checking spam' do
-      let(:opts) do
+      let(:params) do
         {
-          title: 'Awesome issue',
-          description: 'please fix',
-          request: double(:request, env: {})
+          title: 'Spam issue'
         }
       end
 
-      before do
-        stub_feature_flags(allow_possible_spam: false)
+      subject do
+        described_class.new(project: project, current_user: user, params: params, spam_params: spam_params)
       end
 
-      context 'when recaptcha was verified' do
-        let(:log_user)  { user }
-        let(:spam_logs) { create_list(:spam_log, 2, user: log_user, title: 'Awesome issue') }
-
-        before do
-          opts[:recaptcha_verified] = true
-          opts[:spam_log_id]        = spam_logs.last.id
-
-          expect(Spam::AkismetService).not_to receive(:new)
+      it 'executes SpamActionService' do
+        expect_next_instance_of(
+          Spam::SpamActionService,
+          {
+            spammable: kind_of(Issue),
+            spam_params: spam_params,
+            user: an_instance_of(User),
+            action: :create
+          }
+        ) do |instance|
+          expect(instance).to receive(:execute)
         end
 
-        it 'does no mark an issue as a spam ' do
-          expect(issue).not_to be_spam
-        end
-
-        it 'an issue is valid ' do
-          expect(issue.valid?).to be_truthy
-        end
-
-        it 'does not assign a spam_log to an issue' do
-          expect(issue.spam_log).to be_nil
-        end
-
-        it 'marks related spam_log as recaptcha_verified' do
-          expect { issue }.to change {SpamLog.last.recaptcha_verified}.from(false).to(true)
-        end
-
-        context 'when spam log does not belong to a user' do
-          let(:log_user) { create(:user) }
-
-          it 'does not mark spam_log as recaptcha_verified' do
-            expect { issue }.not_to change {SpamLog.last.recaptcha_verified}
-          end
-        end
-      end
-
-      context 'when recaptcha was not verified' do
-        before do
-          expect_next_instance_of(Spam::SpamCheckService) do |spam_service|
-            expect(spam_service).to receive_messages(check_for_spam?: true)
-          end
-        end
-
-        context 'when akismet detects spam' do
-          before do
-            expect_next_instance_of(Spam::AkismetService) do |akismet_service|
-              expect(akismet_service).to receive_messages(spam?: true)
-            end
-          end
-
-          context 'when issuables_recaptcha_enabled feature flag is true' do
-            it 'marks an issue as a spam ' do
-              expect(issue).to be_spam
-            end
-
-            it 'invalidates the issue' do
-              expect(issue).to be_invalid
-            end
-
-            it 'creates a new spam_log' do
-              expect { issue }
-                  .to have_spam_log(title: issue.title, description: issue.description, user_id: user.id, noteable_type: 'Issue')
-            end
-
-            it 'assigns a spam_log to an issue' do
-              expect(issue.spam_log).to eq(SpamLog.last)
-            end
-          end
-
-          context 'when issuable_recaptcha_enabled feature flag is false' do
-            before do
-              stub_feature_flags(allow_possible_spam: true)
-            end
-
-            it 'does not mark an issue as a spam ' do
-              expect(issue).not_to be_spam
-            end
-
-            it 'accepts the ​issue as valid' do
-              expect(issue).to be_valid
-            end
-
-            it 'creates a new spam_log' do
-              expect { issue }
-                  .to have_spam_log(title: issue.title, description: issue.description, user_id: user.id, noteable_type: 'Issue')
-            end
-
-            it 'assigns a spam_log to an issue' do
-              expect(issue.spam_log).to eq(SpamLog.last)
-            end
-          end
-        end
-
-        context 'when akismet does not detect spam' do
-          before do
-            expect_next_instance_of(Spam::AkismetService) do |akismet_service|
-              expect(akismet_service).to receive_messages(spam?: false)
-            end
-          end
-
-          it 'does not mark an issue as a spam ' do
-            expect(issue).not_to be_spam
-          end
-
-          it 'an issue is valid ' do
-            expect(issue.valid?).to be_truthy
-          end
-
-          it 'does not assign a spam_log to an issue' do
-            expect(issue.spam_log).to be_nil
-          end
-        end
+        subject.execute
       end
     end
   end

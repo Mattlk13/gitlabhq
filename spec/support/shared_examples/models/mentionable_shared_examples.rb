@@ -66,7 +66,7 @@ RSpec.shared_examples 'a mentionable' do
     expect(subject.gfm_reference).to eq(backref_text)
   end
 
-  it "extracts references from its reference property" do
+  it "extracts references from its reference property", :clean_gitlab_redis_cache do
     # De-duplicate and omit itself
     refs = subject.referenced_mentionables
     expect(refs.size).to eq(6)
@@ -80,29 +80,25 @@ RSpec.shared_examples 'a mentionable' do
 
   context 'when there are cached markdown fields' do
     before do
-      if subject.is_a?(CacheMarkdownField)
-        subject.refresh_markdown_cache
-      end
+      skip unless subject.is_a?(CacheMarkdownField)
     end
 
     it 'sends in cached markdown fields when appropriate' do
-      if subject.is_a?(CacheMarkdownField) && subject.extractors[author].blank?
-        expect_next_instance_of(Gitlab::ReferenceExtractor) do |ext|
-          attrs = subject.class.mentionable_attrs.collect(&:first) & subject.cached_markdown_fields.markdown_fields
-          attrs.each do |field|
-            expect(ext).to receive(:analyze).with(subject.send(field), hash_including(rendered: anything))
-          end
+      subject.extractors[author] = nil
+      expect_next_instance_of(Gitlab::ReferenceExtractor) do |ext|
+        attrs = subject.class.mentionable_attrs.collect(&:first) & subject.cached_markdown_fields.markdown_fields
+        attrs.each do |field|
+          expect(ext).to receive(:analyze).with(subject.send(field), hash_including(rendered: anything))
         end
-
-        expect(subject).not_to receive(:refresh_markdown_cache)
-        expect(subject).to receive(:cached_markdown_fields).at_least(:once).and_call_original
-
-        subject.all_references(author)
       end
+
+      expect(subject).to receive(:cached_markdown_fields).at_least(1).and_call_original
+
+      subject.all_references(author)
     end
   end
 
-  it 'creates cross-reference notes' do
+  it 'creates cross-reference notes', :clean_gitlab_redis_cache do
     mentioned_objects = [mentioned_issue, mentioned_mr, mentioned_commit,
                          ext_issue, ext_mr, ext_commit]
 
@@ -126,33 +122,47 @@ RSpec.shared_examples 'an editable mentionable' do
 
   context 'when there are cached markdown fields' do
     before do
-      if subject.is_a?(CacheMarkdownField)
-        subject.refresh_markdown_cache
-      end
+      skip unless subject.is_a?(CacheMarkdownField)
+
+      subject.save!
     end
 
     it 'refreshes markdown cache if necessary' do
-      subject.save!
-
       set_mentionable_text.call('This is a text')
 
-      if subject.is_a?(CacheMarkdownField) && subject.extractors[author].blank?
-        expect_next_instance_of(Gitlab::ReferenceExtractor) do |ext|
-          subject.cached_markdown_fields.markdown_fields.each do |field|
-            expect(ext).to receive(:analyze).with(subject.send(field), hash_including(rendered: anything))
-          end
+      subject.extractors[author] = nil
+      expect_next_instance_of(Gitlab::ReferenceExtractor) do |ext|
+        subject.cached_markdown_fields.markdown_fields.each do |field|
+          expect(ext).to receive(:analyze).with(subject.send(field), hash_including(rendered: anything))
         end
+      end
 
-        expect(subject).to receive(:refresh_markdown_cache)
-        expect(subject).to receive(:cached_markdown_fields).at_least(:once).and_call_original
+      expect(subject).to receive(:refresh_markdown_cache).and_call_original
+      expect(subject).to receive(:cached_markdown_fields).at_least(:once).and_call_original
 
+      subject.all_references(author)
+    end
+
+    context 'when the markdown cache is stale' do
+      before do
+        expect(subject).to receive(:latest_cached_markdown_version).at_least(:once) do
+          (Gitlab::MarkdownCache::CACHE_COMMONMARK_VERSION + 1) << 16
+        end
+      end
+
+      it 'persists the refreshed cache so that it does not have to be refreshed every time' do
+        expect(subject).to receive(:refresh_markdown_cache).at_least(1).and_call_original
+
+        subject.all_references(author)
+
+        subject.reload
         subject.all_references(author)
       end
     end
   end
 
   it 'creates new cross-reference notes when the mentionable text is edited' do
-    subject.save
+    subject.save!
     subject.create_cross_references!
 
     new_text = <<-MSG.strip_heredoc
@@ -197,25 +207,8 @@ RSpec.shared_examples 'an editable mentionable' do
 end
 
 RSpec.shared_examples 'mentions in description' do |mentionable_type|
-  describe 'when store_mentioned_users_to_db feature disabled' do
+  describe 'when storing user mentions' do
     before do
-      stub_feature_flags(store_mentioned_users_to_db: false)
-      mentionable.store_mentions!
-    end
-
-    context 'when mentionable description contains mentions' do
-      let(:user) { create(:user) }
-      let(:mentionable) { create(mentionable_type, description: "#{user.to_reference} some description") }
-
-      it 'stores no mentions' do
-        expect(mentionable.user_mentions.count).to eq 0
-      end
-    end
-  end
-
-  describe 'when store_mentioned_users_to_db feature enabled' do
-    before do
-      stub_feature_flags(store_mentioned_users_to_db: true)
       mentionable.store_mentions!
     end
 
@@ -256,7 +249,7 @@ RSpec.shared_examples 'mentions in notes' do |mentionable_type|
     let!(:mentionable) { note.noteable }
 
     before do
-      note.update(note: note_desc)
+      note.update!(note: note_desc)
       note.store_mentions!
       add_member(user)
     end
@@ -278,7 +271,7 @@ RSpec.shared_examples 'load mentions from DB' do |mentionable_type|
     let_it_be(:note_desc) { "#{mentioned_user.to_reference} and #{group.to_reference(full: true)} and @all" }
 
     before do
-      note.update(note: note_desc)
+      note.update!(note: note_desc)
       note.store_mentions!
       add_member(user)
     end
@@ -287,11 +280,11 @@ RSpec.shared_examples 'load mentions from DB' do |mentionable_type|
       before do
         user_mention = note.send(:model_user_mention)
         mention_ids = {
-          mentioned_users_ids: user_mention.mentioned_users_ids.to_a << User.maximum(:id).to_i.succ,
-          mentioned_projects_ids: user_mention.mentioned_projects_ids.to_a << Project.maximum(:id).to_i.succ,
-          mentioned_groups_ids: user_mention.mentioned_groups_ids.to_a << Group.maximum(:id).to_i.succ
+          mentioned_users_ids: user_mention.mentioned_users_ids.to_a << non_existing_record_id,
+          mentioned_projects_ids: user_mention.mentioned_projects_ids.to_a << non_existing_record_id,
+          mentioned_groups_ids: user_mention.mentioned_groups_ids.to_a << non_existing_record_id
         }
-        user_mention.update(mention_ids)
+        user_mention.update!(mention_ids)
       end
 
       it 'filters out inexistent mentions' do
@@ -314,7 +307,7 @@ RSpec.shared_examples 'load mentions from DB' do |mentionable_type|
           mentioned_projects_ids: user_mention.mentioned_projects_ids.to_a << private_project.id,
           mentioned_groups_ids: user_mention.mentioned_groups_ids.to_a << private_group.id
         }
-        user_mention.update(mention_ids)
+        user_mention.update!(mention_ids)
 
         add_member(mega_user)
         private_project.add_developer(mega_user)

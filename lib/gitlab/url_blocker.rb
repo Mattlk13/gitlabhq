@@ -11,8 +11,8 @@ module Gitlab
       # Validates the given url according to the constraints specified by arguments.
       #
       # ports - Raises error if the given URL port does is not between given ports.
-      # allow_localhost - Raises error if URL resolves to a localhost IP address and argument is true.
-      # allow_local_network - Raises error if URL resolves to a link-local address and argument is true.
+      # allow_localhost - Raises error if URL resolves to a localhost IP address and argument is false.
+      # allow_local_network - Raises error if URL resolves to a link-local address and argument is false.
       # ascii_only - Raises error if URL has unicode characters and argument is true.
       # enforce_user - Raises error if URL user doesn't start with alphanumeric characters and argument is true.
       # enforce_sanitization - Raises error if URL includes any HTML/CSS/JS tags and argument is true.
@@ -49,9 +49,11 @@ module Gitlab
         return [uri, nil] unless address_info
 
         ip_address = ip_address(address_info)
-        return [uri, nil] if domain_whitelisted?(uri) || ip_whitelisted?(ip_address)
+        return [uri, nil] if domain_allowed?(uri)
 
         protected_uri_with_hostname = enforce_uri_hostname(ip_address, uri, dns_rebind_protection)
+
+        return protected_uri_with_hostname if ip_allowed?(ip_address, port: get_port(uri))
 
         # Allow url from the GitLab instance itself but only for the configured hostname and ports
         return protected_uri_with_hostname if internal?(uri)
@@ -65,8 +67,8 @@ module Gitlab
         protected_uri_with_hostname
       end
 
-      def blocked_url?(*args)
-        validate!(*args)
+      def blocked_url?(url, **kwargs)
+        validate!(url, **kwargs)
 
         false
       rescue BlockedUrlError
@@ -113,8 +115,8 @@ module Gitlab
         end
       rescue SocketError
         # If the dns rebinding protection is not enabled or the domain
-        # is whitelisted we avoid the dns rebinding checks
-        return if domain_whitelisted?(uri) || !dns_rebind_protection
+        # is allowed we avoid the dns rebinding checks
+        return if domain_allowed?(uri) || !dns_rebind_protection
 
         # In the test suite we use a lot of mocked urls that are either invalid or
         # don't exist. In order to avoid modifying a ton of tests and factories
@@ -253,12 +255,12 @@ module Gitlab
           (uri.port.blank? || uri.port == config.gitlab_shell.ssh_port)
       end
 
-      def domain_whitelisted?(uri)
-        Gitlab::UrlBlockers::UrlWhitelist.domain_whitelisted?(uri.normalized_host)
+      def domain_allowed?(uri)
+        Gitlab::UrlBlockers::UrlAllowlist.domain_allowed?(uri.normalized_host, port: get_port(uri))
       end
 
-      def ip_whitelisted?(ip_address)
-        Gitlab::UrlBlockers::UrlWhitelist.ip_whitelisted?(ip_address)
+      def ip_allowed?(ip_address, port: nil)
+        Gitlab::UrlBlockers::UrlAllowlist.ip_allowed?(ip_address, port: port)
       end
 
       def config

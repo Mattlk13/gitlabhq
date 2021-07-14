@@ -14,12 +14,12 @@ module Snippets
       @snippets = snippets
     end
 
-    def execute
+    def execute(options = {})
       return ServiceResponse.success(message: 'No snippets found.') if snippets.empty?
 
-      user_can_delete_snippets!
+      user_can_delete_snippets! unless options[:hard_delete]
       attempt_delete_repositories!
-      snippets.destroy_all # rubocop: disable DestroyAll
+      snippets.destroy_all # rubocop: disable Cop/DestroyAll
 
       ServiceResponse.success(message: 'Snippets were deleted.')
     rescue SnippetAccessError
@@ -27,7 +27,7 @@ module Snippets
     rescue DeleteRepositoryError
       attempt_rollback_repositories
       service_response_error('Failed to delete snippet repositories.', 400)
-    rescue
+    rescue StandardError
       # In case the delete operation fails
       attempt_rollback_repositories
       service_response_error('Failed to remove snippets.', 400)

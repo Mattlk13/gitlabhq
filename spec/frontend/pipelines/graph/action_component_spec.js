@@ -1,12 +1,14 @@
+import { GlButton } from '@gitlab/ui';
 import { mount } from '@vue/test-utils';
 import MockAdapter from 'axios-mock-adapter';
 import waitForPromises from 'helpers/wait_for_promises';
 import axios from '~/lib/utils/axios_utils';
-import ActionComponent from '~/pipelines/components/graph/action_component.vue';
+import ActionComponent from '~/pipelines/components/jobs_shared/action_component.vue';
 
 describe('pipeline graph action component', () => {
   let wrapper;
   let mock;
+  const findButton = () => wrapper.find(GlButton);
 
   beforeEach(() => {
     mock = new MockAdapter(axios);
@@ -31,7 +33,7 @@ describe('pipeline graph action component', () => {
     expect(wrapper.attributes('title')).toBe('bar');
   });
 
-  it('should update bootstrap tooltip when title changes', done => {
+  it('should update bootstrap tooltip when title changes', (done) => {
     wrapper.setProps({ tooltipText: 'changed' });
 
     wrapper.vm
@@ -44,15 +46,15 @@ describe('pipeline graph action component', () => {
   });
 
   it('should render an svg', () => {
-    expect(wrapper.find('.ci-action-icon-wrapper')).toBeDefined();
-    expect(wrapper.find('svg')).toBeDefined();
+    expect(wrapper.find('.ci-action-icon-wrapper').exists()).toBe(true);
+    expect(wrapper.find('svg').exists()).toBe(true);
   });
 
   describe('on click', () => {
-    it('emits `pipelineActionRequestComplete` after a successful request', done => {
+    it('emits `pipelineActionRequestComplete` after a successful request', (done) => {
       jest.spyOn(wrapper.vm, '$emit');
 
-      wrapper.find('button').trigger('click');
+      findButton().trigger('click');
 
       waitForPromises()
         .then(() => {
@@ -62,8 +64,8 @@ describe('pipeline graph action component', () => {
         .catch(done.fail);
     });
 
-    it('renders a loading icon while waiting for request', done => {
-      wrapper.find('button').trigger('click');
+    it('renders a loading icon while waiting for request', (done) => {
+      findButton().trigger('click');
 
       wrapper.vm.$nextTick(() => {
         expect(wrapper.find('.js-action-icon-loading').exists()).toBe(true);

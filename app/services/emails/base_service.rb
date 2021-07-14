@@ -11,3 +11,5 @@ module Emails
     end
   end
 end
+
+Emails::BaseService.prepend_mod_with('Emails::BaseService')

@@ -1,6 +1,6 @@
 import { capitalizeFirstCharacter } from '~/lib/utils/text_utility';
 
-export const clearDraft = autosaveKey => {
+export const clearDraft = (autosaveKey) => {
   try {
     window.localStorage.removeItem(`autosave/${autosaveKey}`);
   } catch (e) {
@@ -9,7 +9,7 @@ export const clearDraft = autosaveKey => {
   }
 };
 
-export const getDraft = autosaveKey => {
+export const getDraft = (autosaveKey) => {
   try {
     return window.localStorage.getItem(`autosave/${autosaveKey}`);
   } catch (e) {
@@ -29,5 +29,5 @@ export const updateDraft = (autosaveKey, text) => {
 };
 
 export const getDiscussionReplyKey = (noteableType, discussionId) =>
-  /* eslint-disable-next-line @gitlab/i18n/no-non-i18n-strings */
+  /* eslint-disable-next-line @gitlab/require-i18n-strings */
   ['Note', capitalizeFirstCharacter(noteableType), discussionId, 'Reply'].join('/');

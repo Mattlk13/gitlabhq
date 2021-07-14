@@ -13,11 +13,11 @@ module Gitlab
     TAG_REF_PREFIX = "refs/tags/"
     BRANCH_REF_PREFIX = "refs/heads/"
 
-    BaseError = Class.new(StandardError)
     CommandError = Class.new(BaseError)
     CommitError = Class.new(BaseError)
     OSError = Class.new(BaseError)
     UnknownRef = Class.new(BaseError)
+    CommandTimedOut = Class.new(CommandError)
 
     class << self
       include Gitlab::EncodingHelper
@@ -80,7 +80,7 @@ module Gitlab
       def shas_eql?(sha1, sha2)
         return true if sha1.nil? && sha2.nil?
         return false if sha1.nil? || sha2.nil?
-        return false unless sha1.class == sha2.class
+        return false unless sha1.instance_of?(sha2.class)
 
         # If either of the shas is below the minimum length, we cannot be sure
         # that they actually refer to the same commit because of hash collision.

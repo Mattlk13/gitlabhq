@@ -1,14 +1,12 @@
-import AWS from 'aws-sdk/global';
 import EC2 from 'aws-sdk/clients/ec2';
+import AWS from 'aws-sdk/global';
 import {
   setAWSConfig,
   fetchRoles,
-  fetchRegions,
   fetchKeyPairs,
   fetchVpcs,
   fetchSubnets,
   fetchSecurityGroups,
-  DEFAULT_REGION,
 } from '~/create_cluster/eks_cluster/services/aws_services_facade';
 
 const mockListRolesPromise = jest.fn();
@@ -45,19 +43,17 @@ describe('awsServicesFacade', () => {
     vpc = 'vpc-2';
   });
 
-  it('setAWSConfig configures AWS SDK with provided credentials and default region', () => {
+  it('setAWSConfig configures AWS SDK with provided credentials', () => {
     const awsCredentials = {
       accessKeyId: 'access-key',
       secretAccessKey: 'secret-key',
       sessionToken: 'session-token',
+      region,
     };
 
     setAWSConfig({ awsCredentials });
 
-    expect(AWS.config).toEqual({
-      ...awsCredentials,
-      region: DEFAULT_REGION,
-    });
+    expect(AWS.config).toEqual(awsCredentials);
   });
 
   describe('when fetchRoles succeeds', () => {
@@ -75,23 +71,7 @@ describe('awsServicesFacade', () => {
     });
 
     it('return list of regions where each item has a name and value', () => {
-      expect(fetchRoles()).resolves.toEqual(rolesOutput);
-    });
-  });
-
-  describe('when fetchRegions succeeds', () => {
-    let regions;
-    let regionsOutput;
-
-    beforeEach(() => {
-      regions = [{ RegionName: 'east-1' }, { RegionName: 'west-2' }];
-      regionsOutput = regions.map(({ RegionName: name }) => ({ name, value: name }));
-
-      mockDescribeRegionsPromise.mockResolvedValueOnce({ Regions: regions });
-    });
-
-    it('return list of roles where each item has a name and value', () => {
-      expect(fetchRegions()).resolves.toEqual(regionsOutput);
+      return expect(fetchRoles()).resolves.toEqual(rolesOutput);
     });
   });
 
@@ -112,7 +92,7 @@ describe('awsServicesFacade', () => {
     });
 
     it('return list of key pairs where each item has a name and value', () => {
-      expect(fetchKeyPairs({ region })).resolves.toEqual(keyPairsOutput);
+      return expect(fetchKeyPairs({ region })).resolves.toEqual(keyPairsOutput);
     });
   });
 
@@ -121,7 +101,10 @@ describe('awsServicesFacade', () => {
     let vpcsOutput;
 
     beforeEach(() => {
-      vpcs = [{ VpcId: 'vpc-1', Tags: [] }, { VpcId: 'vpc-2', Tags: [] }];
+      vpcs = [
+        { VpcId: 'vpc-1', Tags: [] },
+        { VpcId: 'vpc-2', Tags: [] },
+      ];
       vpcsOutput = vpcs.map(({ VpcId: vpcId }) => ({ name: vpcId, value: vpcId }));
 
       mockDescribeVpcsPromise.mockResolvedValueOnce({ Vpcs: vpcs });
@@ -133,7 +116,7 @@ describe('awsServicesFacade', () => {
     });
 
     it('return list of vpcs where each item has a name and value', () => {
-      expect(fetchVpcs({ region })).resolves.toEqual(vpcsOutput);
+      return expect(fetchVpcs({ region })).resolves.toEqual(vpcsOutput);
     });
   });
 
@@ -151,7 +134,7 @@ describe('awsServicesFacade', () => {
     });
 
     it('uses name tag value as the vpc name', () => {
-      expect(fetchVpcs({ region })).resolves.toEqual(vpcsOutput);
+      return expect(fetchVpcs({ region })).resolves.toEqual(vpcsOutput);
     });
   });
 
@@ -167,7 +150,7 @@ describe('awsServicesFacade', () => {
     });
 
     it('return list of subnets where each item has a name and value', () => {
-      expect(fetchSubnets({ region, vpc })).resolves.toEqual(subnetsOutput);
+      return expect(fetchSubnets({ region, vpc })).resolves.toEqual(subnetsOutput);
     });
   });
 
@@ -189,7 +172,7 @@ describe('awsServicesFacade', () => {
     });
 
     it('return list of security groups where each item has a name and value', () => {
-      expect(fetchSecurityGroups({ region, vpc })).resolves.toEqual(securityGroupsOutput);
+      return expect(fetchSecurityGroups({ region, vpc })).resolves.toEqual(securityGroupsOutput);
     });
   });
 });

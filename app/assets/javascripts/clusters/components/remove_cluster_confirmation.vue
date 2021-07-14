@@ -1,9 +1,10 @@
 <script>
-import _ from 'underscore';
-import SplitButton from '~/vue_shared/components/split_button.vue';
+/* eslint-disable vue/no-v-html */
 import { GlModal, GlButton, GlFormInput } from '@gitlab/ui';
-import { s__, sprintf } from '~/locale';
+import { escape } from 'lodash';
 import csrf from '~/lib/utils/csrf';
+import { s__, sprintf } from '~/locale';
+import SplitButton from '~/vue_shared/components/split_button.vue';
 
 const splitButtonActionItems = [
   {
@@ -39,6 +40,10 @@ export default {
       type: String,
       required: true,
     },
+    hasManagementProject: {
+      type: Boolean,
+      required: false,
+    },
   },
   data() {
     return {
@@ -62,18 +67,6 @@ export default {
           )
         : s__('ClusterIntegration|You are about to remove your cluster integration.');
     },
-    warningToBeRemoved() {
-      return s__(`ClusterIntegration|
-        This will permanently delete the following resources:
-        <ul>
-          <li>All installed applications and related resources</li>
-          <li>The <code>gitlab-managed-apps</code> namespace</li>
-          <li>Any project namespaces</li>
-          <li><code>clusterroles</code></li>
-          <li><code>clusterrolebindings</code></li>
-        </ul>
-      `);
-    },
     confirmationTextLabel() {
       return sprintf(
         this.confirmCleanup
@@ -82,13 +75,16 @@ export default {
             )
           : s__('ClusterIntegration|To remove your integration, type %{clusterName} to confirm:'),
         {
-          clusterName: `<code>${_.escape(this.clusterName)}</code>`,
+          clusterName: `<code>${escape(this.clusterName)}</code>`,
         },
         false,
       );
     },
     canSubmit() {
       return this.enteredClusterName === this.clusterName;
+    },
+    canCleanupResources() {
+      return !this.hasManagementProject;
     },
   },
   methods: {
@@ -110,14 +106,23 @@ export default {
 </script>
 
 <template>
-  <div>
+  <div class="gl-display-flex gl-justify-content-end">
     <split-button
+      v-if="canCleanupResources"
       :action-items="$options.splitButtonActionItems"
       menu-class="dropdown-menu-large"
       variant="danger"
       @remove-cluster="handleClickRemoveCluster(false)"
       @remove-cluster-and-cleanup="handleClickRemoveCluster(true)"
     />
+    <gl-button
+      v-else
+      variant="danger"
+      data-testid="btnRemove"
+      @click="handleClickRemoveCluster(false)"
+    >
+      {{ s__('ClusterIntegration|Remove integration') }}
+    </gl-button>
     <gl-modal
       ref="modal"
       size="lg"
@@ -125,42 +130,61 @@ export default {
       :title="modalTitle"
       kind="danger"
     >
-      <template>
-        <p>{{ warningMessage }}</p>
-        <div v-if="confirmCleanup" v-html="warningToBeRemoved"></div>
-        <strong v-html="confirmationTextLabel"></strong>
-        <form ref="form" :action="clusterPath" method="post" class="append-bottom-20">
-          <input ref="method" type="hidden" name="_method" value="delete" />
-          <input :value="csrfToken" type="hidden" name="authenticity_token" />
-          <input ref="cleanup" type="hidden" name="cleanup" value="true" />
-          <gl-form-input
-            v-model="enteredClusterName"
-            autofocus
-            type="text"
-            name="confirm_cluster_name_input"
-            autocomplete="off"
-          />
-        </form>
-        <span v-if="confirmCleanup">{{
-          s__(
-            'ClusterIntegration|If you do not wish to delete all associated GitLab resources, you can simply remove the integration.',
-          )
-        }}</span>
-      </template>
-      <template slot="modal-footer">
+      <p>{{ warningMessage }}</p>
+      <div v-if="confirmCleanup">
+        {{ s__('ClusterIntegration|This will permanently delete the following resources:') }}
+        <ul>
+          <li>{{ s__('ClusterIntegration|Any project namespaces') }}</li>
+          <!-- eslint-disable @gitlab/vue-require-i18n-strings -->
+          <li><code>clusterroles</code></li>
+          <li><code>clusterrolebindings</code></li>
+          <!-- eslint-enable @gitlab/vue-require-i18n-strings -->
+        </ul>
+      </div>
+      <strong v-html="confirmationTextLabel"></strong>
+      <form ref="form" :action="clusterPath" method="post" class="gl-mb-5">
+        <input ref="method" type="hidden" name="_method" value="delete" />
+        <input :value="csrfToken" type="hidden" name="authenticity_token" />
+        <input ref="cleanup" type="hidden" name="cleanup" value="true" />
+        <gl-form-input
+          v-model="enteredClusterName"
+          autofocus
+          type="text"
+          name="confirm_cluster_name_input"
+          autocomplete="off"
+        />
+      </form>
+      <span v-if="confirmCleanup">{{
+        s__(
+          'ClusterIntegration|If you do not wish to delete all associated GitLab resources, you can simply remove the integration.',
+        )
+      }}</span>
+      <template #modal-footer>
         <gl-button variant="secondary" @click="handleCancel">{{ s__('Cancel') }}</gl-button>
         <template v-if="confirmCleanup">
-          <gl-button :disabled="!canSubmit" variant="warning" @click="handleSubmit">{{
-            s__('ClusterIntegration|Remove integration')
-          }}</gl-button>
-          <gl-button :disabled="!canSubmit" variant="danger" @click="handleSubmit(true)">{{
-            s__('ClusterIntegration|Remove integration and resources')
-          }}</gl-button>
+          <gl-button
+            :disabled="!canSubmit"
+            variant="warning"
+            category="primary"
+            @click="handleSubmit"
+            >{{ s__('ClusterIntegration|Remove integration') }}</gl-button
+          >
+          <gl-button
+            :disabled="!canSubmit"
+            variant="danger"
+            category="primary"
+            @click="handleSubmit(true)"
+            >{{ s__('ClusterIntegration|Remove integration and resources') }}</gl-button
+          >
         </template>
         <template v-else>
-          <gl-button :disabled="!canSubmit" variant="danger" @click="handleSubmit">{{
-            s__('ClusterIntegration|Remove integration')
-          }}</gl-button>
+          <gl-button
+            :disabled="!canSubmit"
+            variant="danger"
+            category="primary"
+            @click="handleSubmit"
+            >{{ s__('ClusterIntegration|Remove integration') }}</gl-button
+          >
         </template>
       </template>
     </gl-modal>

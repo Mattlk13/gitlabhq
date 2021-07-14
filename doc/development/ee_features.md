@@ -1,30 +1,48 @@
+---
+stage: none
+group: unassigned
+info: To determine the technical writer assigned to the Stage/Group associated with this page, see https://about.gitlab.com/handbook/engineering/ux/technical-writing/#assignments
+---
+
 # Guidelines for implementing Enterprise Edition features
 
 - **Write the code and the tests.**: As with any code, EE features should have
   good test coverage to prevent regressions.
 - **Write documentation.**: Add documentation to the `doc/` directory. Describe
-  the feature and include screenshots, if applicable.
+  the feature and include screenshots, if applicable. Indicate [what editions](documentation/styleguide/index.md#product-tier-badges)
+  the feature applies to.
 - **Submit a MR to the `www-gitlab-com` project.**: Add the new feature to the
   [EE features list](https://about.gitlab.com/features/).
 
 ## Act as CE when unlicensed
 
-Since the implementation of [GitLab CE features to work with unlicensed EE instance][ee-as-ce]
+Since the implementation of
+[GitLab CE features to work with unlicensed EE instance](https://gitlab.com/gitlab-org/gitlab/-/issues/2500)
 GitLab Enterprise Edition should work like GitLab Community Edition
 when no license is active. So EE features always should be guarded by
-`project.feature_available?` or `group.feature_available?` (or
+`project.feature_available?` or `group.licensed_feature_available?` (or
 `License.feature_available?` if it is a system-wide feature).
+
+Frontend features should be guarded by pushing a flag from the backend by [using `push_licensed_feature`](licensed_feature_availability.md#restricting-frontend-features), and checked using `this.glFeatures.someFeature` in the frontend.
 
 CE specs should remain untouched as much as possible and extra specs
 should be added for EE. Licensed features can be stubbed using the
 spec helper `stub_licensed_features` in `EE::LicenseHelpers`.
 
 You can force GitLab to act as CE by either deleting the `ee/` directory or by
-setting the [`FOSS_ONLY` environment variable](https://gitlab.com/gitlab-org/gitlab/blob/master/config/helpers/is_ee_env.js)
+setting the [`FOSS_ONLY` environment variable](https://gitlab.com/gitlab-org/gitlab/-/blob/master/config/helpers/is_ee_env.js)
 to something that evaluates as `true`. The same works for running tests
 (for example `FOSS_ONLY=1 yarn jest`).
 
-[ee-as-ce]: https://gitlab.com/gitlab-org/gitlab/issues/2500
+## CI pipelines in a FOSS context
+
+By default, merge request pipelines for development run in an EE-context only. If you are
+developing features that differ between FOSS and EE, you may wish to run pipelines in a
+FOSS context as well.
+
+To run pipelines in both contexts, include `RUN AS-IF-FOSS` in the merge request title.
+
+See the [As-if-FOSS jobs](pipelines.md#as-if-foss-jobs) pipelines documentation for more information.
 
 ## Separation of EE code
 
@@ -53,10 +71,14 @@ is applied not only to models. Here's a list of other examples:
 - `ee/app/views/foo/_bar.html.haml`
 
 This works because for every path that is present in CE's eager-load/auto-load
-paths, we add the same `ee/`-prepended path in [`config/application.rb`].
+paths, we add the same `ee/`-prepended path in [`config/application.rb`](https://gitlab.com/gitlab-org/gitlab/-/blob/925d3d4ebc7a2c72964ce97623ae41b8af12538d/config/application.rb#L42-52).
 This also applies to views.
 
-[`config/application.rb`]: https://gitlab.com/gitlab-org/gitlab/blob/925d3d4ebc7a2c72964ce97623ae41b8af12538d/config/application.rb#L42-52
+#### Testing EE-only features
+
+To test an EE class that doesn't exist in CE, create the spec file as you normally
+would in the `ee/spec` directory, but without the second `ee/` subdirectory.
+For example, a class `ee/app/models/vulnerability.rb` would have its tests in `ee/spec/models/vulnerability_spec.rb`.
 
 ### EE features based on CE features
 
@@ -72,12 +94,36 @@ class User < ActiveRecord::Base
   # ... lots of code here ...
 end
 
-User.prepend_if_ee('EE::User')
+User.prepend_mod
 ```
 
 Do not use methods such as `prepend`, `extend`, and `include`. Instead, use
-`prepend_if_ee`, `extend_if_ee`, or `include_if_ee`. These methods take a
-_String_ containing the full module name as the argument, not the module itself.
+`prepend_mod`, `extend_mod`, or `include_mod`. These methods will try to
+find the relevant EE module by the name of the receiver module, for example;
+
+```ruby
+module Vulnerabilities
+  class Finding
+    #...
+  end
+end
+
+Vulnerabilities::Finding.prepend_mod
+```
+
+will prepend the module named `::EE::Vulnerabilities::Finding`.
+
+If the extending module does not follow this naming convention, you can also provide the module name
+by using `prepend_mod_with`, `extend_mod_with`, or `include_mod_with`. These methods take a
+_String_ containing the full module name as the argument, not the module itself, like so;
+
+```ruby
+class User
+  #...
+end
+
+User.prepend_mod_with('UserExtension')
+```
 
 Since the module would require an `EE` namespace, the file should also be
 put in an `ee/` sub-directory. For example, we want to extend the user model
@@ -98,6 +144,21 @@ This is also not just applied to models. Here's a list of other examples:
 - `ee/app/validators/ee/foo_attr_validator.rb`
 - `ee/app/workers/ee/foo_worker.rb`
 
+#### Testing EE features based on CE features
+
+To test an `EE` namespaced module that extends a CE class with EE features,
+create the spec file as you normally would in the `ee/spec` directory, including the second `ee/` subdirectory.
+For example, an extension `ee/app/models/ee/user.rb` would have its tests in `ee/spec/models/ee/user_spec.rb`.
+
+In the `RSpec.describe` call, use the CE class name where the EE module would be used.
+For example, in `ee/spec/models/ee/user_spec.rb`, the test would start with:
+
+```ruby
+RSpec.describe User do
+  describe 'ee feature added through extension'
+end
+```
+
 #### Overriding CE methods
 
 To override a method present in the CE codebase, use `prepend`. It
@@ -107,14 +168,14 @@ still having access the class's implementation with `super`.
 There are a few gotchas with it:
 
 - you should always [`extend ::Gitlab::Utils::Override`](utilities.md#override) and use `override` to
-  guard the "overrider" method to ensure that if the method gets renamed in
-  CE, the EE override won't be silently forgotten.
-- when the "overrider" would add a line in the middle of the CE
+  guard the `overrider` method to ensure that if the method gets renamed in
+  CE, the EE override isn't silently forgotten.
+- when the `overrider` would add a line in the middle of the CE
   implementation, you should refactor the CE method and split it in
   smaller methods. Or create a "hook" method that is empty in CE,
   and with the EE-specific implementation in EE.
 - when the original implementation contains a guard clause (e.g.
-  `return unless condition`), we cannot easily extend the behaviour by
+  `return unless condition`), we cannot easily extend the behavior by
   overriding the method, because we can't know when the overridden method
   (i.e. calling `super` in the overriding method) would want to stop early.
   In this case, we shouldn't just override it, but update the original method
@@ -134,7 +195,7 @@ There are a few gotchas with it:
   ```
 
   Instead of just overriding `Base#execute`, we should update it and extract
-  the behaviour into another method:
+  the behavior into another method:
 
   ```ruby
     class Base
@@ -167,8 +228,6 @@ There are a few gotchas with it:
     end
   ```
 
-  This would require updating CE first, or make sure this is back ported to CE.
-
 When prepending, place them in the `ee/` specific sub-directory, and
 wrap class or module in `module EE` to avoid naming conflicts.
 
@@ -195,7 +254,7 @@ class ApplicationController < ActionController::Base
   # ...
 end
 
-ApplicationController.prepend_if_ee('EE::ApplicationController')
+ApplicationController.prepend_mod_with('ApplicationController')
 ```
 
 And create a new file in the `ee/` sub-directory with the altered
@@ -251,7 +310,7 @@ wrap it in a self-descriptive method and use that method.
 For example, in GitLab-FOSS, the only user created by the system is `User.ghost`
 but in EE there are several types of bot-users that aren't really users. It would
 be incorrect to override the implementation of `User#ghost?`, so instead we add
-a method `#internal?` to `app/models/user.rb`. The implementation will be:
+a method `#internal?` to `app/models/user.rb`. The implementation:
 
 ```ruby
 def internal?
@@ -270,13 +329,13 @@ end
 
 ### Code in `config/routes`
 
-When we add `draw :admin` in `config/routes.rb`, the application will try to
+When we add `draw :admin` in `config/routes.rb`, the application tries to
 load the file located in `config/routes/admin.rb`, and also try to load the
 file located in `ee/config/routes/admin.rb`.
 
 In EE, it should at least load one file, at most two files. If it cannot find
-any files, an error will be raised. In CE, since we don't know if there will
-be an EE route, it will not raise any errors even if it cannot find anything.
+any files, an error is raised. In CE, since we don't know if an
+an EE route exists, it doesn't raise any errors even if it cannot find anything.
 
 This means if we want to extend a particular CE route file, just add the same
 file located in `ee/config/routes`. If we want to add an EE only route, we
@@ -370,7 +429,7 @@ module Gitlab
   end
 end
 
-Gitlab::BackgroundMigration::PruneOrphanedGeoEvents.prepend_if_ee('EE::Gitlab::BackgroundMigration::PruneOrphanedGeoEvents')
+Gitlab::BackgroundMigration::PruneOrphanedGeoEvents.prepend_mod_with('Gitlab::BackgroundMigration::PruneOrphanedGeoEvents')
 ```
 
 GitLab EE:
@@ -399,10 +458,42 @@ module EE
 end
 ```
 
+### Code in `app/graphql/`
+
+EE-specific mutations, resolvers, and types should be added to
+`ee/app/graphql/{mutations,resolvers,types}`.
+
+To override a CE mutation, resolver, or type, create the file in
+`ee/app/graphql/ee/{mutations,resolvers,types}` and add new code to a
+`prepended` block.
+
+For example, if CE has a mutation called `Mutations::Tanukis::Create` and you
+wanted to add a new argument, place the EE override in
+`ee/app/graphql/ee/mutations/tanukis/create.rb`:
+
+```ruby
+module EE
+  module Mutations
+    module Tanukis
+      module Create
+        extend ActiveSupport::Concern
+
+        prepended do
+          argument :name,
+                   GraphQL::STRING_TYPE,
+                   required: false,
+                   description: 'Tanuki name'
+        end
+      end
+    end
+  end
+end
+```
+
 #### Using `render_if_exists`
 
 Instead of using regular `render`, we should use `render_if_exists`, which
-will not render anything if it cannot find the specific partial. We use this
+doesn't render anything if it cannot find the specific partial. We use this
 so that we could put `render_if_exists` in CE, keeping code the same between
 CE and EE.
 
@@ -417,7 +508,7 @@ The disadvantage of this:
 ##### Caveats
 
 The `render_if_exists` view path argument must be relative to `app/views/` and `ee/app/views`.
-Resolving an EE template path that is relative to the CE view path will not work.
+Resolving an EE template path that is relative to the CE view path doesn't work.
 
 ```haml
 - # app/views/projects/index.html.haml
@@ -447,7 +538,7 @@ In this case, we could as well just use `render_ce` which would ignore any EE
 partials. One example would be
 `ee/app/views/shared/issuable/form/_default_templates.html.haml`:
 
-``` haml
+```haml
 - if @project.feature_available?(:issuable_default_templates)
   = render_ce 'shared/issuable/form/default_templates'
 - elsif show_promotions?
@@ -472,7 +563,7 @@ EE-specific LDAP classes in `ee/lib/ee/gitlab/ldap`.
 
 ### Code in `lib/api/`
 
-It can be very tricky to extend EE features by a single line of `prepend_if_ee`,
+It can be very tricky to extend EE features by a single line of `prepend_mod_with`,
 and for each different [Grape](https://github.com/ruby-grape/grape) feature, we
 might need different strategies to extend it. To apply different strategies
 easily, we would use `extend ActiveSupport::Concern` in the EE module.
@@ -506,22 +597,22 @@ end
 Note that due to namespace differences, we need to use the full qualifier for some
 constants.
 
-#### EE params
+#### EE parameters
 
-We can define `params` and utilize `use` in another `params` definition to
-include params defined in EE. However, we need to define the "interface" first
+We can define `params` and use `use` in another `params` definition to
+include parameters defined in EE. However, we need to define the "interface" first
 in CE in order for EE to override it. We don't have to do this in other places
-due to `prepend_if_ee`, but Grape is complex internally and we couldn't easily
-do that, so we'll follow regular object-oriented practices that we define the
+due to `prepend_mod_with`, but Grape is complex internally and we couldn't easily
+do that, so we follow regular object-oriented practices that we define the
 interface first here.
 
-For example, suppose we have a few more optional params for EE. We can move the
-params out of the `Grape::API` class to a helper module, so we can inject it
+For example, suppose we have a few more optional parameters for EE. We can move the
+parameters out of the `Grape::API::Instance` class to a helper module, so we can inject it
 before it would be used in the class.
 
 ```ruby
 module API
-  class Projects < Grape::API
+  class Projects < Grape::API::Instance
     helpers Helpers::ProjectsHelpers
   end
 end
@@ -551,7 +642,7 @@ module API
   end
 end
 
-API::Helpers::ProjectsHelpers.prepend_if_ee('EE::API::Helpers::ProjectsHelpers')
+API::Helpers::ProjectsHelpers.prepend_mod_with('API::Helpers::ProjectsHelpers')
 ```
 
 We could override it in EE module:
@@ -582,7 +673,7 @@ class definition to make it easy and clear:
 
 ```ruby
 module API
-  class JobArtifacts < Grape::API
+  class JobArtifacts < Grape::API::Instance
     # EE::API::JobArtifacts would override the following helpers
     helpers do
       def authorize_download_artifacts!
@@ -592,7 +683,7 @@ module API
   end
 end
 
-API::JobArtifacts.prepend_if_ee('EE::API::JobArtifacts')
+API::JobArtifacts.prepend_mod_with('API::JobArtifacts')
 ```
 
 And then we can follow regular object-oriented practices to override it:
@@ -616,9 +707,9 @@ module EE
 end
 ```
 
-#### EE-specific behaviour
+#### EE-specific behavior
 
-Sometimes we need EE-specific behaviour in some of the APIs. Normally we could
+Sometimes we need EE-specific behavior in some of the APIs. Normally we could
 use EE methods to override CE methods, however API routes are not methods and
 therefore can't be simply overridden. We need to extract them into a standalone
 method, or introduce some "hooks" where we could inject behavior in the CE
@@ -626,7 +717,7 @@ route. Something like this:
 
 ```ruby
 module API
-  class MergeRequests < Grape::API
+  class MergeRequests < Grape::API::Instance
     helpers do
       # EE::API::MergeRequests would override the following helpers
       def update_merge_request_ee(merge_request)
@@ -645,7 +736,7 @@ module API
   end
 end
 
-API::MergeRequests.prepend_if_ee('EE::API::MergeRequests')
+API::MergeRequests.prepend_mod_with('API::MergeRequests')
 ```
 
 Note that `update_merge_request_ee` doesn't do anything in CE, but
@@ -673,7 +764,7 @@ end
 
 It's very hard to extend this in an EE module, and this is simply storing
 some meta-data for a particular route. Given that, we could simply leave the
-EE `route_setting` in CE as it won't hurt and we are just not going to use
+EE `route_setting` in CE as it doesn't hurt and we don't use
 those meta-data in CE.
 
 We could revisit this policy when we're using `route_setting` more and whether
@@ -686,7 +777,7 @@ can't easily extend it with an EE module because Grape has different context in
 different blocks. In order to overcome this, we need to move the data to a class
 method that resides in a separate module or class. This allows us to extend that
 module or class before its data is used, without having to place a
-`prepend_if_ee` in the middle of CE code.
+`prepend_mod_with` in the middle of CE code.
 
 For example, in one place we need to pass an extra argument to
 `at_least_one_of` so that the API could consider an EE-only argument as the
@@ -695,7 +786,7 @@ least argument. We would approach this as follows:
 ```ruby
 # api/merge_requests/parameters.rb
 module API
-  class MergeRequests < Grape::API
+  class MergeRequests < Grape::API::Instance
     module Parameters
       def self.update_params_at_least_one_of
         %i[
@@ -707,11 +798,11 @@ module API
   end
 end
 
-API::MergeRequests::Parameters.prepend_if_ee('EE::API::MergeRequests::Parameters')
+API::MergeRequests::Parameters.prepend_mod_with('API::MergeRequests::Parameters')
 
 # api/merge_requests.rb
 module API
-  class MergeRequests < Grape::API
+  class MergeRequests < Grape::API::Instance
     params do
       at_least_one_of(*Parameters.update_params_at_least_one_of)
     end
@@ -757,7 +848,7 @@ class Identity < ActiveRecord::Base
     [:provider]
   end
 
-  prepend_if_ee('EE::Identity')
+  prepend_mod_with('Identity')
 
   validates :extern_uid,
     allow_blank: true,
@@ -809,7 +900,7 @@ class Identity < ActiveRecord::Base
   end
 end
 
-Identity::UniquenessScopes.prepend_if_ee('EE::Identity::UniquenessScopes')
+Identity::UniquenessScopes.prepend_mod_with('Identity::UniquenessScopes')
 
 # app/models/identity.rb
 class Identity < ActiveRecord::Base
@@ -882,7 +973,7 @@ information on managing page-specific JavaScript within EE.
 
 #### Child Component only used in EE
 
-To separate Vue template differences we should [async import the components](https://vuejs.org/v2/guide/components-dynamic-async.html#Async-Components).
+To separate Vue template differences we should [import the components asynchronously](https://vuejs.org/v2/guide/components-dynamic-async.html#Async-Components).
 
 Doing this allows for us to load the correct component in EE while in CE
 we can load a empty component that renders nothing. This code **should**
@@ -904,30 +995,82 @@ export default {
 </template>
 ```
 
-#### For JS code that is EE only, like props, computed properties, methods, etc, we will keep the current approach
+#### For JS code that is EE only, like props, computed properties, methods, etc
 
-- Since we [can't async load a mixin](https://github.com/vuejs/vue-loader/issues/418#issuecomment-254032223) we will use the [`ee_else_ce`](../development/ee_features.md#javascript-code-in-assetsjavascripts) alias we already have for webpack.
-  - This means all the EE specific props, computed properties, methods, etc that are EE only should be in a mixin in the `ee/` folder and we need to create a CE counterpart of the mixin
+- Please do not use mixins unless ABSOLUTELY NECESSARY. Please try to find an alternative pattern.
 
-##### Example
+##### Recommended alternative approach (named/scoped slots)
 
-```javascript
-import mixin from 'ee_else_ce/path/mixin';
+- We can use slots and/or scoped slots to achieve the same thing as we did with mixins. If you only need an EE component there is no need to create the CE component.
 
-{
-    mixins: [mixin]
+1. First, we have a CE component that can render a slot in case we need EE template and functionality to be decorated on top of the CE base.
+
+```vue
+// ./ce/my_component.vue
+
+<script>
+export default {
+  props: {
+    tooltipDefaultText: {
+      type: String,
+    },
+  },
+  computed: {
+    tooltipText() {
+      return this.tooltipDefaultText || "5 issues please";
+    }
+  },
 }
+</script>
+
+<template>
+  <span v-gl-tooltip :title="tooltipText" class="ce-text">Community Edition Only Text</span>
+  <slot name="ee-specific-component">
+</template>
 ```
 
-- Computed Properties/methods and getters only used in the child import still need a counterpart in CE
+1. Next, we render the EE component, and inside of the EE component we render the CE component and add additional content in the slot.
 
-- For store modules, we will need a CE counterpart too.
-- You can see an MR with an example [here](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/9762)
+```vue
+// ./ee/my_component.vue
 
-#### `template` tag
+<script>
+export default {
+  computed: {
+    tooltipText() {
+      if (this.weight) {
+        return "5 issues with weight 10";
+      }
+    }
+  },
+  methods: {
+    submit() {
+      // do something.
+    }
+  },
+}
+</script>
+
+<template>
+  <my-component :tooltipDefaultText="tooltipText">
+    <template #ee-specific-component>
+      <span class="some-ee-specific">EE Specific Value</span>
+      <button @click="submit">Click Me</button>
+    </template>
+  </my-component>
+</template>
+```
+
+1. Finally, wherever the component is needed we can require it like so
+
+`import MyComponent from 'ee_else_ce/path/my_component'.vue`
+
+- this way the correct component is included for either the CE or EE implementation
+
+**For EE components that need different results for the same computed values, we can pass in props to the CE wrapper as seen in the example.**
 
 - **EE Child components**
-  - Since we are using the async loading to check which component to load, we'd still use the component's name, check [this example](#child-component-only-used-in-ee).
+  - Since we are using the asynchronous loading to check which component to load, we'd still use the component's name, check [this example](#child-component-only-used-in-ee).
 
 - **EE extra HTML**
   - For the templates that have extra HTML in EE we should move it into a new component and use the `ee_else_ce` dynamic import
@@ -936,7 +1079,7 @@ import mixin from 'ee_else_ce/path/mixin';
 
 For regular JS files, the approach is similar.
 
-1. We will keep using the [`ee_else_ce`](../development/ee_features.md#javascript-code-in-assetsjavascripts) helper, this means that EE only code should be inside the `ee/` folder.
+1. We keep using the [`ee_else_ce`](../development/ee_features.md#javascript-code-in-assetsjavascripts) helper, this means that EE only code should be inside the `ee/` folder.
    1. An EE file should be created with the EE only code, and it should extend the CE counterpart.
    1. For code inside functions that can't be extended, the code should be moved into a new file and we should use `ee_else_ce` helper:
 
@@ -961,7 +1104,7 @@ separate SCSS file in an appropriate directory within `app/assets/stylesheets`.
 
 In some cases, this is not entirely possible or creating dedicated SCSS file is an overkill,
 e.g. a text style of some component is different for EE. In such cases,
-styles are usually kept in stylesheet that is common for both CE and EE, and it is wise
+styles are usually kept in a stylesheet that is common for both CE and EE, and it is wise
 to isolate such ruleset from rest of CE rules (along with adding comment describing the same)
 to avoid conflicts during CE to EE merge.
 

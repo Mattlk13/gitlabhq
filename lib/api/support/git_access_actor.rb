@@ -37,7 +37,18 @@ module API
       end
 
       def update_last_used_at!
+        return if Feature.enabled?(:disable_ssh_key_used_tracking)
+
         key&.update_last_used_at
+      end
+
+      def key_details
+        return {} unless key
+
+        {
+          gl_key_type: key.model_name.singular,
+          gl_key_id: key.id
+        }
       end
     end
   end

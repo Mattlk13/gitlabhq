@@ -1,36 +1,49 @@
 <script>
-import { mapActions, mapState } from 'vuex';
 import { GlLoadingIcon } from '@gitlab/ui';
+import { mapActions, mapGetters, mapState } from 'vuex';
+import EmptyState from './empty_state.vue';
 import TestSuiteTable from './test_suite_table.vue';
 import TestSummary from './test_summary.vue';
 import TestSummaryTable from './test_summary_table.vue';
-import store from '~/pipelines/stores/test_reports';
 
 export default {
   name: 'TestReports',
   components: {
+    EmptyState,
     GlLoadingIcon,
     TestSuiteTable,
     TestSummary,
     TestSummaryTable,
   },
-  store,
   computed: {
-    ...mapState(['isLoading', 'selectedSuite', 'testReports']),
+    ...mapState(['isLoading', 'selectedSuiteIndex', 'testReports']),
+    ...mapGetters(['getSelectedSuite']),
     showSuite() {
-      return this.selectedSuite.total_count > 0;
+      return this.selectedSuiteIndex !== null;
     },
     showTests() {
-      return this.testReports.total_count > 0;
+      const { test_suites: testSuites = [] } = this.testReports;
+      return testSuites.length > 0;
     },
   },
+  created() {
+    this.fetchSummary();
+  },
   methods: {
-    ...mapActions(['setSelectedSuite', 'removeSelectedSuite']),
+    ...mapActions([
+      'fetchTestSuite',
+      'fetchSummary',
+      'setSelectedSuiteIndex',
+      'removeSelectedSuiteIndex',
+    ]),
     summaryBackClick() {
-      this.removeSelectedSuite();
+      this.removeSelectedSuiteIndex();
     },
-    summaryTableRowClick(suite) {
-      this.setSelectedSuite(suite);
+    summaryTableRowClick(index) {
+      this.setSelectedSuiteIndex(index);
+
+      // Fetch the test suite when the user clicks to see more details
+      this.fetchTestSuite(index);
     },
     beforeEnterTransition() {
       document.documentElement.style.overflowX = 'hidden';
@@ -44,26 +57,27 @@ export default {
 
 <template>
   <div v-if="isLoading">
-    <gl-loading-icon size="lg" class="prepend-top-default js-loading-spinner" />
+    <gl-loading-icon size="lg" class="gl-mt-3" />
   </div>
 
   <div
     v-else-if="!isLoading && showTests"
     ref="container"
-    class="tests-detail position-relative js-tests-detail"
+    class="position-relative"
+    data-testid="tests-detail"
   >
     <transition
       name="slide"
       @before-enter="beforeEnterTransition"
       @after-leave="afterLeaveTransition"
     >
-      <div v-if="showSuite" key="detail" class="w-100 position-absolute slide-enter-to-element">
-        <test-summary :report="selectedSuite" show-back @on-back-click="summaryBackClick" />
+      <div v-if="showSuite" key="detail" class="w-100 slide-enter-to-element">
+        <test-summary :report="getSelectedSuite" show-back @on-back-click="summaryBackClick" />
 
         <test-suite-table />
       </div>
 
-      <div v-else key="summary" class="w-100 position-absolute slide-enter-from-element">
+      <div v-else key="summary" class="w-100 slide-enter-from-element">
         <test-summary :report="testReports" />
 
         <test-summary-table @row-click="summaryTableRowClick" />
@@ -71,11 +85,5 @@ export default {
     </transition>
   </div>
 
-  <div v-else>
-    <div class="row prepend-top-default">
-      <div class="col-12">
-        <p class="js-no-tests-to-show">{{ s__('TestReports|There are no tests to show.') }}</p>
-      </div>
-    </div>
-  </div>
+  <empty-state v-else />
 </template>

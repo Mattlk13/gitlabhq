@@ -3,16 +3,16 @@
 module NotificationHelpers
   extend self
 
-  def send_notifications(*new_mentions)
+  def send_notifications(*new_mentions, current_user: @u_disabled)
     mentionable.description = new_mentions.map(&:to_reference).join(' ')
 
-    notification.send(notification_method, mentionable, new_mentions, @u_disabled)
+    notification.send(notification_method, mentionable, new_mentions, current_user)
   end
 
   def create_global_setting_for(user, level)
     setting = user.global_notification_setting
     setting.level = level
-    setting.save
+    setting.save!
 
     user
   end
@@ -27,7 +27,7 @@ module NotificationHelpers
   def create_notification_setting(user, resource, level)
     setting = user.notification_settings_for(resource)
     setting.level = level
-    setting.save
+    setting.save!
   end
 
   # Create custom notifications
@@ -38,26 +38,26 @@ module NotificationHelpers
   end
 
   def expect_delivery_jobs_count(count)
-    expect(ActionMailer::DeliveryJob).to have_been_enqueued.exactly(count).times
+    expect(ActionMailer::MailDeliveryJob).to have_been_enqueued.exactly(count).times
   end
 
   def expect_no_delivery_jobs
-    expect(ActionMailer::DeliveryJob).not_to have_been_enqueued
+    expect(ActionMailer::MailDeliveryJob).not_to have_been_enqueued
   end
 
   def expect_any_delivery_jobs
-    expect(ActionMailer::DeliveryJob).to have_been_enqueued.at_least(:once)
+    expect(ActionMailer::MailDeliveryJob).to have_been_enqueued.at_least(:once)
   end
 
   def have_enqueued_email(*args, mailer: "Notify", mail: "", delivery: "deliver_now")
-    have_enqueued_job(ActionMailer::DeliveryJob).with(mailer, mail, delivery, *args)
+    have_enqueued_job(ActionMailer::MailDeliveryJob).with(mailer, mail, delivery, args: args)
   end
 
   def expect_enqueud_email(*args, mailer: "Notify", mail: "", delivery: "deliver_now")
-    expect(ActionMailer::DeliveryJob).to have_been_enqueued.with(mailer, mail, delivery, *args)
+    expect(ActionMailer::MailDeliveryJob).to have_been_enqueued.with(mailer, mail, delivery, args: args)
   end
 
-  def expect_not_enqueud_email(*args, mailer: "Notify", mail: "", delivery: "deliver_now")
-    expect(ActionMailer::DeliveryJob).not_to have_been_enqueued.with(mailer, mail, *args, any_args)
+  def expect_not_enqueud_email(*args, mailer: "Notify", mail: "")
+    expect(ActionMailer::MailDeliveryJob).not_to have_been_enqueued.with(mailer, mail, args: any_args)
   end
 end

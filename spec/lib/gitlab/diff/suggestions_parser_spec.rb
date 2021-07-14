@@ -2,7 +2,7 @@
 
 require 'spec_helper'
 
-describe Gitlab::Diff::SuggestionsParser do
+RSpec.describe Gitlab::Diff::SuggestionsParser do
   describe '.parse' do
     let(:merge_request) { create(:merge_request) }
     let(:project) { merge_request.project }
@@ -56,7 +56,8 @@ describe Gitlab::Diff::SuggestionsParser do
       end
 
       it 'parsed suggestion has correct data' do
-        from_line, to_line = position.new_line, position.new_line
+        from_line = position.new_line
+        to_line = position.new_line
 
         expect(subject.first.to_hash).to include(from_content: blob_lines_data(from_line, to_line),
                                                  to_content: "  foo\n  bar\n",

@@ -19,13 +19,21 @@ class MergeRequestPollWidgetEntity < Grape::Entity
   # User entities
   expose :merge_user, using: UserEntity
 
-  expose :actual_head_pipeline, with: PipelineDetailsEntity, as: :pipeline, if: -> (mr, _) { presenter(mr).can_read_pipeline? }
-
-  expose :merge_pipeline, with: PipelineDetailsEntity, if: ->(mr, _) { mr.merged? && can?(request.current_user, :read_pipeline, mr.target_project)}
+  expose :merge_pipeline, if: ->(mr, _) {
+    Feature.disabled?(:merge_request_cached_merge_pipeline_serializer, mr.project, default_enabled: :yaml) &&
+      mr.merged? &&
+      can?(request.current_user, :read_pipeline, mr.target_project)
+  } do |merge_request, options|
+    MergeRequests::PipelineEntity.represent(merge_request.merge_pipeline, options)
+  end
 
   expose :default_merge_commit_message
 
-  expose :mergeable?, as: :mergeable
+  expose :mergeable do |merge_request, options|
+    next merge_request.mergeable? if Feature.disabled?(:check_mergeability_async_in_widget, merge_request.project, default_enabled: :yaml)
+
+    merge_request.mergeable?
+  end
 
   expose :default_merge_commit_message_with_description do |merge_request|
     merge_request.default_merge_commit_message(include_description: true)
@@ -53,7 +61,7 @@ class MergeRequestPollWidgetEntity < Grape::Entity
 
   # CI related
   expose :has_ci?, as: :has_ci
-  expose :ci_status do |merge_request|
+  expose :ci_status, if: -> (mr, _) { presenter(mr).can_read_pipeline? } do |merge_request|
     presenter(merge_request).ci_status
   end
 
@@ -61,20 +69,10 @@ class MergeRequestPollWidgetEntity < Grape::Entity
     presenter(merge_request).pipeline_coverage_delta
   end
 
+  expose :head_pipeline_builds_with_coverage, as: :builds_with_coverage, using: BuildCoverageEntity
+
   expose :cancel_auto_merge_path do |merge_request|
     presenter(merge_request).cancel_auto_merge_path
-  end
-
-  expose :test_reports_path do |merge_request|
-    if merge_request.has_test_reports?
-      test_reports_project_merge_request_path(merge_request.project, merge_request, format: :json)
-    end
-  end
-
-  expose :exposed_artifacts_path do |merge_request|
-    if merge_request.has_exposed_artifacts?
-      exposed_artifacts_project_merge_request_path(merge_request.project, merge_request, format: :json)
-    end
   end
 
   expose :create_issue_to_resolve_discussions_path do |merge_request|
@@ -133,6 +131,22 @@ class MergeRequestPollWidgetEntity < Grape::Entity
     presenter(merge_request).revert_in_fork_path
   end
 
+  expose :squash_enabled_by_default do |merge_request|
+    presenter(merge_request).project.squash_enabled_by_default?
+  end
+
+  expose :squash_readonly do |merge_request|
+    presenter(merge_request).project.squash_readonly?
+  end
+
+  expose :squash_on_merge do |merge_request|
+    presenter(merge_request).squash_on_merge?
+  end
+
+  expose :approvals_widget_type do |merge_request|
+    presenter(merge_request).approvals_widget_type
+  end
+
   private
 
   delegate :current_user, to: :request
@@ -143,4 +157,4 @@ class MergeRequestPollWidgetEntity < Grape::Entity
   end
 end
 
-MergeRequestPollWidgetEntity.prepend_if_ee('EE::MergeRequestPollWidgetEntity')
+MergeRequestPollWidgetEntity.prepend_mod_with('MergeRequestPollWidgetEntity')

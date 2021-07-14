@@ -4,6 +4,16 @@ RSpec.shared_examples 'an unauthorized API user' do
   it { is_expected.to eq(403) }
 end
 
+RSpec.shared_examples 'API user with insufficient permissions' do
+  context 'with non member that is the author' do
+    before do
+      issuable.update!(author: non_member) # an external author can't admin issuable
+    end
+
+    it_behaves_like 'an unauthorized API user'
+  end
+end
+
 RSpec.shared_examples 'time tracking endpoints' do |issuable_name|
   let(:non_member) { create(:user) }
 
@@ -14,6 +24,7 @@ RSpec.shared_examples 'time tracking endpoints' do |issuable_name|
       subject { post(api("/projects/#{project.id}/#{issuable_collection_name}/#{issuable.iid}/time_estimate", non_member), params: { duration: '1w' }) }
 
       it_behaves_like 'an unauthorized API user'
+      it_behaves_like 'API user with insufficient permissions'
     end
 
     it "sets the time estimate for #{issuable_name}" do
@@ -53,6 +64,7 @@ RSpec.shared_examples 'time tracking endpoints' do |issuable_name|
       subject { post(api("/projects/#{project.id}/#{issuable_collection_name}/#{issuable.iid}/reset_time_estimate", non_member)) }
 
       it_behaves_like 'an unauthorized API user'
+      it_behaves_like 'API user with insufficient permissions'
     end
 
     it "resets the time estimate for #{issuable_name}" do
@@ -70,6 +82,7 @@ RSpec.shared_examples 'time tracking endpoints' do |issuable_name|
       end
 
       it_behaves_like 'an unauthorized API user'
+      it_behaves_like 'API user with insufficient permissions'
     end
 
     it "add spent time for #{issuable_name}" do
@@ -109,7 +122,23 @@ RSpec.shared_examples 'time tracking endpoints' do |issuable_name|
         end
 
         expect(response).to have_gitlab_http_status(:bad_request)
-        expect(json_response['message']['time_spent'].first).to match(/exceeds the total time spent/)
+        expect(json_response['message']['base'].first).to eq(_('Time to subtract exceeds the total time spent'))
+      end
+    end
+
+    if issuable_name == 'merge_request'
+      it 'calls update service with :use_specialized_service param' do
+        expect(::MergeRequests::UpdateService).to receive(:new).with(project: project, current_user: user, params: hash_including(use_specialized_service: true))
+
+        post api("/projects/#{project.id}/#{issuable_collection_name}/#{issuable.iid}/add_spent_time", user), params: { duration: '2h' }
+      end
+    end
+
+    if issuable_name == 'issue'
+      it 'calls update service without :use_specialized_service param' do
+        expect(::Issues::UpdateService).to receive(:new).with(project: project, current_user: user, params: hash_not_including(use_specialized_service: true))
+
+        post api("/projects/#{project.id}/#{issuable_collection_name}/#{issuable.iid}/add_spent_time", user), params: { duration: '2h' }
       end
     end
   end
@@ -119,6 +148,7 @@ RSpec.shared_examples 'time tracking endpoints' do |issuable_name|
       subject { post(api("/projects/#{project.id}/#{issuable_collection_name}/#{issuable.iid}/reset_spent_time", non_member)) }
 
       it_behaves_like 'an unauthorized API user'
+      it_behaves_like 'API user with insufficient permissions'
     end
 
     it "resets spent time for #{issuable_name}" do

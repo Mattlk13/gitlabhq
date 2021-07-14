@@ -2,26 +2,26 @@
 
 require 'spec_helper'
 
-describe 'read-only message' do
+RSpec.describe 'read-only message' do
   let_it_be(:user) { create(:user) }
 
   before do
     sign_in(user)
   end
 
-  it 'shows read-only banner when database is read-only' do
-    allow(Gitlab::Database).to receive(:read_only?).and_return(true)
+  context 'when database is read-only' do
+    before do
+      allow(Gitlab::Database).to receive(:read_only?).and_return(true)
+    end
 
-    visit root_dashboard_path
-
-    expect(page).to have_content('You are on a read-only GitLab instance.')
+    it_behaves_like 'Read-only instance', /You are on a read\-only GitLab instance./
   end
 
-  it 'does not show read-only banner when database is able to read-write' do
-    allow(Gitlab::Database).to receive(:read_only?).and_return(false)
+  context 'when database is in read-write mode' do
+    before do
+      allow(Gitlab::Database).to receive(:read_only?).and_return(false)
+    end
 
-    visit root_dashboard_path
-
-    expect(page).not_to have_content('You are on a read-only GitLab instance.')
+    it_behaves_like 'Read-write instance', /You are on a read\-only GitLab instance./
   end
 end

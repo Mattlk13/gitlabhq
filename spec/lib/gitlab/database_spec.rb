@@ -2,14 +2,115 @@
 
 require 'spec_helper'
 
-describe Gitlab::Database do
+RSpec.describe Gitlab::Database do
   before do
     stub_const('MigrationTest', Class.new { include Gitlab::Database })
   end
 
+  describe 'EXTRA_SCHEMAS' do
+    it 'contains only schemas starting with gitlab_ prefix' do
+      described_class::EXTRA_SCHEMAS.each do |schema|
+        expect(schema.to_s).to start_with('gitlab_')
+      end
+    end
+  end
+
+  describe '.default_pool_size' do
+    before do
+      allow(Gitlab::Runtime).to receive(:max_threads).and_return(7)
+    end
+
+    it 'returns the max thread size plus a fixed headroom of 10' do
+      expect(described_class.default_pool_size).to eq(17)
+    end
+
+    it 'returns the max thread size plus a DB_POOL_HEADROOM if this env var is present' do
+      stub_env('DB_POOL_HEADROOM', '7')
+
+      expect(described_class.default_pool_size).to eq(14)
+    end
+  end
+
   describe '.config' do
-    it 'returns a Hash' do
-      expect(described_class.config).to be_an_instance_of(Hash)
+    it 'returns a HashWithIndifferentAccess' do
+      expect(described_class.config).to be_an_instance_of(HashWithIndifferentAccess)
+    end
+
+    it 'returns a default pool size' do
+      expect(described_class.config).to include(pool: described_class.default_pool_size)
+    end
+  end
+
+  describe '.has_config?' do
+    context 'two tier database config' do
+      before do
+        allow(Gitlab::Application).to receive_message_chain(:config, :database_configuration, :[]).with(Rails.env)
+          .and_return({ "adapter" => "postgresql", "database" => "gitlabhq_test" })
+      end
+
+      it 'returns false for primary' do
+        expect(described_class.has_config?(:primary)).to eq(false)
+      end
+
+      it 'returns false for ci' do
+        expect(described_class.has_config?(:ci)).to eq(false)
+      end
+    end
+
+    context 'three tier database config' do
+      before do
+        allow(Gitlab::Application).to receive_message_chain(:config, :database_configuration, :[]).with(Rails.env)
+          .and_return({
+            "primary" => { "adapter" => "postgresql", "database" => "gitlabhq_test" },
+            "ci" => { "adapter" => "postgresql", "database" => "gitlabhq_test_ci" }
+          })
+      end
+
+      it 'returns true for primary' do
+        expect(described_class.has_config?(:primary)).to eq(true)
+      end
+
+      it 'returns true for ci' do
+        expect(described_class.has_config?(:ci)).to eq(true)
+      end
+
+      it 'returns false for non-existent' do
+        expect(described_class.has_config?(:nonexistent)).to eq(false)
+      end
+    end
+  end
+
+  describe '.main_database?' do
+    using RSpec::Parameterized::TableSyntax
+
+    where(:database_name, :result) do
+      :main     | true
+      'main'    | true
+      :ci       | false
+      'ci'      | false
+      :archive  | false
+      'archive' | false
+    end
+
+    with_them do
+      it { expect(described_class.main_database?(database_name)).to eq(result) }
+    end
+  end
+
+  describe '.ci_database?' do
+    using RSpec::Parameterized::TableSyntax
+
+    where(:database_name, :result) do
+      :main     | false
+      'main'    | false
+      :ci       | true
+      'ci'      | true
+      :archive  | false
+      'archive' | false
+    end
+
+    with_them do
+      it { expect(described_class.ci_database?(database_name)).to eq(result) }
     end
   end
 
@@ -28,6 +129,34 @@ describe Gitlab::Database do
   describe '.human_adapter_name' do
     it 'returns PostgreSQL when using PostgreSQL' do
       expect(described_class.human_adapter_name).to eq('PostgreSQL')
+    end
+  end
+
+  describe '.system_id' do
+    it 'returns the PostgreSQL system identifier' do
+      expect(described_class.system_id).to be_an_instance_of(Integer)
+    end
+  end
+
+  describe '.disable_prepared_statements' do
+    around do |example|
+      original_config = ::Gitlab::Database.config
+
+      example.run
+
+      ActiveRecord::Base.establish_connection(original_config)
+    end
+
+    it 'disables prepared statements' do
+      ActiveRecord::Base.establish_connection(::Gitlab::Database.config.merge(prepared_statements: true))
+      expect(ActiveRecord::Base.connection.prepared_statements).to eq(true)
+
+      expect(ActiveRecord::Base).to receive(:establish_connection)
+        .with(a_hash_including({ 'prepared_statements' => false })).and_call_original
+
+      described_class.disable_prepared_statements
+
+      expect(ActiveRecord::Base.connection.prepared_statements).to eq(false)
     end
   end
 
@@ -62,118 +191,64 @@ describe Gitlab::Database do
     end
   end
 
-  describe '.postgresql_9_or_less?' do
-    it 'returns true when using postgresql 8.4' do
-      allow(described_class).to receive(:version).and_return('8.4')
-      expect(described_class.postgresql_9_or_less?).to eq(true)
-    end
-
-    it 'returns true when using PostgreSQL 9.6' do
-      allow(described_class).to receive(:version).and_return('9.6')
-
-      expect(described_class.postgresql_9_or_less?).to eq(true)
-    end
-
-    it 'returns false when using PostgreSQL 10 or newer' do
-      allow(described_class).to receive(:version).and_return('10')
-
-      expect(described_class.postgresql_9_or_less?).to eq(false)
-    end
-  end
-
   describe '.postgresql_minimum_supported_version?' do
-    it 'returns false when using PostgreSQL 9.5' do
-      allow(described_class).to receive(:version).and_return('9.5')
+    it 'returns false when using PostgreSQL 10' do
+      allow(described_class).to receive(:version).and_return('10')
 
       expect(described_class.postgresql_minimum_supported_version?).to eq(false)
     end
 
-    it 'returns true when using PostgreSQL 9.6' do
-      allow(described_class).to receive(:version).and_return('9.6')
+    it 'returns false when using PostgreSQL 11' do
+      allow(described_class).to receive(:version).and_return('11')
+
+      expect(described_class.postgresql_minimum_supported_version?).to eq(false)
+    end
+
+    it 'returns true when using PostgreSQL 12' do
+      allow(described_class).to receive(:version).and_return('12')
 
       expect(described_class.postgresql_minimum_supported_version?).to eq(true)
     end
-
-    it 'returns true when using PostgreSQL 10 or newer' do
-      allow(described_class).to receive(:version).and_return('10')
-
-      expect(described_class.postgresql_minimum_supported_version?).to eq(true)
-    end
   end
 
-  describe '.replication_slots_supported?' do
-    it 'returns false when using PostgreSQL 9.3' do
-      allow(described_class).to receive(:version).and_return('9.3.1')
+  describe '.check_postgres_version_and_print_warning' do
+    subject { described_class.check_postgres_version_and_print_warning }
 
-      expect(described_class.replication_slots_supported?).to eq(false)
+    it 'prints a warning if not compliant with minimum postgres version' do
+      allow(described_class).to receive(:postgresql_minimum_supported_version?).and_return(false)
+
+      expect(Kernel).to receive(:warn).with(/You are using PostgreSQL/)
+
+      subject
     end
 
-    it 'returns true when using PostgreSQL 9.4.0 or newer' do
-      allow(described_class).to receive(:version).and_return('9.4.0')
+    it 'doesnt print a warning if compliant with minimum postgres version' do
+      allow(described_class).to receive(:postgresql_minimum_supported_version?).and_return(true)
 
-      expect(described_class.replication_slots_supported?).to eq(true)
-    end
-  end
+      expect(Kernel).not_to receive(:warn).with(/You are using PostgreSQL/)
 
-  describe '.pg_wal_lsn_diff' do
-    it 'returns old name when using PostgreSQL 9.6' do
-      allow(described_class).to receive(:version).and_return('9.6')
-
-      expect(described_class.pg_wal_lsn_diff).to eq('pg_xlog_location_diff')
+      subject
     end
 
-    it 'returns new name when using PostgreSQL 10 or newer' do
-      allow(described_class).to receive(:version).and_return('10')
+    it 'doesnt print a warning in Rails runner environment' do
+      allow(described_class).to receive(:postgresql_minimum_supported_version?).and_return(false)
+      allow(Gitlab::Runtime).to receive(:rails_runner?).and_return(true)
 
-      expect(described_class.pg_wal_lsn_diff).to eq('pg_wal_lsn_diff')
-    end
-  end
+      expect(Kernel).not_to receive(:warn).with(/You are using PostgreSQL/)
 
-  describe '.pg_current_wal_insert_lsn' do
-    it 'returns old name when using PostgreSQL 9.6' do
-      allow(described_class).to receive(:version).and_return('9.6')
-
-      expect(described_class.pg_current_wal_insert_lsn).to eq('pg_current_xlog_insert_location')
+      subject
     end
 
-    it 'returns new name when using PostgreSQL 10 or newer' do
-      allow(described_class).to receive(:version).and_return('10')
+    it 'ignores ActiveRecord errors' do
+      allow(described_class).to receive(:postgresql_minimum_supported_version?).and_raise(ActiveRecord::ActiveRecordError)
 
-      expect(described_class.pg_current_wal_insert_lsn).to eq('pg_current_wal_insert_lsn')
-    end
-  end
-
-  describe '.pg_last_wal_receive_lsn' do
-    it 'returns old name when using PostgreSQL 9.6' do
-      allow(described_class).to receive(:version).and_return('9.6')
-
-      expect(described_class.pg_last_wal_receive_lsn).to eq('pg_last_xlog_receive_location')
+      expect { subject }.not_to raise_error
     end
 
-    it 'returns new name when using PostgreSQL 10 or newer' do
-      allow(described_class).to receive(:version).and_return('10')
+    it 'ignores Postgres errors' do
+      allow(described_class).to receive(:postgresql_minimum_supported_version?).and_raise(PG::Error)
 
-      expect(described_class.pg_last_wal_receive_lsn).to eq('pg_last_wal_receive_lsn')
-    end
-  end
-
-  describe '.pg_last_wal_replay_lsn' do
-    it 'returns old name when using PostgreSQL 9.6' do
-      allow(described_class).to receive(:version).and_return('9.6')
-
-      expect(described_class.pg_last_wal_replay_lsn).to eq('pg_last_xlog_replay_location')
-    end
-
-    it 'returns new name when using PostgreSQL 10 or newer' do
-      allow(described_class).to receive(:version).and_return('10')
-
-      expect(described_class.pg_last_wal_replay_lsn).to eq('pg_last_wal_replay_lsn')
-    end
-  end
-
-  describe '.pg_last_xact_replay_timestamp' do
-    it 'returns pg_last_xact_replay_timestamp' do
-      expect(described_class.pg_last_xact_replay_timestamp).to eq('pg_last_xact_replay_timestamp')
+      expect { subject }.not_to raise_error
     end
   end
 
@@ -216,7 +291,7 @@ describe Gitlab::Database do
 
           closed_pool = pool
 
-          raise error.new('boom')
+          raise error, 'boom'
         end
       rescue error
       end
@@ -228,7 +303,6 @@ describe Gitlab::Database do
   describe '.bulk_insert' do
     before do
       allow(described_class).to receive(:connection).and_return(connection)
-      allow(described_class).to receive(:version).and_return(version)
       allow(connection).to receive(:quote_column_name, &:itself)
       allow(connection).to receive(:quote, &:itself)
       allow(connection).to receive(:execute)
@@ -242,8 +316,6 @@ describe Gitlab::Database do
         { c: 6, a: 4, b: 5 }
       ]
     end
-
-    let_it_be(:version) { 9.6 }
 
     it 'does nothing with empty rows' do
       expect(connection).not_to receive(:execute)
@@ -311,28 +383,13 @@ describe Gitlab::Database do
         expect(ids).to eq([10])
       end
 
-      context 'with version >= 9.5' do
-        it 'allows setting the upsert to do nothing' do
-          expect(connection)
-            .to receive(:execute)
-            .with(/ON CONFLICT DO NOTHING/)
+      it 'allows setting the upsert to do nothing' do
+        expect(connection)
+          .to receive(:execute)
+          .with(/ON CONFLICT DO NOTHING/)
 
-          described_class
-            .bulk_insert('test', [{ number: 10 }], on_conflict: :do_nothing)
-        end
-      end
-
-      context 'with version < 9.5' do
-        let(:version) { 9.4 }
-
-        it 'refuses setting the upsert' do
-          expect(connection)
-            .not_to receive(:execute)
-            .with(/ON CONFLICT/)
-
-          described_class
-            .bulk_insert('test', [{ number: 10 }], on_conflict: :do_nothing)
-        end
+        described_class
+          .bulk_insert('test', [{ number: 10 }], on_conflict: :do_nothing)
       end
     end
   end
@@ -345,7 +402,7 @@ describe Gitlab::Database do
         expect(pool)
           .to be_kind_of(ActiveRecord::ConnectionAdapters::ConnectionPool)
 
-        expect(pool.spec.config[:pool]).to eq(5)
+        expect(pool.db_config.pool).to eq(5)
       ensure
         pool.disconnect!
       end
@@ -355,7 +412,7 @@ describe Gitlab::Database do
       pool = described_class.create_connection_pool(5, '127.0.0.1')
 
       begin
-        expect(pool.spec.config[:host]).to eq('127.0.0.1')
+        expect(pool.db_config.host).to eq('127.0.0.1')
       ensure
         pool.disconnect!
       end
@@ -365,8 +422,8 @@ describe Gitlab::Database do
       pool = described_class.create_connection_pool(5, '127.0.0.1', 5432)
 
       begin
-        expect(pool.spec.config[:host]).to eq('127.0.0.1')
-        expect(pool.spec.config[:port]).to eq(5432)
+        expect(pool.db_config.host).to eq('127.0.0.1')
+        expect(pool.db_config.configuration_hash[:port]).to eq(5432)
       ensure
         pool.disconnect!
       end
@@ -416,6 +473,37 @@ describe Gitlab::Database do
     end
   end
 
+  describe '.get_write_location' do
+    it 'returns a string' do
+      connection = ActiveRecord::Base.connection
+
+      expect(described_class.get_write_location(connection)).to be_a(String)
+    end
+
+    it 'returns nil if there are no results' do
+      connection = double(select_all: [])
+
+      expect(described_class.get_write_location(connection)).to be_nil
+    end
+  end
+
+  describe '.dbname' do
+    it 'returns the dbname for the connection' do
+      connection = ActiveRecord::Base.connection
+
+      expect(described_class.dbname(connection)).to be_a(String)
+      expect(described_class.dbname(connection)).to eq(connection.pool.db_config.database)
+    end
+
+    context 'when the pool is a NullPool' do
+      it 'returns unknown' do
+        connection = double(:active_record_connection, pool: ActiveRecord::ConnectionAdapters::NullPool.new)
+
+        expect(described_class.dbname(connection)).to eq('unknown')
+      end
+    end
+  end
+
   describe '#true_value' do
     it 'returns correct value' do
       expect(described_class.true_value).to eq "'t'"
@@ -439,25 +527,25 @@ describe Gitlab::Database do
       allow(ActiveRecord::Base.connection).to receive(:execute).and_call_original
     end
 
-    it 'detects a read only database' do
+    it 'detects a read-only database' do
       allow(ActiveRecord::Base.connection).to receive(:execute).with('SELECT pg_is_in_recovery()').and_return([{ "pg_is_in_recovery" => "t" }])
 
       expect(described_class.db_read_only?).to be_truthy
     end
 
-    it 'detects a read only database' do
+    it 'detects a read-only database' do
       allow(ActiveRecord::Base.connection).to receive(:execute).with('SELECT pg_is_in_recovery()').and_return([{ "pg_is_in_recovery" => true }])
 
       expect(described_class.db_read_only?).to be_truthy
     end
 
-    it 'detects a read write database' do
+    it 'detects a read-write database' do
       allow(ActiveRecord::Base.connection).to receive(:execute).with('SELECT pg_is_in_recovery()').and_return([{ "pg_is_in_recovery" => "f" }])
 
       expect(described_class.db_read_only?).to be_falsey
     end
 
-    it 'detects a read write database' do
+    it 'detects a read-write database' do
       allow(ActiveRecord::Base.connection).to receive(:execute).with('SELECT pg_is_in_recovery()').and_return([{ "pg_is_in_recovery" => false }])
 
       expect(described_class.db_read_only?).to be_falsey
@@ -482,6 +570,114 @@ describe Gitlab::Database do
 
       it 'returns MAX_TIMESTAMP_VALUE' do
         expect(subject).to eq(max_timestamp)
+      end
+    end
+  end
+
+  describe 'ActiveRecordBaseTransactionMetrics' do
+    def subscribe_events
+      events = []
+
+      begin
+        subscriber = ActiveSupport::Notifications.subscribe('transaction.active_record') do |e|
+          events << e
+        end
+
+        yield
+      ensure
+        ActiveSupport::Notifications.unsubscribe(subscriber) if subscriber
+      end
+
+      events
+    end
+
+    context 'without a transaction block' do
+      it 'does not publish a transaction event' do
+        events = subscribe_events do
+          User.first
+        end
+
+        expect(events).to be_empty
+      end
+    end
+
+    context 'within a transaction block' do
+      it 'publishes a transaction event' do
+        events = subscribe_events do
+          ActiveRecord::Base.transaction do
+            User.first
+          end
+        end
+
+        expect(events.length).to be(1)
+
+        event = events.first
+        expect(event).not_to be_nil
+        expect(event.duration).to be > 0.0
+        expect(event.payload).to a_hash_including(
+          connection: be_a(ActiveRecord::ConnectionAdapters::AbstractAdapter)
+        )
+      end
+    end
+
+    context 'within an empty transaction block' do
+      it 'publishes a transaction event' do
+        events = subscribe_events do
+          ActiveRecord::Base.transaction {}
+        end
+
+        expect(events.length).to be(1)
+
+        event = events.first
+        expect(event).not_to be_nil
+        expect(event.duration).to be > 0.0
+        expect(event.payload).to a_hash_including(
+          connection: be_a(ActiveRecord::ConnectionAdapters::AbstractAdapter)
+        )
+      end
+    end
+
+    context 'within a nested transaction block' do
+      it 'publishes multiple transaction events' do
+        events = subscribe_events do
+          ActiveRecord::Base.transaction do
+            ActiveRecord::Base.transaction do
+              ActiveRecord::Base.transaction do
+                User.first
+              end
+            end
+          end
+        end
+
+        expect(events.length).to be(3)
+
+        events.each do |event|
+          expect(event).not_to be_nil
+          expect(event.duration).to be > 0.0
+          expect(event.payload).to a_hash_including(
+            connection: be_a(ActiveRecord::ConnectionAdapters::AbstractAdapter)
+          )
+        end
+      end
+    end
+
+    context 'within a cancelled transaction block' do
+      it 'publishes multiple transaction events' do
+        events = subscribe_events do
+          ActiveRecord::Base.transaction do
+            User.first
+            raise ActiveRecord::Rollback
+          end
+        end
+
+        expect(events.length).to be(1)
+
+        event = events.first
+        expect(event).not_to be_nil
+        expect(event.duration).to be > 0.0
+        expect(event.payload).to a_hash_including(
+          connection: be_a(ActiveRecord::ConnectionAdapters::AbstractAdapter)
+        )
       end
     end
   end

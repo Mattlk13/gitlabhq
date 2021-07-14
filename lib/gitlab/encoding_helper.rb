@@ -20,7 +20,7 @@ module Gitlab
       return message if message.valid_encoding?
 
       # return message if message type is binary
-      detect = CharlockHolmes::EncodingDetector.detect(message)
+      detect = detect_encoding(message)
       return message.force_encoding("BINARY") if detect_binary?(message, detect)
 
       if detect && detect[:encoding] && detect[:confidence] > ENCODING_CONFIDENCE_THRESHOLD
@@ -37,34 +37,49 @@ module Gitlab
       "--broken encoding: #{encoding}"
     end
 
+    def detect_encoding(data, limit: CharlockHolmes::EncodingDetector::DEFAULT_BINARY_SCAN_LEN, cache_key: nil)
+      return if data.nil?
+
+      if Feature.enabled?(:cached_encoding_detection, type: :development, default_enabled: :yaml)
+        return CharlockHolmes::EncodingDetector.new(limit).detect(data) unless cache_key.present?
+
+        Rails.cache.fetch([:detect_binary, CharlockHolmes::VERSION, cache_key], expires_in: 1.week) do
+          CharlockHolmes::EncodingDetector.new(limit).detect(data)
+        end
+      else
+        CharlockHolmes::EncodingDetector.new(limit).detect(data)
+      end
+    end
+
     def detect_binary?(data, detect = nil)
-      detect ||= CharlockHolmes::EncodingDetector.detect(data)
+      detect ||= detect_encoding(data)
       detect && detect[:type] == :binary && detect[:confidence] == 100
     end
 
-    def detect_libgit2_binary?(data)
-      # EncodingDetector checks the first 1024 * 1024 bytes for NUL byte, libgit2 checks
-      # only the first 8000 (https://github.com/libgit2/libgit2/blob/2ed855a9e8f9af211e7274021c2264e600c0f86b/src/filter.h#L15),
-      # which is what we use below to keep a consistent behavior.
-      detect = CharlockHolmes::EncodingDetector.new(8000).detect(data)
+    # EncodingDetector checks the first 1024 * 1024 bytes for NUL byte, libgit2 checks
+    # only the first 8000 (https://github.com/libgit2/libgit2/blob/2ed855a9e8f9af211e7274021c2264e600c0f86b/src/filter.h#L15),
+    # which is what we use below to keep a consistent behavior.
+    def detect_libgit2_binary?(data, cache_key: nil)
+      detect = detect_encoding(data, limit: 8000, cache_key: cache_key)
       detect && detect[:type] == :binary
     end
 
-    def encode_utf8(message)
+    def encode_utf8(message, replace: "")
       message = force_encode_utf8(message)
       return message if message.valid_encoding?
 
-      detect = CharlockHolmes::EncodingDetector.detect(message)
+      detect = detect_encoding(message)
+
       if detect && detect[:encoding]
         begin
           CharlockHolmes::Converter.convert(message, detect[:encoding], 'UTF-8')
         rescue ArgumentError => e
-          Rails.logger.warn("Ignoring error converting #{detect[:encoding]} into UTF8: #{e.message}") # rubocop:disable Gitlab/RailsLogger
+          Gitlab::AppLogger.warn("Ignoring error converting #{detect[:encoding]} into UTF8: #{e.message}")
 
           ''
         end
       else
-        clean(message)
+        clean(message, replace: replace)
       end
     rescue ArgumentError
       nil
@@ -94,8 +109,13 @@ module Gitlab
       message.force_encoding("UTF-8")
     end
 
-    def clean(message)
-      message.encode("UTF-16BE", undef: :replace, invalid: :replace, replace: "".encode("UTF-16BE"))
+    def clean(message, replace: "")
+      message.encode(
+        "UTF-16BE",
+        undef: :replace,
+        invalid: :replace,
+        replace: replace.encode("UTF-16BE")
+      )
         .encode("UTF-8")
         .gsub("\0".encode("UTF-8"), "")
     end

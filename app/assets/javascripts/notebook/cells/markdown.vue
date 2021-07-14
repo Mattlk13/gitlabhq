@@ -1,7 +1,9 @@
 <script>
-import marked from 'marked';
-import sanitize from 'sanitize-html';
+/* eslint-disable vue/no-v-html */
 import katex from 'katex';
+import marked from 'marked';
+import { sanitize } from '~/lib/dompurify';
+import { hasContent } from '~/lib/utils/text_utility';
 import Prompt from './prompt.vue';
 
 const renderer = new marked.Renderer();
@@ -36,37 +38,88 @@ const katexRegexString = `(
   .replace(/\s/g, '')
   .trim();
 
-renderer.paragraph = t => {
+function deHTMLify(t) {
+  // get some specific characters back, that are allowed for KaTex rendering
+  const text = t.replace(/&#39;/g, "'").replace(/&lt;/g, '<').replace(/&gt;/g, '>');
+  return text;
+}
+function renderKatex(t) {
   let text = t;
-  let inline = false;
+  let numInline = 0; // number of successfull converted math formulas
 
   if (typeof katex !== 'undefined') {
     const katexString = text
       .replace(/&amp;/g, '&')
-      .replace(/&=&/g, '\\space=\\space') // eslint-disable-line @gitlab/i18n/no-non-i18n-strings
+      .replace(/&=&/g, '\\space=\\space') // eslint-disable-line @gitlab/require-i18n-strings
       .replace(/<(\/?)em>/g, '_');
     const regex = new RegExp(katexRegexString, 'gi');
     const matchLocation = katexString.search(regex);
     const numberOfMatches = katexString.match(regex);
 
     if (numberOfMatches && numberOfMatches.length !== 0) {
+      let matches = regex.exec(katexString);
       if (matchLocation > 0) {
-        let matches = regex.exec(katexString);
-        inline = true;
+        numInline += 1;
 
         while (matches !== null) {
-          const renderedKatex = katex.renderToString(matches[0].replace(/\$/g, ''));
-          text = `${text.replace(matches[0], ` ${renderedKatex}`)}`;
+          try {
+            const renderedKatex = katex.renderToString(deHTMLify(matches[0].replace(/\$/g, '')));
+            text = `${text.replace(matches[0], ` ${renderedKatex}`)}`;
+          } catch {
+            numInline -= 1;
+          }
           matches = regex.exec(katexString);
         }
       } else {
-        const matches = regex.exec(katexString);
-        text = katex.renderToString(matches[2]);
+        try {
+          text = katex.renderToString(deHTMLify(matches[2]));
+        } catch (error) {
+          numInline -= 1;
+        }
+      }
+    }
+  }
+  return [text, numInline > 0];
+}
+renderer.paragraph = (t) => {
+  const [text, inline] = renderKatex(t);
+  return `<p class="${inline ? 'inline-katex' : ''}">${text}</p>`;
+};
+renderer.listitem = (t) => {
+  const [text, inline] = renderKatex(t);
+  return `<li class="${inline ? 'inline-katex' : ''}">${text}</li>`;
+};
+renderer.originalImage = renderer.image;
+
+renderer.image = function image(href, title, text) {
+  const attachmentHeader = `attachment:`; // eslint-disable-line @gitlab/require-i18n-strings
+
+  if (!this.attachments || !href.startsWith(attachmentHeader)) {
+    return this.originalImage(href, title, text);
+  }
+
+  let img = ``;
+  const filename = href.substring(attachmentHeader.length);
+
+  if (hasContent(filename)) {
+    const attachment = this.attachments[filename];
+
+    if (attachment) {
+      const imageType = Object.keys(attachment)[0];
+
+      if (hasContent(imageType)) {
+        const data = attachment[imageType];
+        const inlined = `data:${imageType};base64,${data}"`; // eslint-disable-line @gitlab/require-i18n-strings
+        img = this.originalImage(inlined, title, text);
       }
     }
   }
 
-  return `<p class="${inline ? 'inline-katex' : ''}">${text}</p>`;
+  if (!hasContent(img)) {
+    return this.originalImage(href, title, text);
+  }
+
+  return sanitize(img);
 };
 
 marked.setOptions({
@@ -85,68 +138,64 @@ export default {
   },
   computed: {
     markdown() {
+      renderer.attachments = this.cell.attachments;
+
       return sanitize(marked(this.cell.source.join('').replace(/\\/g, '\\\\')), {
         // allowedTags from GitLab's inline HTML guidelines
         // https://docs.gitlab.com/ee/user/markdown.html#inline-html
-        allowedTags: [
+        ALLOWED_TAGS: [
+          'a',
+          'abbr',
+          'b',
+          'blockquote',
+          'br',
+          'code',
+          'dd',
+          'del',
+          'div',
+          'dl',
+          'dt',
+          'em',
           'h1',
           'h2',
           'h3',
           'h4',
           'h5',
           'h6',
-          'h7',
-          'h8',
-          'br',
-          'b',
-          'i',
-          'strong',
-          'em',
-          'a',
-          'pre',
-          'code',
-          'img',
-          'tt',
-          'div',
-          'ins',
-          'del',
-          'sup',
-          'sub',
-          'p',
-          'ol',
-          'ul',
-          'table',
-          'thead',
-          'tbody',
-          'tfoot',
-          'blockquote',
-          'dl',
-          'dt',
-          'dd',
-          'kbd',
-          'q',
-          'samp',
-          'var',
           'hr',
-          'ruby',
-          'rt',
-          'rp',
+          'i',
+          'img',
+          'ins',
+          'kbd',
           'li',
-          'tr',
-          'td',
-          'th',
+          'ol',
+          'p',
+          'pre',
+          'q',
+          'rp',
+          'rt',
+          'ruby',
           's',
-          'strike',
+          'samp',
           'span',
-          'abbr',
-          'abbr',
+          'strike',
+          'strong',
+          'sub',
           'summary',
+          'sup',
+          'table',
+          'tbody',
+          'td',
+          'tfoot',
+          'th',
+          'thead',
+          'tr',
+          'tt',
+          'ul',
+          'var',
         ],
-        allowedAttributes: {
-          '*': ['class', 'style'],
-          a: ['href'],
-          img: ['src'],
-        },
+        ALLOWED_ATTR: ['class', 'style', 'href', 'src'],
+        ALLOW_DATA_ATTR: false,
       });
     },
   },

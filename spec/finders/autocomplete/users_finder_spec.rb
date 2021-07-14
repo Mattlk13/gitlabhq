@@ -2,7 +2,7 @@
 
 require 'spec_helper'
 
-describe Autocomplete::UsersFinder do
+RSpec.describe Autocomplete::UsersFinder do
   describe '#execute' do
     let!(:user1) { create(:user, username: 'johndoe') }
     let!(:user2) { create(:user, :blocked, username: 'notsorandom') }
@@ -117,6 +117,11 @@ describe Autocomplete::UsersFinder do
       let(:params) { { author_id: user1.id } }
 
       it { is_expected.to match_array([user1, external_user, omniauth_user, current_user]) }
+    end
+
+    it 'preloads the status association' do
+      associations = subject.map { |user| user.association(:status) }
+      expect(associations).to all(be_loaded)
     end
   end
 end

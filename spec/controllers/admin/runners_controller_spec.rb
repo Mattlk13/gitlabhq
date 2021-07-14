@@ -2,7 +2,7 @@
 
 require 'spec_helper'
 
-describe Admin::RunnersController do
+RSpec.describe Admin::RunnersController do
   let_it_be(:runner) { create(:ci_runner) }
 
   before do
@@ -11,6 +11,10 @@ describe Admin::RunnersController do
 
   describe '#index' do
     render_views
+
+    before do
+      stub_feature_flags(runner_list_view_vue_ui: false)
+    end
 
     it 'lists all runners' do
       get :index
@@ -27,16 +31,32 @@ describe Admin::RunnersController do
 
       # There is still an N+1 query for `runner.builds.count`
       # We also need to add 1 because it takes 2 queries to preload tags
-      expect { get :index }.not_to exceed_query_limit(control_count + 6)
+      # also looking for token nonce requires database queries
+      expect { get :index }.not_to exceed_query_limit(control_count + 16)
 
       expect(response).to have_gitlab_http_status(:ok)
       expect(response.body).to have_content('tag1')
       expect(response.body).to have_content('tag2')
     end
+
+    it 'paginates runners' do
+      stub_const("Admin::RunnersController::NUMBER_OF_RUNNERS_PER_PAGE", 1)
+
+      create(:ci_runner)
+
+      get :index
+
+      expect(response).to have_gitlab_http_status(:ok)
+      expect(assigns(:runners).count).to be(1)
+    end
   end
 
   describe '#show' do
     render_views
+
+    before do
+      stub_feature_flags(runner_detailed_view_vue_ui: false)
+    end
 
     let_it_be(:project) { create(:project) }
     let_it_be(:project_two) { create(:project) }
@@ -72,6 +92,30 @@ describe Admin::RunnersController do
 
       expect(response).to have_gitlab_http_status(:ok)
     end
+
+    describe 'Cost factors values' do
+      context 'when it is Gitlab.com' do
+        before do
+          expect(Gitlab).to receive(:com?).at_least(:once) { true }
+        end
+
+        it 'renders cost factors fields' do
+          get :show, params: { id: runner.id }
+
+          expect(response.body).to match /Private projects Minutes cost factor/
+          expect(response.body).to match /Public projects Minutes cost factor/
+        end
+      end
+
+      context 'when it is not Gitlab.com' do
+        it 'does not show cost factor fields' do
+          get :show, params: { id: runner.id }
+
+          expect(response.body).not_to match /Private projects Minutes cost factor/
+          expect(response.body).not_to match /Public projects Minutes cost factor/
+        end
+      end
+    end
   end
 
   describe '#update' do
@@ -100,7 +144,7 @@ describe Admin::RunnersController do
 
   describe '#resume' do
     it 'marks the runner as active and ticks the queue' do
-      runner.update(active: false)
+      runner.update!(active: false)
 
       expect do
         post :resume, params: { id: runner.id }
@@ -115,7 +159,7 @@ describe Admin::RunnersController do
 
   describe '#pause' do
     it 'marks the runner as inactive and ticks the queue' do
-      runner.update(active: true)
+      runner.update!(active: true)
 
       expect do
         post :pause, params: { id: runner.id }
@@ -125,6 +169,23 @@ describe Admin::RunnersController do
 
       expect(response).to have_gitlab_http_status(:found)
       expect(runner.active).to eq(false)
+    end
+  end
+
+  describe 'GET #runner_setup_scripts' do
+    it 'renders the setup scripts' do
+      get :runner_setup_scripts, params: { os: 'linux', arch: 'amd64' }
+
+      expect(response).to have_gitlab_http_status(:ok)
+      expect(json_response).to have_key("install")
+      expect(json_response).to have_key("register")
+    end
+
+    it 'renders errors if they occur' do
+      get :runner_setup_scripts, params: { os: 'foo', arch: 'bar' }
+
+      expect(response).to have_gitlab_http_status(:bad_request)
+      expect(json_response).to have_key("errors")
     end
   end
 end

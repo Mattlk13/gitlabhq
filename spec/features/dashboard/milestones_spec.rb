@@ -2,7 +2,7 @@
 
 require 'spec_helper'
 
-describe 'Dashboard > Milestones' do
+RSpec.describe 'Dashboard > Milestones' do
   describe 'as anonymous user' do
     before do
       visit dashboard_milestones_path
@@ -30,7 +30,7 @@ describe 'Dashboard > Milestones' do
       expect(current_path).to eq dashboard_milestones_path
       expect(page).to have_content(milestone.title)
       expect(page).to have_content(group.name)
-      expect(first('.milestone')).to have_content('Merge Requests')
+      expect(first('.milestone')).to have_content('Merge requests')
     end
 
     describe 'new milestones dropdown', :js do

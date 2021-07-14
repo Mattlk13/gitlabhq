@@ -1,8 +1,16 @@
+import { GlLoadingIcon } from '@gitlab/ui';
+import { shallowMount, createLocalVue } from '@vue/test-utils';
 import Vuex from 'vuex';
-import { shallowMount } from '@vue/test-utils';
 import { getJSONFixture } from 'helpers/fixtures';
+import { extendedWrapper } from 'helpers/vue_test_utils_helper';
+import EmptyState from '~/pipelines/components/test_reports/empty_state.vue';
 import TestReports from '~/pipelines/components/test_reports/test_reports.vue';
-import * as actions from '~/pipelines/stores/test_reports/actions';
+import TestSummary from '~/pipelines/components/test_reports/test_summary.vue';
+import TestSummaryTable from '~/pipelines/components/test_reports/test_summary_table.vue';
+import * as getters from '~/pipelines/stores/test_reports/getters';
+
+const localVue = createLocalVue();
+localVue.use(Vuex);
 
 describe('Test reports app', () => {
   let wrapper;
@@ -10,48 +18,66 @@ describe('Test reports app', () => {
 
   const testReports = getJSONFixture('pipelines/test_report.json');
 
-  const loadingSpinner = () => wrapper.find('.js-loading-spinner');
-  const testsDetail = () => wrapper.find('.js-tests-detail');
-  const noTestsToShow = () => wrapper.find('.js-no-tests-to-show');
+  const loadingSpinner = () => wrapper.findComponent(GlLoadingIcon);
+  const testsDetail = () => wrapper.findByTestId('tests-detail');
+  const emptyState = () => wrapper.findComponent(EmptyState);
+  const testSummary = () => wrapper.findComponent(TestSummary);
+  const testSummaryTable = () => wrapper.findComponent(TestSummaryTable);
 
-  const createComponent = (state = {}) => {
+  const actionSpies = {
+    fetchTestSuite: jest.fn(),
+    fetchSummary: jest.fn(),
+    setSelectedSuiteIndex: jest.fn(),
+    removeSelectedSuiteIndex: jest.fn(),
+  };
+
+  const createComponent = ({ state = {} } = {}) => {
     store = new Vuex.Store({
       state: {
         isLoading: false,
-        selectedSuite: {},
+        selectedSuiteIndex: null,
         testReports,
         ...state,
       },
-      actions,
+      actions: actionSpies,
+      getters,
     });
 
-    wrapper = shallowMount(TestReports, {
-      store,
-    });
+    wrapper = extendedWrapper(
+      shallowMount(TestReports, {
+        store,
+        localVue,
+      }),
+    );
   };
 
   afterEach(() => {
     wrapper.destroy();
   });
 
+  describe('when component is created', () => {
+    it('should call fetchSummary when pipeline has test report', () => {
+      createComponent();
+
+      expect(actionSpies.fetchSummary).toHaveBeenCalled();
+    });
+  });
+
   describe('when loading', () => {
-    beforeEach(() => createComponent({ isLoading: true }));
+    beforeEach(() => createComponent({ state: { isLoading: true } }));
 
     it('shows the loading spinner', () => {
-      expect(noTestsToShow().exists()).toBe(false);
+      expect(emptyState().exists()).toBe(false);
       expect(testsDetail().exists()).toBe(false);
       expect(loadingSpinner().exists()).toBe(true);
     });
   });
 
   describe('when the api returns no data', () => {
-    beforeEach(() => createComponent({ testReports: {} }));
+    it('displays empty state component', () => {
+      createComponent({ state: { testReports: {} } });
 
-    it('displays that there are no tests to show', () => {
-      const noTests = noTestsToShow();
-
-      expect(noTests.exists()).toBe(true);
-      expect(noTests.text()).toBe('There are no tests to show.');
+      expect(emptyState().exists()).toBe(true);
     });
   });
 
@@ -61,6 +87,33 @@ describe('Test reports app', () => {
     it('sets testReports and shows tests', () => {
       expect(wrapper.vm.testReports).toBeTruthy();
       expect(wrapper.vm.showTests).toBeTruthy();
+    });
+
+    it('shows tests details', () => {
+      expect(testsDetail().exists()).toBe(true);
+    });
+  });
+
+  describe('when a suite is clicked', () => {
+    beforeEach(() => {
+      createComponent({ state: { hasFullReport: true } });
+      testSummaryTable().vm.$emit('row-click', 0);
+    });
+
+    it('should call setSelectedSuiteIndex and fetchTestSuite', () => {
+      expect(actionSpies.setSelectedSuiteIndex).toHaveBeenCalled();
+      expect(actionSpies.fetchTestSuite).toHaveBeenCalled();
+    });
+  });
+
+  describe('when clicking back to summary', () => {
+    beforeEach(() => {
+      createComponent({ state: { selectedSuiteIndex: 0 } });
+      testSummary().vm.$emit('on-back-click');
+    });
+
+    it('should call removeSelectedSuiteIndex', () => {
+      expect(actionSpies.removeSelectedSuiteIndex).toHaveBeenCalled();
     });
   });
 });

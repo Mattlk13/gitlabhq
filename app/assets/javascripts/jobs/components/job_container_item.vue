@@ -1,19 +1,17 @@
 <script>
-import { GlLink } from '@gitlab/ui';
-import tooltip from '~/vue_shared/directives/tooltip';
-import CiIcon from '~/vue_shared/components/ci_icon.vue';
-import Icon from '~/vue_shared/components/icon.vue';
+import { GlLink, GlIcon, GlTooltipDirective } from '@gitlab/ui';
 import delayedJobMixin from '~/jobs/mixins/delayed_job_mixin';
 import { sprintf } from '~/locale';
+import CiIcon from '~/vue_shared/components/ci_icon.vue';
 
 export default {
   components: {
     CiIcon,
-    Icon,
+    GlIcon,
     GlLink,
   },
   directives: {
-    tooltip,
+    GlTooltip: GlTooltipDirective,
   },
   mixins: [delayedJobMixin],
   props: {
@@ -37,36 +35,42 @@ export default {
 
       return text;
     },
+    jobName() {
+      return this.job.name ? this.job.name : this.job.id;
+    },
+    classes() {
+      return {
+        retried: this.job.retried,
+        'gl-font-weight-bold': this.isActive,
+      };
+    },
+    dataTestId() {
+      return this.isActive ? 'active-job' : null;
+    },
   },
 };
 </script>
 
 <template>
-  <div
-    class="build-job position-relative"
-    :class="{
-      retried: job.retried,
-      active: isActive,
-    }"
-  >
+  <div class="build-job gl-relative" :class="classes">
     <gl-link
-      v-tooltip
+      v-gl-tooltip.left.viewport
       :href="job.status.details_path"
       :title="tooltipText"
-      data-boundary="viewport"
-      class="js-job-link d-flex"
+      class="gl-display-flex gl-align-items-center"
+      :data-testid="dataTestId"
     >
-      <icon
+      <gl-icon
         v-if="isActive"
         name="arrow-right"
-        class="js-arrow-right icon-arrow-right position-absolute d-block"
+        class="icon-arrow-right gl-absolute gl-display-block"
       />
 
       <ci-icon :status="job.status" />
 
-      <span class="text-truncate w-100">{{ job.name ? job.name : job.id }}</span>
+      <span class="gl-text-truncate gl-w-full">{{ jobName }}</span>
 
-      <icon v-if="job.retried" name="retry" class="js-retry-icon" />
+      <gl-icon v-if="job.retried" name="retry" />
     </gl-link>
   </div>
 </template>

@@ -1,19 +1,23 @@
-# Notification settings API
+---
+stage: Plan
+group: Project Management
+info: To determine the technical writer assigned to the Stage/Group associated with this page, see https://about.gitlab.com/handbook/engineering/ux/technical-writing/#assignments
+---
 
-> [Introduced](https://gitlab.com/gitlab-org/gitlab-foss/-/merge_requests/5632) in GitLab 8.12.
+# Notification settings API **(FREE)**
+
+Change [notification settings](../user/profile/notifications.md) using the REST API.
 
 ## Valid notification levels
 
 The notification levels are defined in the `NotificationSetting.level` model enumeration. Currently, these levels are recognized:
 
-```plaintext
-disabled
-participating
-watch
-global
-mention
-custom
-```
+- `disabled`
+- `participating`
+- `watch`
+- `global`
+- `mention`
+- `custom`
 
 If the `custom` level is used, specific email events can be controlled. Available events are returned by `NotificationSetting.email_events`. Currently, these events are recognized:
 
@@ -32,6 +36,8 @@ If the `custom` level is used, specific email events can be controlled. Availabl
 - `failed_pipeline`
 - `fixed_pipeline`
 - `success_pipeline`
+- `moved_project`
+- `merge_when_pipeline_succeeds`
 - `new_epic` **(ULTIMATE)**
 
 ## Global notification settings
@@ -43,7 +49,7 @@ GET /notification_settings
 ```
 
 ```shell
-curl --header "PRIVATE-TOKEN: <your_access_token>" https://gitlab.example.com/api/v4/notification_settings
+curl --header "PRIVATE-TOKEN: <your_access_token>" "https://gitlab.example.com/api/v4/notification_settings"
 ```
 
 Example response:
@@ -64,7 +70,7 @@ PUT /notification_settings
 ```
 
 ```shell
-curl --request PUT --header "PRIVATE-TOKEN: <your_access_token>" https://gitlab.example.com/api/v4/notification_settings?level=watch
+curl --request PUT --header "PRIVATE-TOKEN: <your_access_token>" "https://gitlab.example.com/api/v4/notification_settings?level=watch"
 ```
 
 | Attribute | Type | Required | Description |
@@ -86,7 +92,9 @@ curl --request PUT --header "PRIVATE-TOKEN: <your_access_token>" https://gitlab.
 | `failed_pipeline` | boolean | no | Enable/disable this notification |
 | `fixed_pipeline` | boolean | no | Enable/disable this notification |
 | `success_pipeline` | boolean | no | Enable/disable this notification |
-| `new_epic` | boolean | no | Enable/disable this notification ([Introduced](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/6626) in 11.3) **(ULTIMATE)** |
+| `moved_project` | boolean | no | Enable/disable this notification ([Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/30371) in GitLab 13.3) |
+| `merge_when_pipeline_succeeds` | boolean | no | Enable/disable this notification ([Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/244840) in GitLab 13.9) |
+| `new_epic` | boolean | no | Enable/disable this notification ([Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/5863) in GitLab 11.3) **(ULTIMATE)** |
 
 Example response:
 
@@ -107,13 +115,13 @@ GET /projects/:id/notification_settings
 ```
 
 ```shell
-curl --header "PRIVATE-TOKEN: <your_access_token>" https://gitlab.example.com/api/v4/groups/5/notification_settings
-curl --header "PRIVATE-TOKEN: <your_access_token>" https://gitlab.example.com/api/v4/projects/8/notification_settings
+curl --header "PRIVATE-TOKEN: <your_access_token>" "https://gitlab.example.com/api/v4/groups/5/notification_settings"
+curl --header "PRIVATE-TOKEN: <your_access_token>" "https://gitlab.example.com/api/v4/projects/8/notification_settings"
 ```
 
 | Attribute | Type | Required | Description |
 | --------- | ---- | -------- | ----------- |
-| `id` | integer/string | yes | The group/project ID or path |
+| `id` | integer or string | yes | The ID, or [URL-encoded path, of the group or project](index.md#namespaced-path-encoding). |
 
 Example response:
 
@@ -133,13 +141,13 @@ PUT /projects/:id/notification_settings
 ```
 
 ```shell
-curl --request PUT --header "PRIVATE-TOKEN: <your_access_token>" https://gitlab.example.com/api/v4/groups/5/notification_settings?level=watch
-curl --request PUT --header "PRIVATE-TOKEN: <your_access_token>" https://gitlab.example.com/api/v4/projects/8/notification_settings?level=custom&new_note=true
+curl --request PUT --header "PRIVATE-TOKEN: <your_access_token>" "https://gitlab.example.com/api/v4/groups/5/notification_settings?level=watch"
+curl --request PUT --header "PRIVATE-TOKEN: <your_access_token>" "https://gitlab.example.com/api/v4/projects/8/notification_settings?level=custom&new_note=true"
 ```
 
 | Attribute | Type | Required | Description |
 | --------- | ---- | -------- | ----------- |
-| `id` | integer/string | yes | The group/project ID or path |
+| `id` | integer or string | yes | The ID, or [URL-encoded path, of the group or project](index.md#namespaced-path-encoding) |
 | `level` | string | no | The global notification level |
 | `new_note` | boolean | no | Enable/disable this notification |
 | `new_issue` | boolean | no | Enable/disable this notification |
@@ -156,7 +164,9 @@ curl --request PUT --header "PRIVATE-TOKEN: <your_access_token>" https://gitlab.
 | `failed_pipeline` | boolean | no | Enable/disable this notification |
 | `fixed_pipeline` | boolean | no | Enable/disable this notification |
 | `success_pipeline` | boolean | no | Enable/disable this notification |
-| `new_epic` | boolean | no | Enable/disable this notification ([Introduced](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/6626) in 11.3) **(ULTIMATE)** |
+| `moved_project` | boolean | no | Enable/disable this notification ([Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/30371) in GitLab 13.3) |
+| `merge_when_pipeline_succeeds` | boolean | no | Enable/disable this notification ([Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/244840) in GitLab 13.9) |
+| `new_epic` | boolean | no | Enable/disable this notification ([Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/5863) in GitLab 11.3) **(ULTIMATE)** |
 
 Example responses:
 
@@ -164,7 +174,9 @@ Example responses:
 {
   "level": "watch"
 }
+```
 
+```json
 {
   "level": "custom",
   "events": {
@@ -187,8 +199,8 @@ Example responses:
 }
 ```
 
-Users on GitLab [Ultimate or Gold](https://about.gitlab.com/pricing/) will also see
-the `new_epic` parameter:
+Users on GitLab [Ultimate](https://about.gitlab.com/pricing/) also see the `new_epic`
+parameter:
 
 ```json
 {

@@ -5,14 +5,19 @@ module Gitlab
     module Loader
       class Yaml
         DataTooLargeError = Class.new(Loader::FormatError)
+        NotHashError = Class.new(Loader::FormatError)
 
         include Gitlab::Utils::StrongMemoize
 
         MAX_YAML_SIZE = 1.megabyte
         MAX_YAML_DEPTH = 100
 
-        def initialize(config)
-          @config = YAML.safe_load(config, [Symbol], [], true)
+        def initialize(config, additional_permitted_classes: [])
+          @config = YAML.safe_load(config,
+            permitted_classes: [Symbol, *additional_permitted_classes],
+            permitted_symbols: [],
+            aliases: true
+          )
         rescue Psych::Exception => e
           raise Loader::FormatError, e.message
         end
@@ -21,11 +26,15 @@ module Gitlab
           hash? && !too_big?
         end
 
-        def load!
+        def load_raw!
           raise DataTooLargeError, 'The parsed YAML is too big' if too_big?
-          raise Loader::FormatError, 'Invalid configuration format' unless hash?
+          raise NotHashError, 'Invalid configuration format' unless hash?
 
-          @config.deep_symbolize_keys
+          @config
+        end
+
+        def load!
+          @symbolized_config ||= load_raw!.deep_symbolize_keys
         end
 
         private

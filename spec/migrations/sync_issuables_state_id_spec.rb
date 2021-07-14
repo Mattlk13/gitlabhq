@@ -1,9 +1,9 @@
 # frozen_string_literal: true
 
 require 'spec_helper'
-require Rails.root.join('db', 'post_migrate', '20190911251732_sync_issuables_state_id')
+require_migration!
 
-describe SyncIssuablesStateId, :migration do
+RSpec.describe SyncIssuablesStateId do
   let(:migration) { described_class.new }
 
   describe '#up' do

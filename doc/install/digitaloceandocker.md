@@ -1,15 +1,18 @@
 ---
+stage: none
+group: unassigned
+info: To determine the technical writer assigned to the Stage/Group associated with this page, see https://about.gitlab.com/handbook/engineering/ux/technical-writing/#assignments
 type: howto
 ---
 
-# Digital Ocean and Docker Machine test environment
+# Digital Ocean and Docker Machine test environment **(FREE SELF)**
 
 This guide is for quickly testing different versions of GitLab and not
 recommended for ease of future upgrades or keeping the data you create.
 
 ## Initial setup
 
-In this guide you'll configure a Digital Ocean droplet and set up Docker
+This guide configures a Digital Ocean droplet and sets up Docker
 locally on either macOS or Linux.
 
 ### On macOS
@@ -28,18 +31,18 @@ locally on either macOS or Linux.
 
 - <https://docs.docker.com/machine/install-machine/>
 
-NOTE: **Note:**
+NOTE:
 The rest of the steps are identical for macOS and Linux.
 
-## Create new docker host
+## Create new Docker host
 
 1. Login to Digital Ocean.
 1. Generate a new API token at <https://cloud.digitalocean.com/settings/api/tokens>.
 
-   This command will create a new DO droplet called `gitlab-test-env-do` that will act as a docker host.
+   This command creates a new Digital Ocean droplet called `gitlab-test-env-do` that acts as a Docker host.
 
-   NOTE: **Note:**
-   4GB is the minimum requirement for a Docker host that will run more than one GitLab instance.
+   NOTE:
+   4GB is the minimum requirement for a Docker host that runs more than one GitLab instance.
 
    - RAM: 4GB
    - Name: `gitlab-test-env-do`
@@ -67,22 +70,22 @@ Resource: <https://docs.docker.com/machine/drivers/digital-ocean/>.
 
 ### Connect your shell to the new machine
 
-In this example we'll create a GitLab EE 8.10.8 instance.
+This example creates a GitLab EE 8.10.8 instance.
 
-First connect the docker client to the docker host you created previously.
+First connect the Docker client to the Docker host you created previously.
 
 ```shell
 eval "$(docker-machine env gitlab-test-env-do)"
 ```
 
-You can add this to your `~/.bash_profile` file to ensure the `docker` client uses the `gitlab-test-env-do` docker host
+You can add this to your `~/.bash_profile` file to ensure the `docker` client uses the `gitlab-test-env-do` Docker host
 
 ### Create new GitLab container
 
 - HTTP port: `8888`
 - SSH port: `2222`
   - Set `gitlab_shell_ssh_port` using `--env GITLAB_OMNIBUS_CONFIG`
-- Hostname: IP of docker host
+- Hostname: IP of Docker host
 - Container name: `gitlab-test-8.10`
 - GitLab version: **EE** `8.10.8-ee.0`
 
@@ -108,7 +111,7 @@ gitlab/gitlab-ee:$VERSION
 
 ### Connect to the GitLab container
 
-#### Retrieve the docker host IP
+#### Retrieve the Docker host IP
 
 ```shell
 docker-machine ip gitlab-test-env-do

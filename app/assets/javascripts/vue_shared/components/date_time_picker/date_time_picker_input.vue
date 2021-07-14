@@ -1,14 +1,14 @@
 <script>
-import { uniqueId } from 'lodash';
 import { GlFormGroup, GlFormInput } from '@gitlab/ui';
+import { uniqueId } from 'lodash';
 import { __, sprintf } from '~/locale';
 import { dateFormats } from './date_time_picker_lib';
 
 const inputGroupText = {
   invalidFeedback: sprintf(__('Format: %{dateFormat}'), {
-    dateFormat: dateFormats.stringDate,
+    dateFormat: dateFormats.inputFormat,
   }),
-  placeholder: dateFormats.stringDate,
+  placeholder: dateFormats.inputFormat,
 };
 
 export default {
@@ -20,12 +20,12 @@ export default {
     state: {
       default: null,
       required: true,
-      validator: prop => typeof prop === 'boolean' || prop === null,
+      validator: (prop) => typeof prop === 'boolean' || prop === null,
     },
     value: {
       default: null,
       required: false,
-      validator: prop => typeof prop === 'string' || prop === null,
+      validator: (prop) => typeof prop === 'string' || prop === null,
     },
     label: {
       type: String,

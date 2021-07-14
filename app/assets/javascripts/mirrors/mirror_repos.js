@@ -1,8 +1,9 @@
 import $ from 'jquery';
 import { debounce } from 'lodash';
-import { __ } from '~/locale';
-import Flash from '~/flash';
+import createFlash from '~/flash';
 import axios from '~/lib/utils/axios_utils';
+import { __ } from '~/locale';
+import { hide } from '~/tooltips';
 import SSHMirror from './ssh_mirror';
 
 export default class MirrorRepos {
@@ -22,19 +23,23 @@ export default class MirrorRepos {
   }
 
   initMirrorPush() {
+    this.$keepDivergentRefsInput = $('.js-mirror-keep-divergent-refs', this.$form);
     this.$passwordGroup = $('.js-password-group', this.$container);
     this.$password = $('.js-password', this.$passwordGroup);
     this.$authMethod = $('.js-auth-method', this.$form);
 
+    this.$keepDivergentRefsInput.on('change', () => this.updateKeepDivergentRefs());
     this.$authMethod.on('change', () => this.togglePassword());
     this.$password.on('input.updateUrl', () => this.debouncedUpdateUrl());
 
     this.initMirrorSSH();
     this.updateProtectedBranches();
+    this.updateKeepDivergentRefs();
   }
 
   initMirrorSSH() {
     if (this.$password) {
+      // eslint-disable-next-line @gitlab/no-global-event-off
       this.$password.off('input.updateUrl');
     }
     this.$password = undefined;
@@ -61,11 +66,21 @@ export default class MirrorRepos {
     $('.js-mirror-protected-hidden', this.$form).val(val);
   }
 
+  updateKeepDivergentRefs() {
+    const field = this.$keepDivergentRefsInput.get(0);
+
+    // This field only exists after the form is switched to 'Push' mode
+    if (field) {
+      const val = field.checked ? this.$keepDivergentRefsInput.val() : '0';
+      $('.js-mirror-keep-divergent-refs-hidden', this.$form).val(val);
+    }
+  }
+
   registerUpdateListeners() {
     this.debouncedUpdateUrl = debounce(() => this.updateUrl(), 200);
     this.$urlInput.on('input', () => this.debouncedUpdateUrl());
     this.$protectedBranchesInput.on('change', () => this.updateProtectedBranches());
-    this.$table.on('click', '.js-delete-mirror', event => this.deleteMirror(event));
+    this.$table.on('click', '.js-delete-mirror', (event) => this.deleteMirror(event));
   }
 
   togglePassword() {
@@ -96,13 +111,17 @@ export default class MirrorRepos {
     return axios
       .put(this.mirrorEndpoint, payload)
       .then(() => this.removeRow($target))
-      .catch(() => Flash(__('Failed to remove mirror.')));
+      .catch(() =>
+        createFlash({
+          message: __('Failed to remove mirror.'),
+        }),
+      );
   }
 
   /* eslint-disable class-methods-use-this */
   removeRow($target) {
     const row = $target.closest('tr');
-    $('.js-delete-mirror', row).tooltip('hide');
+    hide($('.js-delete-mirror', row));
     row.remove();
   }
   /* eslint-enable class-methods-use-this */

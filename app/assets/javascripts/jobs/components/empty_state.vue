@@ -35,11 +35,6 @@ export default {
       required: false,
       default: false,
     },
-    variablesSettingsUrl: {
-      type: String,
-      required: false,
-      default: null,
-    },
     action: {
       type: Object,
       required: false,
@@ -71,21 +66,18 @@ export default {
 
     <div class="col-12">
       <div class="text-content">
-        <h4 class="js-job-empty-state-title text-center">{{ title }}</h4>
+        <h4 class="text-center" data-testid="job-empty-state-title">{{ title }}</h4>
 
-        <p v-if="content" class="js-job-empty-state-content">{{ content }}</p>
+        <p v-if="content" data-testid="job-empty-state-content">{{ content }}</p>
       </div>
-      <manual-variables-form
-        v-if="shouldRenderManualVariables"
-        :action="action"
-        :variables-settings-url="variablesSettingsUrl"
-      />
+      <manual-variables-form v-if="shouldRenderManualVariables" :action="action" />
       <div class="text-content">
         <div v-if="action && !shouldRenderManualVariables" class="text-center">
           <gl-link
             :href="action.path"
             :data-method="action.method"
-            class="js-job-empty-state-action btn btn-primary"
+            class="btn gl-button btn-confirm gl-text-decoration-none!"
+            data-testid="job-empty-state-action"
             >{{ action.button_title }}</gl-link
           >
         </div>

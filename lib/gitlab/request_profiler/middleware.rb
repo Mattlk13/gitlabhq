@@ -51,7 +51,7 @@ module Gitlab
       def call_with_call_stack_profiling(env)
         ret = nil
         report = RubyProf::Profile.profile do
-          ret = catch(:warden) do
+          ret = catch(:warden) do # rubocop:disable Cop/BanCatchThrow
             @app.call(env)
           end
         end
@@ -67,7 +67,7 @@ module Gitlab
       def call_with_memory_profiling(env)
         ret = nil
         report = MemoryProfiler.report do
-          ret = catch(:warden) do
+          ret = catch(:warden) do # rubocop:disable Cop/BanCatchThrow
             @app.call(env)
           end
         end
@@ -90,7 +90,7 @@ module Gitlab
           File.open(file_path, 'wb') do |file|
             yield(file)
           end
-        rescue
+        rescue StandardError
           FileUtils.rm(file_path)
         end
       end
@@ -99,7 +99,7 @@ module Gitlab
         if ret.is_a?(Array)
           ret
         else
-          throw(:warden, ret)
+          throw(:warden, ret) # rubocop:disable Cop/BanCatchThrow
         end
       end
     end

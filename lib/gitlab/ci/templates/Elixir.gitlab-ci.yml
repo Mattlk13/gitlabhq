@@ -1,8 +1,13 @@
+# To contribute improvements to CI/CD templates, please follow the Development guide at:
+# https://docs.gitlab.com/ee/development/cicd/templates.html
+# This specific template is located at:
+# https://gitlab.com/gitlab-org/gitlab/-/blob/master/lib/gitlab/ci/templates/Elixir.gitlab-ci.yml
+
 image: elixir:latest
 
 # Pick zero or more services to be used on all builds.
 # Only needed when using a docker container to run your tests in.
-# Check out: http://docs.gitlab.com/ce/ci/docker/using_docker_images.html#what-is-a-service
+# Check out: http://docs.gitlab.com/ee/ci/docker/using_docker_images.html#what-is-a-service
 services:
   - mysql:latest
   - redis:latest

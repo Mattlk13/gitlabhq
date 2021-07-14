@@ -2,126 +2,152 @@
 
 require 'spec_helper'
 
-describe Projects::Alerting::NotifyService do
-  let_it_be(:project, reload: true) { create(:project) }
+RSpec.describe Projects::Alerting::NotifyService do
+  let_it_be_with_reload(:project) { create(:project) }
+
+  let(:payload) { ActionController::Parameters.new(payload_raw).permit! }
+  let(:payload_raw) { {} }
+
+  let(:service) { described_class.new(project, payload) }
 
   before do
-    # We use `let_it_be(:project)` so we make sure to clear caches
-    project.clear_memoization(:licensed_feature_available)
-  end
-
-  shared_examples 'processes incident issues' do |amount|
-    let(:create_incident_service) { spy }
-
-    it 'processes issues' do
-      expect(IncidentManagement::ProcessAlertWorker)
-        .to receive(:perform_async)
-        .with(project.id, kind_of(Hash))
-        .exactly(amount).times
-
-      Sidekiq::Testing.inline! do
-        expect(subject.status).to eq(:success)
-      end
-    end
-  end
-
-  shared_examples 'sends notification email' do
-    let(:notification_service) { spy }
-
-    it 'sends a notification for firing alerts only' do
-      expect(NotificationService)
-        .to receive(:new)
-        .and_return(notification_service)
-
-      expect(notification_service)
-        .to receive_message_chain(:async, :prometheus_alerts_fired)
-
-      expect(subject.status).to eq(:success)
-    end
-  end
-
-  shared_examples 'does not process incident issues' do
-    it 'does not process issues' do
-      expect(IncidentManagement::ProcessAlertWorker)
-        .not_to receive(:perform_async)
-
-      expect(subject.status).to eq(:success)
-    end
-  end
-
-  shared_examples 'does not process incident issues due to error' do |http_status:|
-    it 'does not process issues' do
-      expect(IncidentManagement::ProcessAlertWorker)
-        .not_to receive(:perform_async)
-
-      expect(subject.status).to eq(:error)
-      expect(subject.http_status).to eq(http_status)
-    end
+    stub_licensed_features(oncall_schedules: false, generic_alert_fingerprinting: false)
   end
 
   describe '#execute' do
-    let(:token) { 'invalid-token' }
-    let(:starts_at) { Time.now.change(usec: 0) }
-    let(:service) { described_class.new(project, nil, payload) }
-    let(:payload_raw) do
-      {
-        'title' => 'alert title',
-        'start_time' => starts_at.rfc3339
-      }
-    end
-    let(:payload) { ActionController::Parameters.new(payload_raw).permit! }
+    include_context 'incident management settings enabled'
 
-    subject { service.execute(token) }
+    subject { service.execute(token, integration) }
 
-    context 'with activated Alerts Service' do
-      let!(:alerts_service) { create(:alerts_service, project: project) }
+    context 'with HTTP integration' do
+      let_it_be_with_reload(:integration) { create(:alert_management_http_integration, project: project) }
 
       context 'with valid token' do
-        let(:token) { alerts_service.token }
-        let(:incident_management_setting) { double(send_email?: email_enabled, create_issue?: issue_enabled) }
-        let(:email_enabled) { false }
-        let(:issue_enabled) { false }
+        let(:token) { integration.token }
 
-        before do
-          allow(service)
-            .to receive(:incident_management_setting)
-            .and_return(incident_management_setting)
-        end
+        context 'with valid payload' do
+          let_it_be(:environment) { create(:environment, project: project) }
+          let_it_be(:fingerprint) { 'testing' }
+          let_it_be(:source) { 'GitLab RSpec' }
+          let_it_be(:starts_at) { Time.current.change(usec: 0) }
 
-        it_behaves_like 'does not process incident issues'
+          let(:ended_at) { nil }
+          let(:domain) { 'operations' }
+          let(:payload_raw) do
+            {
+              title: 'alert title',
+              start_time: starts_at.rfc3339,
+              end_time: ended_at&.rfc3339,
+              severity: 'low',
+              monitoring_tool: source,
+              service: 'GitLab Test Suite',
+              description: 'Very detailed description',
+              hosts: ['1.1.1.1', '2.2.2.2'],
+              fingerprint: fingerprint,
+              gitlab_environment_name: environment.name
+            }.with_indifferent_access
+          end
 
-        context 'issue enabled' do
-          let(:issue_enabled) { true }
+          let(:last_alert_attributes) do
+            AlertManagement::Alert.last.attributes
+              .except('id', 'iid', 'created_at', 'updated_at')
+              .with_indifferent_access
+          end
 
-          it_behaves_like 'processes incident issues', 1
+          it_behaves_like 'processes new firing alert'
+          it_behaves_like 'properly assigns the alert properties'
 
-          context 'with an invalid payload' do
-            before do
-              allow(Gitlab::Alerting::NotificationPayloadParser)
-                .to receive(:call)
-                .and_raise(Gitlab::Alerting::NotificationPayloadParser::BadPayloadError)
+          it 'passes the integration to alert processing' do
+            expect(Gitlab::AlertManagement::Payload)
+              .to receive(:parse)
+              .with(project, payload.to_h, integration: integration)
+              .and_call_original
+
+            subject
+          end
+
+          context 'with partial payload' do
+            let_it_be(:source) { integration.name }
+            let_it_be(:payload_raw) do
+              {
+                title: 'alert title',
+                start_time: starts_at.rfc3339
+              }
             end
 
-            it_behaves_like 'does not process incident issues due to error', http_status: 400
+            include_examples 'processes never-before-seen alert'
+
+            it 'assigns the alert properties' do
+              subject
+
+              expect(last_alert_attributes).to match(
+                project_id: project.id,
+                title: payload_raw.fetch(:title),
+                started_at: Time.zone.parse(payload_raw.fetch(:start_time)),
+                severity: 'critical',
+                status: AlertManagement::Alert.status_value(:triggered),
+                events: 1,
+                hosts: [],
+                domain: 'operations',
+                payload: payload_raw.with_indifferent_access,
+                issue_id: nil,
+                description: nil,
+                monitoring_tool: nil,
+                service: nil,
+                fingerprint: nil,
+                ended_at: nil,
+                prometheus_alert_id: nil,
+                environment_id: nil
+              )
+            end
+
+            context 'with existing alert with matching payload' do
+              let_it_be(:fingerprint) { payload_raw.except(:start_time).stringify_keys }
+              let_it_be(:gitlab_fingerprint) { Gitlab::AlertManagement::Fingerprint.generate(fingerprint) }
+              let_it_be(:alert) { create(:alert_management_alert, project: project, fingerprint: gitlab_fingerprint) }
+
+              include_examples 'processes never-before-seen alert'
+            end
+          end
+
+          context 'with resolving payload' do
+            let(:ended_at) { Time.current.change(usec: 0) }
+
+            it_behaves_like 'processes recovery alert'
           end
         end
 
-        context 'with emails turned on' do
-          let(:email_enabled) { true }
+        context 'with overlong payload' do
+          let(:deep_size_object) { instance_double(Gitlab::Utils::DeepSize, valid?: false) }
 
-          it_behaves_like 'sends notification email'
+          before do
+            allow(Gitlab::Utils::DeepSize).to receive(:new).and_return(deep_size_object)
+          end
+
+          it_behaves_like 'alerts service responds with an error and takes no actions', :bad_request
+        end
+
+        context 'with inactive integration' do
+          before do
+            integration.update!(active: false)
+          end
+
+          it_behaves_like 'alerts service responds with an error and takes no actions', :forbidden
         end
       end
 
       context 'with invalid token' do
-        it_behaves_like 'does not process incident issues due to error', http_status: 401
-      end
+        let(:token) { 'invalid-token' }
 
-      context 'with deactivated Alerts Service' do
-        let!(:alerts_service) { create(:alerts_service, :inactive, project: project) }
-
-        it_behaves_like 'does not process incident issues due to error', http_status: 403
+        it_behaves_like 'alerts service responds with an error and takes no actions', :unauthorized
       end
+    end
+
+    context 'without HTTP integration' do
+      let(:integration) { nil }
+      let(:token) { nil }
+
+      it_behaves_like 'alerts service responds with an error and takes no actions', :forbidden
     end
   end
 end

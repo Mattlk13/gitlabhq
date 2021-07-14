@@ -2,8 +2,8 @@
 
 require 'spec_helper'
 
-describe 'IDE merge request', :js do
-  let(:merge_request) { create(:merge_request, :with_diffs, :simple, source_project: project) }
+RSpec.describe 'IDE merge request', :js do
+  let(:merge_request) { create(:merge_request, :simple, source_project: project) }
   let(:project) { create(:project, :public, :repository) }
   let(:user) { project.owner }
 

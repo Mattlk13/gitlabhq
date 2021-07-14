@@ -26,10 +26,11 @@ module Gitlab
           Base64.urlsafe_encode64(state.to_json)
         end
 
-        def open_section(section, timestamp)
+        def open_section(section, timestamp, options)
           @open_sections[section] = timestamp
 
           @current_line.add_section(section)
+          @current_line.set_section_options(options)
           @current_line.set_as_section_header
         end
 
@@ -90,7 +91,7 @@ module Gitlab
           decoded_state = Base64.urlsafe_decode64(state)
           return unless decoded_state.present?
 
-          JSON.parse(decoded_state)
+          Gitlab::Json.parse(decoded_state)
         end
       end
     end

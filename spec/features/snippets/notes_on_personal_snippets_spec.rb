@@ -2,21 +2,22 @@
 
 require 'spec_helper'
 
-describe 'Comments on personal snippets', :js do
+RSpec.describe 'Comments on personal snippets', :js do
   include NoteInteractionHelpers
 
-  let!(:user)    { create(:user) }
-  let!(:snippet) { create(:personal_snippet, :public) }
+  let_it_be(:snippet) { create(:personal_snippet, :public) }
+  let_it_be(:other_note) { create(:note_on_personal_snippet) }
+
+  let(:user_name) { 'Test User' }
+  let!(:user) { create(:user, name: user_name) }
   let!(:snippet_notes) do
     [
       create(:note_on_personal_snippet, noteable: snippet, author: user),
       create(:note_on_personal_snippet, noteable: snippet)
     ]
   end
-  let!(:other_note) { create(:note_on_personal_snippet) }
 
   before do
-    stub_feature_flags(snippets_vue: false)
     sign_in user
     visit snippet_path(snippet)
 
@@ -56,6 +57,14 @@ describe 'Comments on personal snippets', :js do
         expect(page).to show_user_status(status)
       end
     end
+
+    it 'shows the author name' do
+      visit snippet_path(snippet)
+
+      within("#note_#{snippet_notes[0].id}") do
+        expect(page).to have_content(user_name)
+      end
+    end
   end
 
   context 'when submitting a note' do
@@ -87,9 +96,6 @@ describe 'Comments on personal snippets', :js do
     end
 
     it 'does not have autocomplete' do
-      wait_for_requests
-
-      find('#note_note').native.send_keys('')
       fill_in 'note[note]', with: '@'
 
       wait_for_requests
@@ -97,6 +103,17 @@ describe 'Comments on personal snippets', :js do
       # This selector probably won't be in place even if autocomplete was enabled
       # but we want to make sure
       expect(page).not_to have_selector('.atwho-view')
+    end
+
+    it_behaves_like 'personal snippet with references' do
+      let(:container) { 'div#notes' }
+
+      subject do
+        fill_in 'note[note]', with: references
+        click_button 'Comment'
+
+        wait_for_requests
+      end
     end
   end
 

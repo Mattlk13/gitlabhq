@@ -13,21 +13,12 @@ module MergeRequests
       create(merge_request)
     end
 
-    def before_create(merge_request)
-      # current_user (defined in BaseService) is not available within run_after_commit block
-      user = current_user
-      merge_request.run_after_commit do
-        NewMergeRequestWorker.perform_async(merge_request.id, user.id)
-      end
-    end
-
     def after_create(issuable)
-      todo_service.new_merge_request(issuable, current_user)
-      issuable.cache_merge_request_closes_issues!(current_user)
-      create_pipeline_for(issuable, current_user)
-      issuable.update_head_pipeline
-      Gitlab::UsageDataCounters::MergeRequestCounter.count(:create)
-      link_lfs_objects(issuable)
+      issuable.mark_as_preparing
+
+      # Add new items to MergeRequests::AfterCreateService if they can
+      # be performed in Sidekiq
+      NewMergeRequestWorker.perform_async(issuable.id, current_user.id)
 
       super
     end
@@ -36,12 +27,6 @@ module MergeRequests
     # handler CreateMergeRequestHandler
     def create(merge_request)
       super
-    end
-
-    # Override from IssuableBaseService
-    def handle_quick_actions_on_create(merge_request)
-      super
-      handle_wip_event(merge_request)
     end
 
     private
@@ -65,11 +50,7 @@ module MergeRequests
         raise Gitlab::Access::AccessDeniedError
       end
     end
-
-    def link_lfs_objects(issuable)
-      LinkLfsObjectsService.new(issuable.target_project).execute(issuable)
-    end
   end
 end
 
-MergeRequests::CreateService.include_if_ee('EE::MergeRequests::CreateService')
+MergeRequests::CreateService.include_mod_with('MergeRequests::CreateService')

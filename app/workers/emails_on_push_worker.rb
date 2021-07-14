@@ -3,10 +3,12 @@
 class EmailsOnPushWorker # rubocop:disable Scalability/IdempotentWorker
   include ApplicationWorker
 
+  sidekiq_options retry: 3
+
   attr_reader :email, :skip_premailer
 
   feature_category :source_code_management
-  latency_sensitive_worker!
+  urgency :low
   worker_resource_boundary :cpu
   weight 2
 
@@ -56,7 +58,7 @@ class EmailsOnPushWorker # rubocop:disable Scalability/IdempotentWorker
       end
     end
 
-    valid_recipients(recipients).each do |recipient|
+    Integrations::EmailsOnPush.valid_recipients(recipients).each do |recipient|
       send_email(
         recipient,
         project_id,
@@ -91,11 +93,5 @@ class EmailsOnPushWorker # rubocop:disable Scalability/IdempotentWorker
     email.add_message_id
     email.header[:skip_premailer] = true if skip_premailer
     email.deliver_now
-  end
-
-  def valid_recipients(recipients)
-    recipients.split.select do |recipient|
-      recipient.include?('@')
-    end
   end
 end

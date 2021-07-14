@@ -1,7 +1,7 @@
-import axios from '~/lib/utils/axios_utils';
 import createFlash from '~/flash';
-import { s__ } from '~/locale';
+import axios from '~/lib/utils/axios_utils';
 import { normalizeHeaders } from '~/lib/utils/common_utils';
+import { s__ } from '~/locale';
 import * as types from './mutation_types';
 
 const REQUEST_PAGE_COUNT = 100;
@@ -21,7 +21,7 @@ export const fetchMergeRequests = ({ state, dispatch }) => {
 
   return axios
     .get(`${state.apiEndpoint}?per_page=${REQUEST_PAGE_COUNT}`)
-    .then(res => {
+    .then((res) => {
       const { headers, data } = res;
       const total = Number(normalizeHeaders(headers)['X-TOTAL']) || 0;
 
@@ -29,9 +29,8 @@ export const fetchMergeRequests = ({ state, dispatch }) => {
     })
     .catch(() => {
       dispatch('receiveDataError');
-      createFlash(s__('Something went wrong while fetching related merge requests.'));
+      createFlash({
+        message: s__('Something went wrong while fetching related merge requests.'),
+      });
     });
 };
-
-// prevent babel-plugin-rewire from generating an invalid default during karma tests
-export default () => {};

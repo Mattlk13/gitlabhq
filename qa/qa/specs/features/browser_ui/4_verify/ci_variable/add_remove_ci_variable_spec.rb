@@ -1,9 +1,9 @@
 # frozen_string_literal: true
 
 module QA
-  context 'Verify' do
-    describe 'Add or Remove CI variable via UI', :smoke, quarantine: { issue: 'https://gitlab.com/gitlab-org/gitlab/issues/207915', type: :stale } do
-      let!(:project) do
+  RSpec.describe 'Verify' do
+    describe 'Add or Remove CI variable via UI', :smoke do
+      let(:project) do
         Resource::Project.fabricate_via_api! do |project|
           project.name = 'project-with-ci-variables'
           project.description = 'project with CI variables'
@@ -12,30 +12,27 @@ module QA
 
       before do
         Flow::Login.sign_in
+        project.visit!
         add_ci_variable
-        open_ci_cd_settings
       end
 
-      it 'user adds a CI variable' do
-        Page::Project::Settings::CICD.perform do |settings|
-          settings.expand_ci_variables do |page|
-            expect(page).to have_field(with: 'VARIABLE_KEY')
-            expect(page).not_to have_field(with: 'some_CI_variable')
+      it 'user adds a CI variable', testcase: 'https://gitlab.com/gitlab-org/quality/testcases/-/issues/1759' do
+        Page::Project::Settings::CiVariables.perform do |ci_variable|
+          expect(ci_variable).to have_text('VARIABLE_KEY')
+          expect(ci_variable).not_to have_text('some_CI_variable')
 
-            page.reveal_variables
+          ci_variable.click_reveal_ci_variable_value_button
 
-            expect(page).to have_field(with: 'some_CI_variable')
-          end
+          expect(ci_variable).to have_text('some_CI_variable')
         end
       end
 
-      it 'user removes a CI variable' do
-        Page::Project::Settings::CICD.perform do |settings|
-          settings.expand_ci_variables do |page|
-            page.remove_variable
+      it 'user removes a CI variable', testcase: 'https://gitlab.com/gitlab-org/quality/testcases/-/issues/1758' do
+        Page::Project::Settings::CiVariables.perform do |ci_variable|
+          ci_variable.click_edit_ci_variable
+          ci_variable.click_ci_variable_delete_button
 
-            expect(page).not_to have_field(with: 'VARIABLE_KEY')
-          end
+          expect(ci_variable).to have_text('There are no variables yet', wait: 60)
         end
       end
 
@@ -48,11 +45,6 @@ module QA
           ci_variable.value = 'some_CI_variable'
           ci_variable.masked = false
         end
-      end
-
-      def open_ci_cd_settings
-        project.visit!
-        Page::Project::Menu.perform(&:go_to_ci_cd_settings)
       end
     end
   end

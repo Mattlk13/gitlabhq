@@ -63,11 +63,17 @@ class ExternalPullRequest < ApplicationRecord
   def predefined_variables
     Gitlab::Ci::Variables::Collection.new.tap do |variables|
       variables.append(key: 'CI_EXTERNAL_PULL_REQUEST_IID', value: pull_request_iid.to_s)
+      variables.append(key: 'CI_EXTERNAL_PULL_REQUEST_SOURCE_REPOSITORY', value: source_repository)
+      variables.append(key: 'CI_EXTERNAL_PULL_REQUEST_TARGET_REPOSITORY', value: target_repository)
       variables.append(key: 'CI_EXTERNAL_PULL_REQUEST_SOURCE_BRANCH_SHA', value: source_sha)
       variables.append(key: 'CI_EXTERNAL_PULL_REQUEST_TARGET_BRANCH_SHA', value: target_sha)
       variables.append(key: 'CI_EXTERNAL_PULL_REQUEST_SOURCE_BRANCH_NAME', value: source_branch)
       variables.append(key: 'CI_EXTERNAL_PULL_REQUEST_TARGET_BRANCH_NAME', value: target_branch)
     end
+  end
+
+  def modified_paths
+    project.repository.diff_stats(target_sha, source_sha).paths
   end
 
   private
@@ -78,7 +84,7 @@ class ExternalPullRequest < ApplicationRecord
 
   def not_from_fork
     if from_fork?
-      errors.add(:base, 'Pull requests from fork are not supported')
+      errors.add(:base, _('Pull requests from fork are not supported'))
     end
   end
 

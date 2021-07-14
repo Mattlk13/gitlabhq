@@ -1,41 +1,96 @@
 function retry() {
-    if eval "$@"; then
-        return 0
-    fi
+  if eval "$@"; then
+    return 0
+  fi
 
-    for i in 2 1; do
-        sleep 3s
-        echo "Retrying $i..."
-        if eval "$@"; then
-            return 0
-        fi
-    done
-    return 1
+  for i in 2 1; do
+    sleep 3s
+    echo "Retrying $i..."
+    if eval "$@"; then
+      return 0
+    fi
+  done
+  return 1
+}
+
+function test_url() {
+  local url="${1}"
+  local curl_output="${2}"
+  local status
+
+  status=$(curl -s -o "${curl_output}" -L -w ''%{http_code}'' "${url}")
+
+  if [[ $status == "200" ]]; then
+    return 0
+  fi
+
+  return 1
+}
+
+function bundle_install_script() {
+  local extra_install_args="${1}"
+
+  if [[ "${extra_install_args}" =~ "--without" ]]; then
+    echoerr "The '--without' flag shouldn't be passed as it would replace the default \${BUNDLE_WITHOUT} (currently set to '${BUNDLE_WITHOUT}')."
+    echoerr "Set the 'BUNDLE_WITHOUT' variable instead, e.g. '- export BUNDLE_WITHOUT=\"\${BUNDLE_WITHOUT}:any:other:group:not:to:install\"'."
+    exit 1;
+  fi;
+
+  bundle --version
+  bundle config set path 'vendor'
+  bundle config set clean 'true'
+
+  echo $BUNDLE_WITHOUT
+  bundle config
+
+  run_timed_command "bundle install ${BUNDLE_INSTALL_FLAGS} ${extra_install_args} && bundle check"
+
+  if [[ $(bundle info pg) ]]; then
+    # When we test multiple versions of PG in the same pipeline, we have a single `setup-test-env`
+    # job but the `pg` gem needs to be rebuilt since it includes extensions (https://guides.rubygems.org/gems-with-extensions).
+    # Uncomment the following line if multiple versions of PG are tested in the same pipeline.
+    run_timed_command "bundle pristine pg"
+  fi
 }
 
 function setup_db_user_only() {
-    source scripts/create_postgres_user.sh
+  source scripts/create_postgres_user.sh
 }
 
 function setup_db() {
-    setup_db_user_only
-
-    bundle exec rake db:drop db:create db:schema:load db:migrate
-
-    bundle exec rake gitlab:db:setup_ee
+  run_timed_command "setup_db_user_only"
+  run_timed_command "bundle exec rake db:drop db:create db:structure:load db:migrate gitlab:db:setup_ee"
 }
 
 function install_api_client_dependencies_with_apk() {
   apk add --update openssl curl jq
 }
 
-function install_api_client_dependencies_with_apt() {
-  apt update && apt install jq -y
+function install_gitlab_gem() {
+  gem install httparty --no-document --version 0.18.1
+  gem install gitlab --no-document --version 4.17.0
 }
 
-function install_gitlab_gem() {
-  gem install httparty --no-document --version 0.17.3
-  gem install gitlab --no-document --version 4.13.0
+function install_tff_gem() {
+  gem install test_file_finder --version 0.1.1
+}
+
+function run_timed_command() {
+  local cmd="${1}"
+  local start=$(date +%s)
+  echosuccess "\$ ${cmd}"
+  eval "${cmd}"
+  local ret=$?
+  local end=$(date +%s)
+  local runtime=$((end-start))
+
+  if [[ $ret -eq 0 ]]; then
+    echosuccess "==> '${cmd}' succeeded in ${runtime} seconds."
+    return 0
+  else
+    echoerr "==> '${cmd}' failed (${ret}) in ${runtime} seconds."
+    return $ret
+  fi
 }
 
 function echoerr() {
@@ -58,96 +113,24 @@ function echoinfo() {
   fi
 }
 
-function get_job_id() {
-  local job_name="${1}"
-  local query_string="${2:+&${2}}"
-  local api_token="${API_TOKEN-${GITLAB_BOT_MULTI_PROJECT_PIPELINE_POLLING_TOKEN}}"
-  if [ -z "${api_token}" ]; then
-    echoerr "Please provide an API token with \$API_TOKEN or \$GITLAB_BOT_MULTI_PROJECT_PIPELINE_POLLING_TOKEN."
-    return
-  fi
+function echosuccess() {
+  local header="${2}"
 
-  local max_page=3
-  local page=1
-
-  while true; do
-    local url="https://gitlab.com/api/v4/projects/${CI_PROJECT_ID}/pipelines/${CI_PIPELINE_ID}/jobs?per_page=100&page=${page}${query_string}"
-    echoinfo "GET ${url}"
-
-    local job_id
-    job_id=$(curl --silent --show-error --header "PRIVATE-TOKEN: ${api_token}" "${url}" | jq "map(select(.name == \"${job_name}\")) | map(.id) | last")
-    [[ "${job_id}" == "null" && "${page}" -lt "$max_page" ]] || break
-
-    let "page++"
-  done
-
-  if [[ "${job_id}" == "" ]]; then
-    echoerr "The '${job_name}' job ID couldn't be retrieved!"
+  if [ -n "${header}" ]; then
+    printf "\n\033[0;32m** %s **\n\033[0m" "${1}" >&2;
   else
-    echoinfo "The '${job_name}' job ID is ${job_id}"
-    echo "${job_id}"
+    printf "\033[0;32m%s\n\033[0m" "${1}" >&2;
   fi
 }
 
-function play_job() {
-  local job_name="${1}"
-  local job_id
-  job_id=$(get_job_id "${job_name}" "scope=manual");
-  if [ -z "${job_id}" ]; then return; fi
+function fail_pipeline_early() {
+  local dont_interrupt_me_job_id
+  dont_interrupt_me_job_id=$(scripts/api/get_job_id.rb --job-query "scope=success" --job-name "dont-interrupt-me")
 
-  local api_token="${API_TOKEN-${GITLAB_BOT_MULTI_PROJECT_PIPELINE_POLLING_TOKEN}}"
-  if [ -z "${api_token}" ]; then
-    echoerr "Please provide an API token with \$API_TOKEN or \$GITLAB_BOT_MULTI_PROJECT_PIPELINE_POLLING_TOKEN."
-    return
-  fi
-
-  local url="https://gitlab.com/api/v4/projects/${CI_PROJECT_ID}/jobs/${job_id}/play"
-  echoinfo "POST ${url}"
-
-  local job_url
-  job_url=$(curl --silent --show-error --request POST --header "PRIVATE-TOKEN: ${api_token}" "${url}" | jq ".web_url")
-  echoinfo "Manual job '${job_name}' started at: ${job_url}"
-}
-
-function wait_for_job_to_be_done() {
-  local job_name="${1}"
-  local query_string="${2}"
-  local job_id
-  job_id=$(get_job_id "${job_name}" "${query_string}")
-  if [ -z "${job_id}" ]; then return; fi
-
-  local api_token="${API_TOKEN-${GITLAB_BOT_MULTI_PROJECT_PIPELINE_POLLING_TOKEN}}"
-  if [ -z "${api_token}" ]; then
-    echoerr "Please provide an API token with \$API_TOKEN or \$GITLAB_BOT_MULTI_PROJECT_PIPELINE_POLLING_TOKEN."
-    return
-  fi
-
-  echoinfo "Waiting for the '${job_name}' job to finish..."
-
-  local url="https://gitlab.com/api/v4/projects/${CI_PROJECT_ID}/jobs/${job_id}"
-  echoinfo "GET ${url}"
-
-  # In case the job hasn't finished yet. Keep trying until the job times out.
-  local interval=30
-  local elapsed_seconds=0
-  while true; do
-    local job_status
-    job_status=$(curl --silent --show-error --header "PRIVATE-TOKEN: ${api_token}" "${url}" | jq ".status" | sed -e s/\"//g)
-    [[ "${job_status}" == "pending" || "${job_status}" == "running" ]] || break
-
-    printf "."
-    let "elapsed_seconds+=interval"
-    sleep ${interval}
-  done
-
-  local elapsed_minutes=$((elapsed_seconds / 60))
-  echoinfo "Waited '${job_name}' for ${elapsed_minutes} minutes."
-
-  if [[ "${job_status}" == "failed" ]]; then
-    echoerr "The '${job_name}' failed."
-  elif [[ "${job_status}" == "manual" ]]; then
-    echoinfo "The '${job_name}' is manual."
+  if [[ -n "${dont_interrupt_me_job_id}" ]]; then
+    echoinfo "This pipeline cannot be interrupted due to \`dont-interrupt-me\` job ${dont_interrupt_me_job_id}"
   else
-    echoinfo "The '${job_name}' passed."
+    echoinfo "Failing pipeline early for fast feedback due to test failures in rspec fail-fast."
+    scripts/api/cancel_pipeline.rb
   fi
 }

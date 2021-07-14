@@ -1,3 +1,9 @@
+---
+stage: none
+group: unassigned
+info: To determine the technical writer assigned to the Stage/Group associated with this page, see https://about.gitlab.com/handbook/engineering/ux/technical-writing/#assignments
+---
+
 # Guidelines for shell commands in the GitLab codebase
 
 This document contains guidelines for working with processes and files in the GitLab codebase.
@@ -6,7 +12,7 @@ These guidelines are meant to make your code more reliable _and_ secure.
 ## References
 
 - [Google Ruby Security Reviewer's Guide](https://code.google.com/archive/p/ruby-security/wikis/Guide.wiki)
-- [OWASP Command Injection](https://www.owasp.org/index.php/Command_Injection)
+- [OWASP Command Injection](https://wiki.owasp.org/index.php/Command_Injection)
 - [Ruby on Rails Security Guide Command Line Injection](https://guides.rubyonrails.org/security.html#command-line-injection)
 
 ## Use File and FileUtils instead of shell commands
@@ -47,7 +53,7 @@ system(*%W(#{Gitlab.config.git.bin_path} branch -d -- #{branch_name}))
 
 ## Bypass the shell by splitting commands into separate tokens
 
-When we pass shell commands as a single string to Ruby, Ruby will let `/bin/sh` evaluate the entire string. Essentially, we are asking the shell to evaluate a one-line script. This creates a risk for shell injection attacks. It is better to split the shell command into tokens ourselves. Sometimes we use the scripting capabilities of the shell to change the working directory or set environment variables. All of this can also be achieved securely straight from Ruby
+When we pass shell commands as a single string to Ruby, Ruby lets `/bin/sh` evaluate the entire string. Essentially, we are asking the shell to evaluate a one-line script. This creates a risk for shell injection attacks. It is better to split the shell command into tokens ourselves. Sometimes we use the scripting capabilities of the shell to change the working directory or set environment variables. All of this can also be achieved securely straight from Ruby
 
 ```ruby
 # Wrong
@@ -71,19 +77,21 @@ Make the difference between options and arguments clear to the argument parsers 
 
 To understand what `--` does, consider the problem below.
 
-```
+```shell
 # Example
 $ echo hello > -l
 $ cat -l
+
 cat: illegal option -- l
 usage: cat [-benstuv] [file ...]
 ```
 
 In the example above, the argument parser of `cat` assumes that `-l` is an option. The solution in the example above is to make it clear to `cat` that `-l` is really an argument, not an option. Many Unix command line tools follow the convention of separating options from arguments with `--`.
 
-```
+```shell
 # Example (continued)
 $ cat -- -l
+
 hello
 ```
 
@@ -194,7 +202,7 @@ When using regular expressions to validate user input that is passed as an argum
 
 If you don't, an attacker could use this to execute commands with potentially harmful effect.
 
-For example, when a project's `import_url` is validated like below, the user could trick GitLab into cloning from a Git repository on the local filesystem.
+For example, when a project's `import_url` is validated like below, the user could trick GitLab into cloning from a Git repository on the local file system.
 
 ```ruby
 validates :import_url, format: { with: URI.regexp(%w(ssh git http https)) }
@@ -203,7 +211,7 @@ validates :import_url, format: { with: URI.regexp(%w(ssh git http https)) }
 
 Suppose the user submits the following as their import URL:
 
-```
+```plaintext
 file://git:/tmp/lol
 ```
 
@@ -215,4 +223,4 @@ When importing, GitLab would execute the following command, passing the `import_
 git clone file://git:/tmp/lol
 ```
 
-Git would simply ignore the `git:` part, interpret the path as `file:///tmp/lol`, and import the repository into the new project. This action could potentially give the attacker access to any repository in the system, whether private or not.
+Git ignores the `git:` part, interpret the path as `file:///tmp/lol`, and imports the repository into the new project. This action could potentially give the attacker access to any repository in the system, whether private or not.

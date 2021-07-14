@@ -2,10 +2,10 @@
 
 require 'spec_helper'
 
-describe 'User searches for wiki pages', :js do
+RSpec.describe 'User searches for wiki pages', :js do
   let(:user) { create(:user) }
   let(:project) { create(:project, :repository, :wiki_repo, namespace: user.namespace) }
-  let!(:wiki_page) { create(:wiki_page, wiki: project.wiki, attrs: { title: 'directory/title', content: 'Some Wiki content' }) }
+  let!(:wiki_page) { create(:wiki_page, wiki: project.wiki, title: 'directory/title', content: 'Some Wiki content') }
 
   before do
     project.add_maintainer(user)
@@ -15,13 +15,16 @@ describe 'User searches for wiki pages', :js do
   end
 
   include_examples 'top right search form'
+  include_examples 'search timeouts', 'wiki_blobs'
 
   shared_examples 'search wiki blobs' do
     it 'finds a page' do
-      find('.js-search-project-dropdown').click
+      find('[data-testid="project-filter"]').click
 
-      page.within('.project-filter') do
-        click_link(project.full_name)
+      wait_for_requests
+
+      page.within('[data-testid="project-filter"]') do
+        click_on(project.name)
       end
 
       fill_in('dashboard_search', with: search_term)

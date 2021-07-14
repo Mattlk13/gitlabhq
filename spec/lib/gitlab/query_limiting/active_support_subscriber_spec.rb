@@ -2,8 +2,8 @@
 
 require 'spec_helper'
 
-describe Gitlab::QueryLimiting::ActiveSupportSubscriber do
-  let(:transaction) { instance_double(Gitlab::QueryLimiting::Transaction, increment: true) }
+RSpec.describe Gitlab::QueryLimiting::ActiveSupportSubscriber do
+  let(:transaction) { instance_double(Gitlab::QueryLimiting::Transaction, executed_sql: true, increment: true) }
 
   before do
     allow(Gitlab::QueryLimiting::Transaction)
@@ -18,6 +18,11 @@ describe Gitlab::QueryLimiting::ActiveSupportSubscriber do
       expect(transaction)
         .to have_received(:increment)
         .once
+
+      expect(transaction)
+        .to have_received(:executed_sql)
+        .once
+        .with(String)
     end
 
     context 'when the query is actually a rails cache hit' do
@@ -30,6 +35,11 @@ describe Gitlab::QueryLimiting::ActiveSupportSubscriber do
         expect(transaction)
           .to have_received(:increment)
           .once
+
+        expect(transaction)
+          .to have_received(:executed_sql)
+          .once
+          .with(String)
       end
     end
   end

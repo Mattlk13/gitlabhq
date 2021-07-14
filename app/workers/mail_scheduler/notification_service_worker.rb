@@ -5,10 +5,13 @@ require 'active_job/arguments'
 module MailScheduler
   class NotificationServiceWorker # rubocop:disable Scalability/IdempotentWorker
     include ApplicationWorker
+
+    sidekiq_options retry: 3
     include MailSchedulerQueue
 
     feature_category :issue_tracking
     worker_resource_boundary :cpu
+    loggable_arguments 0
 
     def perform(meth, *args)
       check_arguments!(args)

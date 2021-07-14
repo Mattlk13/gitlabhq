@@ -2,7 +2,7 @@
 
 require "spec_helper"
 
-describe Gitlab::Git::Branch, :seed_helper do
+RSpec.describe Gitlab::Git::Branch, :seed_helper do
   let(:repository) { Gitlab::Git::Repository.new('default', TEST_REPO_PATH, '', 'group/project') }
   let(:rugged) do
     Rugged::Repository.new(File.join(TestEnv.repos_path, repository.relative_path))
@@ -41,6 +41,16 @@ describe Gitlab::Git::Branch, :seed_helper do
 
         expect(repository).not_to have_received(:find_branch).with(branch)
       end
+    end
+  end
+
+  describe "#cache_key" do
+    subject { repository.branches.first }
+
+    it "returns a cache key that changes based on changeable values" do
+      digest = Digest::SHA1.hexdigest([subject.name, subject.target, subject.dereferenced_target.sha].join(":"))
+
+      expect(subject.cache_key).to eq("branch:#{digest}")
     end
   end
 
@@ -84,9 +94,10 @@ describe Gitlab::Git::Branch, :seed_helper do
         parents: parents
       }
     end
-    let(:stale_sha) { Timecop.freeze(Gitlab::Git::Branch::STALE_BRANCH_THRESHOLD.ago - 5.days) { create_commit } }
-    let(:active_sha) { Timecop.freeze(Gitlab::Git::Branch::STALE_BRANCH_THRESHOLD.ago + 5.days) { create_commit } }
-    let(:future_sha) { Timecop.freeze(100.days.since) { create_commit } }
+
+    let(:stale_sha) { travel_to(Gitlab::Git::Branch::STALE_BRANCH_THRESHOLD.ago - 5.days) { create_commit } }
+    let(:active_sha) { travel_to(Gitlab::Git::Branch::STALE_BRANCH_THRESHOLD.ago + 5.days) { create_commit } }
+    let(:future_sha) { travel_to(100.days.since) { create_commit } }
 
     before do
       repository.create_branch('stale-1', stale_sha)

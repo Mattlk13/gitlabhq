@@ -1,7 +1,7 @@
 import $ from 'jquery';
+import { isImageLoaded } from '../lib/utils/image_utility';
 import imageDiffHelper from './helpers/index';
 import ImageBadge from './image_badge';
-import { isImageLoaded } from '../lib/utils/image_utility';
 
 export default class ImageDiff {
   constructor(el, options) {
@@ -75,9 +75,7 @@ export default class ImageDiff {
     if (this.renderCommentBadge) {
       imageDiffHelper.addImageCommentBadge(this.imageFrameEl, options);
     } else {
-      const numberBadgeOptions = Object.assign({}, options, {
-        badgeText: index + 1,
-      });
+      const numberBadgeOptions = { ...options, badgeText: index + 1 };
 
       imageDiffHelper.addImageBadge(this.imageFrameEl, numberBadgeOptions);
     }
@@ -130,7 +128,7 @@ export default class ImageDiff {
           const updatedBadgeNumber = index;
           const discussionEl = this.el.querySelector(`#discussion_${discussionId}`);
 
-          imageBadgeEls[index].innerText = updatedBadgeNumber;
+          imageBadgeEls[index].textContent = updatedBadgeNumber;
 
           imageDiffHelper.updateDiscussionBadgeNumber(discussionEl, updatedBadgeNumber);
           imageDiffHelper.updateDiscussionAvatarBadgeNumber(discussionEl, updatedBadgeNumber);

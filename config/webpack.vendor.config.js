@@ -1,7 +1,7 @@
 const path = require('path');
 const webpack = require('webpack');
-const vendorDllHash = require('./helpers/vendor_dll_hash');
 const { YarnCheck } = require('yarn-check-webpack-plugin');
+const vendorDllHash = require('./helpers/vendor_dll_hash');
 
 const ROOT_PATH = path.resolve(__dirname, '..');
 
@@ -13,6 +13,9 @@ module.exports = {
   mode: 'development',
   resolve: {
     extensions: ['.js'],
+    alias: {
+      jquery$: 'jquery/dist/jquery.slim.js',
+    },
   },
 
   // ensure output is not generated when errors are encountered
@@ -22,14 +25,13 @@ module.exports = {
 
   entry: {
     vendor: [
-      'jquery',
+      'jquery/dist/jquery.slim.js',
       'pdfjs-dist/build/pdf',
       'pdfjs-dist/build/pdf.worker.min',
       'sql.js',
       'core-js',
       'echarts',
       'lodash',
-      'underscore',
       'vuex',
       'pikaday',
       'vue/dist/vue.esm.js',
@@ -39,9 +41,9 @@ module.exports = {
       'katex',
       'three',
       'select2',
-      'moment',
+      'moment-mini',
       'aws-sdk',
-      'sanitize-html',
+      'dompurify',
       'bootstrap/dist/js/bootstrap.js',
       'sortablejs/modular/sortable.esm.js',
       'popper.js',
@@ -66,7 +68,23 @@ module.exports = {
     }),
     new YarnCheck({
       rootDirectory: ROOT_PATH,
-      exclude: /ts-jest/,
+      exclude: new RegExp(
+        [
+          /*
+          chokidar has a newer version which do not depend on fsevents,
+          is faster and only compatible with newer node versions (>=8)
+
+          Their actual interface remains the same and we can safely _force_
+          newer versions to get performance and security benefits.
+
+          This can be removed once all dependencies are up to date:
+          https://gitlab.com/gitlab-org/gitlab/-/issues/219353
+          */
+          'chokidar',
+          // We are ignoring ts-jest, because we force a newer version, compatible with our current jest version
+          'ts-jest',
+        ].join('|'),
+      ),
       forceKill: true,
     }),
   ],

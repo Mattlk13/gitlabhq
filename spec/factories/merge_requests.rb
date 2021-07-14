@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 FactoryBot.define do
-  factory :merge_request do
+  factory :merge_request, traits: [:has_internal_id] do
     title { generate(:title) }
     association :source_project, :repository, factory: :project
     target_project { source_project }
@@ -21,7 +21,20 @@ FactoryBot.define do
 
     merge_status { "can_be_merged" }
 
-    trait :with_diffs do
+    trait :draft_merge_request do
+      title { generate(:draft_title) }
+    end
+
+    trait :wip_merge_request do
+      title { generate(:wip_title) }
+    end
+
+    trait :jira_title do
+      title { generate(:jira_title) }
+    end
+
+    trait :jira_branch do
+      source_branch { generate(:jira_branch) }
     end
 
     trait :with_image_diffs do
@@ -41,6 +54,21 @@ FactoryBot.define do
 
     trait :merged do
       state_id { MergeRequest.available_states[:merged] }
+    end
+
+    trait :with_merged_metrics do
+      merged
+
+      transient do
+        merged_by { author }
+      end
+
+      after(:build) do |merge_request, evaluator|
+        metrics = merge_request.build_metrics
+        metrics.merged_at = 1.week.from_now
+        metrics.merged_by = evaluator.merged_by
+        metrics.pipeline = create(:ci_empty_pipeline)
+      end
     end
 
     trait :merged_target do
@@ -109,12 +137,116 @@ FactoryBot.define do
       end
     end
 
+    trait :with_head_pipeline do
+      after(:build) do |merge_request|
+        merge_request.head_pipeline = build(
+          :ci_pipeline,
+          :running,
+          project: merge_request.source_project,
+          ref: merge_request.source_branch,
+          sha: merge_request.diff_head_sha)
+      end
+    end
+
     trait :with_test_reports do
       after(:build) do |merge_request|
         merge_request.head_pipeline = build(
           :ci_pipeline,
           :success,
           :with_test_reports,
+          project: merge_request.source_project,
+          ref: merge_request.source_branch,
+          sha: merge_request.diff_head_sha)
+      end
+    end
+
+    trait :with_accessibility_reports do
+      after(:build) do |merge_request|
+        merge_request.head_pipeline = build(
+          :ci_pipeline,
+          :success,
+          :with_accessibility_reports,
+          project: merge_request.source_project,
+          ref: merge_request.source_branch,
+          sha: merge_request.diff_head_sha)
+      end
+    end
+
+    trait :with_codequality_reports do
+      after(:build) do |merge_request|
+        merge_request.head_pipeline = build(
+          :ci_pipeline,
+          :success,
+          :with_codequality_reports,
+          project: merge_request.source_project,
+          ref: merge_request.source_branch,
+          sha: merge_request.diff_head_sha)
+      end
+    end
+
+    trait :unique_branches do
+      source_branch { generate(:branch) }
+      target_branch { generate(:branch) }
+    end
+
+    trait :unique_author do
+      author { association(:user) }
+    end
+
+    trait :with_coverage_reports do
+      after(:build) do |merge_request|
+        merge_request.head_pipeline = build(
+          :ci_pipeline,
+          :success,
+          :with_coverage_report_artifact,
+          project: merge_request.source_project,
+          ref: merge_request.source_branch,
+          sha: merge_request.diff_head_sha)
+      end
+    end
+
+    trait :with_codequality_mr_diff_reports do
+      after(:build) do |merge_request|
+        merge_request.head_pipeline = build(
+          :ci_pipeline,
+          :success,
+          :with_codequality_mr_diff_report,
+          project: merge_request.source_project,
+          ref: merge_request.source_branch,
+          sha: merge_request.diff_head_sha)
+      end
+    end
+
+    trait :with_terraform_reports do
+      after(:build) do |merge_request|
+        merge_request.head_pipeline = build(
+          :ci_pipeline,
+          :success,
+          :with_terraform_reports,
+          project: merge_request.source_project,
+          ref: merge_request.source_branch,
+          sha: merge_request.diff_head_sha)
+      end
+    end
+
+    trait :with_sast_reports do
+      after(:build) do |merge_request|
+        merge_request.head_pipeline = build(
+          :ci_pipeline,
+          :success,
+          :with_sast_report,
+          project: merge_request.source_project,
+          ref: merge_request.source_branch,
+          sha: merge_request.diff_head_sha)
+      end
+    end
+
+    trait :with_secret_detection_reports do
+      after(:build) do |merge_request|
+        merge_request.head_pipeline = build(
+          :ci_pipeline,
+          :success,
+          :with_secret_detection_report,
           project: merge_request.source_project,
           ref: merge_request.source_branch,
           sha: merge_request.diff_head_sha)
@@ -135,42 +267,30 @@ FactoryBot.define do
 
     trait :with_legacy_detached_merge_request_pipeline do
       after(:create) do |merge_request|
-        merge_request.pipelines_for_merge_request << create(:ci_pipeline,
-          source: :merge_request_event,
-          merge_request: merge_request,
-          project: merge_request.source_project,
-          ref: merge_request.source_branch,
-          sha: merge_request.source_branch_sha)
+        create(:ci_pipeline, :legacy_detached_merge_request_pipeline, merge_request: merge_request)
       end
     end
 
     trait :with_detached_merge_request_pipeline do
       after(:create) do |merge_request|
-        merge_request.pipelines_for_merge_request << create(:ci_pipeline,
-          source: :merge_request_event,
-          merge_request: merge_request,
-          project: merge_request.source_project,
-          ref: merge_request.ref_path,
-          sha: merge_request.source_branch_sha)
+        create(:ci_pipeline, :detached_merge_request_pipeline, merge_request: merge_request)
       end
     end
 
     trait :with_merge_request_pipeline do
       transient do
-        merge_sha { 'test-merge-sha' }
+        merge_sha { 'mergesha' }
         source_sha { source_branch_sha }
         target_sha { target_branch_sha }
       end
 
       after(:create) do |merge_request, evaluator|
-        merge_request.pipelines_for_merge_request << create(:ci_pipeline,
-          source: :merge_request_event,
+        create(:ci_pipeline, :merged_result_pipeline,
           merge_request: merge_request,
-          project: merge_request.source_project,
-          ref: merge_request.merge_ref_path,
           sha: evaluator.merge_sha,
           source_sha: evaluator.source_sha,
-          target_sha: evaluator.target_sha)
+          target_sha: evaluator.target_sha
+        )
       end
     end
 
@@ -178,7 +298,7 @@ FactoryBot.define do
       target_branch { 'pages-deploy-target' }
 
       transient do
-        deployment { create(:deployment, :review_app) }
+        deployment { association(:deployment, :review_app) }
       end
 
       after(:build) do |merge_request, evaluator|
@@ -197,7 +317,7 @@ FactoryBot.define do
       source_project = merge_request.source_project
 
       # Fake `fetch_ref!` if we don't have repository
-      # We have too many existing tests replying on this behaviour
+      # We have too many existing tests relying on this behaviour
       unless [target_project, source_project].all?(&:repository_exists?)
         allow(merge_request).to receive(:fetch_ref!)
       end
@@ -215,10 +335,15 @@ FactoryBot.define do
     factory :closed_merge_request, traits: [:closed]
     factory :reopened_merge_request, traits: [:opened]
     factory :invalid_merge_request, traits: [:invalid]
-    factory :merge_request_with_diffs, traits: [:with_diffs]
+    factory :merge_request_with_diffs
     factory :merge_request_with_diff_notes do
       after(:create) do |mr|
         create(:diff_note_on_merge_request, noteable: mr, project: mr.source_project)
+      end
+    end
+    factory :merge_request_with_multiple_diffs do
+      after(:create) do |mr|
+        mr.merge_request_diffs.create!(head_commit_sha: '6f6d7e7ed97bb5f0054f2b1df789b39ca89b6ff9')
       end
     end
 
@@ -228,8 +353,10 @@ FactoryBot.define do
       end
 
       after(:create) do |merge_request, evaluator|
-        merge_request.update(labels: evaluator.labels)
+        merge_request.update!(labels: evaluator.labels)
       end
     end
+
+    factory :merge_request_without_merge_request_diff, class: 'MergeRequestWithoutMergeRequestDiff'
   end
 end

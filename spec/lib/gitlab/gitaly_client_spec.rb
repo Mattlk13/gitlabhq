@@ -4,7 +4,7 @@ require 'spec_helper'
 
 # We stub Gitaly in `spec/support/gitaly.rb` for other tests. We don't want
 # those stubs while testing the GitalyClient itself.
-describe Gitlab::GitalyClient do
+RSpec.describe Gitlab::GitalyClient do
   let(:sample_cert) { Rails.root.join('spec/fixtures/clusters/sample_cert.pem').to_s }
 
   before do
@@ -19,17 +19,18 @@ describe Gitlab::GitalyClient do
     })
   end
 
+  describe '.query_time', :request_store do
+    it 'increments query times' do
+      subject.add_query_time(0.4510004)
+      subject.add_query_time(0.3220004)
+
+      expect(subject.query_time).to eq(0.773001)
+    end
+  end
+
   describe '.long_timeout' do
     context 'default case' do
       it { expect(subject.long_timeout).to eq(6.hours) }
-    end
-
-    context 'running in Unicorn' do
-      before do
-        allow(Gitlab::Runtime).to receive(:unicorn?).and_return(true)
-      end
-
-      it { expect(subject.long_timeout).to eq(55) }
     end
 
     context 'running in Puma' do
@@ -44,7 +45,7 @@ describe Gitlab::GitalyClient do
   describe '.filesystem_id_from_disk' do
     it 'catches errors' do
       [Errno::ENOENT, Errno::EACCES, JSON::ParserError].each do |error|
-        allow(File).to receive(:read).with(described_class.storage_metadata_file_path('default')).and_raise(error)
+        stub_file_read(described_class.storage_metadata_file_path('default'), error: error)
 
         expect(described_class.filesystem_id_from_disk('default')).to be_nil
       end
@@ -258,31 +259,63 @@ describe Gitlab::GitalyClient do
   end
 
   describe '.request_kwargs' do
-    context 'when catfile-cache feature is enabled' do
-      before do
-        stub_feature_flags('gitaly_catfile-cache': true)
+    it 'sets the gitaly-session-id in the metadata' do
+      results = described_class.request_kwargs('default', timeout: 1)
+      expect(results[:metadata]).to include('gitaly-session-id')
+    end
+
+    context 'when RequestStore is not enabled' do
+      it 'sets a different gitaly-session-id per request' do
+        gitaly_session_id = described_class.request_kwargs('default', timeout: 1)[:metadata]['gitaly-session-id']
+
+        expect(described_class.request_kwargs('default', timeout: 1)[:metadata]['gitaly-session-id']).not_to eq(gitaly_session_id)
       end
+    end
 
-      it 'sets the gitaly-session-id in the metadata' do
-        results = described_class.request_kwargs('default', timeout: 1)
-        expect(results[:metadata]).to include('gitaly-session-id')
+    context 'when RequestStore is enabled', :request_store do
+      it 'sets the same gitaly-session-id on every outgoing request metadata' do
+        gitaly_session_id = described_class.request_kwargs('default', timeout: 1)[:metadata]['gitaly-session-id']
+
+        3.times do
+          expect(described_class.request_kwargs('default', timeout: 1)[:metadata]['gitaly-session-id']).to eq(gitaly_session_id)
+        end
       end
+    end
 
-      context 'when RequestStore is not enabled' do
-        it 'sets a different gitaly-session-id per request' do
-          gitaly_session_id = described_class.request_kwargs('default', timeout: 1)[:metadata]['gitaly-session-id']
+    context 'gitlab_git_env' do
+      let(:policy) { 'gitaly-route-repository-accessor-policy' }
 
-          expect(described_class.request_kwargs('default', timeout: 1)[:metadata]['gitaly-session-id']).not_to eq(gitaly_session_id)
+      context 'when RequestStore is disabled' do
+        it 'does not force-route to primary' do
+          expect(described_class.request_kwargs('default', timeout: 1)[:metadata][policy]).to be_nil
         end
       end
 
-      context 'when RequestStore is enabled', :request_store do
-        it 'sets the same gitaly-session-id on every outgoing request metadata' do
-          gitaly_session_id = described_class.request_kwargs('default', timeout: 1)[:metadata]['gitaly-session-id']
+      context 'when RequestStore is enabled without git_env', :request_store do
+        it 'does not force-orute to primary' do
+          expect(described_class.request_kwargs('default', timeout: 1)[:metadata][policy]).to be_nil
+        end
+      end
 
-          3.times do
-            expect(described_class.request_kwargs('default', timeout: 1)[:metadata]['gitaly-session-id']).to eq(gitaly_session_id)
-          end
+      context 'when RequestStore is enabled with empty git_env', :request_store do
+        before do
+          Gitlab::SafeRequestStore[:gitlab_git_env] = {}
+        end
+
+        it 'disables force-routing to primary' do
+          expect(described_class.request_kwargs('default', timeout: 1)[:metadata][policy]).to be_nil
+        end
+      end
+
+      context 'when RequestStore is enabled with populated git_env', :request_store do
+        before do
+          Gitlab::SafeRequestStore[:gitlab_git_env] = {
+            "GIT_OBJECT_DIRECTORY_RELATIVE" => "foo/bar"
+          }
+        end
+
+        it 'enables force-routing to primary' do
+          expect(described_class.request_kwargs('default', timeout: 1)[:metadata][policy]).to eq('primary-only')
         end
       end
     end
@@ -512,8 +545,6 @@ describe Gitlab::GitalyClient do
 
     context 'when the request store is active', :request_store do
       it 'records call details if a RPC is called' do
-        expect(described_class).to receive(:measure_timings).and_call_original
-
         gitaly_server.server_version
 
         expect(described_class.list_call_details).not_to be_empty

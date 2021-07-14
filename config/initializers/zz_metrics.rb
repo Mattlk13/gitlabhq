@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 # This file was prefixed with zz_ because we want to load it the last!
 # See: https://gitlab.com/gitlab-org/gitlab-foss/issues/55611
 
@@ -88,6 +90,7 @@ def instrument_classes(instrumentation)
 
   instrumentation.instrument_methods(Gitlab::Highlight)
   instrumentation.instrument_instance_methods(Gitlab::Highlight)
+  instrumentation.instrument_instance_method(Gitlab::Ci::Config::Yaml::Tags::Resolver, :to_hash)
 
   Gitlab.ee do
     instrumentation.instrument_instance_methods(Elastic::Latest::GitInstanceProxy)
@@ -100,7 +103,7 @@ def instrument_classes(instrumentation)
     instrumentation.instrument_instance_methods(Gitlab::Elastic::ProjectSearchResults)
     instrumentation.instrument_instance_methods(Gitlab::Elastic::Indexer)
     instrumentation.instrument_instance_methods(Gitlab::Elastic::SnippetSearchResults)
-    instrumentation.instrument_methods(Gitlab::Elastic::Helper)
+    instrumentation.instrument_instance_methods(Gitlab::Elastic::Helper)
 
     instrumentation.instrument_instance_methods(Elastic::ApplicationVersionedSearch)
     instrumentation.instrument_instance_methods(Elastic::ProjectsSearch)
@@ -135,34 +138,41 @@ end
 # loading of our custom migration templates.
 if Gitlab::Metrics.enabled? && !Rails.env.test? && !(Rails.env.development? && defined?(Rails::Generators))
   require 'pathname'
-  require 'influxdb'
   require 'connection_pool'
   require 'method_source'
 
   # These are manually require'd so the classes are registered properly with
   # ActiveSupport.
+  require_dependency 'gitlab/metrics/subscribers/action_cable'
   require_dependency 'gitlab/metrics/subscribers/action_view'
   require_dependency 'gitlab/metrics/subscribers/active_record'
   require_dependency 'gitlab/metrics/subscribers/rails_cache'
 
   Gitlab::Application.configure do |config|
-    config.middleware.use(Gitlab::Metrics::RackMiddleware)
-    config.middleware.use(Gitlab::Middleware::RailsQueueDuration)
-  end
-
-  Sidekiq.configure_server do |config|
-    config.server_middleware do |chain|
-      chain.add Gitlab::Metrics::SidekiqMiddleware
+    # We want to track certain metrics during the Load Balancing host resolving process.
+    # Because of that, we need to have metrics code available earlier for Load Balancing.
+    if Gitlab::Database::LoadBalancing.enable?
+      config.middleware.insert_before Gitlab::Database::LoadBalancing::RackMiddleware,
+        Gitlab::Metrics::RackMiddleware
+    else
+      config.middleware.use(Gitlab::Metrics::RackMiddleware)
     end
+
+    config.middleware.use(Gitlab::Middleware::RailsQueueDuration)
+    config.middleware.use(Gitlab::Metrics::ElasticsearchRackMiddleware)
   end
 
   # This instruments all methods residing in app/models that (appear to) use any
   # of the ActiveRecord methods. This has to take place _after_ initializing as
   # for some unknown reason calling eager_load! earlier breaks Devise.
   Gitlab::Application.config.after_initialize do
-    Rails.application.eager_load!
+    # We should move all the logic of this file to somewhere else
+    # and require it after `Rails.application.initialize!` in `environment.rb` file.
+    models_path = Rails.root.join('app', 'models').to_s
 
-    models = Rails.root.join('app', 'models').to_s
+    Dir.glob("**/*.rb", base: models_path).sort.each do |file|
+      require_dependency file
+    end
 
     regex = Regexp.union(
       ActiveRecord::Querying.public_instance_methods(false).map(&:to_s)
@@ -178,7 +188,7 @@ if Gitlab::Metrics.enabled? && !Rails.env.test? && !(Rails.env.development? && d
         else
           loc = method.source_location
 
-          loc && loc[0].start_with?(models) && method.source =~ regex
+          loc && loc[0].start_with?(models_path) && method.source =~ regex
         end
       end
 
@@ -193,16 +203,12 @@ if Gitlab::Metrics.enabled? && !Rails.env.test? && !(Rails.env.development? && d
 
   GC::Profiler.enable
 
-  Gitlab::Cluster::LifecycleEvents.on_worker_start do
-    Gitlab::Metrics::Samplers::InfluxSampler.initialize_instance.start
-  end
-
   module TrackNewRedisConnections
     def connect(*args)
       val = super
 
       if current_transaction = ::Gitlab::Metrics::Transaction.current
-        current_transaction.increment(:new_redis_connections, 1)
+        current_transaction.increment(:gitlab_transaction_new_redis_connections_total, 1)
       end
 
       val
@@ -212,4 +218,8 @@ if Gitlab::Metrics.enabled? && !Rails.env.test? && !(Rails.env.development? && d
   class ::Redis::Client
     prepend TrackNewRedisConnections
   end
+
+  Labkit::NetHttpPublisher.labkit_prepend!
+  Labkit::ExconPublisher.labkit_prepend!
+  Labkit::HTTPClientPublisher.labkit_prepend!
 end

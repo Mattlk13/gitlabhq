@@ -1,4 +1,10 @@
-# Geo (development) **(PREMIUM ONLY)**
+---
+stage: Enablement
+group: Geo
+info: To determine the technical writer assigned to the Stage/Group associated with this page, see https://about.gitlab.com/handbook/engineering/ux/technical-writing/#assignments
+---
+
+# Geo (development) **(PREMIUM SELF)**
 
 Geo connects GitLab instances together. One GitLab instance is
 designated as a **primary** node and can be run with multiple
@@ -94,9 +100,9 @@ projects that need updating. Those projects can be:
   [Geo admin panel](../user/admin_area/geo_nodes.md).
 
 When we fail to fetch a repository on the secondary `RETRIES_BEFORE_REDOWNLOAD`
-times, Geo does a so-called _redownload_. It will do a clean clone
+times, Geo does a so-called _re-download_. It will do a clean clone
 into the `@geo-temporary` directory in the root of the storage. When
-it's successful, we replace the main repo with the newly cloned one.
+it's successful, we replace the main repository with the newly cloned one.
 
 ### Uploads replication
 
@@ -134,7 +140,7 @@ The **secondary** node authenticates itself via a [JWT request](https://jwt.io/)
 When the **secondary** node wishes to download a file, it sends an
 HTTP request with the `Authorization` header:
 
-```
+```plaintext
 Authorization: GL-Geo <access_key>:<JWT payload>
 ```
 
@@ -146,8 +152,8 @@ file for the right database ID. For example, for an LFS object, the
 request must also include the SHA256 sum of the file. An example JWT
 payload looks like:
 
-```
-{ "data": { sha256: "31806bb23580caab78040f8c45d329f5016b0115" }, iat: "1234567890" }
+```yaml
+{"data": {sha256: "31806bb23580caab78040f8c45d329f5016b0115"}, iat: "1234567890"}
 ```
 
 If the requested file matches the requested SHA256 sum, then the Geo
@@ -155,7 +161,7 @@ If the requested file matches the requested SHA256 sum, then the Geo
 feature, which allows NGINX to handle the file transfer without tying
 up Rails or Workhorse.
 
-NOTE: **Note:**
+NOTE:
 JWT requires synchronized clocks between the machines
 involved, otherwise it may fail with an encryption error.
 
@@ -193,140 +199,27 @@ needs to be applied to the tracking database on each **secondary** node.
 
 ### Configuration
 
-The database configuration is set in [`config/database_geo.yml`](https://gitlab.com/gitlab-org/gitlab/blob/master/config/database_geo.yml.postgresql).
-The directory [`ee/db/geo`](https://gitlab.com/gitlab-org/gitlab/tree/master/ee/db/geo)
+The database configuration is set in [`config/database_geo.yml`](https://gitlab.com/gitlab-org/gitlab/-/blob/master/config/database_geo.yml.postgresql).
+The directory [`ee/db/geo`](https://gitlab.com/gitlab-org/gitlab/-/tree/master/ee/db/geo)
 contains the schema and migrations for this database.
 
 To write a migration for the database, use the `GeoMigrationGenerator`:
 
-```
+```shell
 rails g geo_migration [args] [options]
 ```
 
 To migrate the tracking database, run:
 
-```
-bundle exec rake geo:db:migrate
-```
-
-### Foreign Data Wrapper
-
-> Introduced in GitLab 10.1.
-
-Foreign Data Wrapper ([FDW](#fdw)) is used by the [Geo Log Cursor](#geo-log-cursor) and improves
-the performance of many synchronization operations.
-
-FDW is a PostgreSQL extension ([`postgres_fdw`](https://www.postgresql.org/docs/current/postgres-fdw.html)) that is enabled within
-the Geo Tracking Database (on a **secondary** node), which allows it
-to connect to the readonly database replica and perform queries and filter
-data from both instances.
-
-While FDW is available in older versions of PostgreSQL, we needed to
-raise the minimum required version to 9.6 as this includes many
-performance improvements to the FDW implementation.
-
-This persistent connection is configured as an FDW server
-named `gitlab_secondary`. This configuration exists within the database's user
-context only. To access the `gitlab_secondary`, GitLab needs to use the
-same database user that had previously been configured.
-
-The Geo Tracking Database accesses the readonly database replica via FDW as a regular user,
-limited by its own restrictions. The credentials are configured as a
-`USER MAPPING` associated with the `SERVER` mapped previously
-(`gitlab_secondary`).
-
-FDW configuration and credentials definition are managed automatically by the
-Omnibus GitLab `gitlab-ctl reconfigure` command.
-
-#### Refeshing the Foreign Tables
-
-Whenever a new Geo node is configured or the database schema changes on the
-**primary** node, you must refresh the foreign tables on the **secondary** node
-by running the following:
-
 ```shell
-bundle exec rake geo:db:refresh_foreign_tables
-```
-
-Failure to do this will prevent the **secondary** node from
-functioning properly. The **secondary** node will generate error
-messages, as the following PostgreSQL error:
-
-```
-ERROR:  relation "gitlab_secondary.ci_job_artifacts" does not exist at character 323
-STATEMENT:                SELECT a.attname, format_type(a.atttypid, a.atttypmod),
-                          pg_get_expr(d.adbin, d.adrelid), a.attnotnull, a.atttypid, a.atttypmod
-                     FROM pg_attribute a LEFT JOIN pg_attrdef d
-                       ON a.attrelid = d.adrelid AND a.attnum = d.adnum
-                    WHERE a.attrelid = '"gitlab_secondary"."ci_job_artifacts"'::regclass
-                      AND a.attnum > 0 AND NOT a.attisdropped
-                    ORDER BY a.attnum
-```
-
-#### Accessing data from a Foreign Table
-
-At the SQL level, all you have to do is `SELECT` data from `gitlab_secondary.*`.
-
-Here's an example of how to access all projects from the Geo Tracking Database's FDW:
-
-```sql
-SELECT * FROM gitlab_secondary.projects;
-```
-
-As a more real-world example, this is how you filter for unarchived projects
-on the Tracking Database:
-
-```sql
-SELECT project_registry.*
-  FROM project_registry
-  JOIN gitlab_secondary.projects
-    ON (project_registry.project_id = gitlab_secondary.projects.id
-   AND gitlab_secondary.projects.archived IS FALSE)
-```
-
-At the ActiveRecord level, we have additional Models that represent the
-foreign tables. They must be mapped in a slightly different way, and they are read-only.
-
-Check the existing FDW models in `ee/app/models/geo/fdw` for reference.
-
-From a developer's perspective, it's no different than creating a model that
-represents a Database View.
-
-With the examples above, you can access the projects with:
-
-```ruby
-Geo::Fdw::Project.all
-```
-
-and to access the `ProjectRegistry` filtering by unarchived projects:
-
-```ruby
-# We have to use Arel here:
-project_registry_table = Geo::ProjectRegistry.arel_table
-fdw_project_table = Geo::Fdw::Project.arel_table
-
-project_registry_table.join(fdw_project_table)
-                      .on(project_registry_table[:project_id].eq(fdw_project_table[:id]))
-                      .where((fdw_project_table[:archived]).eq(true)) # if you append `.to_sql` you can check generated query
+bundle exec rake geo:db:migrate
 ```
 
 ## Finders
 
-Geo uses [Finders](https://gitlab.com/gitlab-org/gitlab/tree/master/app/finders),
+Geo uses [Finders](https://gitlab.com/gitlab-org/gitlab/-/tree/master/app/finders),
 which are classes take care of the heavy lifting of looking up
 projects/attachments/etc. in the tracking database and main database.
-
-### Finders Performance
-
-The Finders need to compare data from the main database with data in
-the tracking database. For example, counting the number of synced
-projects normally involves retrieving the project IDs from one
-database and checking their state in the other database. This is slow
-and requires a lot of memory.
-
-To overcome this, the Finders use [FDW](#fdw), or Foreign Data
-Wrappers. This allows a regular `JOIN` between the main database and
-the tracking database.
 
 ## Redis
 
@@ -401,12 +294,6 @@ migration do not need to run on the secondary nodes.
 A database on each Geo **secondary** node that keeps state for the node
 on which it resides. Read more in [Using the Tracking database](#using-the-tracking-database).
 
-### FDW
-
-Foreign Data Wrapper, or FDW, is a feature built-in in PostgreSQL. It
-allows data to be queried from different data sources. In Geo, it's
-used to query data from different PostgreSQL instances.
-
 ## Geo Event Log
 
 The Geo **primary** stores events in the `geo_event_log` table. Each
@@ -418,7 +305,7 @@ events include:
 - Repositories Changed event
 - Repository Created event
 - Hashed Storage Migrated event
-- Lfs Object Deleted event
+- LFS Object Deleted event
 - Hashed Storage Attachments event
 - Job Artifact Deleted event
 - Upload Deleted event
@@ -433,7 +320,7 @@ The process running on the **secondary** node that looks for new
 ### `Gitlab::Geo` utilities
 
 Small utility methods related to Geo go into the
-[`ee/lib/gitlab/geo.rb`](https://gitlab.com/gitlab-org/gitlab/blob/master/ee/lib/gitlab/geo.rb)
+[`ee/lib/gitlab/geo.rb`](https://gitlab.com/gitlab-org/gitlab/-/blob/master/ee/lib/gitlab/geo.rb)
 file.
 
 Many of these methods are cached using the `RequestStore` class, to
@@ -509,11 +396,6 @@ that need to be taken care of:
 - Health Check. If we can perform some pre-cheсks and make node unhealthy if something is wrong, we should do that.
   The `rake gitlab:geo:check` command has to be updated too.
 
-### Geo self-service framework (alpha)
-
-We started developing a new [Geo self-service framework (alpha)](geo/framework.md)
-which makes it a lot easier to add a new data type.
-
 ## History of communication channel
 
 The communication channel has changed since first iteration, you can
@@ -539,7 +421,7 @@ We switch and filter from each event by the `event_name` field.
 
 ### Geo Log Cursor (GitLab 10.0 and up)
 
-Since GitLab 10.0, [System Webhooks](#system-hooks-gitlab-87-to-95) are no longer
+In GitLab 10.0 and later, [System Webhooks](#system-hooks-gitlab-87-to-95) are no longer
 used and Geo Log Cursor is used instead. The Log Cursor traverses the
 `Geo::EventLog` rows to see if there are changes since the last time
 the log was checked and will handle repository updates, deletes,

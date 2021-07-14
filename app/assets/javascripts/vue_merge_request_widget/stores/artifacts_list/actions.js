@@ -1,7 +1,7 @@
 import Visibility from 'visibilityjs';
 import axios from '~/lib/utils/axios_utils';
-import Poll from '~/lib/utils/poll';
 import httpStatusCodes from '~/lib/utils/http_status';
+import Poll from '~/lib/utils/poll';
 
 import * as types from './mutation_types';
 
@@ -69,6 +69,3 @@ export const receiveArtifactsSuccess = ({ commit }, response) => {
 };
 
 export const receiveArtifactsError = ({ commit }) => commit(types.RECEIVE_ARTIFACTS_ERROR);
-
-// prevent babel-plugin-rewire from generating an invalid default during karma tests
-export default () => {};

@@ -1,9 +1,9 @@
 # frozen_string_literal: true
 
 require 'spec_helper'
-require Rails.root.join('db', 'post_migrate', '20200114112932_add_temporary_partial_index_on_project_id_to_services.rb')
+require_migration!
 
-describe AddTemporaryPartialIndexOnProjectIdToServices, :migration do
+RSpec.describe AddTemporaryPartialIndexOnProjectIdToServices do
   let(:migration) { described_class.new }
 
   describe '#up' do

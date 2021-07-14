@@ -2,24 +2,23 @@
 
 require 'spec_helper'
 
-describe Projects::BlobController do
+RSpec.describe Projects::BlobController do
   include ProjectForksHelper
 
   let(:project) { create(:project, :public, :repository) }
 
   describe "GET show" do
+    def request
+      get(:show, params: { namespace_id: project.namespace, project_id: project, id: id })
+    end
+
     render_views
 
     context 'with file path' do
       before do
         expect(::Gitlab::GitalyClient).to receive(:allow_ref_name_caching).and_call_original
 
-        get(:show,
-            params: {
-              namespace_id: project.namespace,
-              project_id: project,
-              id: id
-            })
+        request
       end
 
       context "valid branch, valid file" do
@@ -348,6 +347,13 @@ describe Projects::BlobController do
         end
       end
     end
+
+    it_behaves_like 'tracking unique hll events' do
+      subject(:request) { put :update, params: default_params }
+
+      let(:target_id) { 'g_edit_by_sfe' }
+      let(:expected_type) { instance_of(Integer) }
+    end
   end
 
   describe 'DELETE destroy' do
@@ -378,6 +384,22 @@ describe Projects::BlobController do
         delete :destroy, params: default_params
 
         expect(response).to redirect_to(after_delete_path)
+      end
+
+      context 'when a validation failure occurs' do
+        let(:failure_path) { project_blob_path(project, default_params[:id]) }
+
+        render_views
+
+        it 'redirects to a valid page' do
+          expect_next_instance_of(Files::DeleteService) do |instance|
+            expect(instance).to receive(:validate!).and_raise(Commits::CreateService::ValidationError, "validation error")
+          end
+
+          delete :destroy, params: default_params
+
+          expect(response).to redirect_to(failure_path)
+        end
       end
     end
 
@@ -418,6 +440,93 @@ describe Projects::BlobController do
 
           expect(response).to redirect_to(after_delete_path)
         end
+      end
+    end
+  end
+
+  describe 'POST preview' do
+    subject(:request) { post :preview, params: default_params }
+
+    let(:user) { create(:user) }
+    let(:filename) { 'preview.md' }
+    let(:default_params) do
+      {
+        namespace_id: project.namespace,
+        project_id: project,
+        id: "#{project.default_branch}/#{filename}",
+        content: "Bar\n"
+      }
+    end
+
+    before do
+      project.add_developer(user)
+      sign_in(user)
+
+      project.repository.create_file(
+        project.creator,
+        filename,
+        "Foo\n",
+        message: 'Test',
+        branch_name: project.default_branch
+      )
+    end
+
+    it 'is successful' do
+      request
+
+      expect(response).to be_successful
+    end
+  end
+
+  describe 'POST create' do
+    let(:user) { create(:user) }
+    let(:default_params) do
+      {
+        namespace_id: project.namespace,
+        project_id: project,
+        id: 'master',
+        branch_name: 'master',
+        file_name: 'docs/EXAMPLE_FILE',
+        content: 'Added changes',
+        commit_message: 'Create CHANGELOG'
+      }
+    end
+
+    before do
+      project.add_developer(user)
+
+      sign_in(user)
+    end
+
+    subject(:request) { post :create, params: default_params }
+
+    it_behaves_like 'tracking unique hll events' do
+      let(:target_id) { 'g_edit_by_sfe' }
+      let(:expected_type) { instance_of(Integer) }
+    end
+
+    it 'redirects to blob' do
+      request
+
+      expect(response).to redirect_to(project_blob_path(project, 'master/docs/EXAMPLE_FILE'))
+    end
+
+    context 'when code_quality_walkthrough param is present' do
+      let(:default_params) { super().merge(code_quality_walkthrough: true) }
+
+      it 'redirects to the pipelines page' do
+        request
+
+        expect(response).to redirect_to(project_pipelines_path(project, code_quality_walkthrough: true))
+      end
+
+      it 'creates an "commit_created" experiment tracking event' do
+        experiment = double(track: true)
+        expect(controller).to receive(:experiment).with(:code_quality_walkthrough, namespace: project.root_ancestor).and_return(experiment)
+
+        request
+
+        expect(experiment).to have_received(:track).with(:commit_created)
       end
     end
   end

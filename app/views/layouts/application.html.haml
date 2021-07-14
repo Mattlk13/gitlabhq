@@ -1,10 +1,11 @@
 - page_classes = page_class << @html_class
 - page_classes = page_classes.flatten.compact
+- body_classes = [user_application_theme, user_tab_width, @body_class, client_class_list]
 
 !!! 5
 %html{ lang: I18n.locale, class: page_classes }
   = render "layouts/head"
-  %body{ class: "#{user_application_theme} #{user_tab_width} #{@body_class} #{client_class_list}", data: body_data }
+  %body{ class: body_classes, data: body_data }
     = render "layouts/init_auto_complete" if @gfm_form
     = render "layouts/init_client_detection_flags"
     = render 'peek/bar'
@@ -13,6 +14,6 @@
     = render 'layouts/page', sidebar: sidebar, nav: nav
     = footer_message
 
-    = render_if_exists "shared/onboarding_guide"
+    = render 'layouts/img_loader'
 
     = yield :scripts_body

@@ -1,14 +1,17 @@
 # frozen_string_literal: true
 
 # Worker for updating any project specific caches.
-class ProjectCacheWorker # rubocop:disable Scalability/IdempotentWorker
+class ProjectCacheWorker
   include ApplicationWorker
 
-  latency_sensitive_worker!
+  sidekiq_options retry: 3
 
   LEASE_TIMEOUT = 15.minutes.to_i
 
   feature_category :source_code_management
+  urgency :high
+  loggable_arguments 1, 2, 3
+  idempotent!
 
   # project_id - The ID of the project for which to flush the cache.
   # files - An Array containing extra types of files to refresh such as
@@ -60,4 +63,4 @@ class ProjectCacheWorker # rubocop:disable Scalability/IdempotentWorker
   end
 end
 
-ProjectCacheWorker.prepend_if_ee('EE::ProjectCacheWorker')
+ProjectCacheWorker.prepend_mod_with('ProjectCacheWorker')

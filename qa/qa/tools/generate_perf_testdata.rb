@@ -26,16 +26,16 @@ module QA
       end
 
       def all
-        STDOUT.puts 'Running...'
+        $stdout.puts 'Running...'
         group_id = create_group
         create_project(group_id)
 
         create_many_branches
         create_many_new_files
         create_mr_with_many_commits
+        create_many_issues
 
         methods_arr = [
-          method(:create_many_issues),
           method(:create_many_labels),
           method(:create_many_todos),
           method(:create_many_merge_requests),
@@ -50,23 +50,23 @@ module QA
         end
 
         threads_arr.each(&:join)
-        STDOUT.puts "\nURLs: #{@urls}"
+        $stdout.puts "\nURLs: #{@urls}"
         File.open("urls.yml", "w") { |file| file.puts @urls.stringify_keys.to_yaml }
-        STDOUT.puts "\nDone"
+        $stdout.puts "\nDone"
       end
 
       def create_group
         group_search_response = create_a_group_api_req(@group_name, @visibility)
         group = JSON.parse(group_search_response.body)
         @urls[:group_page] = group["web_url"]
-        STDOUT.puts "Created a group: #{@urls[:group_page]}"
+        $stdout.puts "Created a group: #{@urls[:group_page]}"
         group["id"]
       end
 
       def create_project(group_id)
         create_project_response = create_a_project_api_req(@project_name, group_id, @visibility)
         @urls[:project_page] = JSON.parse(create_project_response.body)["web_url"]
-        STDOUT.puts "Created a project: #{@urls[:project_page]}"
+        $stdout.puts "Created a project: #{@urls[:project_page]}"
       end
 
       def create_many_issues
@@ -74,7 +74,7 @@ module QA
           create_an_issue_api_req("#{@group_name}%2F#{@project_name}", "issue#{i}", "desc#{i}")
         end
         @urls[:issues_list_page] = @urls[:project_page] + "/issues"
-        STDOUT.puts "Created many issues: #{@urls[:issues_list_page]}"
+        $stdout.puts "Created many issues: #{@urls[:issues_list_page]}"
       end
 
       def create_many_todos
@@ -82,7 +82,7 @@ module QA
           create_a_todo_api_req("#{@group_name}%2F#{@project_name}", "#{i + 1}")
         end
         @urls[:todos_page] = ENV['GITLAB_ADDRESS'] + "/dashboard/todos"
-        STDOUT.puts "Created many todos: #{@urls[:todos_page]}"
+        $stdout.puts "Created many todos: #{@urls[:todos_page]}"
       end
 
       def create_many_labels
@@ -90,25 +90,26 @@ module QA
           create_a_label_api_req("#{@group_name}%2F#{@project_name}", "label#{i}", "#{Faker::Color.hex_color}")
         end
         @urls[:labels_page] = @urls[:project_page] + "/labels"
-        STDOUT.puts "Created many labels: #{@urls[:labels_page]}"
+        $stdout.puts "Created many labels: #{@urls[:labels_page]}"
       end
 
       def create_many_merge_requests
         30.times do |i|
-          create_a_merge_request_api_req("#{@group_name}%2F#{@project_name}", "branch#{i}", "master", "MR#{i}")
+          create_a_merge_request_api_req("#{@group_name}%2F#{@project_name}", "branch#{i}", Runtime::Env.default_branch, "MR#{i}")
         end
         @urls[:mr_list_page] = @urls[:project_page] + "/merge_requests"
-        STDOUT.puts "Created many MRs: #{@urls[:mr_list_page]}"
+        $stdout.puts "Created many MRs: #{@urls[:mr_list_page]}"
       end
 
       def create_many_new_files
-        create_a_new_file_api_req("hello.txt", "master", "#{@group_name}%2F#{@project_name}", "hello", "my new content")
+        create_a_new_file_api_req("hello.txt", Runtime::Env.default_branch, "#{@group_name}%2F#{@project_name}", "hello", "my new content")
         30.times do |i|
+          create_a_new_file_api_req("hello#{i}.txt", Runtime::Env.default_branch, "#{@group_name}%2F#{@project_name}", "hello", "my new content")
           create_a_new_file_api_req("hello#{i}.txt", "branch#{i}", "#{@group_name}%2F#{@project_name}", "hello", "my new content")
         end
 
-        @urls[:files_page] = @urls[:project_page] + "/tree/master"
-        STDOUT.puts "Added many new files: #{@urls[:files_page]}"
+        @urls[:files_page] = @urls[:project_page] + "/tree/#{Runtime::Env.default_branch}"
+        $stdout.puts "Added many new files: #{@urls[:files_page]}"
       end
 
       def create_many_branches
@@ -116,7 +117,7 @@ module QA
           create_a_branch_api_req("branch#{i}", "#{@group_name}%2F#{@project_name}")
         end
         @urls[:branches_page] = @urls[:project_page] + "/-/branches"
-        STDOUT.puts "Created many branches: #{@urls[:branches_page]}"
+        $stdout.puts "Created many branches: #{@urls[:branches_page]}"
       end
 
       def create_an_issue_with_many_discussions
@@ -129,7 +130,7 @@ module QA
         # Add description and labels
         update_an_issue_api_req("#{@group_name}%2F#{@project_name}", issue_id, "#{Faker::Lorem.sentences(500).join(" ")}", labels_list)
         @urls[:large_issue] = @urls[:project_page] + "/issues/#{issue_id}"
-        STDOUT.puts "Created an issue with many discussions: #{@urls[:large_issue]}"
+        $stdout.puts "Created an issue with many discussions: #{@urls[:large_issue]}"
       end
 
       def create_an_mr_with_large_files_and_many_mr_discussions
@@ -137,7 +138,7 @@ module QA
         16.times do |i|
           faker_line_arr = Faker::Lorem.sentences(1500)
           content = faker_line_arr.join("\n\r")
-          create_a_new_file_api_req("hello#{i}.txt", "master", "#{@group_name}%2F#{@project_name}", "Add hello#{i}.txt", content)
+          create_a_new_file_api_req("hello#{i + 100}.txt", Runtime::Env.default_branch, "#{@group_name}%2F#{@project_name}", "Add hello#{i + 100}.txt", content)
           content_arr[i] = faker_line_arr
         end
 
@@ -147,10 +148,10 @@ module QA
           missed_line_array = content_arr[i].each_slice(2).map(&:first)
           content = missed_line_array.join("\n\rIm new!:D \n\r ")
 
-          update_file_api_req("hello#{i}.txt", "performance", "#{@group_name}%2F#{@project_name}", "Update hello#{i}.txt", content)
+          update_file_api_req("hello#{i + 100}.txt", "performance", "#{@group_name}%2F#{@project_name}", "Update hello#{i + 100}.txt", content)
         end
 
-        create_mr_response = create_a_merge_request_api_req("#{@group_name}%2F#{@project_name}", "performance", "master", "Large_MR")
+        create_mr_response = create_a_merge_request_api_req("#{@group_name}%2F#{@project_name}", "performance", Runtime::Env.default_branch, "Large_MR")
 
         iid = JSON.parse(create_mr_response.body)["iid"]
         diff_refs = JSON.parse(create_mr_response.body)["diff_refs"]
@@ -177,12 +178,12 @@ module QA
           create_a_discussion_on_mr_api_req("#{@group_name}%2F#{@project_name}", iid, "Let us discuss")
         end
         @urls[:large_mr] = JSON.parse(create_mr_response.body)["web_url"]
-        STDOUT.puts "Created an MR with many discussions and many very large Files: #{@urls[:large_mr]}"
+        $stdout.puts "Created an MR with many discussions and many very large Files: #{@urls[:large_mr]}"
       end
 
       def create_diff_note(iid, file_count, line_count, head_sha, start_sha, base_sha, line_type)
         post Runtime::API::Request.new(@api_client, "/projects/#{@group_name}%2F#{@project_name}/merge_requests/#{iid}/discussions").url,
-             "" "body=\"Let us discuss\"&
+          "" "body=\"Let us discuss\"&
           position[position_type]=text&
           position[new_path]=hello#{file_count}.txt&
           position[old_path]=hello#{file_count}.txt&
@@ -199,12 +200,12 @@ module QA
 
         create_a_branch_api_req(branch_name, project_path)
         create_a_new_file_api_req(file_name, branch_name, project_path, "Initial commit for new file", "Initial file content")
-        create_mr_response = create_a_merge_request_api_req(project_path, branch_name, "master", "MR with many commits-#{SecureRandom.hex(8)}")
+        create_mr_response = create_a_merge_request_api_req(project_path, branch_name, Runtime::Env.default_branch, "MR with many commits-#{SecureRandom.hex(8)}")
         @urls[:mr_with_many_commits] = JSON.parse(create_mr_response.body)["web_url"]
         100.times do |i|
           update_file_api_req(file_name, branch_name, project_path, Faker::Lorem.sentences(5).join(" "), Faker::Lorem.sentences(500).join("\n"))
         end
-        STDOUT.puts "Using branch: #{branch_name}, created an MR with many commits: #{@urls[:mr_with_many_commits]}"
+        $stdout.puts "Using branch: #{branch_name}, created an MR with many commits: #{@urls[:mr_with_many_commits]}"
       end
 
       private
@@ -267,7 +268,7 @@ module QA
 
       def create_a_branch_api_req(branch_name, project_path_or_id)
         call_api(expected_response_code: 201) do
-          post Runtime::API::Request.new(@api_client, "/projects/#{project_path_or_id}/repository/branches").url, "branch=#{branch_name}&ref=master"
+          post Runtime::API::Request.new(@api_client, "/projects/#{project_path_or_id}/repository/branches").url, "branch=#{branch_name}&ref=#{Runtime::Env.default_branch}"
         end
       end
 

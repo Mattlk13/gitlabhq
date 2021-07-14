@@ -2,17 +2,19 @@
 
 require 'spec_helper'
 
-describe Projects::PipelinesController do
+RSpec.describe Projects::PipelinesController do
   include ApiHelpers
 
   let_it_be(:user) { create(:user) }
   let_it_be(:project) { create(:project, :public, :repository) }
+
   let(:feature) { ProjectFeature::ENABLED }
 
   before do
+    allow(Sidekiq.logger).to receive(:info)
     stub_not_protect_default_branch
     project.add_developer(user)
-    project.project_feature.update(builds_access_level: feature)
+    project.project_feature.update!(builds_access_level: feature)
 
     sign_in(user)
   end
@@ -25,10 +27,6 @@ describe Projects::PipelinesController do
     context 'when using persisted stages', :request_store do
       render_views
 
-      before do
-        stub_feature_flags(ci_pipeline_persisted_stages: true)
-      end
-
       it 'returns serialized pipelines' do
         expect(::Gitlab::GitalyClient).to receive(:allow_ref_name_caching).and_call_original
 
@@ -38,11 +36,8 @@ describe Projects::PipelinesController do
         expect(response).to match_response_schema('pipeline')
 
         expect(json_response).to include('pipelines')
-        expect(json_response['pipelines'].count).to eq 5
-        expect(json_response['count']['all']).to eq '5'
-        expect(json_response['count']['running']).to eq '1'
-        expect(json_response['count']['pending']).to eq '1'
-        expect(json_response['count']['finished']).to eq '3'
+        expect(json_response['pipelines'].count).to eq 6
+        expect(json_response['count']['all']).to eq '6'
 
         json_response.dig('pipelines', 0, 'details', 'stages').tap do |stages|
           expect(stages.count).to eq 3
@@ -61,46 +56,7 @@ describe Projects::PipelinesController do
         # There appears to be one extra query for Pipelines#has_warnings? for some reason
         expect { get_pipelines_index_json }.not_to exceed_query_limit(control_count + 1)
         expect(response).to have_gitlab_http_status(:ok)
-        expect(json_response['pipelines'].count).to eq 10
-      end
-    end
-
-    context 'when using legacy stages', :request_store do
-      before do
-        stub_feature_flags(ci_pipeline_persisted_stages: false)
-      end
-
-      it 'returns JSON with serialized pipelines' do
-        get_pipelines_index_json
-
-        expect(response).to have_gitlab_http_status(:ok)
-        expect(response).to match_response_schema('pipeline')
-
-        expect(json_response).to include('pipelines')
-        expect(json_response['pipelines'].count).to eq 5
-        expect(json_response['count']['all']).to eq '5'
-        expect(json_response['count']['running']).to eq '1'
-        expect(json_response['count']['pending']).to eq '1'
-        expect(json_response['count']['finished']).to eq '3'
-
-        json_response.dig('pipelines', 0, 'details', 'stages').tap do |stages|
-          expect(stages.count).to eq 3
-        end
-      end
-
-      it 'does not execute N+1 queries' do
-        get_pipelines_index_json
-
-        control_count = ActiveRecord::QueryRecorder.new do
-          get_pipelines_index_json
-        end.count
-
-        create_all_pipeline_types
-
-        # There appears to be one extra query for Pipelines#has_warnings? for some reason
-        expect { get_pipelines_index_json }.not_to exceed_query_limit(control_count + 1)
-        expect(response).to have_gitlab_http_status(:ok)
-        expect(json_response['pipelines'].count).to eq 10
+        expect(json_response['pipelines'].count).to eq 12
       end
     end
 
@@ -108,6 +64,14 @@ describe Projects::PipelinesController do
       get_pipelines_index_json
 
       expect(json_response['pipelines'][0]).not_to include('coverage')
+    end
+
+    it 'paginates the result' do
+      allow(Ci::Pipeline).to receive(:default_per_page).and_return(2)
+
+      get_pipelines_index_json
+
+      check_pipeline_response(returned: 2, all: 6)
     end
 
     context 'when performing gitaly calls', :request_store do
@@ -119,9 +83,9 @@ describe Projects::PipelinesController do
 
         expect(::Gitlab::GitalyClient).to receive(:allow_ref_name_caching).and_call_original
 
-        # ListCommitsByOid, RepositoryExists, HasLocalBranches
+        # ListCommitsByOid, RepositoryExists, HasLocalBranches, ListCommitsByRefNames
         expect { get_pipelines_index_json }
-          .to change { Gitlab::GitalyClient.get_request_count }.by(3)
+          .to change { Gitlab::GitalyClient.get_request_count }.by(4)
       end
     end
 
@@ -139,15 +103,123 @@ describe Projects::PipelinesController do
       it 'returns the pipelines when the user has access' do
         get_pipelines_index_json
 
-        expect(json_response['pipelines'].size).to eq(5)
+        expect(json_response['pipelines'].size).to eq(6)
       end
     end
 
-    def get_pipelines_index_json
+    context 'when user tries to access legacy scope via URL' do
+      it 'redirects to all pipelines with that status instead' do
+        get_pipelines_index_html(scope: 'running')
+
+        expect(response).to redirect_to(project_pipelines_path(project, status: 'running', format: :html))
+      end
+    end
+
+    context 'filter by scope' do
+      context 'scope is branches or tags' do
+        before do
+          create(:ci_pipeline, :failed, project: project, ref: 'v1.0.0', tag: true)
+          create(:ci_pipeline, :failed, project: project, ref: 'master', tag: false)
+          create(:ci_pipeline, :failed, project: project, ref: 'feature', tag: false)
+        end
+
+        context 'when scope is branches' do
+          it 'returns matched pipelines' do
+            get_pipelines_index_json(scope: 'branches')
+
+            check_pipeline_response(returned: 2, all: 9)
+          end
+        end
+
+        context 'when scope is tags' do
+          it 'returns matched pipelines' do
+            get_pipelines_index_json(scope: 'tags')
+
+            check_pipeline_response(returned: 1, all: 9)
+          end
+        end
+      end
+    end
+
+    context 'filter by username' do
+      let!(:pipeline) { create(:ci_pipeline, :running, project: project, user: user) }
+
+      context 'when username exists' do
+        it 'returns matched pipelines' do
+          get_pipelines_index_json(username: user.username)
+
+          check_pipeline_response(returned: 1, all: 1)
+        end
+      end
+
+      context 'when username does not exist' do
+        it 'returns empty' do
+          get_pipelines_index_json(username: 'invalid-username')
+
+          check_pipeline_response(returned: 0, all: 0)
+        end
+      end
+    end
+
+    context 'filter by ref' do
+      let!(:pipeline) { create(:ci_pipeline, :running, project: project, ref: 'branch-1') }
+
+      context 'when pipelines with the ref exists' do
+        it 'returns matched pipelines' do
+          get_pipelines_index_json(ref: 'branch-1')
+
+          check_pipeline_response(returned: 1, all: 1)
+        end
+      end
+
+      context 'when no pipeline with the ref exists' do
+        it 'returns empty list' do
+          get_pipelines_index_json(ref: 'invalid-ref')
+
+          check_pipeline_response(returned: 0, all: 0)
+        end
+      end
+    end
+
+    context 'filter by status' do
+      context 'when pipelines with the status exists' do
+        it 'returns matched pipelines' do
+          get_pipelines_index_json(status: 'success')
+
+          check_pipeline_response(returned: 1, all: 1)
+        end
+      end
+
+      context 'when no pipeline with the status exists' do
+        it 'returns empty list' do
+          get_pipelines_index_json(status: 'manual')
+
+          check_pipeline_response(returned: 0, all: 0)
+        end
+      end
+
+      context 'when invalid status' do
+        it 'returns all list' do
+          get_pipelines_index_json(status: 'invalid-status')
+
+          check_pipeline_response(returned: 6, all: 6)
+        end
+      end
+    end
+
+    def get_pipelines_index_html(params = {})
       get :index, params: {
                     namespace_id: project.namespace,
                     project_id: project
-                  },
+                  }.merge(params),
+                  format: :html
+    end
+
+    def get_pipelines_index_json(params = {})
+      get :index, params: {
+                    namespace_id: project.namespace,
+                    project_id: project
+                  }.merge(params),
                   format: :json
     end
 
@@ -155,18 +227,33 @@ describe Projects::PipelinesController do
       %w(pending running success failed canceled).each_with_index do |status, index|
         create_pipeline(status, project.commit("HEAD~#{index}"))
       end
+
+      create_pipeline_with_merge_request
     end
 
-    def create_pipeline(status, sha)
+    def create_pipeline_with_merge_request
+      # New merge requests must be created with different branches, so
+      # let's just create new ones with random names.
+      branch_name = "test-#{SecureRandom.hex}"
+      project.repository.create_branch(branch_name, project.repository.root_ref)
+      mr = create(:merge_request, source_project: project, target_project: project, source_branch: branch_name)
+      create_pipeline(:running, project.commit('HEAD'), merge_request: mr)
+    end
+
+    def create_pipeline(status, sha, merge_request: nil)
       user = create(:user)
       pipeline = create(:ci_empty_pipeline, status: status,
                                             project: project,
-                                            sha: sha,
-                                            user: user)
+                                            sha: sha.id,
+                                            ref: sha.id.first(8),
+                                            user: user,
+                                            merge_request: merge_request)
 
       create_build(pipeline, 'build', 1, 'build', user)
       create_build(pipeline, 'test', 2, 'test', user)
       create_build(pipeline, 'deploy', 3, 'deploy', user)
+
+      pipeline
     end
 
     def create_build(pipeline, stage, stage_idx, name, user = nil)
@@ -182,6 +269,68 @@ describe Projects::PipelinesController do
         status: status,
         user: user
       )
+    end
+
+    def check_pipeline_response(returned:, all:)
+      aggregate_failures do
+        expect(response).to match_response_schema('pipeline')
+
+        expect(json_response['pipelines'].count).to eq returned
+        expect(json_response['count']['all'].to_i).to eq all
+      end
+    end
+  end
+
+  describe 'GET #index' do
+    before do
+      stub_application_setting(auto_devops_enabled: false)
+    end
+
+    def action
+      get :index, params: { namespace_id: project.namespace, project_id: project }
+    end
+
+    subject { project.namespace }
+
+    context 'code_quality_walkthrough experiment' do
+      it_behaves_like 'tracks assignment and records the subject', :code_quality_walkthrough, :namespace
+    end
+
+    context 'ci_runner_templates experiment' do
+      it_behaves_like 'tracks assignment and records the subject', :ci_runner_templates, :namespace
+    end
+  end
+
+  describe 'GET #show' do
+    render_views
+
+    let_it_be(:pipeline) { create(:ci_pipeline, project: project) }
+
+    subject { get_pipeline_html }
+
+    def get_pipeline_html
+      get :show, params: { namespace_id: project.namespace, project_id: project, id: pipeline }, format: :html
+    end
+
+    def create_build_with_artifacts(stage, stage_idx, name)
+      create(:ci_build, :artifacts, :tags, pipeline: pipeline, stage: stage, stage_idx: stage_idx, name: name)
+    end
+
+    before do
+      create_build_with_artifacts('build', 0, 'job1')
+      create_build_with_artifacts('build', 0, 'job2')
+    end
+
+    it 'avoids N+1 database queries', :request_store do
+      get_pipeline_html
+
+      control_count = ActiveRecord::QueryRecorder.new { get_pipeline_html }.count
+      expect(response).to have_gitlab_http_status(:ok)
+
+      create_build_with_artifacts('build', 0, 'job3')
+
+      expect { get_pipeline_html }.not_to exceed_query_limit(control_count)
+      expect(response).to have_gitlab_http_status(:ok)
     end
   end
 
@@ -450,6 +599,39 @@ describe Projects::PipelinesController do
     end
   end
 
+  describe 'GET dag.json' do
+    let(:pipeline) { create(:ci_pipeline, project: project) }
+
+    before do
+      create_build('build', 1, 'build')
+      create_build('test', 2, 'test', scheduling_type: 'dag').tap do |job|
+        create(:ci_build_need, build: job, name: 'build')
+      end
+    end
+
+    it 'returns the pipeline with DAG serialization' do
+      get :dag, params: { namespace_id: project.namespace, project_id: project, id: pipeline }, format: :json
+
+      expect(response).to have_gitlab_http_status(:ok)
+
+      expect(json_response.fetch('stages')).not_to be_empty
+
+      build_stage = json_response['stages'].first
+      expect(build_stage.fetch('name')).to eq 'build'
+      expect(build_stage.fetch('groups').first.fetch('jobs'))
+        .to eq [{ 'name' => 'build', 'scheduling_type' => 'stage' }]
+
+      test_stage = json_response['stages'].last
+      expect(test_stage.fetch('name')).to eq 'test'
+      expect(test_stage.fetch('groups').first.fetch('jobs'))
+        .to eq [{ 'name' => 'test', 'scheduling_type' => 'dag', 'needs' => ['build'] }]
+    end
+
+    def create_build(stage, stage_idx, name, params = {})
+      create(:ci_build, pipeline: pipeline, stage: stage, stage_idx: stage_idx, name: name, **params)
+    end
+  end
+
   describe 'GET stages.json' do
     let(:pipeline) { create(:ci_pipeline, project: project) }
 
@@ -508,44 +690,6 @@ describe Projects::PipelinesController do
     end
   end
 
-  describe 'GET stages_ajax.json' do
-    let(:pipeline) { create(:ci_pipeline, project: project) }
-
-    context 'when accessing existing stage' do
-      before do
-        create(:ci_build, pipeline: pipeline, stage: 'build')
-
-        get_stage_ajax('build')
-      end
-
-      it 'returns html source for stage dropdown' do
-        expect(response).to have_gitlab_http_status(:ok)
-        expect(response).to render_template('projects/pipelines/_stage')
-        expect(json_response).to include('html')
-      end
-    end
-
-    context 'when accessing unknown stage' do
-      before do
-        get_stage_ajax('test')
-      end
-
-      it 'responds with not found' do
-        expect(response).to have_gitlab_http_status(:not_found)
-      end
-    end
-
-    def get_stage_ajax(name)
-      get :stage_ajax, params: {
-                         namespace_id: project.namespace,
-                         project_id: project,
-                         id: pipeline.id,
-                         stage: name
-                       },
-                       format: :json
-    end
-  end
-
   describe 'GET status.json' do
     let(:pipeline) { create(:ci_pipeline, project: project) }
     let(:status) { pipeline.detailed_status(double('user')) }
@@ -568,11 +712,148 @@ describe Projects::PipelinesController do
     end
   end
 
-  describe 'POST retry.json' do
-    let!(:pipeline) { create(:ci_pipeline, :failed, project: project) }
-    let!(:build) { create(:ci_build, :failed, pipeline: pipeline) }
+  describe 'GET #charts' do
+    let(:pipeline) { create(:ci_pipeline, project: project) }
+
+    it_behaves_like 'tracking unique visits', :charts do
+      let(:request_params) { { namespace_id: project.namespace, project_id: project, id: pipeline.id } }
+      let(:target_id) { 'p_analytics_pipelines' }
+    end
+  end
+
+  describe 'POST create' do
+    let(:project) { create(:project, :public, :repository) }
 
     before do
+      project.add_developer(user)
+      project.project_feature.update!(builds_access_level: feature)
+    end
+
+    context 'with a valid .gitlab-ci.yml file' do
+      before do
+        stub_ci_pipeline_yaml_file(YAML.dump({
+          test: {
+            stage: 'test',
+            script: 'echo'
+          }
+        }))
+      end
+
+      shared_examples 'creates a pipeline' do
+        specify do
+          expect { post_request }.to change { project.ci_pipelines.count }.by(1)
+
+          pipeline = project.ci_pipelines.last
+          expected_redirect_path = Gitlab::Routing.url_helpers.project_pipeline_path(project, pipeline)
+          expect(pipeline).to be_created
+          expect(response).to redirect_to(expected_redirect_path)
+        end
+      end
+
+      it_behaves_like 'creates a pipeline'
+
+      context 'when latest commit contains [ci skip]' do
+        before do
+          project.repository.create_file(user, 'new-file.txt', 'A new file',
+                                         message: '[skip ci] This is a test',
+                                         branch_name: 'master')
+        end
+
+        it_behaves_like 'creates a pipeline'
+      end
+    end
+
+    context 'with an invalid .gitlab-ci.yml file' do
+      before do
+        stub_ci_pipeline_yaml_file('invalid yaml file')
+      end
+
+      it 'does not persist a pipeline' do
+        expect { post_request }.not_to change { project.ci_pipelines.count }
+
+        expect(response).to have_gitlab_http_status(:bad_request)
+        expect(response).to render_template('new')
+      end
+    end
+
+    def post_request
+      post :create, params: {
+        namespace_id: project.namespace,
+        project_id: project,
+        pipeline: {
+          ref: 'master'
+        }
+      }
+    end
+  end
+
+  describe 'POST create.json' do
+    let(:project) { create(:project, :public, :repository) }
+
+    subject do
+      post :create, params: {
+                      namespace_id: project.namespace,
+                      project_id: project,
+                      pipeline: { ref: 'master' }
+                    },
+                    format: :json
+    end
+
+    before do
+      project.add_developer(user)
+      project.project_feature.update!(builds_access_level: feature)
+    end
+
+    context 'with a valid .gitlab-ci.yml file' do
+      before do
+        stub_ci_pipeline_yaml_file(YAML.dump({
+          test: {
+            stage: 'test',
+            script: 'echo'
+          }
+        }))
+      end
+
+      it 'creates a pipeline' do
+        expect { subject }.to change { project.ci_pipelines.count }.by(1)
+
+        expect(response).to have_gitlab_http_status(:created)
+        expect(json_response['id']).to eq(project.ci_pipelines.last.id)
+      end
+    end
+
+    context 'with an invalid .gitlab-ci.yml file' do
+      before do
+        stub_ci_pipeline_yaml_file(YAML.dump({
+          build: {
+            stage: 'build',
+            script: 'echo',
+            rules: [{ when: 'always' }]
+          },
+          test: {
+            stage: 'invalid',
+            script: 'echo'
+          }
+        }))
+      end
+
+      it 'does not create a pipeline' do
+        expect { subject }.not_to change { project.ci_pipelines.count }
+
+        expect(response).to have_gitlab_http_status(:bad_request)
+        expect(json_response['errors']).to eq([
+          'test job: chosen stage does not exist; available stages are .pre, build, test, deploy, .post'
+        ])
+        expect(json_response['warnings'][0]).to include(
+          'jobs:build may allow multiple pipelines to run for a single action due to `rules:when`'
+        )
+        expect(json_response['total_warnings']).to eq(1)
+      end
+    end
+  end
+
+  describe 'POST retry.json' do
+    subject(:post_retry) do
       post :retry, params: {
                      namespace_id: project.namespace,
                      project_id: project,
@@ -581,15 +862,28 @@ describe Projects::PipelinesController do
                    format: :json
     end
 
-    it 'retries a pipeline without returning any content' do
+    let!(:pipeline) { create(:ci_pipeline, :failed, project: project) }
+    let!(:build) { create(:ci_build, :failed, pipeline: pipeline) }
+
+    let(:worker_spy) { class_spy(::Ci::RetryPipelineWorker) }
+
+    before do
+      stub_const('::Ci::RetryPipelineWorker', worker_spy)
+    end
+
+    it 'retries a pipeline in the background without returning any content' do
+      post_retry
+
       expect(response).to have_gitlab_http_status(:no_content)
-      expect(build.reload).to be_retried
+      expect(::Ci::RetryPipelineWorker).to have_received(:perform_async).with(pipeline.id, user.id)
     end
 
     context 'when builds are disabled' do
       let(:feature) { ProjectFeature::DISABLED }
 
       it 'fails to retry pipeline' do
+        post_retry
+
         expect(response).to have_gitlab_http_status(:not_found)
       end
     end
@@ -623,142 +917,126 @@ describe Projects::PipelinesController do
   end
 
   describe 'GET test_report.json' do
-    subject(:get_test_report_json) do
-      get :test_report, params: {
-        namespace_id: project.namespace,
-        project_id: project,
-        id: pipeline.id
-      },
-      format: :json
-    end
+    let(:pipeline) { create(:ci_pipeline, project: project) }
 
-    context 'when feature is enabled' do
-      before do
-        stub_feature_flags(junit_pipeline_view: true)
+    context 'with attachments' do
+      let(:blob) do
+        <<~EOF
+          <testsuites>
+            <testsuite>
+              <testcase classname='Calculator' name='sumTest1' time='0.01'>
+                <failure>Some failure</failure>
+                <system-out>[[ATTACHMENT|some/path.png]]</system-out>
+              </testcase>
+            </testsuite>
+          </testsuites>
+        EOF
       end
-
-      context 'when pipeline does not have a test report' do
-        let(:pipeline) { create(:ci_pipeline, project: project) }
-
-        it 'renders an empty test report' do
-          get_test_report_json
-
-          expect(response).to have_gitlab_http_status(:ok)
-          expect(json_response['total_count']).to eq(0)
-        end
-      end
-
-      context 'when pipeline has a test report' do
-        let(:pipeline) { create(:ci_pipeline, :with_test_reports, project: project) }
-
-        it 'renders the test report' do
-          get_test_report_json
-
-          expect(response).to have_gitlab_http_status(:ok)
-          expect(json_response['total_count']).to eq(4)
-        end
-      end
-
-      context 'when pipeline has corrupt test reports' do
-        let(:pipeline) { create(:ci_pipeline, project: project) }
-
-        before do
-          job = create(:ci_build, pipeline: pipeline)
-          create(:ci_job_artifact, :junit_with_corrupted_data, job: job, project: project)
-        end
-
-        it 'renders the test reports' do
-          get_test_report_json
-
-          expect(response).to have_gitlab_http_status(:ok)
-          expect(json_response['status']).to eq('error_parsing_report')
-        end
-      end
-    end
-
-    context 'when feature is disabled' do
-      let(:pipeline) { create(:ci_empty_pipeline, project: project) }
 
       before do
-        stub_feature_flags(junit_pipeline_view: false)
+        allow_any_instance_of(Ci::JobArtifact).to receive(:each_blob).and_yield(blob)
       end
 
-      it 'renders empty response' do
+      it 'does not have N+1 problem with attachments' do
         get_test_report_json
 
-        expect(response).to have_gitlab_http_status(:no_content)
-        expect(response.body).to be_empty
+        create(:ci_build, name: 'rspec', pipeline: pipeline).tap do |build|
+          create(:ci_job_artifact, :junit, job: build)
+        end
+
+        clear_controller_memoization
+
+        control_count = ActiveRecord::QueryRecorder.new { get_test_report_json }.count
+
+        create(:ci_build, name: 'karma', pipeline: pipeline).tap do |build|
+          create(:ci_job_artifact, :junit, job: build)
+        end
+
+        clear_controller_memoization
+
+        expect { get_test_report_json }.not_to exceed_query_limit(control_count)
       end
     end
-  end
 
-  describe 'GET test_report_count.json' do
-    subject(:test_reports_count_json) do
-      get :test_reports_count, params: {
+    context 'when pipeline does not have a test report' do
+      it 'renders an empty test report' do
+        get_test_report_json
+
+        expect(response).to have_gitlab_http_status(:ok)
+        expect(json_response['total_count']).to eq(0)
+      end
+    end
+
+    context 'when pipeline has a test report' do
+      before do
+        create(:ci_build, :test_reports, name: 'rspec', pipeline: pipeline)
+      end
+
+      it 'renders the test report' do
+        get_test_report_json
+
+        expect(response).to have_gitlab_http_status(:ok)
+        expect(json_response['total_count']).to eq(4)
+      end
+    end
+
+    context 'when pipeline has a corrupt test report artifact' do
+      before do
+        create(:ci_build, :broken_test_reports, name: 'rspec', pipeline: pipeline)
+
+        get_test_report_json
+      end
+
+      it 'renders the test reports' do
+        expect(response).to have_gitlab_http_status(:ok)
+        expect(json_response['test_suites'].count).to eq(1)
+      end
+
+      it 'returns a suite_error on the suite with corrupted XML' do
+        expect(json_response['test_suites'].first['suite_error']).to eq('JUnit XML parsing failed: 1:1: FATAL: Document is empty')
+      end
+    end
+
+    context 'when test_report contains attachment and scope is with_attachment as a URL param' do
+      let(:pipeline) { create(:ci_pipeline, :with_test_reports_attachment, project: project) }
+
+      it 'returns a test reports with attachment' do
+        get_test_report_json(scope: 'with_attachment')
+
+        expect(response).to have_gitlab_http_status(:ok)
+        expect(json_response["test_suites"]).to be_present
+        expect(json_response["test_suites"].first["test_cases"].first).to include("attachment_url")
+      end
+    end
+
+    context 'when test_report does not contain attachment and scope is with_attachment as a URL param' do
+      let(:pipeline) { create(:ci_pipeline, :with_test_reports, project: project) }
+
+      it 'returns a test reports with empty values' do
+        get_test_report_json(scope: 'with_attachment')
+
+        expect(response).to have_gitlab_http_status(:ok)
+        expect(json_response["test_suites"]).to be_empty
+      end
+    end
+
+    def get_test_report_json(**args)
+      params = {
         namespace_id: project.namespace,
         project_id: project,
         id: pipeline.id
-      },
-      format: :json
+      }
+
+      params.merge!(args) if args
+
+      get :test_report,
+        params: params,
+        format: :json
     end
 
-    context 'when feature is enabled' do
-      before do
-        stub_feature_flags(junit_pipeline_view: true)
-      end
-
-      context 'when pipeline does not have a test report' do
-        let(:pipeline) { create(:ci_pipeline, project: project) }
-
-        it 'renders an empty badge counter' do
-          test_reports_count_json
-
-          expect(response).to have_gitlab_http_status(:ok)
-          expect(json_response['total_count']).to eq(0)
-        end
-      end
-
-      context 'when pipeline has a test report' do
-        let(:pipeline) { create(:ci_pipeline, :with_test_reports, project: project) }
-
-        it 'renders the badge counter value' do
-          test_reports_count_json
-
-          expect(response).to have_gitlab_http_status(:ok)
-          expect(json_response['total_count']).to eq(4)
-        end
-      end
-
-      context 'when pipeline has corrupt test reports' do
-        let(:pipeline) { create(:ci_pipeline, project: project) }
-
-        before do
-          job = create(:ci_build, pipeline: pipeline)
-          create(:ci_job_artifact, :junit_with_corrupted_data, job: job, project: project)
-        end
-
-        it 'renders 0' do
-          test_reports_count_json
-
-          expect(response).to have_gitlab_http_status(:ok)
-          expect(json_response['total_count']).to eq(0)
-        end
-      end
-    end
-
-    context 'when feature is disabled' do
-      let(:pipeline) { create(:ci_empty_pipeline, project: project) }
-
-      before do
-        stub_feature_flags(junit_pipeline_view: false)
-      end
-
-      it 'renders empty response' do
-        test_reports_count_json
-
-        expect(response).to have_gitlab_http_status(:no_content)
-        expect(response.body).to be_empty
-      end
+    def clear_controller_memoization
+      controller.clear_memoization(:pipeline_test_report)
+      controller.instance_variable_set(:@pipeline, nil)
     end
   end
 
@@ -795,8 +1073,16 @@ describe Projects::PipelinesController do
     end
 
     context 'ref provided' do
+      render_views
+
       before do
         create(:ci_pipeline, ref: 'master', project: project)
+      end
+
+      it 'shows a 404 if no pipeline exists' do
+        get :show, params: { namespace_id: project.namespace, project_id: project, latest: true, ref: 'non-existence' }
+
+        expect(response).to have_gitlab_http_status(:not_found)
       end
 
       it 'shows the latest pipeline for the provided ref' do
@@ -871,6 +1157,180 @@ describe Projects::PipelinesController do
                          project_id: project,
                          id: pipeline.id
                        }
+    end
+  end
+
+  describe 'GET config_variables.json', :use_clean_rails_memory_store_caching do
+    include ReactiveCachingHelpers
+
+    let(:result) { YAML.dump(ci_config) }
+    let(:service) { Ci::ListConfigVariablesService.new(project, user) }
+
+    before do
+      stub_gitlab_ci_yml_for_sha(sha, result)
+      allow(Ci::ListConfigVariablesService)
+        .to receive(:new)
+        .and_return(service)
+    end
+
+    context 'when sending a valid sha' do
+      let(:sha) { 'master' }
+      let(:ci_config) do
+        {
+          variables: {
+            KEY1: { value: 'val 1', description: 'description 1' }
+          },
+          test: {
+            stage: 'test',
+            script: 'echo'
+          }
+        }
+      end
+
+      before do
+        synchronous_reactive_cache(service)
+      end
+
+      it 'returns variable list' do
+        get_config_variables
+
+        expect(response).to have_gitlab_http_status(:ok)
+        expect(json_response['KEY1']).to eq({ 'value' => 'val 1', 'description' => 'description 1' })
+      end
+    end
+
+    context 'when sending an invalid sha' do
+      let(:sha) { 'invalid-sha' }
+      let(:ci_config) { nil }
+
+      before do
+        synchronous_reactive_cache(service)
+      end
+
+      it 'returns empty json' do
+        get_config_variables
+
+        expect(response).to have_gitlab_http_status(:ok)
+        expect(json_response).to eq({})
+      end
+    end
+
+    context 'when sending an invalid config' do
+      let(:sha) { 'master' }
+      let(:ci_config) do
+        {
+          variables: {
+            KEY1: { value: 'val 1', description: 'description 1' }
+          },
+          test: {
+            stage: 'invalid',
+            script: 'echo'
+          }
+        }
+      end
+
+      before do
+        synchronous_reactive_cache(service)
+      end
+
+      it 'returns empty result' do
+        get_config_variables
+
+        expect(response).to have_gitlab_http_status(:ok)
+        expect(json_response).to eq({})
+      end
+    end
+
+    context 'when the cache is empty' do
+      let(:sha) { 'master' }
+      let(:ci_config) do
+        {
+          variables: {
+            KEY1: { value: 'val 1', description: 'description 1' }
+          },
+          test: {
+            stage: 'test',
+            script: 'echo'
+          }
+        }
+      end
+
+      it 'returns no content' do
+        get_config_variables
+
+        expect(response).to have_gitlab_http_status(:no_content)
+      end
+    end
+
+    private
+
+    def stub_gitlab_ci_yml_for_sha(sha, result)
+      allow_any_instance_of(Repository)
+          .to receive(:gitlab_ci_yml_for)
+          .with(sha, '.gitlab-ci.yml')
+          .and_return(result)
+    end
+
+    def get_config_variables
+      get :config_variables, params: { namespace_id: project.namespace,
+                                       project_id: project,
+                                       sha: sha },
+                             format: :json
+    end
+  end
+
+  describe 'GET downloadable_artifacts.json' do
+    context 'when pipeline is empty' do
+      let(:pipeline) { create(:ci_empty_pipeline) }
+
+      it 'returns status not_found' do
+        get_downloadable_artifacts_json
+
+        expect(response).to have_gitlab_http_status(:not_found)
+      end
+    end
+
+    context 'when pipeline exists' do
+      context 'when pipeline does not have any downloadable artifacts' do
+        let(:pipeline) { create(:ci_pipeline, project: project) }
+
+        it 'returns an empty array' do
+          get_downloadable_artifacts_json
+
+          expect(response).to have_gitlab_http_status(:ok)
+          expect(json_response['artifacts']).to be_empty
+        end
+      end
+
+      context 'when pipeline has downloadable artifacts' do
+        let(:pipeline) { create(:ci_pipeline, :with_codequality_reports, project: project) }
+
+        before do
+          create(:ci_build, name: 'rspec', pipeline: pipeline).tap do |build|
+            create(:ci_job_artifact, :junit, job: build)
+          end
+        end
+
+        it 'returns an array of artifacts' do
+          get_downloadable_artifacts_json
+
+          expect(response).to have_gitlab_http_status(:ok)
+          expect(json_response['artifacts']).to be_kind_of(Array)
+          expect(json_response['artifacts'].size).to eq(2)
+        end
+      end
+    end
+
+    private
+
+    def get_downloadable_artifacts_json
+      get :downloadable_artifacts,
+        params: {
+          namespace_id: project.namespace,
+          project_id: project,
+          id: pipeline.id
+        },
+        format: :json
     end
   end
 end

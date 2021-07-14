@@ -6,12 +6,23 @@ module ExportHelper
     [
       _('Project and wiki repositories'),
       _('Project uploads'),
-      _('Project configuration, including services'),
+      _('Project configuration, excluding integrations'),
       _('Issues with comments, merge requests with diffs and comments, labels, milestones, snippets, and other project entities'),
       _('LFS objects'),
-      _('Issue Boards')
+      _('Issue Boards'),
+      _('Design Management files and data')
+    ]
+  end
+
+  def group_export_descriptions
+    [
+      _('Milestones'),
+      _('Labels'),
+      _('Boards and Board Lists'),
+      _('Badges'),
+      _('Subgroups')
     ]
   end
 end
 
-ExportHelper.prepend_if_ee('EE::ExportHelper')
+ExportHelper.prepend_mod_with('ExportHelper')

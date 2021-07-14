@@ -1,3 +1,9 @@
+---
+stage: none
+group: unassigned
+info: To determine the technical writer assigned to the Stage/Group associated with this page, see https://about.gitlab.com/handbook/engineering/ux/technical-writing/#assignments
+---
+
 # Modules with instance variables could be considered harmful
 
 ## Background
@@ -30,11 +36,11 @@ People are saying multiple inheritance is bad. Mixing multiple modules with
 multiple instance variables scattering everywhere suffer from the same issue.
 The same applies to `ActiveSupport::Concern`. See:
 [Consider replacing concerns with dedicated classes & composition](
-https://gitlab.com/gitlab-org/gitlab/issues/16270)
+https://gitlab.com/gitlab-org/gitlab/-/issues/16270)
 
 There's also a similar idea:
 [Use decorators and interface segregation to solve overgrowing models problem](
-https://gitlab.com/gitlab-org/gitlab/issues/14235)
+https://gitlab.com/gitlab-org/gitlab/-/issues/14235)
 
 Note that `included` doesn't solve the whole issue. They define the
 dependencies, but they still allow each modules to talk implicitly via the
@@ -62,7 +68,7 @@ objects are touching them, then it would be an acceptable use.
 We especially allow the case where a single instance variable is used with
 `||=` to set up the value. This would look like:
 
-``` ruby
+```ruby
 module M
   def f
     @f ||= true
@@ -79,7 +85,7 @@ we could easily add to the cop, we should do it.
 Even if we could just disable the cop, we should avoid doing so. Some code
 could be easily rewritten in simple form. Consider this acceptable method:
 
-``` ruby
+```ruby
 module Gitlab
   module Emoji
     def emoji_unicode_version(name)
@@ -98,7 +104,7 @@ cop is not smart enough to judge that this is fine.
 
 On the other hand, we could split this method into two:
 
-``` ruby
+```ruby
 module Gitlab
   module Emoji
     def emoji_unicode_version(name)
@@ -115,77 +121,13 @@ module Gitlab
 end
 ```
 
-Now the cop won't complain. Here's a bad example which we could rewrite:
-
-``` ruby
-module SpamCheckService
-  def filter_spam_check_params
-    @request            = params.delete(:request)
-    @api                = params.delete(:api)
-    @recaptcha_verified = params.delete(:recaptcha_verified)
-    @spam_log_id        = params.delete(:spam_log_id)
-  end
-
-  def spam_check(spammable, user)
-    spam_service = SpamService.new(spammable, @request)
-
-    spam_service.when_recaptcha_verified(@recaptcha_verified, @api) do
-      user.spam_logs.find_by(id: @spam_log_id)&.update!(recaptcha_verified: true)
-    end
-  end
-end
-```
-
-There are several implicit dependencies here. First, `params` should be
-defined before use. Second, `filter_spam_check_params` should be called
-before `spam_check`. These are all implicit and the includer could be using
-those instance variables without awareness.
-
-This should be rewritten like:
-
-``` ruby
-class SpamCheckService
-  def initialize(request:, api:, recaptcha_verified:, spam_log_id:)
-    @request            = request
-    @api                = api
-    @recaptcha_verified = recaptcha_verified
-    @spam_log_id        = spam_log_id
-  end
-
-  def spam_check(spammable, user)
-    spam_service = SpamService.new(spammable, @request)
-
-    spam_service.when_recaptcha_verified(@recaptcha_verified, @api) do
-      user.spam_logs.find_by(id: @spam_log_id)&.update!(recaptcha_verified: true)
-    end
-  end
-end
-```
-
-And use it like:
-
-``` ruby
-class UpdateSnippetService < BaseService
-  def execute
-    # ...
-    spam = SpamCheckService.new(params.slice!(:request, :api, :recaptcha_verified, :spam_log_id))
-
-    spam.check(snippet, current_user)
-    # ...
-  end
-end
-```
-
-This way, all those instance variables are isolated in `SpamCheckService`
-rather than whatever includes the module, and those modules which were also
-included, making it much easier to track down any issues,
-and reducing the chance of having name conflicts.
+Now the cop doesn't complain.
 
 ## How to disable this cop
 
 Put the disabling comment right after your code in the same line:
 
-``` ruby
+```ruby
 module M
   def violating_method
     @f + @g # rubocop:disable Gitlab/ModuleWithInstanceVariables
@@ -195,7 +137,7 @@ end
 
 If there are multiple lines, you could also enable and disable for a section:
 
-``` ruby
+```ruby
 module M
   # rubocop:disable Gitlab/ModuleWithInstanceVariables
   def violating_method
@@ -207,14 +149,14 @@ module M
 end
 ```
 
-Note that you need to enable it at some point, otherwise everything below
-won't be checked.
+Note that you need to enable it at some point, otherwise nothing below
+that point is checked.
 
 ## Things we might need to ignore right now
 
 Because of the way Rails helpers and mailers work, we might not be able to
 avoid the use of instance variables there. For those cases, we could ignore
-them at the moment. At least we're not going to share those modules with
+them at the moment. Those modules are not shared with
 other random objects, so they're still somewhat isolated.
 
 ## Instance variables in views
@@ -225,13 +167,13 @@ point of view), making it extremely hard to track data dependency.
 
 We're trying to use something like this instead:
 
-``` haml
+```haml
 = render 'projects/commits/commit', commit: commit, ref: ref, project: project
 ```
 
 And in the partial:
 
-``` haml
+```haml
 - ref = local_assigns.fetch(:ref)
 - commit = local_assigns.fetch(:commit)
 - project = local_assigns.fetch(:project)

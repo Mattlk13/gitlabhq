@@ -2,7 +2,7 @@
 
 require 'spec_helper'
 
-describe RendersCommits do
+RSpec.describe RendersCommits do
   let_it_be(:project) { create(:project, :public, :repository) }
   let_it_be(:merge_request) { create(:merge_request, source_project: project) }
   let_it_be(:user) { create(:user) }
@@ -46,7 +46,7 @@ describe RendersCommits do
     it 'avoids N + 1' do
       stub_const("MergeRequestDiff::COMMITS_SAFE_SIZE", 5)
 
-      control_count = ActiveRecord::QueryRecorder.new(skip_cached: false) do
+      control_count = ActiveRecord::QueryRecorder.new do
         go
       end.count
 
@@ -55,6 +55,19 @@ describe RendersCommits do
       expect do
         go
       end.not_to exceed_all_query_limit(control_count)
+    end
+  end
+
+  describe '.prepare_commits_for_rendering' do
+    it 'avoids N+1' do
+      control = ActiveRecord::QueryRecorder.new do
+        subject.prepare_commits_for_rendering(merge_request.commits.take(1))
+      end
+
+      expect do
+        subject.prepare_commits_for_rendering(merge_request.commits)
+        merge_request.commits.each(&:latest_pipeline)
+      end.not_to exceed_all_query_limit(control.count)
     end
   end
 end

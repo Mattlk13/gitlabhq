@@ -2,7 +2,7 @@
 
 require 'spec_helper'
 
-describe WaitableWorker do
+RSpec.describe WaitableWorker do
   let(:worker) do
     Class.new do
       def self.name
@@ -38,16 +38,31 @@ describe WaitableWorker do
     it 'inlines workloads <= 3 jobs' do
       args_list = [[1], [2], [3]]
       expect(worker).to receive(:bulk_perform_inline).with(args_list).and_call_original
+      expect(Gitlab::AppJsonLogger).to(
+        receive(:info).with(a_hash_including('message' => 'running inline',
+                                             'class' => 'Gitlab::Foo::Bar::DummyWorker',
+                                             'job_status' => 'running',
+                                             'queue' => 'foo_bar_dummy'))
+                      .exactly(3).times)
 
       worker.bulk_perform_and_wait(args_list)
 
       expect(worker.counter).to eq(6)
     end
 
-    it 'runs > 3 jobs using sidekiq' do
+    it 'runs > 3 jobs using sidekiq and a waiter key' do
       expect(worker).to receive(:bulk_perform_async)
+                          .with([[1, anything], [2, anything], [3, anything], [4, anything]])
 
       worker.bulk_perform_and_wait([[1], [2], [3], [4]])
+    end
+
+    it 'runs > 10 * timeout jobs using sidekiq and no waiter key' do
+      arguments = 1.upto(21).map { |i| [i] }
+
+      expect(worker).to receive(:bulk_perform_async).with(arguments)
+
+      worker.bulk_perform_and_wait(arguments, timeout: 2)
     end
   end
 

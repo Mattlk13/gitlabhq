@@ -1,10 +1,21 @@
+---
+stage: none
+group: unassigned
+info: To determine the technical writer assigned to the Stage/Group associated with this page, see https://about.gitlab.com/handbook/engineering/ux/technical-writing/#assignments
+---
+
 # Pry debugging
 
 ## Invoking pry debugging
 
 To invoke the debugger, place `binding.pry` somewhere in your
-code. When the Ruby interpreter hits that code, execution will stop,
-and you can type in commands to debug the state of the program
+code. When the Ruby interpreter hits that code, execution stops,
+and you can type in commands to debug the state of the program.
+
+When debugging code in another process like Puma or Sidekiq, you can use `binding.pry_shell`.
+You can then connect to this session by using the [pry-shell](https://github.com/meinac/pry-shell) executable.
+You can watch [this video](https://www.youtube.com/watch?v=Lzs_PL_BySo), for more information about
+how to use the `pry-shell`.
 
 ## `byebug` vs `binding.pry`
 
@@ -14,7 +25,7 @@ use the powerful Pry REPL.
 `binding.pry` uses Pry, but lacks some of the `byebug`
 features. GitLab uses the [`pry-byebug`](https://github.com/deivid-rodriguez/pry-byebug)
 gem. This gem brings some capabilities `byebug` to `binding.pry`, so
-using that, will give you the most debugging powers.
+using that gives you the most debugging powers.
 
 ## `byebug`
 
@@ -73,7 +84,7 @@ Similar to source browsing, is [Documentation browsing](https://github.com/pry/p
 
 ### Command history
 
-With **Ctrl+R** you can search your [command history](https://github.com/pry/pry/wiki/History).
+With <kbd>Control</kbd> + <kbd>R</kbd> you can search your [command history](https://github.com/pry/pry/wiki/History).
 
 ## Stepping
 
@@ -98,7 +109,7 @@ You also can move around in the callstack with these commands:
 - `down`: Moves the stack frame down. Takes an optional numeric
   argument to move multiple frames.
 - `frame <n>`: Moves to a specific frame. Called without arguments
-  will show the current frame.
+  displays the current frame.
 
 ## Short commands
 

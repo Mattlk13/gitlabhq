@@ -1,10 +1,13 @@
 ---
+stage: none
+group: unassigned
+info: To determine the technical writer assigned to the Stage/Group associated with this page, see https://about.gitlab.com/handbook/engineering/ux/technical-writing/#assignments
 type: howto
 ---
 
-# How to unlock a locked user from the command line
+# How to unlock a locked user from the command line **(FREE SELF)**
 
-After six failed login attempts a user gets in a locked state.
+After ten failed login attempts a user gets in a locked state.
 
 To unlock a locked user:
 
@@ -16,7 +19,7 @@ To unlock a locked user:
    sudo gitlab-rails console -e production
 
    ## For installations from source
-   sudo -u git -H bundle exec rails console RAILS_ENV=production
+   sudo -u git -H bundle exec rails console -e production
    ```
 
 1. Find the user to unlock. You can search by email or ID.
@@ -37,7 +40,7 @@ To unlock a locked user:
    user.unlock_access!
    ```
 
-1. Exit the console with <kbd>Ctrl</kbd>+<kbd>d</kbd>
+1. Exit the console with <kbd>Control</kbd>+<kbd>d</kbd>
 
 The user should now be able to log in.
 

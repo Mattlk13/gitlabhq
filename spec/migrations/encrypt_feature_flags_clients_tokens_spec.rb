@@ -1,14 +1,14 @@
 # frozen_string_literal: true
 
 require 'spec_helper'
-require Rails.root.join('db', 'post_migrate', '20190606175050_encrypt_feature_flags_clients_tokens.rb')
+require_migration!
 
-describe EncryptFeatureFlagsClientsTokens, :migration do
+RSpec.describe EncryptFeatureFlagsClientsTokens do
   let(:migration) { described_class.new }
   let(:feature_flags_clients) { table(:operations_feature_flags_clients) }
   let(:projects) { table(:projects) }
   let(:plaintext) { "secret-token" }
-  let(:ciphertext) { Gitlab::CryptoHelper.aes256_gcm_encrypt(plaintext) }
+  let(:ciphertext) { Gitlab::CryptoHelper.aes256_gcm_encrypt(plaintext, nonce: Gitlab::CryptoHelper::AES256_GCM_IV_STATIC) }
 
   describe '#up' do
     it 'keeps plaintext token the same and populates token_encrypted if not present' do

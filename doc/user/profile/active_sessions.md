@@ -1,4 +1,7 @@
 ---
+stage: none
+group: unassigned
+info: To determine the technical writer assigned to the Stage/Group associated with this page, see https://about.gitlab.com/handbook/engineering/ux/technical-writing/#assignments
 type: howto
 ---
 
@@ -11,23 +14,34 @@ review the sessions, and revoke any you don't recognize.
 
 ## Listing all active sessions
 
-1. Click your avatar.
-1. Select **Settings**.
-1. Click **Active Sessions** in the sidebar.
+To list all active sessions:
+
+1. In the top-right corner, select your avatar.
+1. Select **Edit profile**.
+1. In the left sidebar, select **Active Sessions**.
 
 ![Active sessions list](img/active_sessions_list.png)
 
 ## Active sessions limit
 
-> [Introduced](https://gitlab.com/gitlab-org/gitlab/issues/31611) in GitLab 12.6.
+> [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/31611) in GitLab 12.6.
 
 GitLab allows users to have up to 100 active sessions at once. If the number of active sessions
 exceeds 100, the oldest ones are deleted.
 
 ## Revoking a session
 
-1. Use the previous steps to navigate to **Active Sessions**.
-1. Click on **Revoke** besides a session. The current session cannot be revoked, as this would sign you out of GitLab.
+To revoke an active session:
+
+1. In the top-right corner, select your avatar.
+1. Select **Edit profile**.
+1. In the left sidebar, select **Active Sessions**.
+1. Select **Revoke** next to a session. The current session cannot be revoked, as this would sign you out of GitLab.
+
+NOTE:
+When any session is revoked all **Remember me** tokens for all
+devices are revoked. See ['Why do I keep getting signed out?'](index.md#why-do-i-keep-getting-signed-out)
+for more information about the **Remember me** feature.
 
 <!-- ## Troubleshooting
 

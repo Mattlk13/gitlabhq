@@ -2,7 +2,7 @@
 
 require 'spec_helper'
 
-describe MergeRequestTargetProjectFinder do
+RSpec.describe MergeRequestTargetProjectFinder do
   include ProjectForksHelper
 
   let(:user) { create(:user) }
@@ -16,11 +16,20 @@ describe MergeRequestTargetProjectFinder do
       expect(finder.execute).to contain_exactly(base_project, other_fork, forked_project)
     end
 
-    it 'does not include projects that have merge requests turned off' do
+    it 'does not include projects that have merge requests turned off by default' do
       other_fork.project_feature.update!(merge_requests_access_level: ProjectFeature::DISABLED)
       base_project.project_feature.update!(merge_requests_access_level: ProjectFeature::DISABLED)
 
       expect(finder.execute).to contain_exactly(forked_project)
+    end
+
+    it 'includes projects that have merge requests turned off by default with a more-permissive project feature' do
+      finder = described_class.new(current_user: user, source_project: forked_project, project_feature: :repository)
+
+      other_fork.project_feature.update!(merge_requests_access_level: ProjectFeature::DISABLED)
+      base_project.project_feature.update!(merge_requests_access_level: ProjectFeature::DISABLED)
+
+      expect(finder.execute).to contain_exactly(base_project, other_fork, forked_project)
     end
 
     it 'does not contain archived projects' do

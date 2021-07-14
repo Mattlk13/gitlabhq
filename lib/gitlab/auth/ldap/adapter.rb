@@ -2,12 +2,10 @@
 
 module Gitlab
   module Auth
-    module LDAP
+    module Ldap
       class Adapter
-        prepend_if_ee('::EE::Gitlab::Auth::LDAP::Adapter') # rubocop: disable Cop/InjectEnterpriseEditionModule
-
         SEARCH_RETRY_FACTOR = [1, 1, 2, 3].freeze
-        MAX_SEARCH_RETRIES = Rails.env.test? ? 1 : SEARCH_RETRY_FACTOR.size.freeze
+        MAX_SEARCH_RETRIES = Rails.env.test? ? 1 : SEARCH_RETRY_FACTOR.size
 
         attr_reader :provider, :ldap
 
@@ -18,7 +16,7 @@ module Gitlab
         end
 
         def self.config(provider)
-          Gitlab::Auth::LDAP::Config.new(provider)
+          Gitlab::Auth::Ldap::Config.new(provider)
         end
 
         def initialize(provider, ldap = nil)
@@ -27,7 +25,7 @@ module Gitlab
         end
 
         def config
-          Gitlab::Auth::LDAP::Config.new(provider)
+          Gitlab::Auth::Ldap::Config.new(provider)
         end
 
         def users(fields, value, limit = nil)
@@ -55,11 +53,7 @@ module Gitlab
 
             if results.nil?
               response = ldap.get_operation_result
-
-              unless response.code.zero?
-                Rails.logger.warn("LDAP search error: #{response.message}") # rubocop:disable Gitlab/RailsLogger
-              end
-
+              check_empty_response_code(response)
               []
             else
               results
@@ -69,13 +63,13 @@ module Gitlab
           retries += 1
           error_message = connection_error_message(error)
 
-          Rails.logger.warn(error_message) # rubocop:disable Gitlab/RailsLogger
+          Gitlab::AppLogger.warn(error_message)
 
           if retries < MAX_SEARCH_RETRIES
             renew_connection_adapter
             retry
           else
-            raise LDAPConnectionError, error_message
+            raise LdapConnectionError, error_message
           end
         end
 
@@ -91,13 +85,13 @@ module Gitlab
           end
 
           entries.map do |entry|
-            Gitlab::Auth::LDAP::Person.new(entry, provider)
+            Gitlab::Auth::Ldap::Person.new(entry, provider)
           end
         end
 
         def user_options(fields, value, limit)
           options = {
-            attributes: Gitlab::Auth::LDAP::Person.ldap_attributes(config),
+            attributes: Gitlab::Auth::Ldap::Person.ldap_attributes(config),
             base: config.base
           }
 
@@ -138,7 +132,19 @@ module Gitlab
         def renew_connection_adapter
           @ldap = Net::LDAP.new(config.adapter_options)
         end
+
+        def check_empty_response_code(response)
+          if config.retry_empty_result_with_codes.include?(response.code)
+            raise Net::LDAP::Error, "Got empty results with response code: #{response.code}, message: #{response.message}"
+          end
+
+          unless response.code == 0
+            Gitlab::AppLogger.warn("LDAP search error: #{response.message}")
+          end
+        end
       end
     end
   end
 end
+
+Gitlab::Auth::Ldap::Adapter.prepend_mod_with('Gitlab::Auth::Ldap::Adapter')

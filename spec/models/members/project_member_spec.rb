@@ -2,7 +2,7 @@
 
 require 'spec_helper'
 
-describe ProjectMember do
+RSpec.describe ProjectMember do
   describe 'associations' do
     it { is_expected.to belong_to(:project).with_foreign_key(:source_id) }
   end
@@ -13,22 +13,13 @@ describe ProjectMember do
     it { is_expected.to validate_inclusion_of(:access_level).in_array(Gitlab::Access.values) }
   end
 
+  describe 'delegations' do
+    it { is_expected.to delegate_method(:namespace_id).to(:project) }
+  end
+
   describe '.access_level_roles' do
     it 'returns Gitlab::Access.options' do
       expect(described_class.access_level_roles).to eq(Gitlab::Access.options)
-    end
-  end
-
-  describe '.add_user' do
-    it 'adds the user as a member' do
-      user = create(:user)
-      project = create(:project)
-
-      expect(project.users).not_to include(user)
-
-      described_class.add_user(project, user, :maintainer, current_user: project.owner)
-
-      expect(project.users.reload).to include(user)
     end
   end
 
@@ -44,14 +35,25 @@ describe ProjectMember do
     let(:maintainer) { create(:project_member, project: project) }
 
     it "creates an expired event when left due to expiry" do
-      expired = create(:project_member, project: project, expires_at: Time.now - 6.days)
-      expired.destroy
-      expect(Event.recent.first.action).to eq(Event::EXPIRED)
+      expired = create(:project_member, project: project, expires_at: 1.day.from_now)
+      travel_to(2.days.from_now) { expired.destroy! }
+
+      expect(Event.recent.first).to be_expired_action
     end
 
     it "creates a left event when left due to leave" do
-      maintainer.destroy
-      expect(Event.recent.first.action).to eq(Event::LEFT)
+      maintainer.destroy!
+      expect(Event.recent.first).to be_left_action
+    end
+
+    context 'for an orphaned member' do
+      let!(:orphaned_project_member) do
+        owner.tap { |member| member.update_column(:user_id, nil) }
+      end
+
+      it 'does not raise an error' do
+        expect { orphaned_project_member.destroy! }.not_to raise_error
+      end
     end
   end
 

@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 # Use this hook to configure devise mailer, warden hooks and so forth. The first
 # four configuration values can also be set straight in your models.
 Devise.setup do |config|
@@ -5,6 +7,11 @@ Devise.setup do |config|
     manager.default_strategies(scope: :user).unshift :two_factor_authenticatable
     manager.default_strategies(scope: :user).unshift :two_factor_backupable
   end
+
+  # This is the default. This makes it explicit that Devise loads routes
+  # before eager loading. Disabling this seems to cause an error loading
+  # grape-entity `expose` for some reason.
+  config.reload_routes = true
 
   # ==> Mailer Configuration
   # Configure the class responsible to send e-mails.
@@ -36,7 +43,7 @@ Devise.setup do |config|
   # Configure which authentication keys should be case-insensitive.
   # These keys will be downcased upon creating or modifying a user and when used
   # to authenticate or find a user. Default is :email.
-  config.case_insensitive_keys = [:email, :email_confirmation]
+  config.case_insensitive_keys = [:email]
 
   # Configure which authentication keys should have whitespace stripped.
   # These keys will have whitespace before and after removed upon creating or
@@ -80,8 +87,16 @@ Devise.setup do |config|
   # When allow_unconfirmed_access_for is zero, the user won't be able to sign in without confirming.
   # You can use this to let your user access some features of your application
   # without confirming the account, but blocking it after a certain period
-  # (ie 2 days).
-  config.allow_unconfirmed_access_for = 30.days
+  # (e.g. 3 days).
+  config.allow_unconfirmed_access_for = 3.days
+
+  # A period that the user is allowed to confirm their account before their
+  # token becomes invalid. For example, if set to 1.day, the user can confirm
+  # their account within 1 days after the mail was sent, but on the second day
+  # their account can't be confirmed with the token any more.
+  # Default is nil, meaning there is no restriction on how long a user can take
+  # before confirming their account.
+  config.confirm_within = 1.day
 
   # Defines which key will be used when confirming an account
   # config.confirmation_keys = [ :email ]
@@ -94,7 +109,7 @@ Devise.setup do |config|
   # config.remember_across_browsers = true
 
   # If true, extends the user's remember period when remembered via cookie.
-  # config.extend_remember_period = false
+  config.extend_remember_period = true
 
   # Options to be passed to the created cookie. For instance, you can set
   # secure: true in order to force SSL only cookies.
@@ -218,9 +233,9 @@ Devise.setup do |config|
     manager.failure_app = Gitlab::DeviseFailure
   end
 
-  if Gitlab::Auth::LDAP::Config.enabled?
-    Gitlab::Auth::LDAP::Config.providers.each do |provider|
-      ldap_config = Gitlab::Auth::LDAP::Config.new(provider)
+  if Gitlab::Auth::Ldap::Config.enabled?
+    Gitlab::Auth::Ldap::Config.available_providers.each do |provider|
+      ldap_config = Gitlab::Auth::Ldap::Config.new(provider)
       config.omniauth(provider, ldap_config.omniauth_options)
     end
   end

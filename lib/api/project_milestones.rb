@@ -1,13 +1,13 @@
 # frozen_string_literal: true
 
 module API
-  class ProjectMilestones < Grape::API
+  class ProjectMilestones < ::API::Base
     include PaginationParams
     include MilestoneResponses
 
-    before do
-      authenticate!
-    end
+    before { authenticate! }
+
+    feature_category :issue_tracking
 
     params do
       requires :id, type: String, desc: 'The ID of a project'
@@ -117,4 +117,4 @@ module API
   end
 end
 
-API::ProjectMilestones.prepend_if_ee('EE::API::ProjectMilestones')
+API::ProjectMilestones.prepend_mod_with('API::ProjectMilestones')

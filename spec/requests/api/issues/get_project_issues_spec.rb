@@ -2,7 +2,7 @@
 
 require 'spec_helper'
 
-describe API::Issues do
+RSpec.describe API::Issues do
   let_it_be(:user) { create(:user) }
   let_it_be(:project, reload: true) { create(:project, :public, :repository, creator_id: user.id, namespace: user.namespace) }
   let_it_be(:private_mrs_project) do
@@ -28,6 +28,7 @@ describe API::Issues do
       updated_at: 3.hours.ago,
       closed_at: 1.hour.ago
   end
+
   let!(:confidential_issue) do
     create :issue,
       :confidential,
@@ -37,6 +38,7 @@ describe API::Issues do
       created_at: generate(:past_time),
       updated_at: 2.hours.ago
   end
+
   let!(:issue) do
     create :issue,
       author: user,
@@ -48,14 +50,17 @@ describe API::Issues do
       title: issue_title,
       description: issue_description
   end
+
   let_it_be(:label) do
     create(:label, title: 'label', color: '#FFAABB', project: project)
   end
+
   let!(:label_link) { create(:label_link, label: label, target: issue) }
   let(:milestone) { create(:milestone, title: '1.0.0', project: project) }
   let_it_be(:empty_milestone) do
     create(:milestone, title: '2.0.0', project: project)
   end
+
   let!(:note) { create(:note_on_issue, author: user, project: project, noteable: issue) }
 
   let(:no_milestone_title) { 'None' }
@@ -69,6 +74,7 @@ describe API::Issues do
            target_project: project,
            description: "closes #{issue.to_reference}")
   end
+
   let!(:merge_request2) do
     create(:merge_request,
            :simple,
@@ -78,7 +84,7 @@ describe API::Issues do
            description: "closes #{issue.to_reference(private_mrs_project)}")
   end
 
-  before(:all) do
+  before_all do
     project.add_reporter(user)
     project.add_guest(guest)
     private_mrs_project.add_reporter(user)
@@ -180,11 +186,17 @@ describe API::Issues do
     it 'avoids N+1 queries' do
       get api("/projects/#{project.id}/issues", user)
 
-      create_list(:issue, 3, project: project)
+      issues = create_list(:issue, 3, project: project, closed_by: user)
 
       control_count = ActiveRecord::QueryRecorder.new(skip_cached: false) do
         get api("/projects/#{project.id}/issues", user)
       end.count
+
+      milestone = create(:milestone, project: project)
+      create(:issue, project: project, milestone: milestone, closed_by: create(:user))
+
+      create(:note_on_issue, project: project, noteable: issues[0])
+      create(:note_on_issue, project: project, noteable: issues[1])
 
       expect do
         get api("/projects/#{project.id}/issues", user)
@@ -350,25 +362,25 @@ describe API::Issues do
     end
 
     it 'returns an array of project issues with any label' do
-      get api("#{base_url}/issues", user), params: { labels: IssuesFinder::FILTER_ANY }
+      get api("#{base_url}/issues", user), params: { labels: IssuableFinder::Params::FILTER_ANY }
 
       expect_paginated_array_response(issue.id)
     end
 
     it 'returns an array of project issues with any label with labels param as array' do
-      get api("#{base_url}/issues", user), params: { labels: [IssuesFinder::FILTER_ANY] }
+      get api("#{base_url}/issues", user), params: { labels: [IssuableFinder::Params::FILTER_ANY] }
 
       expect_paginated_array_response(issue.id)
     end
 
     it 'returns an array of project issues with no label' do
-      get api("#{base_url}/issues", user), params: { labels: IssuesFinder::FILTER_NONE }
+      get api("#{base_url}/issues", user), params: { labels: IssuableFinder::Params::FILTER_NONE }
 
       expect_paginated_array_response([confidential_issue.id, closed_issue.id])
     end
 
     it 'returns an array of project issues with no label with labels param as array' do
-      get api("#{base_url}/issues", user), params: { labels: [IssuesFinder::FILTER_NONE] }
+      get api("#{base_url}/issues", user), params: { labels: [IssuableFinder::Params::FILTER_NONE] }
 
       expect_paginated_array_response([confidential_issue.id, closed_issue.id])
     end

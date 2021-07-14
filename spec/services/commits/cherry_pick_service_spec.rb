@@ -2,7 +2,7 @@
 
 require 'spec_helper'
 
-describe Commits::CherryPickService do
+RSpec.describe Commits::CherryPickService do
   let(:project) { create(:project, :repository) }
   # *   ddd0f15ae83993f5cb66a927a28673882e99100b (HEAD -> master, origin/master, origin/HEAD) Merge branch 'po-fix-test-en
   # |\
@@ -24,7 +24,7 @@ describe Commits::CherryPickService do
     repository.add_branch(user, branch_name, merge_base_sha)
   end
 
-  def cherry_pick(sha, branch_name)
+  def cherry_pick(sha, branch_name, message: nil)
     commit = project.commit(sha)
 
     described_class.new(
@@ -32,7 +32,8 @@ describe Commits::CherryPickService do
       user,
       commit: commit,
       start_branch: branch_name,
-      branch_name: branch_name
+      branch_name: branch_name,
+      message: message
     ).execute
   end
 
@@ -44,6 +45,14 @@ describe Commits::CherryPickService do
 
         head = repository.find_branch(branch_name).target
         expect(head).not_to eq(merge_base_sha)
+      end
+
+      it 'supports a custom commit message' do
+        result = cherry_pick(merge_commit_sha, branch_name, message: 'foo')
+        branch = repository.find_branch(branch_name)
+
+        expect(result[:status]).to eq(:success)
+        expect(branch.dereferenced_target.message).to eq('foo')
       end
     end
 
@@ -60,18 +69,6 @@ describe Commits::CherryPickService do
         mr_notes = find_cherry_pick_notes(merge_request)
         expect(mr_notes.length).to eq(1)
         expect(mr_notes[0].commit_id).to eq(result[:result])
-      end
-
-      context 'when :track_mr_picking feature flag is disabled' do
-        before do
-          stub_feature_flags(track_mr_picking: false)
-        end
-
-        it 'does not add system notes' do
-          expect do
-            cherry_pick(merge_commit_sha, branch_name)
-          end.not_to change { Note.count }
-        end
       end
     end
 

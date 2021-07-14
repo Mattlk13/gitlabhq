@@ -1,43 +1,58 @@
 <script>
-import Vue from 'vue';
-import { mapActions, mapGetters, mapState } from 'vuex';
 import { GlButton, GlLoadingIcon } from '@gitlab/ui';
+import { mapActions, mapGetters, mapState } from 'vuex';
 import { __ } from '~/locale';
-import FindFile from '~/vue_shared/components/file_finder/index.vue';
-import NewModal from './new_dropdown/modal.vue';
+import {
+  WEBIDE_MARK_APP_START,
+  WEBIDE_MARK_FILE_FINISH,
+  WEBIDE_MARK_FILE_CLICKED,
+  WEBIDE_MEASURE_FILE_AFTER_INTERACTION,
+  WEBIDE_MEASURE_BEFORE_VUE,
+} from '~/performance/constants';
+import { performanceMarkAndMeasure } from '~/performance/utils';
+import glFeatureFlagsMixin from '~/vue_shared/mixins/gl_feature_flags_mixin';
+import { modalTypes } from '../constants';
+import eventHub from '../eventhub';
+import { measurePerformance } from '../utils';
+import CannotPushCodeAlert from './cannot_push_code_alert.vue';
 import IdeSidebar from './ide_side_bar.vue';
-import RepoTabs from './repo_tabs.vue';
-import IdeStatusBar from './ide_status_bar.vue';
 import RepoEditor from './repo_editor.vue';
-import RightPane from './panes/right.vue';
-import ErrorMessage from './error_message.vue';
-import CommitEditorHeader from './commit_sidebar/editor_header.vue';
+
+eventHub.$on(WEBIDE_MEASURE_FILE_AFTER_INTERACTION, () =>
+  measurePerformance(
+    WEBIDE_MARK_FILE_FINISH,
+    WEBIDE_MEASURE_FILE_AFTER_INTERACTION,
+    WEBIDE_MARK_FILE_CLICKED,
+  ),
+);
 
 export default {
   components: {
-    NewModal,
     IdeSidebar,
-    RepoTabs,
-    IdeStatusBar,
     RepoEditor,
-    FindFile,
-    ErrorMessage,
-    CommitEditorHeader,
     GlButton,
     GlLoadingIcon,
+    ErrorMessage: () => import(/* webpackChunkName: 'ide_runtime' */ './error_message.vue'),
+    CommitEditorHeader: () =>
+      import(/* webpackChunkName: 'ide_runtime' */ './commit_sidebar/editor_header.vue'),
+    RepoTabs: () => import(/* webpackChunkName: 'ide_runtime' */ './repo_tabs.vue'),
+    IdeStatusBar: () => import(/* webpackChunkName: 'ide_runtime' */ './ide_status_bar.vue'),
+    FindFile: () =>
+      import(/* webpackChunkName: 'ide_runtime' */ '~/vue_shared/components/file_finder/index.vue'),
+    RightPane: () => import(/* webpackChunkName: 'ide_runtime' */ './panes/right.vue'),
+    NewModal: () => import(/* webpackChunkName: 'ide_runtime' */ './new_dropdown/modal.vue'),
+    CannotPushCodeAlert,
   },
-  props: {
-    rightPaneComponent: {
-      type: Vue.Component,
-      required: false,
-      default: () => RightPane,
-    },
+  mixins: [glFeatureFlagsMixin()],
+  data() {
+    return {
+      loadDeferred: false,
+    };
   },
   computed: {
     ...mapState([
       'openFiles',
       'viewer',
-      'currentMergeRequestId',
       'fileFindVisible',
       'emptyStateSvgPath',
       'currentProjectId',
@@ -45,20 +60,39 @@ export default {
       'loading',
     ]),
     ...mapGetters([
+      'canPushCodeStatus',
       'activeFile',
-      'hasChanges',
       'someUncommittedChanges',
       'isCommitModeActive',
       'allBlobs',
       'emptyRepo',
       'currentTree',
+      'hasCurrentProject',
+      'editorTheme',
+      'getUrlForPath',
     ]),
+    themeName() {
+      return window.gon?.user_color_scheme;
+    },
   },
   mounted() {
-    window.onbeforeunload = e => this.onBeforeUnload(e);
+    window.onbeforeunload = (e) => this.onBeforeUnload(e);
+
+    if (this.themeName)
+      document.querySelector('.navbar-gitlab').classList.add(`theme-${this.themeName}`);
+  },
+  beforeCreate() {
+    performanceMarkAndMeasure({
+      mark: WEBIDE_MARK_APP_START,
+      measures: [
+        {
+          name: WEBIDE_MEASURE_BEFORE_VUE,
+        },
+      ],
+    });
   },
   methods: {
-    ...mapActions(['toggleFileFinder', 'openNewEntryModal']),
+    ...mapActions(['toggleFileFinder']),
     onBeforeUnload(e = {}) {
       const returnValue = __('Are you sure you want to lose unsaved changes?');
 
@@ -70,36 +104,46 @@ export default {
       return returnValue;
     },
     openFile(file) {
-      this.$router.push(`/project${file.url}`);
+      this.$router.push(this.getUrlForPath(file.path));
+    },
+    createNewFile() {
+      this.$refs.newModal.open(modalTypes.blob);
+    },
+    loadDeferredComponents() {
+      this.loadDeferred = true;
     },
   },
 };
 </script>
 
 <template>
-  <article class="ide position-relative d-flex flex-column align-items-stretch">
+  <article
+    class="ide position-relative d-flex flex-column align-items-stretch"
+    :class="{ [`theme-${themeName}`]: themeName }"
+  >
+    <cannot-push-code-alert
+      v-if="!canPushCodeStatus.isAllowed"
+      :message="canPushCodeStatus.message"
+      :action="canPushCodeStatus.action"
+    />
     <error-message v-if="errorMessage" :message="errorMessage" />
     <div class="ide-view flex-grow d-flex">
-      <find-file
-        v-show="fileFindVisible"
-        :files="allBlobs"
-        :visible="fileFindVisible"
-        :loading="loading"
-        @toggle="toggleFileFinder"
-        @click="openFile"
-      />
-      <ide-sidebar />
+      <template v-if="loadDeferred">
+        <find-file
+          :files="allBlobs"
+          :visible="fileFindVisible"
+          :loading="loading"
+          @toggle="toggleFileFinder"
+          @click="openFile"
+        />
+      </template>
+      <ide-sidebar @tree-ready="loadDeferredComponents" />
       <div class="multi-file-edit-pane">
         <template v-if="activeFile">
-          <commit-editor-header v-if="isCommitModeActive" :active-file="activeFile" />
-          <repo-tabs
-            v-else
-            :active-file="activeFile"
-            :files="openFiles"
-            :viewer="viewer"
-            :has-changes="hasChanges"
-            :merge-request-id="currentMergeRequestId"
-          />
+          <template v-if="loadDeferred">
+            <commit-editor-header v-if="isCommitModeActive" :active-file="activeFile" />
+            <repo-tabs v-else :active-file="activeFile" :files="openFiles" :viewer="viewer" />
+          </template>
           <repo-editor :file="activeFile" class="multi-file-edit-pane-content" />
         </template>
         <template v-else>
@@ -123,9 +167,11 @@ export default {
                     </p>
                     <gl-button
                       variant="success"
+                      category="primary"
                       :title="__('New file')"
                       :aria-label="__('New file')"
-                      @click="openNewEntryModal({ type: 'blob' })"
+                      data-qa-selector="first_file_button"
+                      @click="createNewFile()"
                     >
                       {{ __('New file') }}
                     </gl-button>
@@ -144,9 +190,13 @@ export default {
           </div>
         </template>
       </div>
-      <component :is="rightPaneComponent" v-if="currentProjectId" />
+      <template v-if="loadDeferred">
+        <right-pane v-if="currentProjectId" />
+      </template>
     </div>
-    <ide-status-bar />
-    <new-modal />
+    <template v-if="loadDeferred">
+      <ide-status-bar />
+      <new-modal ref="newModal" />
+    </template>
   </article>
 </template>

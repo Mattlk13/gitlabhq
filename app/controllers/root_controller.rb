@@ -13,10 +13,15 @@ class RootController < Dashboard::ProjectsController
 
   before_action :redirect_unlogged_user, if: -> { current_user.nil? }
   before_action :redirect_logged_user, if: -> { current_user.present? }
+  # We only need to load the projects when the user is logged in but did not
+  # configure a dashboard. In which case we render projects. We can do that straight
+  # from the #index action.
+  skip_before_action :projects
 
   def index
     # n+1: https://gitlab.com/gitlab-org/gitlab-foss/issues/40260
     Gitlab::GitalyClient.allow_n_plus_1_calls do
+      projects
       super
     end
   end
@@ -40,6 +45,8 @@ class RootController < Dashboard::ProjectsController
       redirect_to(activity_dashboard_path)
     when 'starred_project_activity'
       redirect_to(activity_dashboard_path(filter: 'starred'))
+    when 'followed_user_activity'
+      redirect_to(activity_dashboard_path(filter: 'followed'))
     when 'groups'
       redirect_to(dashboard_groups_path)
     when 'todos'
@@ -63,4 +70,4 @@ class RootController < Dashboard::ProjectsController
   end
 end
 
-RootController.prepend_if_ee('EE::RootController')
+RootController.prepend_mod_with('RootController')

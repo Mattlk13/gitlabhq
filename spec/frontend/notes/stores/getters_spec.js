@@ -1,3 +1,4 @@
+import { DESC, ASC } from '~/notes/constants';
 import * as getters from '~/notes/stores/getters';
 import {
   notesDataMock,
@@ -5,11 +6,15 @@ import {
   noteableDataMock,
   individualNote,
   collapseNotesMock,
+  discussionMock,
   discussion1,
   discussion2,
   discussion3,
   resolvedDiscussion1,
   unresolvableDiscussion,
+  draftComments,
+  draftReply,
+  draftDiffDiscussion,
 } from '../mock_data';
 
 const discussionWithTwoUnresolvedNotes = 'merge_requests/resolved_diff_discussion.json';
@@ -21,10 +26,10 @@ const createDiscussionNeighborParams = (discussionId, diffOrder, step) => ({
   step,
 });
 
+const asDraftDiscussion = (x) => ({ ...x, individual_note: true });
+
 describe('Getters Notes Store', () => {
   let state;
-
-  preloadFixtures(discussionWithTwoUnresolvedNotes);
 
   beforeEach(() => {
     state = {
@@ -35,6 +40,8 @@ describe('Getters Notes Store', () => {
       notesData: notesDataMock,
       userData: userDataMock,
       noteableData: noteableDataMock,
+      descriptionVersions: 'descriptionVersions',
+      discussionSortOrder: DESC,
     };
   });
 
@@ -59,8 +66,58 @@ describe('Getters Notes Store', () => {
   });
 
   describe('discussions', () => {
-    it('should return all discussions in the store', () => {
-      expect(getters.discussions(state)).toEqual([individualNote]);
+    let batchComments = null;
+
+    const getDiscussions = () => getters.discussions(state, {}, { batchComments });
+
+    describe('without batchComments module', () => {
+      it('should return all discussions in the store', () => {
+        expect(getDiscussions()).toEqual([individualNote]);
+      });
+
+      it('should transform  discussion to individual notes in timeline view', () => {
+        state.discussions = [discussionMock];
+        state.isTimelineEnabled = true;
+
+        const discussions = getDiscussions();
+
+        expect(discussions.length).toEqual(discussionMock.notes.length);
+        discussions.forEach((discussion) => {
+          expect(discussion.individual_note).toBe(true);
+          expect(discussion.id).toBe(discussion.notes[0].id);
+          expect(discussion.created_at).toBe(discussion.notes[0].created_at);
+        });
+      });
+    });
+
+    describe('with batchComments', () => {
+      beforeEach(() => {
+        batchComments = { drafts: [...draftComments, draftReply, draftDiffDiscussion] };
+      });
+
+      it.each`
+        discussionSortOrder | expectation
+        ${ASC}              | ${[individualNote, ...draftComments.map(asDraftDiscussion)]}
+        ${DESC}             | ${[...draftComments.reverse().map(asDraftDiscussion), individualNote]}
+      `(
+        'only appends draft comments (discussionSortOrder=$discussionSortOrder)',
+        ({ discussionSortOrder, expectation }) => {
+          state.discussionSortOrder = discussionSortOrder;
+
+          expect(getDiscussions()).toEqual(expectation);
+        },
+      );
+    });
+  });
+
+  describe('hasDrafts', () => {
+    it.each`
+      rootGetters                             | expected
+      ${{}}                                   | ${false}
+      ${{ 'batchComments/hasDrafts': true }}  | ${true}
+      ${{ 'batchComments/hasDrafts': false }} | ${false}
+    `('with rootGetters=$rootGetters, returns $expected', ({ rootGetters, expected }) => {
+      expect(getters.hasDrafts({}, {}, {}, rootGetters)).toBe(expected);
     });
   });
 
@@ -89,7 +146,7 @@ describe('Getters Notes Store', () => {
     };
 
     it('should return a single system note when a description was updated multiple times', () => {
-      expect(getters.discussions(stateCollapsedNotes).length).toEqual(1);
+      expect(getters.discussions(stateCollapsedNotes, {}, {}).length).toEqual(1);
     });
   });
 
@@ -282,17 +339,18 @@ describe('Getters Notes Store', () => {
         };
       });
 
-      [{ step: 1, id: '123', expected: '123' }, { step: -1, id: '123', expected: '123' }].forEach(
-        ({ step, id, expected }) => {
-          it(`with step ${step} and match, returns only value`, () => {
-            const params = createDiscussionNeighborParams(id, true, step);
+      [
+        { step: 1, id: '123', expected: '123' },
+        { step: -1, id: '123', expected: '123' },
+      ].forEach(({ step, id, expected }) => {
+        it(`with step ${step} and match, returns only value`, () => {
+          const params = createDiscussionNeighborParams(id, true, step);
 
-            expect(getters.findUnresolvedDiscussionIdNeighbor(state, localGetters)(params)).toBe(
-              expected,
-            );
-          });
-        },
-      );
+          expect(getters.findUnresolvedDiscussionIdNeighbor(state, localGetters)(params)).toBe(
+            expected,
+          );
+        });
+      });
 
       it('with no match, returns only value', () => {
         const params = createDiscussionNeighborParams('bogus', true, 1);
@@ -383,6 +441,18 @@ describe('Getters Notes Store', () => {
       state.discussions.push({ id: '1' });
 
       expect(getters.getDiscussion(state)('1')).toEqual({ id: '1' });
+    });
+  });
+
+  describe('descriptionVersions', () => {
+    it('should return `descriptionVersions`', () => {
+      expect(getters.descriptionVersions(state)).toEqual('descriptionVersions');
+    });
+  });
+
+  describe('sortDirection', () => {
+    it('should return `discussionSortOrder`', () => {
+      expect(getters.sortDirection(state)).toBe(DESC);
     });
   });
 });

@@ -2,15 +2,20 @@
 
 require 'spec_helper'
 
-describe Projects::GroupLinksController do
-  let(:group) { create(:group, :private) }
-  let(:group2) { create(:group, :private) }
-  let(:project) { create(:project, :private, group: group2) }
-  let(:user) { create(:user) }
+RSpec.describe Projects::GroupLinksController do
+  let_it_be(:group) { create(:group, :private) }
+  let_it_be(:group2) { create(:group, :private) }
+  let_it_be(:project) { create(:project, :private, group: group2) }
+  let_it_be(:user) { create(:user) }
 
   before do
+    travel_to DateTime.new(2019, 4, 1)
     project.add_maintainer(user)
     sign_in(user)
+  end
+
+  after do
+    travel_back
   end
 
   describe '#create' do
@@ -27,7 +32,7 @@ describe Projects::GroupLinksController do
 
     context 'when project is not allowed to be shared with a group' do
       before do
-        group.update(share_with_group_lock: false)
+        group.update!(share_with_group_lock: false)
       end
 
       include_context 'link project to group'
@@ -59,7 +64,7 @@ describe Projects::GroupLinksController do
       include_context 'link project to group'
 
       it 'renders 404' do
-        expect(response.status).to eq 404
+        expect(response).to have_gitlab_http_status(:not_found)
       end
 
       it 'does not share project with that group' do
@@ -73,7 +78,7 @@ describe Projects::GroupLinksController do
       include_context 'link project to group'
 
       it 'renders 404' do
-        expect(response.status).to eq 404
+        expect(response).to have_gitlab_http_status(:not_found)
       end
 
       it 'does not share project with that group' do
@@ -139,6 +144,49 @@ describe Projects::GroupLinksController do
           project_project_members_path(project)
         )
         expect(flash[:alert]).to eq('error')
+      end
+    end
+  end
+
+  describe '#update' do
+    let_it_be(:link) do
+      create(
+        :project_group_link,
+        {
+          project: project,
+          group: group
+        }
+      )
+    end
+
+    let(:expiry_date) { 1.month.from_now.to_date }
+
+    before do
+      travel_to Time.now.utc.beginning_of_day
+
+      put(
+        :update,
+        params: {
+          namespace_id: project.namespace.to_param,
+          project_id: project.to_param,
+          id: link.id,
+          group_link: { group_access: Gitlab::Access::GUEST, expires_at: expiry_date }
+        },
+        format: :json
+      )
+    end
+
+    context 'when `expires_at` is set' do
+      it 'returns correct json response' do
+        expect(json_response).to eq({ "expires_in" => "about 1 month", "expires_soon" => false })
+      end
+    end
+
+    context 'when `expires_at` is not set' do
+      let(:expiry_date) { nil }
+
+      it 'returns empty json response' do
+        expect(json_response).to be_empty
       end
     end
   end

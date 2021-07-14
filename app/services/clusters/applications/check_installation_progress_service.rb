@@ -19,9 +19,7 @@ module Clusters
 
       def check_timeout
         if timed_out?
-          begin
-            app.make_errored!("Operation timed out. Check pod logs for #{pod_name} for more details.")
-          end
+          app.make_errored!("Operation timed out. Check pod logs for #{pod_name} for more details.")
         else
           ClusterWaitForAppInstallationWorker.perform_in(
             ClusterWaitForAppInstallationWorker::INTERVAL, app.name, app.id)
@@ -33,7 +31,7 @@ module Clusters
       end
 
       def timed_out?
-        Time.now.utc - app.updated_at.utc > ClusterWaitForAppInstallationWorker::TIMEOUT
+        Time.current.utc - app.updated_at.utc > ClusterWaitForAppInstallationWorker::TIMEOUT
       end
 
       def remove_installation_pod

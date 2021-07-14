@@ -2,10 +2,11 @@
 
 require 'spec_helper'
 
-describe Gitlab::SlashCommands::Presenters::IssueComment do
+RSpec.describe Gitlab::SlashCommands::Presenters::IssueComment do
   let_it_be(:project) { create(:project) }
   let_it_be(:issue) { create(:issue, project: project) }
   let_it_be(:note) { create(:note, project: project, noteable: issue) }
+
   let(:author) { note.author }
 
   describe '#present' do

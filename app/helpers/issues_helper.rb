@@ -4,49 +4,24 @@ module IssuesHelper
   def issue_css_classes(issue)
     classes = ["issue"]
     classes << "closed" if issue.closed?
-    classes << "today" if issue.today?
+    classes << "today" if issue.new?
     classes << "user-can-drag" if @sort == 'relative_position'
     classes.join(' ')
   end
 
-  # Returns an OpenStruct object suitable for use by <tt>options_from_collection_for_select</tt>
-  # to allow filtering issues by an unassigned User or Milestone
-  def unassigned_filter
-    # Milestone uses :title, Issue uses :name
-    OpenStruct.new(id: 0, title: 'None (backlog)', name: 'Unassigned')
-  end
+  def issue_manual_ordering_class
+    is_sorting_by_relative_position = @sort == 'relative_position'
 
-  def url_for_issue(issue_iid, project = @project, options = {})
-    return '' if project.nil?
-
-    url =
-      if options[:internal]
-        url_for_internal_issue(issue_iid, project, options)
-      else
-        url_for_tracker_issue(issue_iid, project, options)
-      end
-
-    # Ensure we return a valid URL to prevent possible XSS.
-    URI.parse(url).to_s
-  rescue URI::InvalidURIError
-    ''
-  end
-
-  def url_for_tracker_issue(issue_iid, project, options)
-    if options[:only_path]
-      project.issues_tracker.issue_path(issue_iid)
-    else
-      project.issues_tracker.issue_url(issue_iid)
+    if is_sorting_by_relative_position && !issue_repositioning_disabled?
+      "manual-ordering"
     end
   end
 
-  def url_for_internal_issue(issue_iid, project = @project, options = {})
-    helpers = Gitlab::Routing.url_helpers
-
-    if options[:only_path]
-      helpers.namespace_project_issue_path(namespace_id: project.namespace, project_id: project, id: issue_iid)
-    else
-      helpers.namespace_project_issue_url(namespace_id: project.namespace, project_id: project, id: issue_iid)
+  def issue_repositioning_disabled?
+    if @group
+      @group.root_ancestor.issue_repositioning_disabled?
+    elsif @project
+      @project.root_namespace.issue_repositioning_disabled?
     end
   end
 
@@ -73,16 +48,8 @@ module IssuesHelper
     end
   end
 
-  def issue_button_visibility(issue, closed)
-    return 'hidden' if issue_button_hidden?(issue, closed)
-  end
-
-  def issue_button_hidden?(issue, closed)
-    issue.closed? == closed || (!closed && issue.discussion_locked)
-  end
-
   def confidential_icon(issue)
-    icon('eye-slash') if issue.confidential?
+    sprite_icon('eye-slash', css_class: 'gl-vertical-align-text-bottom') if issue.confidential?
   end
 
   def award_user_list(awards, current_user, limit: 10)
@@ -145,17 +112,12 @@ module IssuesHelper
     can?(current_user, :create_issue, project)
   end
 
-  def create_confidential_merge_request_enabled?
-    Feature.enabled?(:create_confidential_merge_request, @project, default_enabled: true)
-  end
-
   def show_new_branch_button?
     can_create_confidential_merge_request? || !@issue.confidential?
   end
 
   def can_create_confidential_merge_request?
     @issue.confidential? && !@project.private? &&
-      create_confidential_merge_request_enabled? &&
       can?(current_user, :create_merge_request_in, @project)
   end
 
@@ -177,10 +139,86 @@ module IssuesHelper
     end
   end
 
-  # Required for Banzai::Filter::IssueReferenceFilter
-  module_function :url_for_issue
-  module_function :url_for_internal_issue
-  module_function :url_for_tracker_issue
+  def show_moved_service_desk_issue_warning?(issue)
+    return false unless issue.moved_from
+    return false unless issue.from_service_desk?
+
+    issue.moved_from.project.service_desk_enabled? && !issue.project.service_desk_enabled?
+  end
+
+  def use_startup_call?
+    request.query_parameters.empty? && @sort == 'created_date'
+  end
+
+  def startup_call_params
+    {
+      state: 'opened',
+      with_labels_details: 'true',
+      page: 1,
+      per_page: 20,
+      order_by: 'created_at',
+      sort: 'desc'
+    }
+  end
+
+  def issue_header_actions_data(project, issuable, current_user)
+    new_issuable_params = ({ issuable_template: 'incident', issue: { issue_type: 'incident' } } if issuable.incident?)
+
+    {
+      can_create_issue: show_new_issue_link?(project).to_s,
+      can_reopen_issue: can?(current_user, :reopen_issue, issuable).to_s,
+      can_report_spam: issuable.submittable_as_spam_by?(current_user).to_s,
+      can_update_issue: can?(current_user, :update_issue, issuable).to_s,
+      iid: issuable.iid,
+      is_issue_author: (issuable.author == current_user).to_s,
+      issue_type: issuable_display_type(issuable),
+      new_issue_path: new_project_issue_path(project, new_issuable_params),
+      project_path: project.full_path,
+      report_abuse_path: new_abuse_report_path(user_id: issuable.author.id, ref_url: issue_url(issuable)),
+      submit_as_spam_path: mark_as_spam_project_issue_path(project, issuable)
+    }
+  end
+
+  def issues_list_data(project, current_user, finder)
+    {
+      autocomplete_award_emojis_path: autocomplete_award_emojis_path,
+      calendar_path: url_for(safe_params.merge(calendar_url_options)),
+      can_bulk_update: can?(current_user, :admin_issue, project).to_s,
+      can_edit: can?(current_user, :admin_project, project).to_s,
+      can_import_issues: can?(current_user, :import_issues, @project).to_s,
+      email: current_user&.notification_email,
+      emails_help_page_path: help_page_path('development/emails', anchor: 'email-namespace'),
+      empty_state_svg_path: image_path('illustrations/issues.svg'),
+      export_csv_path: export_csv_project_issues_path(project),
+      has_project_issues: project_issues(project).exists?.to_s,
+      import_csv_issues_path: import_csv_namespace_project_issues_path,
+      initial_email: project.new_issuable_address(current_user, 'issue'),
+      is_signed_in: current_user.present?.to_s,
+      issues_path: project_issues_path(project),
+      jira_integration_path: help_page_url('integration/jira/', anchor: 'view-jira-issues'),
+      markdown_help_path: help_page_path('user/markdown'),
+      max_attachment_size: number_to_human_size(Gitlab::CurrentSettings.max_attachment_size.megabytes),
+      new_issue_path: new_project_issue_path(project, issue: { milestone_id: finder.milestones.first.try(:id) }),
+      project_import_jira_path: project_import_jira_path(project),
+      project_path: project.full_path,
+      quick_actions_help_path: help_page_path('user/project/quick_actions'),
+      reset_path: new_issuable_address_project_path(project, issuable_type: 'issue'),
+      rss_path: url_for(safe_params.merge(rss_url_options)),
+      show_new_issue_link: show_new_issue_link?(project).to_s,
+      sign_in_path: new_user_session_path
+    }
+  end
+
+  # Overridden in EE
+  def scoped_labels_available?(parent)
+    false
+  end
+
+  def award_emoji_issue_api_path(issue)
+    if Feature.enabled?(:improved_emoji_picker, issue.project, default_enabled: :yaml)
+      api_v4_projects_issues_award_emoji_path(id: issue.project.id, issue_iid: issue.iid)
+    end
+  end
 end
 
-IssuesHelper.prepend_if_ee('EE::IssuesHelper')
+IssuesHelper.prepend_mod_with('IssuesHelper')

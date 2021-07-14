@@ -2,9 +2,9 @@
 
 require 'spec_helper'
 
-describe ProtectedTag do
+RSpec.describe ProtectedTag do
   describe 'Associations' do
-    it { is_expected.to belong_to(:project) }
+    it { is_expected.to belong_to(:project).touch(true) }
   end
 
   describe 'Validation' do

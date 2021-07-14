@@ -1,3 +1,4 @@
+import { TEST_HOST } from 'helpers/test_constants';
 import * as urlUtils from '~/lib/utils/url_utility';
 
 const shas = {
@@ -15,7 +16,7 @@ const shas = {
   ],
 };
 
-const setWindowLocation = value => {
+const setWindowLocation = (value) => {
   Object.defineProperty(window, 'location', {
     writable: true,
     value,
@@ -23,6 +24,16 @@ const setWindowLocation = value => {
 };
 
 describe('URL utility', () => {
+  let originalLocation;
+
+  beforeAll(() => {
+    originalLocation = window.location;
+  });
+
+  afterAll(() => {
+    window.location = originalLocation;
+  });
+
   describe('webIDEUrl', () => {
     afterEach(() => {
       gon.relative_url_root = '';
@@ -91,35 +102,195 @@ describe('URL utility', () => {
   });
 
   describe('mergeUrlParams', () => {
+    const { mergeUrlParams } = urlUtils;
+
     it('adds w', () => {
-      expect(urlUtils.mergeUrlParams({ w: 1 }, '#frag')).toBe('?w=1#frag');
-      expect(urlUtils.mergeUrlParams({ w: 1 }, '/path#frag')).toBe('/path?w=1#frag');
-      expect(urlUtils.mergeUrlParams({ w: 1 }, 'https://host/path')).toBe('https://host/path?w=1');
-      expect(urlUtils.mergeUrlParams({ w: 1 }, 'https://host/path#frag')).toBe(
-        'https://host/path?w=1#frag',
-      );
-
-      expect(urlUtils.mergeUrlParams({ w: 1 }, 'https://h/p?k1=v1#frag')).toBe(
-        'https://h/p?k1=v1&w=1#frag',
-      );
-    });
-
-    it('updates w', () => {
-      expect(urlUtils.mergeUrlParams({ w: 1 }, '?k1=v1&w=0#frag')).toBe('?k1=v1&w=1#frag');
+      expect(mergeUrlParams({ w: 1 }, '#frag')).toBe('?w=1#frag');
+      expect(mergeUrlParams({ w: 1 }, '')).toBe('?w=1');
+      expect(mergeUrlParams({ w: 1 }, '/path#frag')).toBe('/path?w=1#frag');
+      expect(mergeUrlParams({ w: 1 }, 'https://host/path')).toBe('https://host/path?w=1');
+      expect(mergeUrlParams({ w: 1 }, 'https://host/path#frag')).toBe('https://host/path?w=1#frag');
+      expect(mergeUrlParams({ w: 1 }, 'https://h/p?k1=v1#frag')).toBe('https://h/p?k1=v1&w=1#frag');
+      expect(mergeUrlParams({ w: 'null' }, '')).toBe('?w=null');
     });
 
     it('adds multiple params', () => {
-      expect(urlUtils.mergeUrlParams({ a: 1, b: 2, c: 3 }, '#frag')).toBe('?a=1&b=2&c=3#frag');
+      expect(mergeUrlParams({ a: 1, b: 2, c: 3 }, '#frag')).toBe('?a=1&b=2&c=3#frag');
     });
 
-    it('adds and updates encoded params', () => {
-      expect(urlUtils.mergeUrlParams({ a: '&', q: '?' }, '?a=%23#frag')).toBe('?a=%26&q=%3F#frag');
+    it('updates w', () => {
+      expect(mergeUrlParams({ w: 2 }, '/path?w=1#frag')).toBe('/path?w=2#frag');
+      expect(mergeUrlParams({ w: 2 }, 'https://host/path?w=1')).toBe('https://host/path?w=2');
+    });
+
+    it('removes null w', () => {
+      expect(mergeUrlParams({ w: null }, '?w=1#frag')).toBe('#frag');
+      expect(mergeUrlParams({ w: null }, '/path?w=1#frag')).toBe('/path#frag');
+      expect(mergeUrlParams({ w: null }, 'https://host/path?w=1')).toBe('https://host/path');
+      expect(mergeUrlParams({ w: null }, 'https://host/path?w=1#frag')).toBe(
+        'https://host/path#frag',
+      );
+      expect(mergeUrlParams({ w: null }, 'https://h/p?k1=v1&w=1#frag')).toBe(
+        'https://h/p?k1=v1#frag',
+      );
+    });
+
+    it('adds and updates encoded param values', () => {
+      expect(mergeUrlParams({ foo: '&', q: '?' }, '?foo=%23#frag')).toBe('?foo=%26&q=%3F#frag');
+      expect(mergeUrlParams({ foo: 'a value' }, '')).toBe('?foo=a%20value');
+      expect(mergeUrlParams({ foo: 'a value' }, '?foo=1')).toBe('?foo=a%20value');
+    });
+
+    it('adds and updates encoded param names', () => {
+      expect(mergeUrlParams({ 'a name': 1 }, '')).toBe('?a%20name=1');
+      expect(mergeUrlParams({ 'a name': 2 }, '?a%20name=1')).toBe('?a%20name=2');
+      expect(mergeUrlParams({ 'a name': null }, '?a%20name=1')).toBe('');
     });
 
     it('treats "+" as "%20"', () => {
-      expect(urlUtils.mergeUrlParams({ ref: 'bogus' }, '?a=lorem+ipsum&ref=charlie')).toBe(
+      expect(mergeUrlParams({ ref: 'bogus' }, '?a=lorem+ipsum&ref=charlie')).toBe(
         '?a=lorem%20ipsum&ref=bogus',
       );
+    });
+
+    it('treats question marks and slashes as part of the query', () => {
+      expect(mergeUrlParams({ ending: '!' }, '?ending=?&foo=bar')).toBe('?ending=!&foo=bar');
+      expect(mergeUrlParams({ ending: '!' }, 'https://host/path?ending=?&foo=bar')).toBe(
+        'https://host/path?ending=!&foo=bar',
+      );
+      expect(mergeUrlParams({ ending: '?' }, '?ending=!&foo=bar')).toBe('?ending=%3F&foo=bar');
+      expect(mergeUrlParams({ ending: '?' }, 'https://host/path?ending=!&foo=bar')).toBe(
+        'https://host/path?ending=%3F&foo=bar',
+      );
+      expect(mergeUrlParams({ ending: '!', op: '+' }, '?ending=?&op=/')).toBe('?ending=!&op=%2B');
+      expect(mergeUrlParams({ ending: '!', op: '+' }, 'https://host/path?ending=?&op=/')).toBe(
+        'https://host/path?ending=!&op=%2B',
+      );
+      expect(mergeUrlParams({ op: '+' }, '?op=/&foo=bar')).toBe('?op=%2B&foo=bar');
+      expect(mergeUrlParams({ op: '+' }, 'https://host/path?op=/&foo=bar')).toBe(
+        'https://host/path?op=%2B&foo=bar',
+      );
+    });
+
+    it('sorts params in alphabetical order with sort option', () => {
+      expect(mergeUrlParams({ c: 'c', b: 'b', a: 'a' }, 'https://host/path', { sort: true })).toBe(
+        'https://host/path?a=a&b=b&c=c',
+      );
+      expect(
+        mergeUrlParams({ alpha: 'alpha' }, 'https://host/path?op=/&foo=bar', { sort: true }),
+      ).toBe('https://host/path?alpha=alpha&foo=bar&op=%2F');
+    });
+
+    describe('with spread array option', () => {
+      const spreadArrayOptions = { spreadArrays: true };
+
+      it('maintains multiple values', () => {
+        expect(mergeUrlParams({}, '?array[]=foo&array[]=bar', spreadArrayOptions)).toBe(
+          '?array[]=foo&array[]=bar',
+        );
+      });
+
+      it('overrides multiple values with one', () => {
+        expect(
+          mergeUrlParams({ array: ['baz'] }, '?array[]=foo&array[]=bar', spreadArrayOptions),
+        ).toBe('?array[]=baz');
+      });
+      it('removes existing params', () => {
+        expect(
+          mergeUrlParams({ array: null }, '?array[]=foo&array[]=bar', spreadArrayOptions),
+        ).toBe('');
+      });
+      it('removes existing params and keeps others', () => {
+        expect(
+          mergeUrlParams(
+            { array: null },
+            '?array[]=foo&array[]=bar&other=quis',
+            spreadArrayOptions,
+          ),
+        ).toBe('?other=quis');
+      });
+      it('removes existing params along others', () => {
+        expect(
+          mergeUrlParams(
+            { array: null, other: 'quis' },
+            '?array[]=foo&array[]=bar',
+            spreadArrayOptions,
+          ),
+        ).toBe('?other=quis');
+      });
+      it('handles empty arrays along other parameters', () => {
+        expect(mergeUrlParams({ array: [], other: 'quis' }, '?array=baz', spreadArrayOptions)).toBe(
+          '?array[]=&other=quis',
+        );
+      });
+      it('handles multiple values along other parameters', () => {
+        expect(
+          mergeUrlParams(
+            { array: ['foo', 'bar'], other: 'quis' },
+            '?array=baz',
+            spreadArrayOptions,
+          ),
+        ).toBe('?array[]=foo&array[]=bar&other=quis');
+      });
+      it('handles array values with encoding', () => {
+        expect(
+          mergeUrlParams({ array: ['foo+', 'bar,baz'] }, '?array[]=%2Fbaz', spreadArrayOptions),
+        ).toBe('?array[]=foo%2B&array[]=bar%2Cbaz');
+      });
+      it('handles multiple arrays', () => {
+        expect(
+          mergeUrlParams(
+            { array1: ['foo+', 'bar,baz'], array2: ['quis', 'quux'] },
+            '?array1[]=%2Fbaz',
+            spreadArrayOptions,
+          ),
+        ).toBe('?array1[]=foo%2B&array1[]=bar%2Cbaz&array2[]=quis&array2[]=quux');
+      });
+    });
+
+    describe('without spread array option', () => {
+      it('maintains multiple values', () => {
+        expect(mergeUrlParams({}, '?array=foo%2Cbar')).toBe('?array=foo%2Cbar');
+      });
+      it('overrides multiple values with one', () => {
+        expect(mergeUrlParams({ array: ['baz'] }, '?array=foo%2Cbar')).toBe('?array=baz');
+      });
+      it('removes existing params', () => {
+        expect(mergeUrlParams({ array: null }, '?array=foo%2Cbar')).toBe('');
+      });
+      it('removes existing params and keeps others', () => {
+        expect(mergeUrlParams({ array: null }, '?array=foo&array=bar&other=quis')).toBe(
+          '?other=quis',
+        );
+      });
+      it('removes existing params along others', () => {
+        expect(mergeUrlParams({ array: null, other: 'quis' }, '?array=foo&array=bar')).toBe(
+          '?other=quis',
+        );
+      });
+      it('handles empty arrays along other parameters', () => {
+        expect(mergeUrlParams({ array: [], other: 'quis' }, '?array=baz')).toBe(
+          '?array=&other=quis',
+        );
+      });
+      it('handles multiple values along other parameters', () => {
+        expect(mergeUrlParams({ array: ['foo', 'bar'], other: 'quis' }, '?array=baz')).toBe(
+          '?array=foo%2Cbar&other=quis',
+        );
+      });
+      it('handles array values with encoding', () => {
+        expect(mergeUrlParams({ array: ['foo+', 'bar,baz'] }, '?array=%2Fbaz')).toBe(
+          '?array=foo%2B%2Cbar%2Cbaz',
+        );
+      });
+      it('handles multiple arrays', () => {
+        expect(
+          mergeUrlParams(
+            { array1: ['foo+', 'bar,baz'], array2: ['quis', 'quux'] },
+            '?array1=%2Fbaz',
+          ),
+        ).toBe('?array1=foo%2B%2Cbar%2Cbaz&array2=quis%2Cquux');
+      });
     });
   });
 
@@ -158,26 +329,24 @@ describe('URL utility', () => {
   });
 
   describe('doesHashExistInUrl', () => {
-    it('should return true when the given string exists in the URL hash', () => {
+    beforeEach(() => {
       setWindowLocation({
-        href: 'https://gitlab.com/gitlab-org/gitlab-test/issues/1#note_1',
+        hash: 'https://gitlab.com/gitlab-org/gitlab-test/issues/1#note_1',
       });
+    });
 
+    it('should return true when the given string exists in the URL hash', () => {
       expect(urlUtils.doesHashExistInUrl('note_')).toBe(true);
     });
 
     it('should return false when the given string does not exist in the URL hash', () => {
-      setWindowLocation({
-        href: 'https://gitlab.com/gitlab-org/gitlab-test/issues/1#note_1',
-      });
-
       expect(urlUtils.doesHashExistInUrl('doesnotexist')).toBe(false);
     });
   });
 
   describe('urlContainsSha', () => {
     it('returns true when there is a valid 40-character SHA1 hash in the URL', () => {
-      shas.valid.forEach(sha => {
+      shas.valid.forEach((sha) => {
         expect(
           urlUtils.urlContainsSha({ url: `http://urlstuff/${sha}/moreurlstuff` }),
         ).toBeTruthy();
@@ -185,7 +354,7 @@ describe('URL utility', () => {
     });
 
     it('returns false when there is not a valid 40-character SHA1 hash in the URL', () => {
-      shas.invalid.forEach(str => {
+      shas.invalid.forEach((str) => {
         expect(urlUtils.urlContainsSha({ url: `http://urlstuff/${str}/moreurlstuff` })).toBeFalsy();
       });
     });
@@ -196,8 +365,8 @@ describe('URL utility', () => {
     let invalidUrls = [];
 
     beforeAll(() => {
-      validUrls = shas.valid.map(sha => `http://urlstuff/${sha}/moreurlstuff`);
-      invalidUrls = shas.invalid.map(str => `http://urlstuff/${str}/moreurlstuff`);
+      validUrls = shas.valid.map((sha) => `http://urlstuff/${sha}/moreurlstuff`);
+      invalidUrls = shas.invalid.map((str) => `http://urlstuff/${str}/moreurlstuff`);
     });
 
     it('returns the valid 40-character SHA1 hash from the URL', () => {
@@ -207,7 +376,7 @@ describe('URL utility', () => {
     });
 
     it('returns null from a URL with no valid 40-character SHA1 hash', () => {
-      invalidUrls.forEach(url => {
+      invalidUrls.forEach((url) => {
         expect(urlUtils.getShaFromUrl({ url })).toBeNull();
       });
     });
@@ -284,18 +453,128 @@ describe('URL utility', () => {
     });
   });
 
+  describe('isAbsolute', () => {
+    it.each`
+      url                                      | valid
+      ${'https://gitlab.com/'}                 | ${true}
+      ${'http://gitlab.com/'}                  | ${true}
+      ${'/users/sign_in'}                      | ${false}
+      ${' https://gitlab.com'}                 | ${false}
+      ${'somepath.php?url=https://gitlab.com'} | ${false}
+      ${'notaurl'}                             | ${false}
+      ${'../relative_url'}                     | ${false}
+      ${'<a></a>'}                             | ${false}
+    `('returns $valid for $url', ({ url, valid }) => {
+      expect(urlUtils.isAbsolute(url)).toBe(valid);
+    });
+  });
+
+  describe('isRootRelative', () => {
+    it.each`
+      url                                       | valid
+      ${'https://gitlab.com/'}                  | ${false}
+      ${'http://gitlab.com/'}                   | ${false}
+      ${'/users/sign_in'}                       | ${true}
+      ${' https://gitlab.com'}                  | ${false}
+      ${'/somepath.php?url=https://gitlab.com'} | ${true}
+      ${'notaurl'}                              | ${false}
+      ${'../relative_url'}                      | ${false}
+      ${'<a></a>'}                              | ${false}
+      ${'//other-host.test'}                    | ${false}
+    `('returns $valid for $url', ({ url, valid }) => {
+      expect(urlUtils.isRootRelative(url)).toBe(valid);
+    });
+  });
+
   describe('isAbsoluteOrRootRelative', () => {
-    const validUrls = ['https://gitlab.com/', 'http://gitlab.com/', '/users/sign_in'];
+    it.each`
+      url                                       | valid
+      ${'https://gitlab.com/'}                  | ${true}
+      ${'http://gitlab.com/'}                   | ${true}
+      ${'/users/sign_in'}                       | ${true}
+      ${' https://gitlab.com'}                  | ${false}
+      ${'/somepath.php?url=https://gitlab.com'} | ${true}
+      ${'notaurl'}                              | ${false}
+      ${'../relative_url'}                      | ${false}
+      ${'<a></a>'}                              | ${false}
+    `('returns $valid for $url', ({ url, valid }) => {
+      expect(urlUtils.isAbsoluteOrRootRelative(url)).toBe(valid);
+    });
+  });
 
-    const invalidUrls = [' https://gitlab.com/', './file/path', 'notanurl', '<a></a>'];
+  describe('isExternal', () => {
+    const gitlabUrl = 'https://gitlab.com/';
 
-    it.each(validUrls)(`returns true for %s`, url => {
-      expect(urlUtils.isAbsoluteOrRootRelative(url)).toBe(true);
+    beforeEach(() => {
+      gon.gitlab_url = gitlabUrl;
     });
 
-    it.each(invalidUrls)(`returns false for %s`, url => {
-      expect(urlUtils.isAbsoluteOrRootRelative(url)).toBe(false);
+    afterEach(() => {
+      gon.gitlab_url = '';
     });
+
+    it.each`
+      url                                        | urlType                    | external
+      ${'/gitlab-org/gitlab-test/-/issues/2'}    | ${'relative'}              | ${false}
+      ${gitlabUrl}                               | ${'absolute and internal'} | ${false}
+      ${`${gitlabUrl}/gitlab-org/gitlab-test`}   | ${'absolute and internal'} | ${false}
+      ${'http://jira.atlassian.net/browse/IG-1'} | ${'absolute and external'} | ${true}
+    `('returns $external for $url ($urlType)', ({ url, external }) => {
+      expect(urlUtils.isExternal(url)).toBe(external);
+    });
+  });
+
+  describe('isBase64DataUrl', () => {
+    it.each`
+      url                                                      | valid
+      ${undefined}                                             | ${false}
+      ${'http://gitlab.com'}                                   | ${false}
+      ${'data:image/png;base64,abcdef'}                        | ${true}
+      ${'data:application/smil+xml;base64,abcdef'}             | ${true}
+      ${'data:application/vnd.syncml+xml;base64,abcdef'}       | ${true}
+      ${'data:application/vnd.3m.post-it-notes;base64,abcdef'} | ${true}
+      ${'notaurl'}                                             | ${false}
+      ${'../relative_url'}                                     | ${false}
+      ${'<a></a>'}                                             | ${false}
+    `('returns $valid for $url', ({ url, valid }) => {
+      expect(urlUtils.isBase64DataUrl(url)).toBe(valid);
+    });
+  });
+
+  describe('isBlobUrl', () => {
+    it.each`
+      url                               | valid
+      ${undefined}                      | ${false}
+      ${'blob:http://gitlab.com/abcd'}  | ${true}
+      ${'data:image/png;base64,abcdef'} | ${false}
+      ${'notaurl'}                      | ${false}
+      ${'../relative_url'}              | ${false}
+      ${'<a></a>'}                      | ${false}
+    `('returns $valid for $url', ({ url, valid }) => {
+      expect(urlUtils.isBlobUrl(url)).toBe(valid);
+    });
+  });
+
+  describe('relativePathToAbsolute', () => {
+    it.each`
+      path                       | base                                  | result
+      ${'./foo'}                 | ${'bar/'}                             | ${'/bar/foo'}
+      ${'../john.md'}            | ${'bar/baz/foo.php'}                  | ${'/bar/john.md'}
+      ${'../images/img.png'}     | ${'bar/baz/foo.php'}                  | ${'/bar/images/img.png'}
+      ${'../images/Image 1.png'} | ${'bar/baz/foo.php'}                  | ${'/bar/images/Image 1.png'}
+      ${'/images/img.png'}       | ${'bar/baz/foo.php'}                  | ${'/images/img.png'}
+      ${'/images/img.png'}       | ${'/bar/baz/foo.php'}                 | ${'/images/img.png'}
+      ${'../john.md'}            | ${'/bar/baz/foo.php'}                 | ${'/bar/john.md'}
+      ${'../john.md'}            | ${'///bar/baz/foo.php'}               | ${'/bar/john.md'}
+      ${'/images/img.png'}       | ${'https://gitlab.com/user/project/'} | ${'https://gitlab.com/images/img.png'}
+      ${'../images/img.png'}     | ${'https://gitlab.com/user/project/'} | ${'https://gitlab.com/user/images/img.png'}
+      ${'../images/Image 1.png'} | ${'https://gitlab.com/user/project/'} | ${'https://gitlab.com/user/images/Image%201.png'}
+    `(
+      'converts relative path "$path" with base "$base" to absolute path => "expected"',
+      ({ path, base, result }) => {
+        expect(urlUtils.relativePathToAbsolute(path, base)).toBe(result);
+      },
+    );
   });
 
   describe('isSafeUrl', () => {
@@ -342,11 +621,11 @@ describe('URL utility', () => {
     ];
 
     describe('with URL constructor support', () => {
-      it.each(safeUrls)('returns true for %s', url => {
+      it.each(safeUrls)('returns true for %s', (url) => {
         expect(urlUtils.isSafeURL(url)).toBe(true);
       });
 
-      it.each(unsafeUrls)('returns false for %s', url => {
+      it.each(unsafeUrls)('returns false for %s', (url) => {
         expect(urlUtils.isSafeURL(url)).toBe(false);
       });
     });
@@ -380,11 +659,107 @@ describe('URL utility', () => {
     });
   });
 
-  describe('queryToObject', () => {
-    it('converts search query into an object', () => {
-      const searchQuery = '?one=1&two=2';
+  describe('urlParamsToArray', () => {
+    it('returns empty array for empty querystring', () => {
+      expect(urlUtils.urlParamsToArray('')).toEqual([]);
+    });
 
-      expect(urlUtils.queryToObject(searchQuery)).toEqual({ one: '1', two: '2' });
+    it('should decode params', () => {
+      expect(urlUtils.urlParamsToArray('?label_name%5B%5D=test')[0]).toBe('label_name[]=test');
+    });
+
+    it('should remove the question mark from the search params', () => {
+      const paramsArray = urlUtils.urlParamsToArray('?test=thing');
+
+      expect(paramsArray[0][0]).not.toBe('?');
+    });
+  });
+
+  describe('urlParamsToObject', () => {
+    it('parses path for label with trailing +', () => {
+      // eslint-disable-next-line import/no-deprecated
+      expect(urlUtils.urlParamsToObject('label_name[]=label%2B', {})).toEqual({
+        label_name: ['label+'],
+      });
+    });
+
+    it('parses path for milestone with trailing +', () => {
+      // eslint-disable-next-line import/no-deprecated
+      expect(urlUtils.urlParamsToObject('milestone_title=A%2B', {})).toEqual({
+        milestone_title: 'A+',
+      });
+    });
+
+    it('parses path for search terms with spaces', () => {
+      // eslint-disable-next-line import/no-deprecated
+      expect(urlUtils.urlParamsToObject('search=two+words', {})).toEqual({
+        search: 'two words',
+      });
+    });
+  });
+
+  describe('queryToObject', () => {
+    it.each`
+      case                                                                      | query                             | options                                             | result
+      ${'converts query'}                                                       | ${'?one=1&two=2'}                 | ${undefined}                                        | ${{ one: '1', two: '2' }}
+      ${'converts query without ?'}                                             | ${'one=1&two=2'}                  | ${undefined}                                        | ${{ one: '1', two: '2' }}
+      ${'removes undefined values'}                                             | ${'?one=1&two=2&three'}           | ${undefined}                                        | ${{ one: '1', two: '2' }}
+      ${'overwrites values with same key and does not change key'}              | ${'?one[]=1&one[]=2&two=2&two=3'} | ${undefined}                                        | ${{ 'one[]': '2', two: '3' }}
+      ${'gathers values with the same array-key, strips `[]` from key'}         | ${'?one[]=1&one[]=2&two=2&two=3'} | ${{ gatherArrays: true }}                           | ${{ one: ['1', '2'], two: '3' }}
+      ${'overwrites values with the same array-key name'}                       | ${'?one=1&one[]=2&two=2&two=3'}   | ${{ gatherArrays: true }}                           | ${{ one: ['2'], two: '3' }}
+      ${'overwrites values with the same key name'}                             | ${'?one[]=1&one=2&two=2&two=3'}   | ${{ gatherArrays: true }}                           | ${{ one: '2', two: '3' }}
+      ${'ignores plus symbols'}                                                 | ${'?search=a+b'}                  | ${{ legacySpacesDecode: true }}                     | ${{ search: 'a+b' }}
+      ${'ignores plus symbols in keys'}                                         | ${'?search+term=a'}               | ${{ legacySpacesDecode: true }}                     | ${{ 'search+term': 'a' }}
+      ${'ignores plus symbols when gathering arrays'}                           | ${'?search[]=a+b'}                | ${{ gatherArrays: true, legacySpacesDecode: true }} | ${{ search: ['a+b'] }}
+      ${'replaces plus symbols with spaces'}                                    | ${'?search=a+b'}                  | ${undefined}                                        | ${{ search: 'a b' }}
+      ${'replaces plus symbols in keys with spaces'}                            | ${'?search+term=a'}               | ${undefined}                                        | ${{ 'search term': 'a' }}
+      ${'replaces plus symbols when gathering arrays'}                          | ${'?search[]=a+b'}                | ${{ gatherArrays: true }}                           | ${{ search: ['a b'] }}
+      ${'replaces plus symbols when gathering arrays for values with same key'} | ${'?search[]=a+b&search[]=c+d'}   | ${{ gatherArrays: true }}                           | ${{ search: ['a b', 'c d'] }}
+    `('$case', ({ query, options, result }) => {
+      expect(urlUtils.queryToObject(query, options)).toEqual(result);
+    });
+  });
+
+  describe('getParameterByName', () => {
+    const { getParameterByName } = urlUtils;
+
+    it('should return valid parameter', () => {
+      setWindowLocation({ search: '?scope=all&p=2' });
+
+      expect(getParameterByName('p')).toEqual('2');
+      expect(getParameterByName('scope')).toBe('all');
+    });
+
+    it('should return invalid parameter', () => {
+      setWindowLocation({ search: '?scope=all&p=2' });
+
+      expect(getParameterByName('fakeParameter')).toBe(null);
+    });
+
+    it('should return a parameter with spaces', () => {
+      setWindowLocation({ search: '?search=my terms' });
+
+      expect(getParameterByName('search')).toBe('my terms');
+    });
+
+    it('should return a parameter with encoded spaces', () => {
+      setWindowLocation({ search: '?search=my%20terms' });
+
+      expect(getParameterByName('search')).toBe('my terms');
+    });
+
+    it('should return a parameter with plus signs as spaces', () => {
+      setWindowLocation({ search: '?search=my+terms' });
+
+      expect(getParameterByName('search')).toBe('my terms');
+    });
+
+    it('should return valid parameters if search is provided', () => {
+      expect(getParameterByName('foo', 'foo=bar')).toBe('bar');
+      expect(getParameterByName('foo', '?foo=bar')).toBe('bar');
+
+      expect(getParameterByName('manan', 'foo=bar&manan=canchu')).toBe('canchu');
+      expect(getParameterByName('manan', '?foo=bar&manan=canchu')).toBe('canchu');
     });
   });
 
@@ -393,6 +768,32 @@ describe('URL utility', () => {
       const searchQueryObject = { one: '1', two: '2' };
 
       expect(urlUtils.objectToQuery(searchQueryObject)).toEqual('one=1&two=2');
+    });
+
+    it('returns empty string when `params` is undefined, null or empty string', () => {
+      expect(urlUtils.objectToQuery()).toBe('');
+      expect(urlUtils.objectToQuery('')).toBe('');
+    });
+
+    it('returns query string with values of `params`', () => {
+      const singleQueryParams = { foo: true };
+      const multipleQueryParams = { foo: true, bar: true };
+
+      expect(urlUtils.objectToQuery(singleQueryParams)).toBe('foo=true');
+      expect(urlUtils.objectToQuery(multipleQueryParams)).toBe('foo=true&bar=true');
+    });
+  });
+
+  describe('cleanLeadingSeparator', () => {
+    it.each`
+      path            | expected
+      ${'/foo/bar'}   | ${'foo/bar'}
+      ${'foo/bar'}    | ${'foo/bar'}
+      ${'//foo/bar'}  | ${'foo/bar'}
+      ${'/./foo/bar'} | ${'./foo/bar'}
+      ${''}           | ${''}
+    `('$path becomes $expected', ({ path, expected }) => {
+      expect(urlUtils.cleanLeadingSeparator(path)).toBe(expected);
     });
   });
 
@@ -417,6 +818,18 @@ describe('URL utility', () => {
       ${['///', '/', '//']}                       | ${'/'}
     `('joins paths $paths => $expected', ({ paths, expected }) => {
       expect(urlUtils.joinPaths(...paths)).toBe(expected);
+    });
+  });
+
+  describe('stripFinalUrlSegment', () => {
+    it.each`
+      path                                                        | expected
+      ${'http://fake.domain/twitter/typeahead-js/-/tags/v0.11.0'} | ${'http://fake.domain/twitter/typeahead-js/-/tags/'}
+      ${'http://fake.domain/bar/cool/-/nested/content'}           | ${'http://fake.domain/bar/cool/-/nested/'}
+      ${'http://fake.domain/bar/cool?q="search"'}                 | ${'http://fake.domain/bar/'}
+      ${'http://fake.domain/bar/cool#link-to-something'}          | ${'http://fake.domain/bar/'}
+    `('stripFinalUrlSegment $path => $expected', ({ path, expected }) => {
+      expect(urlUtils.stripFinalUrlSegment(path)).toBe(expected);
     });
   });
 
@@ -469,11 +882,49 @@ describe('URL utility', () => {
       );
     });
 
-    it('handles arrays properly', () => {
+    it('adds parameters from arrays', () => {
       const url = 'https://gitlab.com/test';
 
-      expect(urlUtils.setUrlParams({ label_name: ['foo', 'bar'] }, url)).toEqual(
-        'https://gitlab.com/test?label_name=foo&label_name=bar',
+      expect(urlUtils.setUrlParams({ labels: ['foo', 'bar'] }, url)).toEqual(
+        'https://gitlab.com/test?labels=foo&labels=bar',
+      );
+    });
+
+    it('removes parameters from empty arrays', () => {
+      const url = 'https://gitlab.com/test?labels=foo&labels=bar';
+
+      expect(urlUtils.setUrlParams({ labels: [] }, url)).toEqual('https://gitlab.com/test');
+    });
+
+    it('removes parameters from empty arrays while keeping other parameters', () => {
+      const url = 'https://gitlab.com/test?labels=foo&labels=bar&unrelated=unrelated';
+
+      expect(urlUtils.setUrlParams({ labels: [] }, url)).toEqual(
+        'https://gitlab.com/test?unrelated=unrelated',
+      );
+    });
+
+    it('adds parameters from arrays when railsArraySyntax=true', () => {
+      const url = 'https://gitlab.com/test';
+
+      expect(urlUtils.setUrlParams({ labels: ['foo', 'bar'] }, url, false, true)).toEqual(
+        'https://gitlab.com/test?labels%5B%5D=foo&labels%5B%5D=bar',
+      );
+    });
+
+    it('removes parameters from empty arrays when railsArraySyntax=true', () => {
+      const url = 'https://gitlab.com/test?labels%5B%5D=foo&labels%5B%5D=bar';
+
+      expect(urlUtils.setUrlParams({ labels: [] }, url, false, true)).toEqual(
+        'https://gitlab.com/test',
+      );
+    });
+
+    it('decodes URI when decodeURI=true', () => {
+      const url = 'https://gitlab.com/test';
+
+      expect(urlUtils.setUrlParams({ labels: ['foo', 'bar'] }, url, false, true, true)).toEqual(
+        'https://gitlab.com/test?labels[]=foo&labels[]=bar',
       );
     });
 
@@ -483,6 +934,130 @@ describe('URL utility', () => {
       expect(urlUtils.setUrlParams({ foo: 'bar' }, url, true)).toEqual(
         'https://gitlab.com/test?foo=bar',
       );
+    });
+  });
+
+  describe('getHTTPProtocol', () => {
+    const httpProtocol = 'http:';
+    const httpsProtocol = 'https:';
+
+    it.each([[httpProtocol], [httpsProtocol]])(
+      'when no url passed, returns correct protocol for %i from window location',
+      (protocol) => {
+        setWindowLocation({
+          protocol,
+        });
+        expect(urlUtils.getHTTPProtocol()).toBe(protocol.slice(0, -1));
+      },
+    );
+
+    it.each`
+      url                      | expectation
+      ${'not-a-url'}           | ${undefined}
+      ${'wss://example.com'}   | ${'wss'}
+      ${'https://foo.bar'}     | ${'https'}
+      ${'http://foo.bar'}      | ${'http'}
+      ${'http://foo.bar:8080'} | ${'http'}
+    `('returns correct protocol for $url', ({ url, expectation }) => {
+      expect(urlUtils.getHTTPProtocol(url)).toBe(expectation);
+    });
+  });
+
+  describe('stripPathTail', () => {
+    it.each`
+      path                     | expected
+      ${''}                    | ${''}
+      ${'index.html'}          | ${''}
+      ${'/'}                   | ${'/'}
+      ${'/foo/bar'}            | ${'/foo/'}
+      ${'/foo/bar/'}           | ${'/foo/bar/'}
+      ${'/foo/bar/index.html'} | ${'/foo/bar/'}
+    `('strips the filename from $path => $expected', ({ path, expected }) => {
+      expect(urlUtils.stripPathTail(path)).toBe(expected);
+    });
+  });
+
+  describe('getURLOrigin', () => {
+    it('when no url passed, returns correct origin from window location', () => {
+      const origin = 'https://foo.bar';
+
+      setWindowLocation({ origin });
+      expect(urlUtils.getURLOrigin()).toBe(origin);
+    });
+
+    it.each`
+      url                          | expectation
+      ${'not-a-url'}               | ${null}
+      ${'wss://example.com'}       | ${'wss://example.com'}
+      ${'https://foo.bar/foo/bar'} | ${'https://foo.bar'}
+    `('returns correct origin for $url', ({ url, expectation }) => {
+      expect(urlUtils.getURLOrigin(url)).toBe(expectation);
+    });
+  });
+
+  describe('encodeSaferUrl', () => {
+    it.each`
+      character | input                 | output
+      ${' '}    | ${'/url/hello 1.jpg'} | ${'/url/hello%201.jpg'}
+      ${'#'}    | ${'/url/hello#1.jpg'} | ${'/url/hello%231.jpg'}
+      ${'!'}    | ${'/url/hello!.jpg'}  | ${'/url/hello%21.jpg'}
+      ${'~'}    | ${'/url/hello~.jpg'}  | ${'/url/hello%7E.jpg'}
+      ${'*'}    | ${'/url/hello*.jpg'}  | ${'/url/hello%2A.jpg'}
+      ${"'"}    | ${"/url/hello'.jpg"}  | ${'/url/hello%27.jpg'}
+      ${'('}    | ${'/url/hello(.jpg'}  | ${'/url/hello%28.jpg'}
+      ${')'}    | ${'/url/hello).jpg'}  | ${'/url/hello%29.jpg'}
+      ${'?'}    | ${'/url/hello?.jpg'}  | ${'/url/hello%3F.jpg'}
+      ${'='}    | ${'/url/hello=.jpg'}  | ${'/url/hello%3D.jpg'}
+      ${'+'}    | ${'/url/hello+.jpg'}  | ${'/url/hello%2B.jpg'}
+      ${'&'}    | ${'/url/hello&.jpg'}  | ${'/url/hello%26.jpg'}
+    `(
+      'properly escapes `$character` characters while retaining the integrity of the URL',
+      ({ input, output }) => {
+        expect(urlUtils.encodeSaferUrl(input)).toBe(output);
+      },
+    );
+
+    it.each`
+      character | input
+      ${'/, .'} | ${'/url/hello.png'}
+      ${'\\d'}  | ${'/url/hello123.png'}
+      ${'-'}    | ${'/url/hello-123.png'}
+      ${'_'}    | ${'/url/hello_123.png'}
+    `('makes no changes to unproblematic characters ($character)', ({ input }) => {
+      expect(urlUtils.encodeSaferUrl(input)).toBe(input);
+    });
+  });
+
+  describe('isSameOriginUrl', () => {
+    // eslint-disable-next-line no-script-url
+    const javascriptUrl = 'javascript:alert(1)';
+
+    beforeEach(() => {
+      setWindowLocation({ origin: TEST_HOST });
+    });
+
+    it.each`
+      url                                | expected
+      ${TEST_HOST}                       | ${true}
+      ${`${TEST_HOST}/a/path`}           | ${true}
+      ${'//test.host/no-protocol'}       | ${true}
+      ${'/a/root/relative/path'}         | ${true}
+      ${'a/relative/path'}               | ${true}
+      ${'#hash'}                         | ${true}
+      ${'?param=foo'}                    | ${true}
+      ${''}                              | ${true}
+      ${'../../../'}                     | ${true}
+      ${`${TEST_HOST}:8080/wrong-port`}  | ${false}
+      ${'ws://test.host/wrong-protocol'} | ${false}
+      ${'http://phishing.test'}          | ${false}
+      ${'//phishing.test'}               | ${false}
+      ${'//invalid:url'}                 | ${false}
+      ${javascriptUrl}                   | ${false}
+      ${'data:,Hello%2C%20World%21'}     | ${false}
+      ${null}                            | ${false}
+      ${undefined}                       | ${false}
+    `('returns $expected given $url', ({ url, expected }) => {
+      expect(urlUtils.isSameOriginUrl(url)).toBe(expected);
     });
   });
 });

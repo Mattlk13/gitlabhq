@@ -2,6 +2,7 @@
 
 class X509Certificate < ApplicationRecord
   include X509SerialNumberAttribute
+  include AfterCommitQueue
 
   x509_serial_number_attribute :serial_number
 
@@ -25,8 +26,20 @@ class X509Certificate < ApplicationRecord
 
   validates :x509_issuer_id, presence: true
 
+  scope :by_x509_issuer, ->(issuer) { where(x509_issuer_id: issuer.id) }
+
+  after_commit :mark_commit_signatures_unverified
+
   def self.safe_create!(attributes)
     create_with(attributes)
       .safe_find_or_create_by!(subject_key_identifier: attributes[:subject_key_identifier])
+  end
+
+  def self.serial_numbers(issuer)
+    by_x509_issuer(issuer).pluck(:serial_number)
+  end
+
+  def mark_commit_signatures_unverified
+    X509CertificateRevokeWorker.perform_async(self.id) if revoked?
   end
 end

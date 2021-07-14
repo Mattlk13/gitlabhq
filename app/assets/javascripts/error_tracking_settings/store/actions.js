@@ -1,7 +1,7 @@
-import { __ } from '~/locale';
+import createFlash from '~/flash';
 import axios from '~/lib/utils/axios_utils';
 import { refreshCurrentPage } from '~/lib/utils/url_utility';
-import createFlash from '~/flash';
+import { __ } from '~/locale';
 import { transformFrontendSettings } from '../utils';
 import * as types from './mutation_types';
 
@@ -46,7 +46,9 @@ export const requestSettings = ({ commit }) => {
 export const receiveSettingsError = ({ commit }, { response = {} }) => {
   const message = response.data && response.data.message ? response.data.message : '';
 
-  createFlash(`${__('There was an error saving your changes.')} ${message}`, 'alert');
+  createFlash({
+    message: `${__('There was an error saving your changes.')} ${message}`,
+  });
   commit(types.UPDATE_SETTINGS_LOADING, false);
 };
 
@@ -63,7 +65,7 @@ export const updateSettings = ({ dispatch, state }) => {
     .then(() => {
       refreshCurrentPage();
     })
-    .catch(err => {
+    .catch((err) => {
       dispatch('receiveSettingsError', err);
     });
 };
@@ -89,6 +91,3 @@ export const updateSelectedProject = ({ commit }, selectedProject) => {
 export const setInitialState = ({ commit }, data) => {
   commit(types.SET_INITIAL_STATE, data);
 };
-
-// prevent babel-plugin-rewire from generating an invalid default during karma tests
-export default () => {};

@@ -2,7 +2,7 @@
 
 require 'spec_helper'
 
-describe Mutations::Todos::MarkAllDone do
+RSpec.describe Mutations::Todos::MarkAllDone do
   include GraphqlHelpers
 
   let_it_be(:current_user) { create(:user) }
@@ -17,27 +17,29 @@ describe Mutations::Todos::MarkAllDone do
 
   let_it_be(:user3) { create(:user) }
 
+  specify { expect(described_class).to require_graphql_authorizations(:update_user) }
+
   describe '#resolve' do
     it 'marks all pending todos as done' do
-      updated_todo_ids = mutation_for(current_user).resolve.dig(:updated_ids)
+      todos = mutation_for(current_user).resolve[:todos]
 
       expect(todo1.reload.state).to eq('done')
       expect(todo2.reload.state).to eq('done')
       expect(todo3.reload.state).to eq('done')
       expect(other_user_todo.reload.state).to eq('pending')
 
-      expect(updated_todo_ids).to contain_exactly(global_id_of(todo1), global_id_of(todo3))
+      expect(todos).to contain_exactly(todo1, todo3)
     end
 
     it 'behaves as expected if there are no todos for the requesting user' do
-      updated_todo_ids = mutation_for(user3).resolve.dig(:updated_ids)
+      todos = mutation_for(user3).resolve[:todos]
 
       expect(todo1.reload.state).to eq('pending')
       expect(todo2.reload.state).to eq('done')
       expect(todo3.reload.state).to eq('pending')
       expect(other_user_todo.reload.state).to eq('pending')
 
-      expect(updated_todo_ids).to be_empty
+      expect(todos).to be_empty
     end
 
     context 'when user is not logged in' do
@@ -48,6 +50,6 @@ describe Mutations::Todos::MarkAllDone do
   end
 
   def mutation_for(user)
-    described_class.new(object: nil, context: { current_user: user })
+    described_class.new(object: nil, context: { current_user: user }, field: nil)
   end
 end

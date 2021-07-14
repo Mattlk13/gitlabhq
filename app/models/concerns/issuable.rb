@@ -31,6 +31,7 @@ module Issuable
   TITLE_HTML_LENGTH_MAX = 800
   DESCRIPTION_LENGTH_MAX = 1.megabyte
   DESCRIPTION_HTML_LENGTH_MAX = 5.megabytes
+  SEARCHABLE_FIELDS = %w(title description).freeze
 
   STATE_ID_MAP = {
     opened: 1,
@@ -38,15 +39,6 @@ module Issuable
     merged: 3,
     locked: 4
   }.with_indifferent_access.freeze
-
-  # This object is used to gather issuable meta data for displaying
-  # upvotes, downvotes, notes and closing merge requests count for issues and merge requests
-  # lists avoiding n+1 queries and improving performance.
-  IssuableMeta = Struct.new(:upvotes, :downvotes, :user_notes_count, :mrs_count) do
-    def merge_requests_count(user = nil)
-      mrs_count
-    end
-  end
 
   included do
     cache_markdown_field :title, pipeline: :single_line
@@ -70,11 +62,13 @@ module Issuable
       end
     end
 
-    has_many :label_links, as: :target, dependent: :destroy, inverse_of: :target # rubocop:disable Cop/ActiveRecordDependent
-    has_many :labels, through: :label_links
-    has_many :todos, as: :target, dependent: :destroy # rubocop:disable Cop/ActiveRecordDependent
+    has_many :note_authors, -> { distinct }, through: :notes, source: :author
 
-    has_one :metrics
+    has_many :label_links, as: :target, inverse_of: :target
+    has_many :labels, through: :label_links
+    has_many :todos, as: :target
+
+    has_one :metrics, inverse_of: model_name.singular.to_sym, autosave: true
 
     delegate :name,
              :email,
@@ -91,9 +85,9 @@ module Issuable
     validate :description_max_length_for_new_records_is_valid, on: :update
 
     before_validation :truncate_description_on_import!
-    after_save :store_mentions!, if: :any_mentionable_attributes_changed?
 
     scope :authored, ->(user) { where(author_id: user) }
+    scope :not_authored, ->(user) { where.not(author_id: user) }
     scope :recent, -> { reorder(id: :desc) }
     scope :of_projects, ->(ids) { where(project_id: ids) }
     scope :opened, -> { with_state(:opened) }
@@ -108,19 +102,48 @@ module Issuable
     scope :unassigned, -> do
       where("NOT EXISTS (SELECT TRUE FROM #{to_ability_name}_assignees WHERE #{to_ability_name}_id = #{to_ability_name}s.id)")
     end
-    scope :assigned_to, ->(u) do
-      assignees_table = Arel::Table.new("#{to_ability_name}_assignees")
-      sql = assignees_table.project('true').where(assignees_table[:user_id].in(u)).where(Arel::Nodes::SqlLiteral.new("#{to_ability_name}_id = #{to_ability_name}s.id"))
-      where("EXISTS (#{sql.to_sql})")
+    scope :assigned_to, ->(users) do
+      assignees_class = self.reflect_on_association("#{to_ability_name}_assignees").klass
+
+      condition = assignees_class.where(user_id: users).where(Arel.sql("#{to_ability_name}_id = #{to_ability_name}s.id"))
+      where(condition.arel.exists)
+    end
+    scope :not_assigned_to, ->(users) do
+      assignees_class = self.reflect_on_association("#{to_ability_name}_assignees").klass
+
+      condition = assignees_class.where(user_id: users).where(Arel.sql("#{to_ability_name}_id = #{to_ability_name}s.id"))
+      where(condition.arel.exists.not)
     end
     # rubocop:enable GitlabSecurity/SqlInjection
 
+    scope :without_particular_labels, ->(label_names) do
+      labels_table = Label.arel_table
+      label_links_table = LabelLink.arel_table
+      issuables_table = klass.arel_table
+      inner_query = label_links_table.project('true')
+                        .join(labels_table, Arel::Nodes::InnerJoin).on(labels_table[:id].eq(label_links_table[:label_id]))
+                        .where(label_links_table[:target_type].eq(name)
+                                   .and(label_links_table[:target_id].eq(issuables_table[:id]))
+                                   .and(labels_table[:title].in(label_names)))
+                        .exists.not
+
+      where(inner_query)
+    end
+
     scope :without_label, -> { joins("LEFT OUTER JOIN label_links ON label_links.target_type = '#{name}' AND label_links.target_id = #{table_name}.id").where(label_links: { id: nil }) }
-    scope :any_label, -> { joins(:label_links).group(:id) }
+    scope :with_label_ids, ->(label_ids) { joins(:label_links).where(label_links: { label_id: label_ids }) }
     scope :join_project, -> { joins(:project) }
     scope :inc_notes_with_associations, -> { includes(notes: [:project, :author, :award_emoji]) }
     scope :references_project, -> { references(:project) }
     scope :non_archived, -> { join_project.where(projects: { archived: false }) }
+
+    scope :includes_for_bulk_update, -> do
+      associations = %i[author assignees epic group labels metrics project source_project target_project].select do |association|
+        reflect_on_association(association)
+      end
+
+      includes(*associations)
+    end
 
     attr_mentionable :title, pipeline: :single_line
     attr_mentionable :description
@@ -131,8 +154,21 @@ module Issuable
 
     strip_attributes :title
 
-    def self.locking_enabled?
-      false
+    class << self
+      def labels_hash
+        issue_labels = Hash.new { |h, k| h[k] = [] }
+
+        relation = unscoped.where(id: self.select(:id)).eager_load(:labels)
+        relation.pluck(:id, 'labels.title').each do |issue_id, label|
+          issue_labels[issue_id] << label if label.present?
+        end
+
+        issue_labels
+      end
+
+      def locking_enabled?
+        false
+      end
     end
 
     # We want to use optimistic lock for cases when only title or description are involved
@@ -149,6 +185,36 @@ module Issuable
       assignees.count > 1
     end
 
+    def allows_reviewers?
+      false
+    end
+
+    def supports_time_tracking?
+      is_a?(TimeTrackable)
+    end
+
+    def supports_severity?
+      incident?
+    end
+
+    def incident?
+      is_a?(Issue) && super
+    end
+
+    def supports_issue_type?
+      is_a?(Issue)
+    end
+
+    def supports_assignee?
+      false
+    end
+
+    def severity
+      return IssuableSeverity::DEFAULT unless supports_severity?
+
+      issuable_severity&.severity || IssuableSeverity::DEFAULT
+    end
+
     private
 
     def description_max_length_for_new_records_is_valid
@@ -163,9 +229,13 @@ module Issuable
   end
 
   class_methods do
+    def participant_includes
+      [:assignees, :author, { notes: [:author, :award_emoji] }]
+    end
+
     # Searches for records with a matching title.
     #
-    # This method uses ILIKE on PostgreSQL and LIKE on MySQL.
+    # This method uses ILIKE on PostgreSQL.
     #
     # query - The search query as a String
     #
@@ -189,21 +259,22 @@ module Issuable
 
     # Searches for records with a matching title or description.
     #
-    # This method uses ILIKE on PostgreSQL and LIKE on MySQL.
+    # This method uses ILIKE on PostgreSQL.
     #
     # query - The search query as a String
     # matched_columns - Modify the scope of the query. 'title', 'description' or joining them with a comma.
     #
     # Returns an ActiveRecord::Relation.
-    def full_search(query, matched_columns: 'title,description', use_minimum_char_limit: true)
-      allowed_columns = [:title, :description]
-      matched_columns = matched_columns.to_s.split(',').map(&:to_sym)
-      matched_columns &= allowed_columns
+    def full_search(query, matched_columns: nil, use_minimum_char_limit: true)
+      if matched_columns
+        matched_columns = matched_columns.to_s.split(',')
+        matched_columns &= SEARCHABLE_FIELDS
+        matched_columns.map!(&:to_sym)
+      end
 
-      # Matching title or description if the matched_columns did not contain any allowed columns.
-      matched_columns = [:title, :description] if matched_columns.empty?
+      search_columns = matched_columns.presence || [:title, :description]
 
-      fuzzy_search(query, matched_columns, use_minimum_char_limit: use_minimum_char_limit)
+      fuzzy_search(query, search_columns, use_minimum_char_limit: use_minimum_char_limit)
     end
 
     def simple_sorts
@@ -251,31 +322,41 @@ module Issuable
     end
 
     def order_labels_priority(direction = 'ASC', excluded_labels: [], extra_select_columns: [], with_cte: false)
-      params = {
+      highest_priority = highest_label_priority(
         target_type: name,
         target_column: "#{table_name}.id",
         project_column: "#{table_name}.#{project_foreign_key}",
         excluded_labels: excluded_labels
-      }
+      ).to_sql
 
-      highest_priority = highest_label_priority(params).to_sql
+      # When using CTE make sure to select the same columns that are on the group_by clause.
+      # This prevents errors when ignored columns are present in the database.
+      issuable_columns = with_cte ? issue_grouping_columns(use_cte: with_cte) : "#{table_name}.*"
+      group_columns = issue_grouping_columns(use_cte: with_cte) + ["highest_priorities.label_priority"]
 
-      select_columns = [
-        "#{table_name}.*",
-        "(#{highest_priority}) AS highest_priority"
-      ] + extra_select_columns
+      extra_select_columns.unshift("highest_priorities.label_priority as highest_priority")
 
-      select(select_columns.join(', '))
-        .group(issue_grouping_columns(use_cte: with_cte))
+      select(issuable_columns)
+        .select(extra_select_columns)
+        .from("#{table_name}")
+        .joins("JOIN LATERAL(#{highest_priority}) as highest_priorities ON TRUE")
+        .group(group_columns)
         .reorder(Gitlab::Database.nulls_last_order('highest_priority', direction))
     end
 
-    def with_label(title, sort = nil, not_query: false)
-      multiple_labels = title.is_a?(Array) && title.size > 1
-      if multiple_labels && !not_query
+    def with_label(title, sort = nil)
+      if title.is_a?(Array) && title.size > 1
         joins(:labels).where(labels: { title: title }).group(*grouping_columns(sort)).having("COUNT(DISTINCT labels.title) = #{title.size}")
       else
         joins(:labels).where(labels: { title: title })
+      end
+    end
+
+    def any_label(sort = nil)
+      if sort
+        joins(:label_links).group(*grouping_columns(sort))
+      else
+        joins(:label_links).distinct
       end
     end
 
@@ -284,12 +365,15 @@ module Issuable
     #
     # Returns an array of arel columns
     def grouping_columns(sort)
+      sort = sort.to_s
       grouping_columns = [arel_table[:id]]
 
       if %w(milestone_due_desc milestone_due_asc milestone).include?(sort)
         milestone_table = Milestone.arel_table
         grouping_columns << milestone_table[:id]
         grouping_columns << milestone_table[:due_date]
+      elsif %w(merged_at_desc merged_at_asc).include?(sort)
+        grouping_columns << MergeRequest::Metrics.arel_table[:merged_at]
       end
 
       grouping_columns
@@ -301,9 +385,9 @@ module Issuable
     # Returns an array of arel columns
     def issue_grouping_columns(use_cte: false)
       if use_cte
-        [arel_table[:state]] + attribute_names.map { |attr| arel_table[attr.to_sym] }
+        attribute_names.map { |attr| arel_table[attr.to_sym] }
       else
-        arel_table[:id]
+        [arel_table[:id]]
       end
     end
 
@@ -336,8 +420,12 @@ module Issuable
     Date.today == created_at.to_date
   end
 
+  def created_hours_ago
+    (Time.now.utc.to_i - created_at.utc.to_i) / 3600
+  end
+
   def new?
-    today? && created_at == updated_at
+    created_hours_ago < 24
   end
 
   def open?
@@ -361,15 +449,20 @@ module Issuable
   end
 
   def subscribed_without_subscriptions?(user, project)
-    participants(user).include?(user)
+    participant?(user)
+  end
+
+  def can_assign_epic?(user)
+    false
   end
 
   def to_hook_data(user, old_associations: {})
     changes = previous_changes
 
     if old_associations
-      old_labels = old_associations.fetch(:labels, [])
-      old_assignees = old_associations.fetch(:assignees, [])
+      old_labels = old_associations.fetch(:labels, labels)
+      old_assignees = old_associations.fetch(:assignees, assignees)
+      old_severity = old_associations.fetch(:severity, severity)
 
       if old_labels != labels
         changes[:labels] = [old_labels.map(&:hook_attrs), labels.map(&:hook_attrs)]
@@ -379,11 +472,17 @@ module Issuable
         changes[:assignees] = [old_assignees.map(&:hook_attrs), assignees.map(&:hook_attrs)]
       end
 
+      if supports_severity? && old_severity != severity
+        changes[:severity] = [old_severity, severity]
+      end
+
       if self.respond_to?(:total_time_spent)
-        old_total_time_spent = old_associations.fetch(:total_time_spent, nil)
+        old_total_time_spent = old_associations.fetch(:total_time_spent, total_time_spent)
+        old_time_change = old_associations.fetch(:time_change, time_change)
 
         if old_total_time_spent != total_time_spent
           changes[:total_time_spent] = [old_total_time_spent, total_time_spent]
+          changes[:time_change] = [old_time_change, time_change]
         end
       end
     end
@@ -476,5 +575,4 @@ module Issuable
   end
 end
 
-Issuable.prepend_if_ee('EE::Issuable') # rubocop: disable Cop/InjectEnterpriseEditionModule
-Issuable::ClassMethods.prepend_if_ee('EE::Issuable::ClassMethods')
+Issuable.prepend_mod_with('Issuable')

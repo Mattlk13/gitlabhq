@@ -1,9 +1,8 @@
 # frozen_string_literal: true
 
 require 'fast_spec_helper'
-require 'rspec-parameterized'
 
-describe Gitlab::SidekiqConfig::CliMethods do
+RSpec.describe Gitlab::SidekiqConfig::CliMethods do
   let(:dummy_root) { '/tmp/' }
 
   describe '.worker_queues' do
@@ -54,14 +53,6 @@ describe Gitlab::SidekiqConfig::CliMethods do
         end
       end
 
-      context 'when the file contains an array of strings' do
-        before do
-          stub_contents(['queue_a'], ['queue_b'])
-        end
-
-        include_examples 'valid file contents'
-      end
-
       context 'when the file contains an array of hashes' do
         before do
           stub_contents([{ name: 'queue_a' }], [{ name: 'queue_b' }])
@@ -84,7 +75,12 @@ describe Gitlab::SidekiqConfig::CliMethods do
 
   describe '.expand_queues' do
     let(:worker_queues) do
-      ['cronjob:stuck_import_jobs', 'cronjob:stuck_merge_jobs', 'post_receive']
+      [
+        'cronjob:import_stuck_project_import_jobs',
+        'cronjob:jira_import_stuck_jira_import_jobs',
+        'cronjob:stuck_merge_jobs',
+        'post_receive'
+      ]
     end
 
     it 'defaults the value of the second argument to .worker_queues' do
@@ -96,12 +92,22 @@ describe Gitlab::SidekiqConfig::CliMethods do
       allow(described_class).to receive(:worker_queues).and_return(worker_queues)
 
       expect(described_class.expand_queues(['cronjob']))
-        .to contain_exactly('cronjob', 'cronjob:stuck_import_jobs', 'cronjob:stuck_merge_jobs')
+        .to contain_exactly(
+          'cronjob',
+          'cronjob:import_stuck_project_import_jobs',
+          'cronjob:jira_import_stuck_jira_import_jobs',
+          'cronjob:stuck_merge_jobs'
+        )
     end
 
     it 'expands queue namespaces to concrete queue names' do
       expect(described_class.expand_queues(['cronjob'], worker_queues))
-        .to contain_exactly('cronjob', 'cronjob:stuck_import_jobs', 'cronjob:stuck_merge_jobs')
+        .to contain_exactly(
+          'cronjob',
+          'cronjob:import_stuck_project_import_jobs',
+          'cronjob:jira_import_stuck_jira_import_jobs',
+          'cronjob:stuck_merge_jobs'
+        )
     end
 
     it 'lets concrete queue names pass through' do
@@ -115,103 +121,54 @@ describe Gitlab::SidekiqConfig::CliMethods do
     end
   end
 
-  describe '.query_workers' do
-    using RSpec::Parameterized::TableSyntax
-
-    let(:queues) do
+  describe '.query_queues' do
+    let(:worker_metadatas) do
       [
         {
           name: 'a',
           feature_category: :category_a,
           has_external_dependencies: false,
-          latency_sensitive: false,
-          resource_boundary: :cpu
+          urgency: :low,
+          resource_boundary: :cpu,
+          tags: [:no_disk_io, :git_access]
         },
         {
           name: 'a:2',
           feature_category: :category_a,
           has_external_dependencies: false,
-          latency_sensitive: true,
-          resource_boundary: :none
+          urgency: :high,
+          resource_boundary: :none,
+          tags: [:git_access]
         },
         {
           name: 'b',
           feature_category: :category_b,
           has_external_dependencies: true,
-          latency_sensitive: true,
-          resource_boundary: :memory
+          urgency: :high,
+          resource_boundary: :memory,
+          tags: [:no_disk_io]
         },
         {
           name: 'c',
           feature_category: :category_c,
           has_external_dependencies: false,
-          latency_sensitive: false,
-          resource_boundary: :memory
+          urgency: :throttled,
+          resource_boundary: :memory,
+          tags: []
         }
       ]
     end
 
-    context 'with valid input' do
-      where(:query, :selected_queues) do
-        # feature_category
-        'feature_category=category_a' | %w(a a:2)
-        'feature_category=category_a,category_c' | %w(a a:2 c)
-        'feature_category=category_a|feature_category=category_c' | %w(a a:2 c)
-        'feature_category!=category_a' | %w(b c)
+    let(:worker_matcher) { double(:WorkerMatcher) }
+    let(:query) { 'feature_category=category_a,category_c' }
 
-        # has_external_dependencies
-        'has_external_dependencies=true' | %w(b)
-        'has_external_dependencies=false' | %w(a a:2 c)
-        'has_external_dependencies=true,false' | %w(a a:2 b c)
-        'has_external_dependencies=true|has_external_dependencies=false' | %w(a a:2 b c)
-        'has_external_dependencies!=true' | %w(a a:2 c)
-
-        # latency_sensitive
-        'latency_sensitive=true' | %w(a:2 b)
-        'latency_sensitive=false' | %w(a c)
-        'latency_sensitive=true,false' | %w(a a:2 b c)
-        'latency_sensitive=true|latency_sensitive=false' | %w(a a:2 b c)
-        'latency_sensitive!=true' | %w(a c)
-
-        # name
-        'name=a' | %w(a)
-        'name=a,b' | %w(a b)
-        'name=a,a:2|name=b' | %w(a a:2 b)
-        'name!=a,a:2' | %w(b c)
-
-        # resource_boundary
-        'resource_boundary=memory' | %w(b c)
-        'resource_boundary=memory,cpu' | %w(a b c)
-        'resource_boundary=memory|resource_boundary=cpu' | %w(a b c)
-        'resource_boundary!=memory,cpu' | %w(a:2)
-
-        # combinations
-        'feature_category=category_a&latency_sensitive=true' | %w(a:2)
-        'feature_category=category_a&latency_sensitive=true|feature_category=category_c' | %w(a:2 c)
-      end
-
-      with_them do
-        it do
-          expect(described_class.query_workers(query, queues))
-            .to match_array(selected_queues)
-        end
-      end
+    before do
+      allow(::Gitlab::SidekiqConfig::WorkerMatcher).to receive(:new).with(query).and_return(worker_matcher)
+      allow(worker_matcher).to receive(:match?).and_return(true, true, false, true)
     end
 
-    context 'with invalid input' do
-      where(:query, :error) do
-        'feature_category="category_a"' | described_class::InvalidTerm
-        'feature_category=' | described_class::InvalidTerm
-        'feature_category~category_a' | described_class::InvalidTerm
-        'worker_name=a' | described_class::UnknownPredicate
-      end
-
-      with_them do
-        it do
-          expect { described_class.query_workers(query, queues) }
-            .to raise_error(error)
-        end
-      end
+    it 'returns the queue names of matched workers' do
+      expect(described_class.query_queues(query, worker_metadatas)).to match(%w(a a:2 c))
     end
   end
 end

@@ -2,7 +2,7 @@
 
 require 'spec_helper'
 
-describe 'Issue notes polling', :js do
+RSpec.describe 'Issue notes polling', :js do
   include NoteInteractionHelpers
 
   let(:project) { create(:project, :public) }
@@ -103,7 +103,7 @@ describe 'Issue notes polling', :js do
   end
 
   def update_note(note, new_text)
-    note.update(note: new_text)
+    note.update!(note: new_text)
     wait_for_requests
   end
 

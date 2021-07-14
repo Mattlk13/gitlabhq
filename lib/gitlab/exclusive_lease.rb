@@ -12,14 +12,17 @@ module Gitlab
   # ExclusiveLease.
   #
   class ExclusiveLease
-    LUA_CANCEL_SCRIPT = <<~EOS.freeze
+    PREFIX = 'gitlab:exclusive_lease'
+    NoKey = Class.new(ArgumentError)
+
+    LUA_CANCEL_SCRIPT = <<~EOS
       local key, uuid = KEYS[1], ARGV[1]
       if redis.call("get", key) == uuid then
         redis.call("del", key)
       end
     EOS
 
-    LUA_RENEW_SCRIPT = <<~EOS.freeze
+    LUA_RENEW_SCRIPT = <<~EOS
       local key, uuid, ttl = KEYS[1], ARGV[1], ARGV[2]
       if redis.call("get", key) == uuid then
         redis.call("expire", key, ttl)
@@ -33,14 +36,44 @@ module Gitlab
       end
     end
 
+    # yield to the {block} at most {count} times per {period}
+    #
+    # Defaults to once per hour.
+    #
+    # For example:
+    #
+    #   # toot the train horn at most every 20min:
+    #   throttle(locomotive.id, count: 3, period: 1.hour) { toot_train_horn }
+    #   # Brake suddenly at most once every minute:
+    #   throttle(locomotive.id, period: 1.minute) { brake_suddenly }
+    #   # Specify a uniqueness group:
+    #   throttle(locomotive.id, group: :locomotive_brake) { brake_suddenly }
+    #
+    # If a group is not specified, each block will get a separate group to itself.
+    def self.throttle(key, group: nil, period: 1.hour, count: 1, &block)
+      group ||= block.source_location.join(':')
+
+      return if new("el:throttle:#{group}:#{key}", timeout: period.to_i / count).waiting?
+
+      yield
+    end
+
     def self.cancel(key, uuid)
+      return unless key.present?
+
       Gitlab::Redis::SharedState.with do |redis|
-        redis.eval(LUA_CANCEL_SCRIPT, keys: [redis_shared_state_key(key)], argv: [uuid])
+        redis.eval(LUA_CANCEL_SCRIPT, keys: [ensure_prefixed_key(key)], argv: [uuid])
       end
     end
 
     def self.redis_shared_state_key(key)
-      "gitlab:exclusive_lease:#{key}"
+      "#{PREFIX}:#{key}"
+    end
+
+    def self.ensure_prefixed_key(key)
+      raise NoKey unless key.present?
+
+      key.start_with?(PREFIX) ? key : redis_shared_state_key(key)
     end
 
     # Removes any existing exclusive_lease from redis
@@ -68,6 +101,11 @@ module Gitlab
       end
     end
 
+    # This lease is waiting to obtain
+    def waiting?
+      !try_obtain
+    end
+
     # Try to renew an existing lease. Return lease UUID on success,
     # false if the lease is taken by a different UUID or inexistent.
     def renew
@@ -91,10 +129,15 @@ module Gitlab
       Gitlab::Redis::SharedState.with do |redis|
         ttl = redis.ttl(@redis_shared_state_key)
 
-        ttl if ttl.positive?
+        ttl if ttl > 0
       end
+    end
+
+    # Gives up this lease, allowing it to be obtained by others.
+    def cancel
+      self.class.cancel(@redis_shared_state_key, @uuid)
     end
   end
 end
 
-Gitlab::ExclusiveLease.prepend_if_ee('EE::Gitlab::ExclusiveLease')
+Gitlab::ExclusiveLease.prepend_mod_with('Gitlab::ExclusiveLease')

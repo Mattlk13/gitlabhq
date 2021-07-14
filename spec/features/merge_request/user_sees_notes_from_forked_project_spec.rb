@@ -2,7 +2,7 @@
 
 require 'spec_helper'
 
-describe 'Merge request > User sees notes from forked project', :js do
+RSpec.describe 'Merge request > User sees notes from forked project', :js do
   include ProjectForksHelper
 
   let(:project) { create(:project, :public, :repository) }
@@ -27,8 +27,9 @@ describe 'Merge request > User sees notes from forked project', :js do
     expect(page).to have_content('A commit comment')
 
     page.within('.discussion-notes') do
-      find('.btn-text-field').click
-      find('#note_note').send_keys('A reply comment')
+      find_field('Reply…').click
+      scroll_to(find_field('note[note]', visible: false))
+      fill_in 'note[note]', with: 'A reply comment'
       find('.js-comment-button').click
     end
 

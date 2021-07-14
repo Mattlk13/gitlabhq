@@ -3,13 +3,13 @@
 module Environments
   class AutoStopCronWorker # rubocop:disable Scalability/IdempotentWorker
     include ApplicationWorker
+
+    sidekiq_options retry: 3
     include CronjobQueue # rubocop:disable Scalability/CronWorkerContext
 
     feature_category :continuous_delivery
 
     def perform
-      return unless Feature.enabled?(:auto_stop_environments, default_enabled: true)
-
       AutoStopService.new.execute
     end
   end

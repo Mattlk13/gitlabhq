@@ -38,9 +38,9 @@ module CycleAnalyticsParams
   end
 
   def to_utc_time(field)
-    date = field.is_a?(Date) ? field : Date.parse(field)
+    date = field.is_a?(Date) || field.is_a?(Time) ? field : Date.parse(field)
     date.to_time.utc
   end
 end
 
-CycleAnalyticsParams.prepend_if_ee('EE::CycleAnalyticsParams')
+CycleAnalyticsParams.prepend_mod_with('CycleAnalyticsParams')

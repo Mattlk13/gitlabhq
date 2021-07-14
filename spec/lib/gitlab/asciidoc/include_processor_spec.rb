@@ -3,7 +3,7 @@
 require 'spec_helper'
 require 'nokogiri'
 
-describe Gitlab::Asciidoc::IncludeProcessor do
+RSpec.describe Gitlab::Asciidoc::IncludeProcessor do
   let_it_be(:project) { create(:project, :repository) }
 
   let(:processor_context) do
@@ -13,6 +13,7 @@ describe Gitlab::Asciidoc::IncludeProcessor do
       ref: ref
     }
   end
+
   let(:ref) { project.repository.root_ref }
   let(:max_includes) { 10 }
 
@@ -35,7 +36,7 @@ describe Gitlab::Asciidoc::IncludeProcessor do
       expect(processor.send(:include_allowed?, 'foo.adoc', reader)).to be_truthy
     end
 
-    it 'allows the Nth + 1 include' do
+    it 'allows the Nth include' do
       (max_includes - 1).times { processor.send(:read_blob, ref, 'a.adoc') }
 
       expect(processor.send(:include_allowed?, 'foo.adoc', reader)).to be_truthy

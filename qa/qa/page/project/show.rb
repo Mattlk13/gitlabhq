@@ -4,8 +4,15 @@ module QA
   module Page
     module Project
       class Show < Page::Base
+        include Layout::Flash
         include Page::Component::ClonePanel
+        include Page::Component::Breadcrumbs
         include Page::Project::SubMenus::Settings
+        include Page::File::Shared::CommitMessage
+
+        view 'app/assets/javascripts/repository/components/preview/index.vue' do
+          element :blob_viewer_content
+        end
 
         view 'app/assets/javascripts/repository/components/table/row.vue' do
           element :file_name_link
@@ -15,9 +22,12 @@ module QA
           element :file_tree_table
         end
 
-        view 'app/views/layouts/header/_new_dropdown.haml' do
+        view 'app/views/layouts/header/_new_dropdown.html.haml' do
           element :new_menu_toggle
-          element :new_issue_link, "link_to _('New issue'), new_project_issue_path(@project)" # rubocop:disable QA/ElementWithPattern
+        end
+
+        view 'app/helpers/nav/new_dropdown_helper.rb' do
+          element :new_issue_link
         end
 
         view 'app/views/projects/_last_push.html.haml' do
@@ -27,6 +37,7 @@ module QA
         view 'app/views/projects/_home_panel.html.haml' do
           element :forked_from_link
           element :project_name_content
+          element :project_id_content
         end
 
         view 'app/views/projects/_files.html.haml' do
@@ -46,9 +57,12 @@ module QA
           element :quick_actions
         end
 
-        view 'app/views/projects/tree/_tree_header.html.haml' do
+        view 'app/assets/javascripts/repository/components/breadcrumbs.vue' do
           element :add_to_tree
           element :new_file_option
+        end
+
+        view 'app/assets/javascripts/vue_shared/components/web_ide_link.vue' do
           element :web_ide_button
         end
 
@@ -90,11 +104,13 @@ module QA
 
         def click_file(filename)
           within_element(:file_tree_table) do
-            click_on filename
+            click_element(:file_name_link, text: filename)
           end
         end
 
         def click_commit(commit_msg)
+          wait_for_requests
+
           within_element(:file_tree_table) do
             click_on commit_msg
           end
@@ -102,7 +118,7 @@ module QA
 
         def go_to_new_issue
           click_element :new_menu_toggle
-          click_link 'New issue'
+          click_element(:new_issue_link)
         end
 
         def has_file?(name)
@@ -111,12 +127,18 @@ module QA
           end
         end
 
+        def has_no_file?(name)
+          within_element(:file_tree_table) do
+            has_no_element?(:file_name_link, text: name)
+          end
+        end
+
         def has_name?(name)
           has_element?(:project_name_content, text: name)
         end
 
-        def last_commit_content
-          find_element(:commit_content).text
+        def has_readme_content?(text)
+          has_element?(:blob_viewer_content, text: text)
         end
 
         def new_merge_request
@@ -128,11 +150,19 @@ module QA
         end
 
         def open_web_ide!
-          click_element :web_ide_button
+          click_element(:web_ide_button)
+        end
+
+        def has_edit_fork_button?
+          has_element?(:web_ide_button, text: 'Edit fork in Web IDE')
         end
 
         def project_name
           find_element(:project_name_content).text
+        end
+
+        def project_id
+          find_element(:project_id_content).text.delete('Project ID: ')
         end
 
         def switch_to_branch(branch_name)
@@ -153,4 +183,4 @@ module QA
   end
 end
 
-QA::Page::Project::Show.prepend_if_ee('QA::EE::Page::Project::Show')
+QA::Page::Project::Show.prepend_mod_with('Page::Project::Show', namespace: QA)

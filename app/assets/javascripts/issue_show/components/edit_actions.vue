@@ -1,15 +1,25 @@
 <script>
-/* eslint-disable @gitlab/vue-i18n/no-bare-strings */
+import { GlButton, GlModal, GlModalDirective } from '@gitlab/ui';
+import { uniqueId } from 'lodash';
 import { __, sprintf } from '~/locale';
-import updateMixin from '../mixins/update';
 import eventHub from '../event_hub';
+import updateMixin from '../mixins/update';
+import getIssueStateQuery from '../queries/get_issue_state.query.graphql';
 
 const issuableTypes = {
   issue: __('Issue'),
   epic: __('Epic'),
+  incident: __('Incident'),
 };
 
 export default {
+  components: {
+    GlButton,
+    GlModal,
+  },
+  directives: {
+    GlModal: GlModalDirective,
+  },
   mixins: [updateMixin],
   props: {
     canDestroy: {
@@ -33,14 +43,56 @@ export default {
   data() {
     return {
       deleteLoading: false,
+      skipApollo: false,
+      issueState: {},
+      modalId: uniqueId('delete-issuable-modal-'),
     };
   },
+  apollo: {
+    issueState: {
+      query: getIssueStateQuery,
+      skip() {
+        return this.skipApollo;
+      },
+      result() {
+        this.skipApollo = true;
+      },
+    },
+  },
   computed: {
+    deleteIssuableButtonText() {
+      return sprintf(__('Delete %{issuableType}'), {
+        issuableType: this.typeToShow.toLowerCase(),
+      });
+    },
+    deleteIssuableModalText() {
+      return this.issuableType === 'epic'
+        ? __('Delete this epic and all descendants?')
+        : sprintf(__('%{issuableType} will be removed! Are you sure?'), {
+            issuableType: this.typeToShow,
+          });
+    },
     isSubmitEnabled() {
       return this.formState.title.trim() !== '';
     },
+    modalActionProps() {
+      return {
+        primary: {
+          text: this.deleteIssuableButtonText,
+          attributes: [{ variant: 'danger' }, { loading: this.deleteLoading }],
+        },
+        cancel: {
+          text: __('Cancel'),
+        },
+      };
+    },
     shouldShowDeleteButton() {
       return this.canDestroy && this.showDeleteButton;
+    },
+    typeToShow() {
+      const { issueState, issuableType } = this;
+      const type = issueState.issueType ?? issuableType;
+      return issuableTypes[type];
     },
   },
   methods: {
@@ -48,44 +100,57 @@ export default {
       eventHub.$emit('close.form');
     },
     deleteIssuable() {
-      const confirmMessage = sprintf(__('%{issuableType} will be removed! Are you sure?'), {
-        issuableType: issuableTypes[this.issuableType],
-      });
-      // eslint-disable-next-line no-alert
-      if (window.confirm(confirmMessage)) {
-        this.deleteLoading = true;
-
-        eventHub.$emit('delete.issuable', { destroy_confirm: true });
-      }
+      this.deleteLoading = true;
+      eventHub.$emit('delete.issuable', { destroy_confirm: true });
     },
   },
 };
 </script>
 
 <template>
-  <div class="prepend-top-default append-bottom-default clearfix">
-    <button
-      :class="{ disabled: formState.updateLoading || !isSubmitEnabled }"
-      :disabled="formState.updateLoading || !isSubmitEnabled"
-      class="btn btn-success float-left qa-save-button"
-      type="submit"
-      @click.prevent="updateIssuable"
-    >
-      Save changes
-      <i v-if="formState.updateLoading" class="fa fa-spinner fa-spin" aria-hidden="true"> </i>
-    </button>
-    <button class="btn btn-default float-right" type="button" @click="closeForm">
-      {{ __('Cancel') }}
-    </button>
-    <button
-      v-if="shouldShowDeleteButton"
-      :class="{ disabled: deleteLoading }"
-      :disabled="deleteLoading"
-      class="btn btn-danger float-right append-right-default qa-delete-button"
-      type="button"
-      @click="deleteIssuable"
-    >
-      Delete <i v-if="deleteLoading" class="fa fa-spinner fa-spin" aria-hidden="true"> </i>
-    </button>
+  <div class="gl-mt-3 gl-mb-3 gl-display-flex gl-justify-content-space-between">
+    <div>
+      <gl-button
+        :loading="formState.updateLoading"
+        :disabled="formState.updateLoading || !isSubmitEnabled"
+        category="primary"
+        variant="confirm"
+        class="qa-save-button gl-mr-3"
+        data-testid="issuable-save-button"
+        type="submit"
+        @click.prevent="updateIssuable"
+      >
+        {{ __('Save changes') }}
+      </gl-button>
+      <gl-button data-testid="issuable-cancel-button" @click="closeForm">
+        {{ __('Cancel') }}
+      </gl-button>
+    </div>
+    <div v-if="shouldShowDeleteButton">
+      <gl-button
+        v-gl-modal="modalId"
+        :loading="deleteLoading"
+        :disabled="deleteLoading"
+        category="secondary"
+        variant="danger"
+        class="qa-delete-button"
+        data-testid="issuable-delete-button"
+      >
+        {{ deleteIssuableButtonText }}
+      </gl-button>
+      <gl-modal
+        ref="removeModal"
+        :modal-id="modalId"
+        size="sm"
+        :action-primary="modalActionProps.primary"
+        :action-cancel="modalActionProps.cancel"
+        @primary="deleteIssuable"
+      >
+        <template #modal-title>{{ deleteIssuableButtonText }}</template>
+        <div>
+          <p class="gl-mb-1">{{ deleteIssuableModalText }}</p>
+        </div>
+      </gl-modal>
+    </div>
   </div>
 </template>

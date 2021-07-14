@@ -1,6 +1,13 @@
-# Resource label events API
+---
+stage: Manage
+group: Compliance
+info: To determine the technical writer assigned to the Stage/Group associated with this page, see https://about.gitlab.com/handbook/engineering/ux/technical-writing/#assignments
+---
 
-Resource label events keep track about who, when, and which label was added to, or removed from, an issuable.
+# Resource label events API **(FREE)**
+
+Resource label events keep track about who, when, and which label was added to (or removed from)
+an issue, merge request, or epic.
 
 ## Issues
 
@@ -14,7 +21,7 @@ GET /projects/:id/issues/:issue_iid/resource_label_events
 
 | Attribute           | Type             | Required   | Description  |
 | ------------------- | ---------------- | ---------- | ------------ |
-| `id`                | integer/string   | yes        | The ID or [URL-encoded path of the project](README.md#namespaced-path-encoding) |
+| `id`                | integer/string   | yes        | The ID or [URL-encoded path of the project](index.md#namespaced-path-encoding) |
 | `issue_iid`         | integer          | yes        | The IID of an issue |
 
 ```json
@@ -65,7 +72,7 @@ GET /projects/:id/issues/:issue_iid/resource_label_events
 ```
 
 ```shell
-curl --header "PRIVATE-TOKEN: <your_access_token>" https://gitlab.example.com/api/v4/projects/5/issues/11/resource_label_events
+curl --header "PRIVATE-TOKEN: <your_access_token>" "https://gitlab.example.com/api/v4/projects/5/issues/11/resource_label_events"
 ```
 
 ### Get single issue label event
@@ -80,12 +87,12 @@ Parameters:
 
 | Attribute       | Type           | Required | Description |
 | --------------- | -------------- | -------- | ----------- |
-| `id`            | integer/string | yes      | The ID or [URL-encoded path of the project](README.md#namespaced-path-encoding) |
+| `id`            | integer/string | yes      | The ID or [URL-encoded path of the project](index.md#namespaced-path-encoding) |
 | `issue_iid`     | integer        | yes      | The IID of an issue |
 | `resource_label_event_id` | integer        | yes      | The ID of a label event |
 
 ```shell
-curl --header "PRIVATE-TOKEN: <your_access_token>" https://gitlab.example.com/api/v4/projects/5/issues/11/resource_label_events/1
+curl --header "PRIVATE-TOKEN: <your_access_token>" "https://gitlab.example.com/api/v4/projects/5/issues/11/resource_label_events/1"
 ```
 
 ## Epics **(ULTIMATE)**
@@ -100,7 +107,7 @@ GET /groups/:id/epics/:epic_id/resource_label_events
 
 | Attribute           | Type             | Required   | Description  |
 | ------------------- | ---------------- | ---------- | ------------ |
-| `id`                | integer/string   | yes        | The ID or [URL-encoded path of the group](README.md#namespaced-path-encoding) |
+| `id`                | integer/string   | yes        | The ID or [URL-encoded path of the group](index.md#namespaced-path-encoding) |
 | `epic_id`           | integer          | yes        | The ID of an epic |
 
 ```json
@@ -151,7 +158,7 @@ GET /groups/:id/epics/:epic_id/resource_label_events
 ```
 
 ```shell
-curl --header "PRIVATE-TOKEN: <your_access_token>" https://gitlab.example.com/api/v4/groups/1/epics/11/resource_label_events
+curl --header "PRIVATE-TOKEN: <your_access_token>" "https://gitlab.example.com/api/v4/groups/1/epics/11/resource_label_events"
 ```
 
 ### Get single epic label event
@@ -166,12 +173,12 @@ Parameters:
 
 | Attribute       | Type           | Required | Description |
 | --------------- | -------------- | -------- | ----------- |
-| `id`            | integer/string | yes      | The ID or [URL-encoded path of the group](README.md#namespaced-path-encoding) |
+| `id`            | integer/string | yes      | The ID or [URL-encoded path of the group](index.md#namespaced-path-encoding) |
 | `epic_id`       | integer        | yes      | The ID of an epic |
 | `resource_label_event_id` | integer        | yes      | The ID of a label event |
 
 ```shell
-curl --request POST --header "PRIVATE-TOKEN: <your_access_token>" https://gitlab.example.com/api/v4/groups/1/epics/11/resource_label_events/107
+curl --request POST --header "PRIVATE-TOKEN: <your_access_token>" "https://gitlab.example.com/api/v4/groups/1/epics/11/resource_label_events/107"
 ```
 
 ## Merge requests
@@ -186,7 +193,7 @@ GET /projects/:id/merge_requests/:merge_request_iid/resource_label_events
 
 | Attribute           | Type             | Required   | Description  |
 | ------------------- | ---------------- | ---------- | ------------ |
-| `id`                | integer/string   | yes        | The ID or [URL-encoded path of the project](README.md#namespaced-path-encoding) |
+| `id`                | integer/string   | yes        | The ID or [URL-encoded path of the project](index.md#namespaced-path-encoding) |
 | `merge_request_iid` | integer          | yes        | The IID of a merge request |
 
 ```json
@@ -237,7 +244,7 @@ GET /projects/:id/merge_requests/:merge_request_iid/resource_label_events
 ```
 
 ```shell
-curl --header "PRIVATE-TOKEN: <your_access_token>" https://gitlab.example.com/api/v4/projects/5/merge_requests/11/resource_label_events
+curl --header "PRIVATE-TOKEN: <your_access_token>" "https://gitlab.example.com/api/v4/projects/5/merge_requests/11/resource_label_events"
 ```
 
 ### Get single merge request label event
@@ -252,10 +259,10 @@ Parameters:
 
 | Attribute           | Type           | Required | Description |
 | ------------------- | -------------- | -------- | ----------- |
-| `id`                | integer/string | yes      | The ID or [URL-encoded path of the project](README.md#namespaced-path-encoding) |
+| `id`                | integer/string | yes      | The ID or [URL-encoded path of the project](index.md#namespaced-path-encoding) |
 | `merge_request_iid` | integer        | yes      | The IID of a merge request |
 | `resource_label_event_id`     | integer        | yes      | The ID of a label event |
 
 ```shell
-curl --request GET --header "PRIVATE-TOKEN: <your_access_token>" https://gitlab.example.com/api/v4/projects/5/merge_requests/11/resource_label_events/120
+curl --request GET --header "PRIVATE-TOKEN: <your_access_token>" "https://gitlab.example.com/api/v4/projects/5/merge_requests/11/resource_label_events/120"
 ```

@@ -8,15 +8,13 @@ class Projects::Tags::ReleasesController < Projects::ApplicationController
   before_action :tag
   before_action :release
 
+  feature_category :release_evidence
+
   def edit
   end
 
   def update
-    if release_params[:description].present?
-      release.update(release_params)
-    else
-      release.destroy
-    end
+    release.update(release_params) if release.persisted? || release_params[:description].present?
 
     redirect_to project_tag_path(@project, tag.name)
   end

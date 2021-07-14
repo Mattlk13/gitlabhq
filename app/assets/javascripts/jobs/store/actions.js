@@ -1,10 +1,9 @@
 import Visibility from 'visibilityjs';
-import * as types from './mutation_types';
+import createFlash from '~/flash';
 import axios from '~/lib/utils/axios_utils';
+import { setFaviconOverlay, resetFavicon } from '~/lib/utils/favicon';
+import httpStatusCodes from '~/lib/utils/http_status';
 import Poll from '~/lib/utils/poll';
-import { setFaviconOverlay, resetFavicon } from '~/lib/utils/common_utils';
-import flash from '~/flash';
-import { __ } from '~/locale';
 import {
   canScroll,
   isScrolledToBottom,
@@ -13,6 +12,8 @@ import {
   scrollDown,
   scrollUp,
 } from '~/lib/utils/scroll_utils';
+import { __ } from '~/locale';
+import * as types from './mutation_types';
 
 export const init = ({ dispatch }, { endpoint, logState, pagePath }) => {
   dispatch('setJobEndpoint', endpoint);
@@ -98,7 +99,9 @@ export const receiveJobSuccess = ({ commit }, data = {}) => {
 };
 export const receiveJobError = ({ commit }) => {
   commit(types.RECEIVE_JOB_ERROR);
-  flash(__('An error occurred while fetching the job.'));
+  createFlash({
+    message: __('An error occurred while fetching the job.'),
+  });
   resetFavicon();
 };
 
@@ -172,7 +175,11 @@ export const fetchTrace = ({ dispatch, state }) =>
         dispatch('startPollingTrace');
       }
     })
-    .catch(() => dispatch('receiveTraceError'));
+    .catch((e) =>
+      e.response.status === httpStatusCodes.FORBIDDEN
+        ? dispatch('receiveTraceUnauthorizedError')
+        : dispatch('receiveTraceError'),
+    );
 
 export const startPollingTrace = ({ dispatch, commit }) => {
   const traceTimeout = setTimeout(() => {
@@ -192,10 +199,18 @@ export const stopPollingTrace = ({ state, commit }) => {
 export const receiveTraceSuccess = ({ commit }, log) => commit(types.RECEIVE_TRACE_SUCCESS, log);
 export const receiveTraceError = ({ dispatch }) => {
   dispatch('stopPollingTrace');
-  flash(__('An error occurred while fetching the job log.'));
+  createFlash({
+    message: __('An error occurred while fetching the job log.'),
+  });
+};
+export const receiveTraceUnauthorizedError = ({ dispatch }) => {
+  dispatch('stopPollingTrace');
+  createFlash({
+    message: __('The current user is not authorized to access the job log.'),
+  });
 };
 /**
- * When the user clicks a collpasible line in the job
+ * When the user clicks a collapsible line in the job
  * log, we commit a mutation to update the state
  *
  * @param {Object} section
@@ -220,7 +235,7 @@ export const fetchJobsForStage = ({ dispatch }, stage = {}) => {
       },
     })
     .then(({ data }) => {
-      const retriedJobs = data.retried.map(job => Object.assign({}, job, { retried: true }));
+      const retriedJobs = data.retried.map((job) => ({ ...job, retried: true }));
       const jobs = data.latest_statuses.concat(retriedJobs);
 
       dispatch('receiveJobsForStageSuccess', jobs);
@@ -231,12 +246,14 @@ export const receiveJobsForStageSuccess = ({ commit }, data) =>
   commit(types.RECEIVE_JOBS_FOR_STAGE_SUCCESS, data);
 export const receiveJobsForStageError = ({ commit }) => {
   commit(types.RECEIVE_JOBS_FOR_STAGE_ERROR);
-  flash(__('An error occurred while fetching the jobs.'));
+  createFlash({
+    message: __('An error occurred while fetching the jobs.'),
+  });
 };
 
 export const triggerManualJob = ({ state }, variables) => {
-  const parsedVariables = variables.map(variable => {
-    const copyVar = Object.assign({}, variable);
+  const parsedVariables = variables.map((variable) => {
+    const copyVar = { ...variable };
     delete copyVar.id;
     return copyVar;
   });
@@ -245,8 +262,9 @@ export const triggerManualJob = ({ state }, variables) => {
     .post(state.job.status.action.path, {
       job_variables_attributes: parsedVariables,
     })
-    .catch(() => flash(__('An error occurred while triggering the job.')));
+    .catch(() =>
+      createFlash({
+        message: __('An error occurred while triggering the job.'),
+      }),
+    );
 };
-
-// prevent babel-plugin-rewire from generating an invalid default during karma tests
-export default () => {};

@@ -1,8 +1,8 @@
 # frozen_string_literal: true
 
-require 'spec_helper.rb'
+require 'spec_helper'
 
-describe Issues::ReferencedMergeRequestsService do
+RSpec.describe Issues::ReferencedMergeRequestsService do
   def create_referencing_mr(attributes = {})
     create(:merge_request, attributes).tap do |merge_request|
       create(:note, :system, project: project, noteable: issue, author: user, note: merge_request.to_reference(full: true))
@@ -26,7 +26,7 @@ describe Issues::ReferencedMergeRequestsService do
   let_it_be(:referencing_mr) { create_referencing_mr(source_project: project, source_branch: 'csv') }
   let_it_be(:referencing_mr_other_project) { create_referencing_mr(source_project: other_project, source_branch: 'csv') }
 
-  let(:service) { described_class.new(project, user) }
+  let(:service) { described_class.new(project: project, current_user: user) }
 
   describe '#execute' do
     it 'returns a list of sorted merge requests' do

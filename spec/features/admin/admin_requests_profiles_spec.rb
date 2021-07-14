@@ -2,12 +2,14 @@
 
 require 'spec_helper'
 
-describe 'Admin::RequestsProfilesController' do
+RSpec.describe 'Admin::RequestsProfilesController' do
   let(:tmpdir) { Dir.mktmpdir('profiler-test') }
 
   before do
     stub_const('Gitlab::RequestProfiler::PROFILES_DIR', tmpdir)
-    sign_in(create(:admin))
+    admin = create(:admin)
+    sign_in(admin)
+    gitlab_enable_admin_mode_sign_in(admin)
   end
 
   after do

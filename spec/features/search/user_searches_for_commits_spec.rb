@@ -2,7 +2,7 @@
 
 require 'spec_helper'
 
-describe 'User searches for commits' do
+RSpec.describe 'User searches for commits', :js do
   let(:project) { create(:project, :repository) }
   let(:sha) { '6d394385cf567f80a8fd85055db1ab4c5295806f' }
   let(:user) { create(:user) }
@@ -13,6 +13,8 @@ describe 'User searches for commits' do
 
     visit(search_path(project_id: project.id))
   end
+
+  include_examples 'search timeouts', 'commits'
 
   context 'when searching by SHA' do
     it 'finds a commit and redirects to its page' do
@@ -41,7 +43,7 @@ describe 'User searches for commits' do
       submit_search('See merge request')
       select_search_scope('Commits')
 
-      expect(page).to have_selector('.commit-row-description', count: 9)
+      expect(page).to have_selector('.commit-row-description', visible: false, count: 9)
     end
   end
 end

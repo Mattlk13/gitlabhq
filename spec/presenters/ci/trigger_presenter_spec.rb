@@ -2,7 +2,7 @@
 
 require 'spec_helper'
 
-describe Ci::TriggerPresenter do
+RSpec.describe Ci::TriggerPresenter do
   let_it_be(:user) { create(:user) }
   let_it_be(:project) { create(:project) }
 
@@ -35,7 +35,7 @@ describe Ci::TriggerPresenter do
 
   context 'when user is a trigger owner and builds admin' do
     before do
-      trigger.update(owner: user)
+      trigger.update!(owner: user)
     end
 
     describe '#token' do

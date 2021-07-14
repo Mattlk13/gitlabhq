@@ -2,7 +2,7 @@
 
 require 'spec_helper'
 
-describe Ci::Resource do
+RSpec.describe Ci::Resource do
   describe '.free' do
     subject { described_class.free }
 
@@ -19,7 +19,7 @@ describe Ci::Resource do
     subject { described_class.retained_by(build) }
 
     let(:build) { create(:ci_build) }
-    let!(:resource) { create(:ci_resource, build: build) }
+    let!(:resource) { create(:ci_resource, processable: build) }
 
     it 'returns retained resources' do
       is_expected.to eq([resource])

@@ -1,19 +1,11 @@
 # frozen_string_literal: true
 
-shared_examples 'Pipeline Processing Service' do
-  let(:user) { create(:user) }
-  let(:project) { create(:project) }
+RSpec.shared_examples 'Pipeline Processing Service' do
+  let(:project) { create(:project, :repository) }
+  let(:user)    { project.owner }
 
   let(:pipeline) do
     create(:ci_empty_pipeline, ref: 'master', project: project)
-  end
-
-  before do
-    stub_ci_pipeline_to_return_yaml_file
-
-    stub_not_protect_default_branch
-
-    project.add_developer(user)
   end
 
   context 'when simple pipeline is defined' do
@@ -259,14 +251,14 @@ shared_examples 'Pipeline Processing Service' do
 
           expect(builds_names_and_statuses).to eq({ 'build': 'success', 'rollout10%': 'scheduled' })
 
-          Timecop.travel 2.minutes.from_now do
+          travel_to 2.minutes.from_now do
             enqueue_scheduled('rollout10%')
           end
           succeed_pending
 
           expect(builds_names_and_statuses).to eq({ 'build': 'success', 'rollout10%': 'success', 'rollout100%': 'scheduled' })
 
-          Timecop.travel 2.minutes.from_now do
+          travel_to 2.minutes.from_now do
             enqueue_scheduled('rollout100%')
           end
           succeed_pending
@@ -330,7 +322,7 @@ shared_examples 'Pipeline Processing Service' do
 
           expect(builds_names_and_statuses).to eq({ 'build': 'success', 'rollout10%': 'scheduled' })
 
-          Timecop.travel 2.minutes.from_now do
+          travel_to 2.minutes.from_now do
             enqueue_scheduled('rollout10%')
           end
           fail_running_or_pending
@@ -398,7 +390,7 @@ shared_examples 'Pipeline Processing Service' do
         expect(process_pipeline).to be_truthy
         expect(builds_names_and_statuses).to eq({ 'delayed1': 'scheduled', 'delayed2': 'scheduled' })
 
-        Timecop.travel 2.minutes.from_now do
+        travel_to 2.minutes.from_now do
           enqueue_scheduled('delayed1')
         end
 
@@ -419,7 +411,7 @@ shared_examples 'Pipeline Processing Service' do
         expect(process_pipeline).to be_truthy
         expect(builds_names_and_statuses).to eq({ 'delayed': 'scheduled' })
 
-        Timecop.travel 2.minutes.from_now do
+        travel_to 2.minutes.from_now do
           enqueue_scheduled('delayed')
         end
         fail_running_or_pending
@@ -757,73 +749,19 @@ shared_examples 'Pipeline Processing Service' do
       expect(builds.pending).to contain_exactly(deploy)
     end
 
-    context 'when feature ci_dag_support is disabled' do
-      before do
-        stub_feature_flags(ci_dag_support: false)
-      end
-
-      it 'when linux:build finishes first it follows stages' do
-        expect(process_pipeline).to be_truthy
-
-        expect(stages).to eq(%w(pending created created))
-        expect(builds.pending).to contain_exactly(linux_build, mac_build)
-
-        # we follow the single path of linux
-        linux_build.reset.success!
-
-        expect(stages).to eq(%w(running created created))
-        expect(builds.success).to contain_exactly(linux_build)
-        expect(builds.pending).to contain_exactly(mac_build)
-
-        mac_build.reset.success!
-
-        expect(stages).to eq(%w(success pending created))
-        expect(builds.success).to contain_exactly(linux_build, mac_build)
-        expect(builds.pending).to contain_exactly(
-          linux_rspec, linux_rubocop, mac_rspec, mac_rubocop)
-
-        linux_rspec.reset.success!
-        linux_rubocop.reset.success!
-        mac_rspec.reset.success!
-        mac_rubocop.reset.success!
-
-        expect(stages).to eq(%w(success success pending))
-        expect(builds.success).to contain_exactly(
-          linux_build, linux_rspec, linux_rubocop, mac_build, mac_rspec, mac_rubocop)
-        expect(builds.pending).to contain_exactly(deploy)
-      end
-    end
-
     context 'when one of the jobs is run on a failure' do
       let!(:linux_notify) { create_build('linux:notify', stage: 'deploy', stage_idx: 2, when: 'on_failure', scheduling_type: :dag) }
 
       let!(:linux_notify_on_build) { create(:ci_build_need, build: linux_notify, name: 'linux:build') }
 
       context 'when another job in build phase fails first' do
-        context 'when ci_dag_support is enabled' do
-          it 'does skip linux:notify' do
-            expect(process_pipeline).to be_truthy
+        it 'does skip linux:notify' do
+          expect(process_pipeline).to be_truthy
 
-            mac_build.reset.drop!
-            linux_build.reset.success!
+          mac_build.reset.drop!
+          linux_build.reset.success!
 
-            expect(linux_notify.reset).to be_skipped
-          end
-        end
-
-        context 'when ci_dag_support is disabled' do
-          before do
-            stub_feature_flags(ci_dag_support: false)
-          end
-
-          it 'does run linux:notify' do
-            expect(process_pipeline).to be_truthy
-
-            mac_build.reset.drop!
-            linux_build.reset.success!
-
-            expect(linux_notify.reset).to be_pending
-          end
+          expect(linux_notify.reset).to be_skipped
         end
       end
 
@@ -842,8 +780,7 @@ shared_examples 'Pipeline Processing Service' do
       let!(:deploy_pages) { create_build('deploy_pages', stage: 'deploy', stage_idx: 2, scheduling_type: :dag) }
 
       it 'runs deploy_pages without waiting prior stages' do
-        # Ci::PipelineProcessing::LegacyProcessingService requires :initial_process parameter
-        expect(process_pipeline(initial_process: true)).to be_truthy
+        expect(process_pipeline).to be_truthy
 
         expect(stages).to eq(%w(pending created pending))
         expect(builds.pending).to contain_exactly(linux_build, mac_build, deploy_pages)
@@ -864,29 +801,16 @@ shared_examples 'Pipeline Processing Service' do
         expect(stages).to eq(%w(success success running))
         expect(builds.pending).to contain_exactly(deploy)
       end
-
-      context 'when ci_dag_support is disabled' do
-        before do
-          stub_feature_flags(ci_dag_support: false)
-        end
-
-        it 'does run deploy_pages at the start' do
-          expect(process_pipeline).to be_truthy
-
-          expect(stages).to eq(%w(pending created created))
-          expect(builds.pending).to contain_exactly(linux_build, mac_build)
-        end
-      end
     end
   end
 
   context 'when a needed job is skipped', :sidekiq_inline do
     let!(:linux_build) { create_build('linux:build', stage: 'build', stage_idx: 0) }
     let!(:linux_rspec) { create_build('linux:rspec', stage: 'test', stage_idx: 1) }
-    let!(:deploy) do
-      create_build('deploy', stage: 'deploy', stage_idx: 2, scheduling_type: :dag, needs: [
-        create(:ci_build_need, name: 'linux:rspec')
-      ])
+    let!(:deploy) { create_build('deploy', stage: 'deploy', stage_idx: 2, scheduling_type: :dag) }
+
+    before do
+      create(:ci_build_need, build: deploy, name: 'linux:build')
     end
 
     it 'skips the jobs depending on it' do
@@ -903,10 +827,91 @@ shared_examples 'Pipeline Processing Service' do
     end
   end
 
+  context 'when a needed job is manual', :sidekiq_inline do
+    let!(:linux_build) { create_build('linux:build', stage: 'build', stage_idx: 0, when: 'manual', allow_failure: true) }
+    let!(:deploy) { create_build('deploy', stage: 'deploy', stage_idx: 1, scheduling_type: :dag) }
+
+    before do
+      create(:ci_build_need, build: deploy, name: 'linux:build')
+    end
+
+    it 'makes deploy DAG to be skipped' do
+      expect(process_pipeline).to be_truthy
+
+      expect(stages).to eq(%w(skipped skipped))
+      expect(all_builds.manual).to contain_exactly(linux_build)
+      expect(all_builds.skipped).to contain_exactly(deploy)
+    end
+  end
+
+  context 'when a bridge job has parallel:matrix config', :sidekiq_inline do
+    let(:parent_config) do
+      <<-EOY
+      test:
+        stage: test
+        script: echo test
+
+      deploy:
+        stage: deploy
+        trigger:
+          include: .child.yml
+        parallel:
+          matrix:
+            - PROVIDER: ovh
+              STACK: [monitoring, app]
+      EOY
+    end
+
+    let(:child_config) do
+      <<-EOY
+      test:
+        stage: test
+        script: echo test
+      EOY
+    end
+
+    let(:pipeline) do
+      Ci::CreatePipelineService.new(project, user, { ref: 'master' }).execute(:push)
+    end
+
+    before do
+      allow_next_instance_of(Repository) do |repository|
+        allow(repository)
+          .to receive(:blob_data_at)
+          .with(an_instance_of(String), '.gitlab-ci.yml')
+          .and_return(parent_config)
+
+        allow(repository)
+          .to receive(:blob_data_at)
+          .with(an_instance_of(String), '.child.yml')
+          .and_return(child_config)
+      end
+    end
+
+    it 'creates pipeline with bridges, then passes the matrix variables to downstream jobs' do
+      expect(all_builds_names).to contain_exactly('test', 'deploy: [ovh, monitoring]', 'deploy: [ovh, app]')
+      expect(all_builds_statuses).to contain_exactly('pending', 'created', 'created')
+
+      succeed_pending
+
+      # bridge jobs directly transition to success
+      expect(all_builds_statuses).to contain_exactly('success', 'success', 'success')
+
+      bridge1 = all_builds.find_by(name: 'deploy: [ovh, monitoring]')
+      bridge2 = all_builds.find_by(name: 'deploy: [ovh, app]')
+
+      downstream_job1 = bridge1.downstream_pipeline.processables.first
+      downstream_job2 = bridge2.downstream_pipeline.processables.first
+
+      expect(downstream_job1.scoped_variables.to_hash).to include('PROVIDER' => 'ovh', 'STACK' => 'monitoring')
+      expect(downstream_job2.scoped_variables.to_hash).to include('PROVIDER' => 'ovh', 'STACK' => 'app')
+    end
+  end
+
   private
 
   def all_builds
-    pipeline.builds.order(:stage_idx, :id)
+    pipeline.processables.order(:stage_idx, :id)
   end
 
   def builds

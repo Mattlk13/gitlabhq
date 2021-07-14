@@ -1,11 +1,11 @@
 import $ from 'jquery';
+import createFlash from '~/flash';
 import axios from '~/lib/utils/axios_utils';
-import flash from '~/flash';
 import { __ } from '~/locale';
-import { getLocationHash } from './lib/utils/url_utility';
 import FilesCommentButton from './files_comment_button';
-import SingleFileDiff from './single_file_diff';
 import initImageDiffHelper from './image_diff/helpers/init_image_diff';
+import { getLocationHash } from './lib/utils/url_utility';
+import SingleFileDiff from './single_file_diff';
 
 const UNFOLD_COUNT = 20;
 let isBound = false;
@@ -24,9 +24,7 @@ export default class Diff {
     if (!tab || (tab && tab.dataset && tab.dataset.isLocked !== ''))
       FilesCommentButton.init($diffFile);
 
-    const firstFile = $('.files')
-      .first()
-      .get(0);
+    const firstFile = $('.files').first().get(0);
     const canCreateNote = firstFile && firstFile.hasAttribute('data-can-create-note');
     $diffFile.each((index, file) => initImageDiffHelper.initImageDiff(file, canCreateNote));
 
@@ -79,7 +77,11 @@ export default class Diff {
     axios
       .get(link, { params })
       .then(({ data }) => $target.parent().replaceWith(data))
-      .catch(() => flash(__('An error occurred while loading diff')));
+      .catch(() =>
+        createFlash({
+          message: __('An error occurred while loading diff'),
+        }),
+      );
   }
 
   openAnchoredDiff(cb) {
@@ -119,7 +121,7 @@ export default class Diff {
 
     table.removeClass('left-side-selected right-side-selected');
 
-    const lineClass = ['left-side', 'right-side'].filter(name => line.hasClass(name))[0];
+    const lineClass = ['left-side', 'right-side'].filter((name) => line.hasClass(name))[0];
     if (lineClass) {
       table.addClass(`${lineClass}-selected`);
     }
@@ -134,7 +136,7 @@ export default class Diff {
     if (children.length !== 2) {
       return [0, 0];
     }
-    return children.map(elm => parseInt($(elm).data('linenumber'), 10) || 0);
+    return children.map((elm) => parseInt($(elm).data('linenumber'), 10) || 0);
   }
   // eslint-disable-next-line class-methods-use-this
   highlightSelectedLine() {

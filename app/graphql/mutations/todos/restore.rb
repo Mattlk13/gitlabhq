@@ -8,17 +8,17 @@ module Mutations
       authorize :update_todo
 
       argument :id,
-               GraphQL::ID_TYPE,
+               ::Types::GlobalIDType[::Todo],
                required: true,
-               description: 'The global id of the todo to restore'
+               description: 'The global ID of the to-do item to restore.'
 
       field :todo, Types::TodoType,
             null: false,
-            description: 'The requested todo'
+            description: 'The requested to-do item.'
 
       def resolve(id:)
         todo = authorized_find!(id: id)
-        restore(todo.id) if todo.done?
+        restore(todo)
 
         {
           todo: todo.reset,
@@ -28,8 +28,8 @@ module Mutations
 
       private
 
-      def restore(id)
-        TodoService.new.mark_todos_as_pending_by_ids([id], current_user)
+      def restore(todo)
+        TodoService.new.restore_todo(todo, current_user)
       end
     end
   end

@@ -1,104 +1,305 @@
 <script>
-import { mapState, mapActions } from 'vuex';
 import {
   GlEmptyState,
-  GlPagination,
   GlTooltipDirective,
-  GlButton,
-  GlIcon,
   GlModal,
   GlSprintf,
   GlLink,
+  GlAlert,
   GlSkeletonLoader,
 } from '@gitlab/ui';
+import { get } from 'lodash';
+import getContainerRepositoriesQuery from 'shared_queries/container_registry/get_container_repositories.query.graphql';
+import createFlash from '~/flash';
+import CleanupPolicyEnabledAlert from '~/packages_and_registries/shared/components/cleanup_policy_enabled_alert.vue';
+import { FILTERED_SEARCH_TERM } from '~/packages_and_registries/shared/constants';
+import { extractFilterAndSorting } from '~/packages_and_registries/shared/utils';
 import Tracking from '~/tracking';
-import ClipboardButton from '~/vue_shared/components/clipboard_button.vue';
-import ProjectEmptyState from '../components/project_empty_state.vue';
-import GroupEmptyState from '../components/group_empty_state.vue';
+import RegistrySearch from '~/vue_shared/components/registry/registry_search.vue';
+import DeleteImage from '../components/delete_image.vue';
+import RegistryHeader from '../components/list_page/registry_header.vue';
+
+import {
+  DELETE_IMAGE_SUCCESS_MESSAGE,
+  DELETE_IMAGE_ERROR_MESSAGE,
+  CONNECTION_ERROR_TITLE,
+  CONNECTION_ERROR_MESSAGE,
+  REMOVE_REPOSITORY_MODAL_TEXT,
+  REMOVE_REPOSITORY_LABEL,
+  EMPTY_RESULT_TITLE,
+  EMPTY_RESULT_MESSAGE,
+  GRAPHQL_PAGE_SIZE,
+  FETCH_IMAGES_LIST_ERROR_MESSAGE,
+  SORT_FIELDS,
+} from '../constants/index';
+import getContainerRepositoriesDetails from '../graphql/queries/get_container_repositories_details.query.graphql';
 
 export default {
-  name: 'RegistryListApp',
+  name: 'RegistryListPage',
   components: {
     GlEmptyState,
-    GlPagination,
-    ProjectEmptyState,
-    GroupEmptyState,
-    ClipboardButton,
-    GlButton,
-    GlIcon,
+    ProjectEmptyState: () =>
+      import(
+        /* webpackChunkName: 'container_registry_components' */ '../components/list_page/project_empty_state.vue'
+      ),
+    GroupEmptyState: () =>
+      import(
+        /* webpackChunkName: 'container_registry_components' */ '../components/list_page/group_empty_state.vue'
+      ),
+    ImageList: () =>
+      import(
+        /* webpackChunkName: 'container_registry_components' */ '../components/list_page/image_list.vue'
+      ),
+    CliCommands: () =>
+      import(
+        /* webpackChunkName: 'container_registry_components' */ '../components/list_page/cli_commands.vue'
+      ),
     GlModal,
     GlSprintf,
     GlLink,
+    GlAlert,
     GlSkeletonLoader,
+    RegistryHeader,
+    DeleteImage,
+    RegistrySearch,
+    CleanupPolicyEnabledAlert,
   },
   directives: {
     GlTooltip: GlTooltipDirective,
   },
   mixins: [Tracking.mixin()],
+  inject: ['config'],
   loader: {
     repeat: 10,
     width: 1000,
     height: 40,
   },
+  i18n: {
+    CONNECTION_ERROR_TITLE,
+    CONNECTION_ERROR_MESSAGE,
+    REMOVE_REPOSITORY_MODAL_TEXT,
+    REMOVE_REPOSITORY_LABEL,
+    EMPTY_RESULT_TITLE,
+    EMPTY_RESULT_MESSAGE,
+  },
+  searchConfig: SORT_FIELDS,
+  apollo: {
+    baseImages: {
+      skip() {
+        return !this.fetchBaseQuery;
+      },
+      query: getContainerRepositoriesQuery,
+      variables() {
+        return this.queryVariables;
+      },
+      update(data) {
+        return data[this.graphqlResource]?.containerRepositories.nodes;
+      },
+      result({ data }) {
+        this.pageInfo = data[this.graphqlResource]?.containerRepositories?.pageInfo;
+        this.containerRepositoriesCount = data[this.graphqlResource]?.containerRepositoriesCount;
+      },
+      error() {
+        createFlash({ message: FETCH_IMAGES_LIST_ERROR_MESSAGE });
+      },
+    },
+    additionalDetails: {
+      skip() {
+        return !this.fetchAdditionalDetails;
+      },
+      query: getContainerRepositoriesDetails,
+      variables() {
+        return this.queryVariables;
+      },
+      update(data) {
+        return data[this.graphqlResource]?.containerRepositories.nodes;
+      },
+      error() {
+        createFlash({ message: FETCH_IMAGES_LIST_ERROR_MESSAGE });
+      },
+    },
+  },
   data() {
     return {
+      baseImages: [],
+      additionalDetails: [],
+      pageInfo: {},
+      containerRepositoriesCount: 0,
       itemToDelete: {},
+      deleteAlertType: null,
+      filter: [],
+      sorting: { orderBy: 'UPDATED', sort: 'desc' },
+      name: null,
+      mutationLoading: false,
+      fetchBaseQuery: false,
+      fetchAdditionalDetails: false,
     };
   },
   computed: {
-    ...mapState(['config', 'isLoading', 'images', 'pagination']),
+    images() {
+      if (this.baseImages) {
+        return this.baseImages.map((image, index) => ({
+          ...image,
+          ...get(this.additionalDetails, index, {}),
+        }));
+      }
+      return [];
+    },
+    graphqlResource() {
+      return this.config.isGroupPage ? 'group' : 'project';
+    },
+    queryVariables() {
+      return {
+        name: this.name,
+        sort: this.sortBy,
+        fullPath: this.config.isGroupPage ? this.config.groupPath : this.config.projectPath,
+        isGroupPage: this.config.isGroupPage,
+        first: GRAPHQL_PAGE_SIZE,
+      };
+    },
     tracking() {
       return {
         label: 'registry_repository_delete',
       };
     },
-    currentPage: {
-      get() {
-        return this.pagination.page;
-      },
-      set(page) {
-        this.requestImagesList({ page });
-      },
+    isLoading() {
+      return this.$apollo.queries.baseImages.loading || this.mutationLoading;
+    },
+    showCommands() {
+      return Boolean(!this.isLoading && !this.config?.isGroupPage && this.images?.length);
+    },
+    showDeleteAlert() {
+      return this.deleteAlertType && this.itemToDelete?.path;
+    },
+    deleteImageAlertMessage() {
+      return this.deleteAlertType === 'success'
+        ? DELETE_IMAGE_SUCCESS_MESSAGE
+        : DELETE_IMAGE_ERROR_MESSAGE;
+    },
+    sortBy() {
+      const { orderBy, sort } = this.sorting;
+      return `${orderBy}_${sort}`.toUpperCase();
     },
   },
+  mounted() {
+    const { sorting, filters } = extractFilterAndSorting(this.$route.query);
+
+    this.filter = [...filters];
+    this.name = filters[0]?.value.data;
+    this.sorting = { ...this.sorting, ...sorting };
+
+    // If the two graphql calls - which are not batched - resolve togheter we will have a race
+    //  condition when apollo sets the cache, with this we give the 'base' call an headstart
+    this.fetchBaseQuery = true;
+    setTimeout(() => {
+      this.fetchAdditionalDetails = true;
+    }, 200);
+  },
   methods: {
-    ...mapActions(['requestImagesList', 'requestDeleteImage']),
     deleteImage(item) {
-      // This event is already tracked in the system and so the name must be kept to aggregate the data
       this.track('click_button');
       this.itemToDelete = item;
       this.$refs.deleteModal.show();
     },
-    handleDeleteRepository() {
-      this.track('confirm_delete');
-      this.requestDeleteImage(this.itemToDelete.destroy_path);
+    dismissDeleteAlert() {
+      this.deleteAlertType = null;
       this.itemToDelete = {};
     },
-    encodeListItem(item) {
-      const params = JSON.stringify({ name: item.path, tags_path: item.tags_path, id: item.id });
-      return window.btoa(params);
+    updateQuery(_, { fetchMoreResult }) {
+      return fetchMoreResult;
+    },
+    async fetchNextPage() {
+      if (this.pageInfo?.hasNextPage) {
+        const variables = {
+          after: this.pageInfo?.endCursor,
+          first: GRAPHQL_PAGE_SIZE,
+        };
+
+        this.$apollo.queries.baseImages.fetchMore({
+          variables,
+          updateQuery: this.updateQuery,
+        });
+
+        await this.$nextTick();
+
+        this.$apollo.queries.additionalDetails.fetchMore({
+          variables,
+          updateQuery: this.updateQuery,
+        });
+      }
+    },
+    async fetchPreviousPage() {
+      if (this.pageInfo?.hasPreviousPage) {
+        const variables = {
+          first: null,
+          before: this.pageInfo?.startCursor,
+          last: GRAPHQL_PAGE_SIZE,
+        };
+        this.$apollo.queries.baseImages.fetchMore({
+          variables,
+          updateQuery: this.updateQuery,
+        });
+
+        await this.$nextTick();
+
+        this.$apollo.queries.additionalDetails.fetchMore({
+          variables,
+          updateQuery: this.updateQuery,
+        });
+      }
+    },
+    startDelete() {
+      this.track('confirm_delete');
+      this.mutationLoading = true;
+    },
+    updateSorting(value) {
+      this.sorting = {
+        ...this.sorting,
+        ...value,
+      };
+    },
+    doFilter() {
+      const search = this.filter.find((i) => i.type === FILTERED_SEARCH_TERM);
+      this.name = search?.value?.data;
+    },
+    updateUrlQueryString(query) {
+      this.$router.push({ query });
     },
   },
 };
 </script>
 
 <template>
-  <div class="w-100 slide-enter-from-element">
+  <div>
+    <gl-alert
+      v-if="showDeleteAlert"
+      :variant="deleteAlertType"
+      class="gl-mt-5"
+      dismissible
+      @dismiss="dismissDeleteAlert"
+    >
+      <gl-sprintf :message="deleteImageAlertMessage">
+        <template #title>
+          {{ itemToDelete.path }}
+        </template>
+      </gl-sprintf>
+    </gl-alert>
+
+    <cleanup-policy-enabled-alert
+      v-if="config.showCleanupPolicyOnAlert"
+      :project-path="config.projectPath"
+      :cleanup-policies-settings-path="config.cleanupPoliciesSettingsPath"
+    />
+
     <gl-empty-state
       v-if="config.characterError"
-      :title="s__('ContainerRegistry|Docker connection error')"
+      :title="$options.i18n.CONNECTION_ERROR_TITLE"
       :svg-path="config.containersErrorImage"
     >
       <template #description>
         <p>
-          <gl-sprintf
-            :message="
-              s__(`ContainerRegistry|We are having trouble connecting to Docker, which could be due to an
-            issue with your project name or path.
-            %{docLinkStart}More Information%{docLinkEnd}`)
-            "
-          >
-            <template #docLink="{content}">
+          <gl-sprintf :message="$options.i18n.CONNECTION_ERROR_MESSAGE">
+            <template #docLink="{ content }">
               <gl-link :href="`${config.helpPagePath}#docker-connection-error`" target="_blank">
                 {{ content }}
               </gl-link>
@@ -109,26 +310,30 @@ export default {
     </gl-empty-state>
 
     <template v-else>
-      <div>
-        <h4>{{ s__('ContainerRegistry|Container Registry') }}</h4>
-        <p>
-          <gl-sprintf
-            :message="
-              s__(`ContainerRegistry|With the Docker Container Registry integrated into GitLab, every
-            project can have its own space to store its Docker images.
-            %{docLinkStart}More Information%{docLinkEnd}`)
-            "
-          >
-            <template #docLink="{content}">
-              <gl-link :href="config.helpPagePath" target="_blank">
-                {{ content }}
-              </gl-link>
-            </template>
-          </gl-sprintf>
-        </p>
-      </div>
+      <registry-header
+        :metadata-loading="isLoading"
+        :images-count="containerRepositoriesCount"
+        :expiration-policy="config.expirationPolicy"
+        :help-page-path="config.helpPagePath"
+        :hide-expiration-policy-data="config.isGroupPage"
+      >
+        <template #commands>
+          <cli-commands v-if="showCommands" />
+        </template>
+      </registry-header>
 
-      <div v-if="isLoading" class="mt-2">
+      <registry-search
+        :filter="filter"
+        :sorting="sorting"
+        :tokens="[]"
+        :sortable-fields="$options.searchConfig"
+        @sorting:changed="updateSorting"
+        @filter:changed="filter = $event"
+        @filter:submit="doFilter"
+        @query:changed="updateUrlQueryString"
+      />
+
+      <div v-if="isLoading" class="gl-mt-5">
         <gl-skeleton-loader
           v-for="index in $options.loader.repeat"
           :key="index"
@@ -142,86 +347,60 @@ export default {
         </gl-skeleton-loader>
       </div>
       <template v-else>
-        <div v-if="images.length" ref="imagesList" class="d-flex flex-column">
-          <div
-            v-for="(listItem, index) in images"
-            :key="index"
-            ref="rowItem"
-            :class="{ 'border-top': index === 0 }"
-            class="d-flex justify-content-between align-items-center py-2 border-bottom"
-          >
-            <div>
-              <router-link
-                ref="detailsLink"
-                :to="{ name: 'details', params: { id: encodeListItem(listItem) } }"
-              >
-                {{ listItem.path }}
-              </router-link>
-              <clipboard-button
-                v-if="listItem.location"
-                ref="clipboardButton"
-                :text="listItem.location"
-                :title="listItem.location"
-                css-class="btn-default btn-transparent btn-clipboard"
-              />
-            </div>
-            <div
-              v-gl-tooltip="{ disabled: listItem.destroy_path }"
-              class="d-none d-sm-block"
-              :title="
-                s__('ContainerRegistry|Missing or insufficient permission, delete button disabled')
-              "
-            >
-              <gl-button
-                ref="deleteImageButton"
-                v-gl-tooltip
-                :disabled="!listItem.destroy_path"
-                :title="s__('ContainerRegistry|Remove repository')"
-                :aria-label="s__('ContainerRegistry|Remove repository')"
-                class="btn-inverted"
-                variant="danger"
-                @click="deleteImage(listItem)"
-              >
-                <gl-icon name="remove" />
-              </gl-button>
-            </div>
-          </div>
-          <gl-pagination
-            v-model="currentPage"
-            :per-page="pagination.perPage"
-            :total-items="pagination.total"
-            align="center"
-            class="w-100 mt-2"
+        <template v-if="images.length > 0 || name">
+          <image-list
+            v-if="images.length"
+            :images="images"
+            :metadata-loading="$apollo.queries.additionalDetails.loading"
+            :page-info="pageInfo"
+            @delete="deleteImage"
+            @prev-page="fetchPreviousPage"
+            @next-page="fetchNextPage"
           />
-        </div>
 
+          <gl-empty-state
+            v-else
+            :svg-path="config.noContainersImage"
+            data-testid="emptySearch"
+            :title="$options.i18n.EMPTY_RESULT_TITLE"
+          >
+            <template #description>
+              {{ $options.i18n.EMPTY_RESULT_MESSAGE }}
+            </template>
+          </gl-empty-state>
+        </template>
         <template v-else>
           <project-empty-state v-if="!config.isGroupPage" />
           <group-empty-state v-else />
         </template>
       </template>
 
-      <gl-modal
-        ref="deleteModal"
-        modal-id="delete-image-modal"
-        ok-variant="danger"
-        @ok="handleDeleteRepository"
-        @cancel="track('cancel_delete')"
+      <delete-image
+        :id="itemToDelete.id"
+        @start="startDelete"
+        @error="deleteAlertType = 'danger'"
+        @success="deleteAlertType = 'success'"
+        @end="mutationLoading = false"
       >
-        <template #modal-title>{{ s__('ContainerRegistry|Remove repository') }}</template>
-        <p>
-          <gl-sprintf
-            :message=" s__(
-                'ContainerRegistry|You are about to remove repository %{title}. Once you confirm, this repository will be permanently deleted.',
-              ),"
+        <template #default="{ doDelete }">
+          <gl-modal
+            ref="deleteModal"
+            modal-id="delete-image-modal"
+            :action-primary="{ text: __('Remove'), attributes: { variant: 'danger' } }"
+            @primary="doDelete"
+            @cancel="track('cancel_delete')"
           >
-            <template #title>
-              <b>{{ itemToDelete.path }}</b>
-            </template>
-          </gl-sprintf>
-        </p>
-        <template #modal-ok>{{ __('Remove') }}</template>
-      </gl-modal>
+            <template #modal-title>{{ $options.i18n.REMOVE_REPOSITORY_LABEL }}</template>
+            <p>
+              <gl-sprintf :message="$options.i18n.REMOVE_REPOSITORY_MODAL_TEXT">
+                <template #title>
+                  <b>{{ itemToDelete.path }}</b>
+                </template>
+              </gl-sprintf>
+            </p>
+          </gl-modal>
+        </template>
+      </delete-image>
     </template>
   </div>
 </template>

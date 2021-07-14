@@ -32,6 +32,8 @@ module Gitlab
       gemfile_lock: 'Gemfile.lock',
       gemspec: %r{\A[^/]*\.gemspec\z},
       godeps_json: 'Godeps.json',
+      go_mod: 'go.mod',
+      go_sum: 'go.sum',
       package_json: 'package.json',
       podfile: 'Podfile',
       podspec_json: %r{\A[^/]*\.podspec\.json\z},
@@ -40,7 +42,7 @@ module Gitlab
       yarn_lock: 'yarn.lock',
 
       # OpenAPI Specification files
-      openapi: %r{.*(openapi|swagger).*\.(yaml|yml|json)\z}i
+      openapi: %r{[^/]*(openapi|swagger)[^/]*\.(yaml|yml|json)\z}i
     }.freeze
 
     # Returns an Array of file types based on the given paths.

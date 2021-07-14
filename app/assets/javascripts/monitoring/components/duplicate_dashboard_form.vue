@@ -1,8 +1,9 @@
 <script>
-import { __, s__, sprintf } from '~/locale';
 import { GlFormGroup, GlFormInput, GlFormRadioGroup, GlFormTextarea } from '@gitlab/ui';
+import { escape as esc } from 'lodash';
+import { __, s__, sprintf } from '~/locale';
 
-const defaultFileName = dashboard => dashboard.path.split('/').reverse()[0];
+const defaultFileName = (dashboard) => dashboard.path.split('/').reverse()[0];
 
 export default {
   components: {
@@ -22,7 +23,7 @@ export default {
     },
   },
   radioVals: {
-    /* Use the default branch (e.g. master) */
+    /* Use the default branch (e.g. main) */
     DEFAULT: 'DEFAULT',
     /* Create a new branch */
     NEW: 'NEW',
@@ -42,7 +43,7 @@ export default {
           html: sprintf(
             __('Commit to %{branchName} branch'),
             {
-              branchName: `<strong>${this.defaultBranch}</strong>`,
+              branchName: `<strong>${esc(this.defaultBranch)}</strong>`,
             },
             false,
           ),
@@ -92,8 +93,7 @@ export default {
     <p class="text-muted">
       {{
         s__(`Metrics|You can save a copy of this dashboard to your repository
-      so it can be customized. Select a file name and branch to 
-      save it.`)
+      so it can be customized. Select a file name and branch to save it.`)
       }}
     </p>
     <gl-form-group
@@ -104,7 +104,13 @@ export default {
       label-size="sm"
       label-for="fileName"
     >
-      <gl-form-input id="fileName" ref="fileName" v-model="form.fileName" :required="true" />
+      <gl-form-input
+        id="fileName"
+        ref="fileName"
+        v-model="form.fileName"
+        data-qa-selector="duplicate_dashboard_filename_field"
+        :required="true"
+      />
     </gl-form-group>
     <gl-form-group :label="__('Branch')" label-size="sm" label-for="branch">
       <gl-form-radio-group

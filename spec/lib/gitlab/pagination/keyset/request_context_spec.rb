@@ -2,7 +2,7 @@
 
 require 'spec_helper'
 
-describe Gitlab::Pagination::Keyset::RequestContext do
+RSpec.describe Gitlab::Pagination::Keyset::RequestContext do
   let(:request) { double('request', params: params) }
 
   describe '#page' do
@@ -57,16 +57,15 @@ describe Gitlab::Pagination::Keyset::RequestContext do
 
     subject { described_class.new(request_context).apply_headers(next_page) }
 
-    it 'sets Links header with same host/path as the original request' do
+    it 'sets Link header with same host/path as the original request' do
       orig_uri = URI.parse(request_context.request.url)
 
-      expect(request_context).to receive(:header) do |name, header|
-        expect(name).to eq('Links')
-
+      expect(request_context).to receive(:header).once do |name, header|
         first_link, _ = /<([^>]+)>; rel="next"/.match(header).captures
 
         uri = URI.parse(first_link)
 
+        expect(name).to eq('Link')
         expect(uri.host).to eq(orig_uri.host)
         expect(uri.path).to eq(orig_uri.path)
       end
@@ -74,16 +73,15 @@ describe Gitlab::Pagination::Keyset::RequestContext do
       subject
     end
 
-    it 'sets Links header with a link to the next page' do
+    it 'sets Link header with a link to the next page' do
       orig_uri = URI.parse(request_context.request.url)
 
-      expect(request_context).to receive(:header) do |name, header|
-        expect(name).to eq('Links')
-
+      expect(request_context).to receive(:header).once do |name, header|
         first_link, _ = /<([^>]+)>; rel="next"/.match(header).captures
 
         query = CGI.parse(URI.parse(first_link).query)
 
+        expect(name).to eq('Link')
         expect(query.except('id_after')).to eq(CGI.parse(orig_uri.query).except('id_after'))
         expect(query['id_after']).to eq(['42'])
       end
@@ -94,16 +92,15 @@ describe Gitlab::Pagination::Keyset::RequestContext do
     context 'with descending order' do
       let(:next_page) { double('next page', order_by: { id: :desc }, lower_bounds: { id: 42 }) }
 
-      it 'sets Links header with a link to the next page' do
+      it 'sets Link header with a link to the next page' do
         orig_uri = URI.parse(request_context.request.url)
 
-        expect(request_context).to receive(:header) do |name, header|
-          expect(name).to eq('Links')
-
+        expect(request_context).to receive(:header).once do |name, header|
           first_link, _ = /<([^>]+)>; rel="next"/.match(header).captures
 
           query = CGI.parse(URI.parse(first_link).query)
 
+          expect(name).to eq('Link')
           expect(query.except('id_before')).to eq(CGI.parse(orig_uri.query).except('id_before'))
           expect(query['id_before']).to eq(['42'])
         end

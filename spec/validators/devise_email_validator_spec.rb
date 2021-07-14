@@ -2,7 +2,7 @@
 
 require 'spec_helper'
 
-describe DeviseEmailValidator do
+RSpec.describe DeviseEmailValidator do
   let!(:user) { build(:user, public_email: 'test@example.com') }
 
   subject { validator.validate(user) }
@@ -23,7 +23,7 @@ describe DeviseEmailValidator do
         subject
 
         expect(user.errors).to be_present
-        expect(user.errors.first[1]).to eq 'is invalid'
+        expect(user.errors.added?(:public_email)).to be true
       end
 
       it 'returns error when email is nil' do
@@ -40,7 +40,7 @@ describe DeviseEmailValidator do
         subject
 
         expect(user.errors).to be_present
-        expect(user.errors.first[1]).to eq 'is invalid'
+        expect(user.errors.added?(:public_email)).to be true
       end
     end
   end

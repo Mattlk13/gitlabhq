@@ -1,9 +1,15 @@
-# Award emoji
+---
+stage: Plan
+group: Project Management
+info: To determine the technical writer assigned to the Stage/Group associated with this page, see https://about.gitlab.com/handbook/engineering/ux/technical-writing/#assignments
+---
 
-> - First [introduced](https://gitlab.com/gitlab-org/gitlab-foss/-/merge_requests/1825) in GitLab 8.2.
+# Award emoji **(FREE)**
+
+> - [Introduced](https://gitlab.com/gitlab-org/gitlab-foss/-/merge_requests/1825) in GitLab 8.2.
 > - GitLab 9.0 [introduced](https://gitlab.com/gitlab-org/gitlab-foss/-/merge_requests/9570) the usage of native emoji if the platform
->  supports them and falls back to images or CSS sprites. This change greatly
->  improved award emoji performance overall.
+>   supports them and falls back to images or CSS sprites. This change greatly
+>   improved award emoji performance overall.
 
 When you're collaborating online, you get fewer opportunities for high-fives
 and thumbs-ups. Emoji can be awarded to [issues](project/issues/index.md), [merge requests](project/merge_requests/index.md),
@@ -40,7 +46,7 @@ celebrate an accomplishment or agree with an opinion.
 To:
 
 - Add an award emoji, click the smile in the top right of the comment and pick an emoji from the dropdown.
-- Remove an award emoji, click the emoji again and the vote will be removed.
+- Remove an award emoji, click the emoji again.
 
 ![Picking an emoji for a comment](img/award_emoji_comment_picker.png)
 

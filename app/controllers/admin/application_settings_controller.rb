@@ -2,17 +2,36 @@
 
 class Admin::ApplicationSettingsController < Admin::ApplicationController
   include InternalRedirect
+  include IntegrationsHelper
 
   # NOTE: Use @application_setting in this controller when you need to access
   # application_settings after it has been modified. This is because the
-  # ApplicationSetting model uses Gitlab::ThreadMemoryCache for caching and the
+  # ApplicationSetting model uses Gitlab::ProcessMemoryCache for caching and the
   # cache might be stale immediately after an update.
   # https://gitlab.com/gitlab-org/gitlab-foss/-/merge_requests/30233
-  before_action :set_application_setting
+  before_action :set_application_setting, except: :integrations
 
-  before_action :whitelist_query_limiting, only: [:usage_data]
+  before_action :disable_query_limiting, only: [:usage_data]
 
-  VALID_SETTING_PANELS = %w(general integrations repository
+  feature_category :not_owned, [
+                     :general, :reporting, :metrics_and_profiling, :network,
+                     :preferences, :update, :reset_health_check_token
+                   ]
+
+  feature_category :metrics, [
+                     :create_self_monitoring_project,
+                     :status_create_self_monitoring_project,
+                     :delete_self_monitoring_project,
+                     :status_delete_self_monitoring_project
+                   ]
+
+  feature_category :source_code_management, [:repository, :clear_repository_check_states]
+  feature_category :continuous_integration, [:ci_cd, :reset_registration_token]
+  feature_category :service_ping, [:usage_data]
+  feature_category :integrations, [:integrations]
+  feature_category :pages, [:lets_encrypt_terms_of_service]
+
+  VALID_SETTING_PANELS = %w(general repository
                             ci_cd reporting metrics_and_profiling
                             network preferences).freeze
 
@@ -27,6 +46,12 @@ class Admin::ApplicationSettingsController < Admin::ApplicationController
     define_method(action) { perform_update if submitted? }
   end
 
+  def integrations
+    return not_found unless instance_level_integrations?
+
+    @integrations = Integration.find_or_initialize_all_non_project_specific(Integration.for_instance).sort_by(&:title)
+  end
+
   def update
     perform_update
   end
@@ -34,7 +59,7 @@ class Admin::ApplicationSettingsController < Admin::ApplicationController
   def usage_data
     respond_to do |format|
       format.html do
-        usage_data_json = JSON.pretty_generate(Gitlab::UsageData.data)
+        usage_data_json = Gitlab::Json.pretty_generate(Gitlab::UsageData.data)
 
         render html: Gitlab::Highlight.highlight('payload.json', usage_data_json, language: 'json')
       end
@@ -162,10 +187,11 @@ class Admin::ApplicationSettingsController < Admin::ApplicationController
 
   def set_application_setting
     @application_setting = ApplicationSetting.current_without_cache
+    @plans = Plan.all
   end
 
-  def whitelist_query_limiting
-    Gitlab::QueryLimiting.whitelist('https://gitlab.com/gitlab-org/gitlab-foss/issues/63107')
+  def disable_query_limiting
+    Gitlab::QueryLimiting.disable!('https://gitlab.com/gitlab-org/gitlab/-/issues/29418')
   end
 
   def application_setting_params
@@ -181,16 +207,21 @@ class Admin::ApplicationSettingsController < Admin::ApplicationController
     end
 
     params[:application_setting][:import_sources]&.delete("")
+    params[:application_setting][:valid_runner_registrars]&.delete("")
     params[:application_setting][:restricted_visibility_levels]&.delete("")
-    params[:application_setting].delete(:elasticsearch_aws_secret_access_key) if params[:application_setting][:elasticsearch_aws_secret_access_key].blank?
-    # TODO Remove domain_blacklist_raw in APIv5 (See https://gitlab.com/gitlab-org/gitlab-foss/issues/67204)
-    params.delete(:domain_blacklist_raw) if params[:domain_blacklist_file]
-    params.delete(:domain_blacklist_raw) if params[:domain_blacklist]
-    params.delete(:domain_whitelist_raw) if params[:domain_whitelist]
 
-    params.require(:application_setting).permit(
-      visible_application_setting_attributes
-    )
+    if params[:application_setting].key?(:required_instance_ci_template)
+      params[:application_setting][:required_instance_ci_template] = nil if params[:application_setting][:required_instance_ci_template].empty?
+    end
+
+    remove_blank_params_for!(:elasticsearch_aws_secret_access_key, :eks_secret_access_key)
+
+    # TODO Remove domain_denylist_raw in APIv5 (See https://gitlab.com/gitlab-org/gitlab-foss/issues/67204)
+    params.delete(:domain_denylist_raw) if params[:domain_denylist_file]
+    params.delete(:domain_denylist_raw) if params[:domain_denylist]
+    params.delete(:domain_allowlist_raw) if params[:domain_allowlist]
+
+    params[:application_setting].permit(visible_application_setting_attributes)
   end
 
   def recheck_user_consent?
@@ -204,14 +235,19 @@ class Admin::ApplicationSettingsController < Admin::ApplicationController
     [
       *::ApplicationSettingsHelper.visible_attributes,
       *::ApplicationSettingsHelper.external_authorization_service_attributes,
+      *ApplicationSetting.kroki_formats_attributes.keys.map { |key| "kroki_formats_#{key}".to_sym },
       :lets_encrypt_notification_email,
       :lets_encrypt_terms_of_service_accepted,
-      :domain_blacklist_file,
+      :domain_denylist_file,
       :raw_blob_request_limit,
+      :issues_create_limit,
+      :notes_create_limit,
+      :default_branch_name,
       disabled_oauth_sign_in_sources: [],
       import_sources: [],
-      repository_storages: [],
-      restricted_visibility_levels: []
+      restricted_visibility_levels: [],
+      repository_storages_weighted: {},
+      valid_runner_registrars: []
     ]
   end
 
@@ -220,7 +256,7 @@ class Admin::ApplicationSettingsController < Admin::ApplicationController
   end
 
   def perform_update
-    successful = ApplicationSettings::UpdateService
+    successful = ::ApplicationSettings::UpdateService
       .new(@application_setting, current_user, application_setting_params)
       .execute
 
@@ -244,7 +280,13 @@ class Admin::ApplicationSettingsController < Admin::ApplicationController
   def render_update_error
     action = valid_setting_panels.include?(action_name) ? action_name : :general
 
+    flash[:alert] = _('Application settings update failed')
+
     render action
+  end
+
+  def remove_blank_params_for!(*keys)
+    params[:application_setting].delete_if { |setting, value| setting.to_sym.in?(keys) && value.blank? }
   end
 
   # overridden in EE
@@ -253,4 +295,4 @@ class Admin::ApplicationSettingsController < Admin::ApplicationController
   end
 end
 
-Admin::ApplicationSettingsController.prepend_if_ee('EE::Admin::ApplicationSettingsController')
+Admin::ApplicationSettingsController.prepend_mod_with('Admin::ApplicationSettingsController')

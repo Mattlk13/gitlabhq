@@ -1,20 +1,19 @@
 <script>
+import { IssuableType } from '~/issue_show/constants';
 import { __, sprintf } from '~/locale';
 import AssigneeAvatarLink from './assignee_avatar_link.vue';
+import UserNameWithStatus from './user_name_with_status.vue';
 
 const DEFAULT_RENDER_COUNT = 5;
 
 export default {
   components: {
     AssigneeAvatarLink,
+    UserNameWithStatus,
   },
   props: {
     users: {
       type: Array,
-      required: true,
-    },
-    rootPath: {
-      type: String,
       required: true,
     },
     issuableType: {
@@ -59,6 +58,12 @@ export default {
     toggleShowLess() {
       this.showLess = !this.showLess;
     },
+    userAvailability(u) {
+      if (this.issuableType === IssuableType.MergeRequest) {
+        return u?.availability || '';
+      }
+      return u?.status?.availability || '';
+    },
   },
 };
 </script>
@@ -66,25 +71,23 @@ export default {
 <template>
   <assignee-avatar-link
     v-if="hasOneUser"
-    v-slot="{ user }"
     tooltip-placement="left"
     :tooltip-has-name="false"
     :user="firstUser"
-    :root-path="rootPath"
     :issuable-type="issuableType"
   >
-    <div class="ml-2">
-      <span class="author"> {{ user.name }} </span>
-      <span class="username"> {{ username }} </span>
+    <div class="ml-2 gl-line-height-normal">
+      <user-name-with-status :name="firstUser.name" :availability="userAvailability(firstUser)" />
+      <div>{{ username }}</div>
     </div>
   </assignee-avatar-link>
   <div v-else>
     <div class="user-list">
       <div v-for="user in uncollapsedUsers" :key="user.id" class="user-item">
-        <assignee-avatar-link :user="user" :root-path="rootPath" :issuable-type="issuableType" />
+        <assignee-avatar-link :user="user" :issuable-type="issuableType" />
       </div>
     </div>
-    <div v-if="renderShowMoreSection" class="user-list-more">
+    <div v-if="renderShowMoreSection" class="user-list-more gl-hover-text-blue-800">
       <button
         type="button"
         class="btn-link"

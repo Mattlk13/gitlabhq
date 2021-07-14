@@ -35,7 +35,6 @@ module QA
 
         view 'app/helpers/auth_helper.rb' do
           element :saml_login_button
-          element :github_login_button
         end
 
         view 'app/views/layouts/devise.html.haml' do
@@ -53,25 +52,28 @@ module QA
           using_wait_time 0 do
             set_initial_password_if_present
 
-            raise NotImplementedError if Runtime::User.ldap_user? && user&.credentials_given?
+            if Runtime::User.ldap_user? && user && user.username != Runtime::User.ldap_username
+              raise 'If an LDAP user is provided, it must be used for sign-in', QA::Resource::User::InvalidUserError
+            end
 
             if Runtime::User.ldap_user?
               sign_in_using_ldap_credentials(user: user || Runtime::User)
             else
               sign_in_using_gitlab_credentials(user: user || Runtime::User, skip_page_validation: skip_page_validation)
             end
+
+            set_up_new_password_if_required(user: user, skip_page_validation: skip_page_validation)
           end
         end
 
         def sign_in_using_admin_credentials
-          admin = QA::Resource::User.new.tap do |user|
+          admin = QA::Resource::User.init do |user|
             user.username = QA::Runtime::User.admin_username
             user.password = QA::Runtime::User.admin_password
           end
 
           using_wait_time 0 do
             set_initial_password_if_present
-
             sign_in_using_gitlab_credentials(user: admin)
           end
 
@@ -126,9 +128,9 @@ module QA
           click_element :sign_in_tab
         end
 
-        def switch_to_register_tab
+        def switch_to_register_page
           set_initial_password_if_present
-          click_element :register_tab
+          click_element :register_link
         end
 
         def switch_to_ldap_tab
@@ -137,11 +139,6 @@ module QA
 
         def switch_to_standard_tab
           click_element :standard_tab
-        end
-
-        def sign_in_with_github
-          set_initial_password_if_present
-          click_element :github_login_button
         end
 
         def sign_in_with_saml
@@ -158,12 +155,34 @@ module QA
         private
 
         def sign_in_using_gitlab_credentials(user:, skip_page_validation: false)
+          wait_if_retry_later
+
           switch_to_sign_in_tab if has_sign_in_tab?
           switch_to_standard_tab if has_standard_tab?
 
           fill_element :login_field, user.username
           fill_element :password_field, user.password
-          click_element :sign_in_button, !skip_page_validation && Page::Main::Menu
+          click_element :sign_in_button
+
+          Page::Main::Terms.perform do |terms|
+            terms.accept_terms if terms.visible?
+          end
+
+          Page::Main::Menu.validate_elements_present! unless skip_page_validation
+        end
+
+        # Handle request for password change
+        # Happens on clean GDK installations when seeded root admin password is expired
+        #
+        def set_up_new_password_if_required(user:, skip_page_validation:)
+          return unless has_content?('Set up new password')
+
+          Profile::Password.perform do |new_password_page|
+            password = user&.password || Runtime::User.password
+            new_password_page.set_new_password(password, password)
+          end
+
+          sign_in_using_credentials(user: user, skip_page_validation: skip_page_validation)
         end
 
         def set_initial_password_if_present

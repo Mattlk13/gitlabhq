@@ -2,14 +2,16 @@
 
 require 'spec_helper'
 
-describe Gitlab::Ci::Build::Context::Global do
+RSpec.describe Gitlab::Ci::Build::Context::Global do
   let(:pipeline)       { create(:ci_pipeline) }
   let(:yaml_variables) { {} }
 
   let(:context) { described_class.new(pipeline, yaml_variables: yaml_variables) }
 
   describe '#variables' do
-    subject { context.variables }
+    subject { context.variables.to_hash }
+
+    it { expect(context.variables).to be_instance_of(Gitlab::Ci::Variables::Collection) }
 
     it { is_expected.to include('CI_COMMIT_REF_NAME' => 'master') }
     it { is_expected.to include('CI_PIPELINE_IID'    => pipeline.iid.to_s) }

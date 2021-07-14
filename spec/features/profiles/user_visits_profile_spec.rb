@@ -2,7 +2,7 @@
 
 require 'spec_helper'
 
-describe 'User visits their profile' do
+RSpec.describe 'User visits their profile' do
   let(:user) { create(:user) }
 
   before do
@@ -39,7 +39,7 @@ describe 'User visits their profile' do
       find(:css, '.header-user-dropdown-toggle').click
 
       page.within ".header-user" do
-        click_link "Profile"
+        click_link user.username
       end
     end
 

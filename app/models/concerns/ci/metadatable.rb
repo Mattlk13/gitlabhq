@@ -14,6 +14,8 @@ module Ci
                          inverse_of: :build,
                          autosave: true
 
+      accepts_nested_attributes_for :metadata
+
       delegate :timeout, to: :metadata, prefix: true, allow_nil: true
       delegate :interruptible, to: :metadata, prefix: false, allow_nil: true
       delegate :has_exposed_artifacts?, to: :metadata, prefix: false, allow_nil: true
@@ -75,7 +77,7 @@ module Ci
 
     def write_metadata_attribute(legacy_key, metadata_key, value)
       # save to metadata or this model depending on the state of feature flag
-      if Feature.enabled?(:ci_build_metadata_config)
+      if Feature.enabled?(:ci_build_metadata_config, project, default_enabled: :yaml)
         ensure_metadata.write_attribute(metadata_key, value)
         write_attribute(legacy_key, nil)
       else
@@ -85,3 +87,5 @@ module Ci
     end
   end
 end
+
+Ci::Metadatable.prepend_mod_with('Ci::Metadatable')

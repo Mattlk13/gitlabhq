@@ -15,6 +15,7 @@ module Gitlab
                     %w(FileUploader Project),
                     %w(PersonalFileUploader Snippet),
                     %w(NamespaceFileUploader Snippet),
+                    %w(DesignManagement::DesignV432x230Uploader DesignManagement::Action :image_v432x230),
                     %w(FileUploader MergeRequest)].freeze
 
       def initialize(args, logger)
@@ -75,4 +76,4 @@ module Gitlab
   end
 end
 
-Gitlab::Uploads::MigrationHelper.prepend_if_ee('EE::Gitlab::Uploads::MigrationHelper')
+Gitlab::Uploads::MigrationHelper.prepend_mod_with('Gitlab::Uploads::MigrationHelper')

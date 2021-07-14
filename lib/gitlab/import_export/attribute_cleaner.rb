@@ -11,10 +11,17 @@ module Gitlab
         'discussion_id',
         'custom_attributes'
       ].freeze
-      PROHIBITED_REFERENCES = Regexp.union(/\Acached_markdown_version\Z/, /_id\Z/, /_ids\Z/, /_html\Z/, /attributes/).freeze
+      PROHIBITED_REFERENCES = Regexp.union(
+        /\Acached_markdown_version\Z/,
+        /_id\Z/,
+        /_ids\Z/,
+        /_html\Z/,
+        /attributes/,
+        /\Aremote_\w+_(url|urls|request_header)\Z/ # carrierwave automatically creates these attribute methods for uploads
+      ).freeze
 
-      def self.clean(*args)
-        new(*args).clean
+      def self.clean(*args, **kwargs)
+        new(*args, **kwargs).clean
       end
 
       def initialize(relation_hash:, relation_class:, excluded_keys: [])

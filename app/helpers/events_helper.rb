@@ -4,12 +4,14 @@ module EventsHelper
   ICON_NAMES_BY_EVENT_TYPE = {
     'pushed to' => 'commit',
     'pushed new' => 'commit',
+    'updated' => 'commit',
     'created' => 'status_open',
     'opened' => 'status_open',
     'closed' => 'status_closed',
     'accepted' => 'fork',
     'commented on' => 'comment',
     'deleted' => 'remove',
+    'destroyed' => 'remove',
     'imported' => 'import',
     'joined' => 'users'
   }.freeze
@@ -26,15 +28,7 @@ module EventsHelper
   end
 
   def event_action_name(event)
-    target =  if event.target_type
-                if event.note?
-                  event.note_target_type
-                else
-                  event.target_type.titleize.downcase
-                end
-              else
-                'project'
-              end
+    target = event.note_target_type_name || event.target_type_name
 
     [event.action_name, target].join(" ")
   end
@@ -56,9 +50,26 @@ module EventsHelper
   end
 
   def event_filter_visible(feature_key)
+    return designs_visible? if feature_key == :designs
     return true unless @project
 
     @project.feature_available?(feature_key, current_user)
+  end
+
+  def designs_visible?
+    if @project
+      design_activity_enabled?(@project)
+    elsif @group
+      design_activity_enabled?(@group)
+    elsif @projects
+      @projects.with_namespace.include_project_feature.any? { |p| design_activity_enabled?(p) }
+    else
+      true
+    end
+  end
+
+  def design_activity_enabled?(project)
+    Ability.allowed?(current_user, :read_design_activity, project)
   end
 
   def comments_visible?
@@ -68,10 +79,12 @@ module EventsHelper
   end
 
   def event_preposition(event)
-    if event.push_action? || event.commented_action? || event.target
-      "at"
+    if event.wiki_page?
+      'in the wiki for'
     elsif event.milestone?
-      "in"
+      'in'
+    elsif event.push_action? || event.commented_action? || event.target
+      'at'
     end
   end
 
@@ -89,6 +102,12 @@ module EventsHelper
       words << "at"
     elsif event.milestone?
       words << "##{event.target_iid}" if event.target_iid
+      words << "in"
+    elsif event.design?
+      words << event.design.to_reference
+      words << "in"
+    elsif event.wiki_page?
+      words << event.target_title
       words << "in"
     elsif event.target
       prefix =
@@ -138,7 +157,7 @@ module EventsHelper
         project_commit_url(event.project,
                                      id: event.commit_to)
       end
-    else
+    elsif event.ref_name
       project_commits_url(event.project,
                                     event.ref_name)
     end
@@ -159,24 +178,47 @@ module EventsHelper
   def event_note_target_url(event)
     if event.commit_note?
       project_commit_url(event.project, event.note_target, anchor: dom_id(event.target))
-    elsif event.project_snippet_note?
-      project_snippet_url(event.project, event.note_target, anchor: dom_id(event.target))
+    elsif event.snippet_note?
+      gitlab_snippet_url(event.note_target, anchor: dom_id(event.target))
     elsif event.issue_note?
       project_issue_url(event.project, id: event.note_target, anchor: dom_id(event.target))
     elsif event.merge_request_note?
       project_merge_request_url(event.project, id: event.note_target, anchor: dom_id(event.target))
+    elsif event.design_note?
+      design_url(event.note_target, anchor: dom_id(event.note))
     else
-      polymorphic_url([event.project.namespace.becomes(Namespace),
-                       event.project, event.note_target],
+      polymorphic_url([event.project, event.note_target],
                         anchor: dom_id(event.target))
     end
+  end
+
+  def event_wiki_title_html(event)
+    capture do
+      concat content_tag(:span, _('wiki page'), class: "event-target-type gl-mr-2")
+      concat link_to(event.target_title, event_wiki_page_target_url(event),
+                     title: event.target_title,
+                     class: 'has-tooltip event-target-link gl-mr-2')
+    end
+  end
+
+  def event_design_title_html(event)
+    capture do
+      concat content_tag(:span, _('design'), class: "event-target-type gl-mr-2")
+      concat link_to(event.design.reference_link_text, design_url(event.design),
+                     title: event.target_title,
+                     class: 'has-tooltip event-design event-target-link gl-mr-2')
+    end
+  end
+
+  def event_wiki_page_target_url(event)
+    project_wiki_url(event.project, event.target&.canonical_slug || Wiki::HOMEPAGE)
   end
 
   def event_note_title_html(event)
     if event.note_target
       capture do
-        concat content_tag(:span, event.note_target_type, class: "event-target-type append-right-4")
-        concat link_to(event.note_target_reference, event_note_target_url(event), title: event.target_title, class: 'has-tooltip event-target-link append-right-4')
+        concat content_tag(:span, event.note_target_type_name, class: "event-target-type gl-mr-2")
+        concat link_to(event.note_target_reference, event_note_target_url(event), title: event.target_title, class: 'has-tooltip event-target-link gl-mr-2')
       end
     else
       content_tag(:strong, '(deleted)')
@@ -186,12 +228,23 @@ module EventsHelper
   def event_commit_title(message)
     message ||= ''
     (message.split("\n").first || "").truncate(70)
-  rescue
+  rescue StandardError
     "--broken encoding"
   end
 
   def icon_for_event(note, size: 24)
     icon_name = ICON_NAMES_BY_EVENT_TYPE[note]
+    sprite_icon(icon_name, size: size) if icon_name
+  end
+
+  DESIGN_ICONS = {
+    'created' => 'upload',
+    'updated' => 'pencil',
+    'destroyed' => ICON_NAMES_BY_EVENT_TYPE['destroyed']
+  }.freeze
+
+  def design_event_icon(action, size: 24)
+    icon_name = DESIGN_ICONS[action]
     sprite_icon(icon_name, size: size) if icon_name
   end
 
@@ -202,14 +255,16 @@ module EventsHelper
       end
     else
       content_tag :div, class: 'system-note-image user-avatar' do
-        author_avatar(event, size: 40)
+        author_avatar(event, size: 32)
       end
     end
   end
 
   def inline_event_icon(event)
     unless current_path?('users#show')
-      content_tag :span, class: "system-note-image-inline d-none d-sm-flex append-right-4 #{event.action_name.parameterize}-icon align-self-center" do
+      content_tag :span, class: "system-note-image-inline d-none d-sm-flex gl-mr-2 #{event.action_name.parameterize}-icon align-self-center" do
+        next design_event_icon(event.action, size: 14) if event.design?
+
         icon_for_event(event.action_name, size: 14)
       end
     end
@@ -217,11 +272,21 @@ module EventsHelper
 
   def event_user_info(event)
     content_tag(:div, class: "event-user-info") do
-      concat content_tag(:span, link_to_author(event), class: "author_name")
+      concat content_tag(:span, link_to_author(event), class: "author-name")
       concat "&nbsp;".html_safe
       concat content_tag(:span, event.author.to_reference, class: "username")
     end
   end
+
+  private
+
+  def design_url(design, opts = {})
+    designs_project_issue_url(
+      design.project,
+      design.issue,
+      opts.merge(vueroute: design.filename)
+    )
+  end
 end
 
-EventsHelper.prepend_if_ee('EE::EventsHelper')
+EventsHelper.prepend_mod_with('EventsHelper')

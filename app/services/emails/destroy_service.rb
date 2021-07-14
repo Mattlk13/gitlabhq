@@ -13,9 +13,9 @@ module Emails
         user.update_secondary_emails!
       end
 
-      result[:status] == 'success'
+      result[:status] == :success
     end
   end
 end
 
-Emails::DestroyService.prepend_if_ee('EE::Emails::DestroyService')
+Emails::DestroyService.prepend_mod_with('Emails::DestroyService')

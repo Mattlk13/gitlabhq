@@ -1,12 +1,24 @@
 <script>
+/* eslint-disable vue/no-v-html */
+import {
+  GlBadge,
+  GlLink,
+  GlDeprecatedSkeletonLoading as GlSkeletonLoading,
+  GlTooltipDirective,
+  GlLoadingIcon,
+  GlIcon,
+  GlHoverLoadDirective,
+} from '@gitlab/ui';
 import { escapeRegExp } from 'lodash';
-import { GlBadge, GlLink, GlSkeletonLoading, GlTooltipDirective, GlLoadingIcon } from '@gitlab/ui';
-import { visitUrl } from '~/lib/utils/url_utility';
+import filesQuery from 'shared_queries/repository/files.query.graphql';
+import { escapeFileUrl } from '~/lib/utils/url_utility';
+import { TREE_PAGE_SIZE } from '~/repository/constants';
+import FileIcon from '~/vue_shared/components/file_icon.vue';
 import TimeagoTooltip from '~/vue_shared/components/time_ago_tooltip.vue';
-import Icon from '~/vue_shared/components/icon.vue';
-import { getIconName } from '../../utils/icon';
+import glFeatureFlagMixin from '~/vue_shared/mixins/gl_feature_flags_mixin';
 import getRefMixin from '../../mixins/get_ref';
-import getCommit from '../../queries/getCommit.query.graphql';
+import blobInfoQuery from '../../queries/blob_info.query.graphql';
+import commitQuery from '../../queries/commit.query.graphql';
 
 export default {
   components: {
@@ -14,27 +26,34 @@ export default {
     GlLink,
     GlSkeletonLoading,
     GlLoadingIcon,
+    GlIcon,
     TimeagoTooltip,
-    Icon,
+    FileIcon,
   },
   directives: {
     GlTooltip: GlTooltipDirective,
+    GlHoverLoad: GlHoverLoadDirective,
   },
   apollo: {
     commit: {
-      query: getCommit,
+      query: commitQuery,
       variables() {
         return {
           fileName: this.name,
           type: this.type,
           path: this.currentPath,
           projectPath: this.projectPath,
+          maxOffset: this.totalEntries,
         };
       },
     },
   },
-  mixins: [getRefMixin],
+  mixins: [getRefMixin, glFeatureFlagMixin()],
   props: {
+    totalEntries: {
+      type: Number,
+      required: true,
+    },
     id: {
       type: String,
       required: true,
@@ -58,6 +77,11 @@ export default {
     path: {
       type: String,
       required: true,
+    },
+    mode: {
+      type: String,
+      required: false,
+      default: '',
     },
     type: {
       type: String,
@@ -90,13 +114,21 @@ export default {
     };
   },
   computed: {
-    routerLinkTo() {
-      return this.isFolder
-        ? { path: `/-/tree/${escape(this.ref)}/${encodeURIComponent(this.path)}` }
-        : null;
+    refactorBlobViewerEnabled() {
+      return this.glFeatures.refactorBlobViewer;
     },
-    iconName() {
-      return `fa-${getIconName(this.type, this.path)}`;
+    routerLinkTo() {
+      const blobRouteConfig = { path: `/-/blob/${this.escapedRef}/${escapeFileUrl(this.path)}` };
+      const treeRouteConfig = { path: `/-/tree/${this.escapedRef}/${escapeFileUrl(this.path)}` };
+
+      if (this.refactorBlobViewerEnabled && this.isBlob) {
+        return blobRouteConfig;
+      }
+
+      return this.isFolder ? treeRouteConfig : null;
+    },
+    isBlob() {
+      return this.type === 'blob';
     },
     isFolder() {
       return this.type === 'tree';
@@ -105,7 +137,7 @@ export default {
       return this.type === 'commit';
     },
     linkComponent() {
-      return this.isFolder ? 'router-link' : 'a';
+      return this.isFolder || (this.refactorBlobViewerEnabled && this.isBlob) ? 'router-link' : 'a';
     },
     fullPath() {
       return this.path.replace(new RegExp(`^${escapeRegExp(this.currentPath)}/`), '');
@@ -118,65 +150,90 @@ export default {
     },
   },
   methods: {
-    openRow(e) {
-      if (e.target.tagName === 'A') return;
-
-      if (this.isFolder && !e.metaKey) {
-        this.$router.push(this.routerLinkTo);
-      } else {
-        visitUrl(this.url, e.metaKey);
+    handlePreload() {
+      return this.isFolder ? this.loadFolder() : this.loadBlob();
+    },
+    loadFolder() {
+      this.apolloQuery(filesQuery, {
+        projectPath: this.projectPath,
+        ref: this.ref,
+        path: this.path,
+        nextPageCursor: '',
+        pageSize: TREE_PAGE_SIZE,
+      });
+    },
+    loadBlob() {
+      if (!this.refactorBlobViewerEnabled) {
+        return;
       }
+
+      this.apolloQuery(blobInfoQuery, {
+        projectPath: this.projectPath,
+        filePath: this.path,
+      });
+    },
+    apolloQuery(query, variables) {
+      this.$apollo.query({ query, variables });
     },
   },
 };
 </script>
 
 <template>
-  <tr :class="`file_${id}`" class="tree-item" @click="openRow">
-    <td class="tree-item-file-name">
-      <gl-loading-icon
-        v-if="path === loadingPath"
-        size="sm"
-        inline
-        class="d-inline-block align-text-bottom fa-fw"
-      />
-      <i v-else :aria-label="type" role="img" :class="iconName" class="fa fa-fw"></i>
+  <tr class="tree-item">
+    <td class="tree-item-file-name cursor-default position-relative">
       <component
         :is="linkComponent"
         ref="link"
+        v-gl-hover-load="handlePreload"
+        v-gl-tooltip:tooltip-container
+        :title="fullPath"
         :to="routerLinkTo"
         :href="url"
-        class="str-truncated"
+        :class="{
+          'is-submodule': isSubmodule,
+        }"
+        class="tree-item-link str-truncated"
         data-qa-selector="file_name_link"
       >
-        {{ fullPath }}
+        <file-icon
+          :file-name="fullPath"
+          :file-mode="mode"
+          :folder="isFolder"
+          :submodule="isSubmodule"
+          :loading="path === loadingPath"
+          css-classes="position-relative file-icon"
+          class="mr-1 position-relative text-secondary"
+        /><span class="position-relative">{{ fullPath }}</span>
       </component>
-      <!-- eslint-disable-next-line @gitlab/vue-i18n/no-bare-strings -->
-      <gl-badge v-if="lfsOid" variant="default" class="label-lfs ml-1">LFS</gl-badge>
+      <!-- eslint-disable @gitlab/vue-require-i18n-strings -->
+      <gl-badge v-if="lfsOid" variant="muted" size="sm" class="ml-1" data-qa-selector="label-lfs"
+        >LFS</gl-badge
+      >
+      <!-- eslint-enable @gitlab/vue-require-i18n-strings -->
       <template v-if="isSubmodule">
         @ <gl-link :href="submoduleTreeUrl" class="commit-sha">{{ shortSha }}</gl-link>
       </template>
-      <icon
+      <gl-icon
         v-if="hasLockLabel"
         v-gl-tooltip
         :title="commit.lockLabel"
         name="lock"
         :size="12"
-        class="ml-2 vertical-align-middle"
+        class="ml-1"
       />
     </td>
-    <td class="d-none d-sm-table-cell tree-commit">
+    <td class="d-none d-sm-table-cell tree-commit cursor-default">
       <gl-link
         v-if="commit"
         :href="commit.commitPath"
         :title="commit.message"
         class="str-truncated-100 tree-commit-link"
-      >
-        {{ commit.message }}
-      </gl-link>
+        v-html="commit.titleHtml"
+      />
       <gl-skeleton-loading v-else :lines="1" class="h-auto" />
     </td>
-    <td class="tree-time-ago text-right">
+    <td class="tree-time-ago text-right cursor-default">
       <timeago-tooltip v-if="commit" :time="commit.committedDate" />
       <gl-skeleton-loading v-else :lines="1" class="ml-auto h-auto w-50" />
     </td>

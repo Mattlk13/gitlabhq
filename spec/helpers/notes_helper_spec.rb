@@ -2,26 +2,57 @@
 
 require "spec_helper"
 
-describe NotesHelper do
+RSpec.describe NotesHelper do
   include RepoHelpers
 
-  let(:owner) { create(:owner) }
-  let(:group) { create(:group) }
-  let(:project) { create(:project, namespace: group) }
-  let(:maintainer) { create(:user) }
-  let(:reporter) { create(:user) }
-  let(:guest) { create(:user) }
+  let_it_be(:owner) { create(:owner) }
+  let_it_be(:group) { create(:group) }
+  let_it_be(:project) { create(:project, namespace: group) }
+  let_it_be(:maintainer) { create(:user) }
+  let_it_be(:reporter) { create(:user) }
+  let_it_be(:guest) { create(:user) }
 
-  let(:owner_note) { create(:note, author: owner, project: project) }
-  let(:maintainer_note) { create(:note, author: maintainer, project: project) }
-  let(:reporter_note) { create(:note, author: reporter, project: project) }
+  let_it_be(:owner_note) { create(:note, author: owner, project: project) }
+  let_it_be(:maintainer_note) { create(:note, author: maintainer, project: project) }
+  let_it_be(:reporter_note) { create(:note, author: reporter, project: project) }
+
   let!(:notes) { [owner_note, maintainer_note, reporter_note] }
 
-  before do
+  before_all do
     group.add_owner(owner)
     project.add_maintainer(maintainer)
     project.add_reporter(reporter)
     project.add_guest(guest)
+  end
+
+  describe '#note_target_title' do
+    context 'note does not exist' do
+      it 'returns nil' do
+        expect(helper.note_target_title(nil)).to be_blank
+      end
+    end
+
+    context 'target does not exist' do
+      it 'returns nil' do
+        note = Note.new
+        expect(helper.note_target_title(note)).to be_blank
+      end
+    end
+
+    context 'when given a design target' do
+      it 'returns nil' do
+        note = build_stubbed(:note_on_design)
+        expect(helper.note_target_title(note)).to be_blank
+      end
+    end
+
+    context 'when given a non-design target' do
+      it 'returns the issue title' do
+        issue = build_stubbed(:issue, title: 'Issue 1')
+        note = build_stubbed(:note, noteable: issue)
+        expect(helper.note_target_title(note)).to eq('Issue 1')
+      end
+    end
   end
 
   describe "#notes_max_access_for_users" do
@@ -42,14 +73,15 @@ describe NotesHelper do
   end
 
   describe '#discussion_path' do
-    let(:project) { create(:project, :repository) }
+    let_it_be(:project) { create(:project, :repository) }
+
     let(:anchor) { discussion.line_code }
 
     context 'for a merge request discusion' do
-      let(:merge_request) { create(:merge_request, source_project: project, target_project: project, importing: true) }
-      let!(:merge_request_diff1) { merge_request.merge_request_diffs.create(head_commit_sha: '6f6d7e7ed97bb5f0054f2b1df789b39ca89b6ff9') }
-      let!(:merge_request_diff2) { merge_request.merge_request_diffs.create(head_commit_sha: nil) }
-      let!(:merge_request_diff3) { merge_request.merge_request_diffs.create(head_commit_sha: '5937ac0a7beb003549fc5fd26fc247adbce4a52e') }
+      let_it_be(:merge_request) { create(:merge_request, source_project: project, target_project: project, importing: true) }
+      let_it_be(:merge_request_diff1) { merge_request.merge_request_diffs.create!(head_commit_sha: '6f6d7e7ed97bb5f0054f2b1df789b39ca89b6ff9') }
+      let_it_be(:merge_request_diff2) { merge_request.merge_request_diffs.create!(head_commit_sha: nil) }
+      let_it_be(:merge_request_diff3) { merge_request.merge_request_diffs.create!(head_commit_sha: '5937ac0a7beb003549fc5fd26fc247adbce4a52e') }
 
       context 'for a diff discussion' do
         context 'when the discussion is active' do
@@ -195,24 +227,22 @@ describe NotesHelper do
     it 'return snippet notes path for personal snippet' do
       @snippet = create(:personal_snippet)
 
-      expect(helper.notes_url).to eq("/snippets/#{@snippet.id}/notes")
+      expect(helper.notes_url).to eq("/-/snippets/#{@snippet.id}/notes")
     end
 
     it 'return project notes path for project snippet' do
-      namespace = create(:namespace, path: 'nm')
-      @project = create(:project, path: 'test', namespace: namespace)
+      @project = project
       @snippet = create(:project_snippet, project: @project)
       @noteable = @snippet
 
-      expect(helper.notes_url).to eq("/nm/test/noteable/project_snippet/#{@noteable.id}/notes")
+      expect(helper.notes_url).to eq("/#{project.full_path}/noteable/project_snippet/#{@noteable.id}/notes")
     end
 
     it 'return project notes path for other noteables' do
-      namespace = create(:namespace, path: 'nm')
-      @project = create(:project, path: 'test', namespace: namespace)
+      @project = project
       @noteable = create(:issue, project: @project)
 
-      expect(helper.notes_url).to eq("/nm/test/noteable/issue/#{@noteable.id}/notes")
+      expect(helper.notes_url).to eq("/#{@project.full_path}/noteable/issue/#{@noteable.id}/notes")
     end
   end
 
@@ -220,23 +250,21 @@ describe NotesHelper do
     it 'return snippet notes path for personal snippet' do
       note = create(:note_on_personal_snippet)
 
-      expect(helper.note_url(note)).to eq("/snippets/#{note.noteable.id}/notes/#{note.id}")
+      expect(helper.note_url(note)).to eq("/-/snippets/#{note.noteable.id}/notes/#{note.id}")
     end
 
     it 'return project notes path for project snippet' do
-      namespace = create(:namespace, path: 'nm')
-      @project = create(:project, path: 'test', namespace: namespace)
+      @project = project
       note = create(:note_on_project_snippet, project: @project)
 
-      expect(helper.note_url(note)).to eq("/nm/test/notes/#{note.id}")
+      expect(helper.note_url(note)).to eq("/#{project.full_path}/notes/#{note.id}")
     end
 
     it 'return project notes path for other noteables' do
-      namespace = create(:namespace, path: 'nm')
-      @project = create(:project, path: 'test', namespace: namespace)
+      @project = project
       note = create(:note_on_issue, project: @project)
 
-      expect(helper.note_url(note)).to eq("/nm/test/notes/#{note.id}")
+      expect(helper.note_url(note)).to eq("/#{project.full_path}/notes/#{note.id}")
     end
   end
 
@@ -249,30 +277,27 @@ describe NotesHelper do
     end
 
     it 'returns namespace, project and note for project snippet' do
-      namespace = create(:namespace, path: 'nm')
-      @project = create(:project, path: 'test', namespace: namespace)
+      @project = project
       @snippet = create(:project_snippet, project: @project)
       @note = create(:note_on_personal_snippet)
 
-      expect(helper.form_resources).to eq([@project.namespace, @project, @note])
+      expect(helper.form_resources).to eq([@project, @note])
     end
 
     it 'returns namespace, project and note path for other noteables' do
-      namespace = create(:namespace, path: 'nm')
-      @project = create(:project, path: 'test', namespace: namespace)
+      @project = project
       @note = create(:note_on_issue, project: @project)
 
-      expect(helper.form_resources).to eq([@project.namespace, @project, @note])
+      expect(helper.form_resources).to eq([@project, @note])
     end
   end
 
   describe '#noteable_note_url' do
-    let(:project) { create(:project) }
     let(:issue) { create(:issue, project: project) }
     let(:note) { create(:note_on_issue, noteable: issue, project: project) }
 
     it 'returns the noteable url with an anchor to the note' do
-      expect(noteable_note_url(note)).to match("/#{project.namespace.path}/#{project.path}/issues/#{issue.iid}##{dom_id(note)}")
+      expect(noteable_note_url(note)).to match("/#{project.namespace.path}/#{project.path}/-/issues/#{issue.iid}##{dom_id(note)}")
     end
   end
 
@@ -291,6 +316,17 @@ describe NotesHelper do
       it 'returns "Resolved"' do
         expect(discussion_resolved_intro(discussion)).to eq('Resolved')
       end
+    end
+  end
+
+  describe '#notes_data' do
+    let(:issue) { create(:issue, project: project) }
+
+    it 'sets last_fetched_at to 0 when start_at_zero is true' do
+      @project = project
+      @noteable = issue
+
+      expect(helper.notes_data(issue, true)[:lastFetchedAt]).to eq(0)
     end
   end
 end

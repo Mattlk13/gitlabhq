@@ -8,8 +8,6 @@ require 'grpc/health/v1/health_services_pb'
 
 module Gitlab
   module GitalyClient
-    include Gitlab::Metrics::Methods
-
     class TooManyInvocationsError < StandardError
       attr_reader :call_site, :invocation_count, :max_call_stack
 
@@ -42,7 +40,7 @@ module Gitlab
           klass = stub_class(name)
           addr = stub_address(storage)
           creds = stub_creds(storage)
-          klass.new(addr, creds, interceptors: interceptors)
+          klass.new(addr, creds, interceptors: interceptors, channel_args: channel_args)
         end
       end
     end
@@ -53,6 +51,16 @@ module Gitlab
       [Labkit::Tracing::GRPC::ClientInterceptor.instance]
     end
     private_class_method :interceptors
+
+    def self.channel_args
+      # These values match the go Gitaly client
+      # https://gitlab.com/gitlab-org/gitaly/-/blob/bf9f52bc/client/dial.go#L78
+      {
+        'grpc.keepalive_time_ms': 20000,
+        'grpc.keepalive_permit_without_calls': 1
+      }
+    end
+    private_class_method :channel_args
 
     def self.stub_cert_paths
       cert_paths = Dir["#{OpenSSL::X509::DEFAULT_CERT_DIR}/*"]
@@ -112,7 +120,7 @@ module Gitlab
         raise "storage #{storage.inspect} is missing a gitaly_address"
       end
 
-      unless URI(address).scheme.in?(%w(tcp unix tls))
+      unless %w(tcp unix tls).include?(URI(address).scheme)
         raise "Unsupported Gitaly address: #{address.inspect} does not use URL scheme 'tcp' or 'unix' or 'tls'"
       end
 
@@ -120,7 +128,7 @@ module Gitlab
     end
 
     def self.address_metadata(storage)
-      Base64.strict_encode64(JSON.dump(storage => connection_data(storage)))
+      Base64.strict_encode64(Gitlab::Json.dump(storage => connection_data(storage)))
     end
 
     def self.connection_data(storage)
@@ -141,21 +149,22 @@ module Gitlab
     #   kwargs.merge(deadline: Time.now + 10)
     # end
     #
+    # The optional remote_storage keyword argument is used to enable
+    # inter-gitaly calls. Say you have an RPC that needs to pull data from
+    # one repository to another. For example, to fetch a branch from a
+    # (non-deduplicated) fork into the fork parent. In that case you would
+    # send an RPC call to the Gitaly server hosting the fork parent, and in
+    # the request, you would tell that Gitaly server to pull Git data from
+    # the fork. How does that Gitaly server connect to the Gitaly server the
+    # forked repo lives on? This is the problem `remote_storage:` solves: it
+    # adds address and authentication information to the call, as gRPC
+    # metadata (under the `gitaly-servers` header). The request would say
+    # "pull from repo X on gitaly-2". In the Ruby code you pass
+    # `remote_storage: 'gitaly-2'`. And then the metadata would say
+    # "gitaly-2 is at network address tcp://10.0.1.2:8075".
+    #
     def self.call(storage, service, rpc, request, remote_storage: nil, timeout: default_timeout, &block)
-      self.measure_timings(service, rpc, request) do
-        self.execute(storage, service, rpc, request, remote_storage: remote_storage, timeout: timeout, &block)
-      end
-    end
-
-    # This method is like GitalyClient.call but should be used with
-    # Gitaly streaming RPCs. It measures how long the the RPC took to
-    # produce the full response, not just the initial response.
-    def self.streaming_call(storage, service, rpc, request, remote_storage: nil, timeout: default_timeout)
-      self.measure_timings(service, rpc, request) do
-        response = self.execute(storage, service, rpc, request, remote_storage: remote_storage, timeout: timeout)
-
-        yield(response)
-      end
+      Gitlab::GitalyClient::Call.new(storage, service, rpc, request, remote_storage, timeout).call(&block)
     end
 
     def self.execute(storage, service, rpc, request, remote_storage:, timeout:)
@@ -168,38 +177,17 @@ module Gitlab
       stub(service, storage).__send__(rpc, request, kwargs) # rubocop:disable GitlabSecurity/PublicSend
     end
 
-    def self.measure_timings(service, rpc, request)
-      start = Gitlab::Metrics::System.monotonic_time
-
-      yield
-    ensure
-      duration = Gitlab::Metrics::System.monotonic_time - start
-      request_hash = request.is_a?(Google::Protobuf::MessageExts) ? request.to_h : {}
-
-      # Keep track, separately, for the performance bar
-      self.query_time += duration
-      if Gitlab::PerformanceBar.enabled_for_request?
-        add_call_details(feature: "#{service}##{rpc}", duration: duration, request: request_hash, rpc: rpc,
-                         backtrace: Gitlab::BacktraceCleaner.clean_backtrace(caller))
-      end
-    end
-
     def self.query_time
-      SafeRequestStore[:gitaly_query_time] ||= 0
+      query_time = Gitlab::SafeRequestStore[:gitaly_query_time] || 0
+      query_time.round(Gitlab::InstrumentationHelper::DURATION_PRECISION)
     end
 
-    def self.query_time=(duration)
-      SafeRequestStore[:gitaly_query_time] = duration
-    end
+    def self.add_query_time(duration)
+      return unless Gitlab::SafeRequestStore.active?
 
-    def self.query_time_ms
-      (self.query_time * 1000).round(2)
+      Gitlab::SafeRequestStore[:gitaly_query_time] ||= 0
+      Gitlab::SafeRequestStore[:gitaly_query_time] += duration
     end
-
-    def self.current_transaction_labels
-      Gitlab::Metrics::Transaction.current&.labels || {}
-    end
-    private_class_method :current_transaction_labels
 
     # For some time related tasks we can't rely on `Time.now` since it will be
     # affected by Timecop in some tests, and the clock of some gitaly-related
@@ -215,7 +203,7 @@ module Gitlab
     def self.authorization_token(storage)
       token = token(storage).to_s
       issued_at = real_time.to_i.to_s
-      hmac = OpenSSL::HMAC.hexdigest(OpenSSL::Digest::SHA256.new, token, issued_at)
+      hmac = OpenSSL::HMAC.hexdigest(OpenSSL::Digest.new('SHA256'), token, issued_at)
 
       "v2.#{hmac}.#{issued_at}"
     end
@@ -227,19 +215,42 @@ module Gitlab
         'client_name' => CLIENT_NAME
       }
 
+      context_data = Gitlab::ApplicationContext.current
+
       feature_stack = Thread.current[:gitaly_feature_stack]
       feature = feature_stack && feature_stack[0]
       metadata['call_site'] = feature.to_s if feature
       metadata['gitaly-servers'] = address_metadata(remote_storage) if remote_storage
       metadata['x-gitlab-correlation-id'] = Labkit::Correlation::CorrelationId.current_id if Labkit::Correlation::CorrelationId.current_id
       metadata['gitaly-session-id'] = session_id
+      metadata['username'] = context_data['meta.user'] if context_data&.fetch('meta.user', nil)
+      metadata['remote_ip'] = context_data['meta.remote_ip'] if context_data&.fetch('meta.remote_ip', nil)
       metadata.merge!(Feature::Gitaly.server_feature_flags)
+      metadata.merge!(route_to_primary)
 
       deadline_info = request_deadline(timeout)
       metadata.merge!(deadline_info.slice(:deadline_type))
 
       { metadata: metadata, deadline: deadline_info[:deadline] }
     end
+
+    # Gitlab::Git::HookEnv will set the :gitlab_git_env variable in case we're
+    # running in the context of a Gitaly hook call, which may make use of
+    # quarantined object directories. We thus need to pass along the path of
+    # the quarantined object directory to Gitaly, otherwise it won't be able to
+    # find these quarantined objects. Given that the quarantine directory is
+    # generated with a random name, they'll have different names when multiple
+    # Gitaly nodes take part in a single transaction. As a result, we are
+    # forced to route all requests to the primary node which has injected the
+    # quarantine object directory to us.
+    def self.route_to_primary
+      return {} unless Gitlab::SafeRequestStore.active?
+
+      return {} if Gitlab::SafeRequestStore[:gitlab_git_env].blank?
+
+      { 'gitaly-route-repository-accessor-policy' => 'primary-only' }
+    end
+    private_class_method :route_to_primary
 
     def self.request_deadline(timeout)
       # timeout being 0 means the request is allowed to run indefinitely.
@@ -437,7 +448,7 @@ module Gitlab
 
     def self.filesystem_id_from_disk(storage)
       metadata_file = File.read(storage_metadata_file_path(storage))
-      metadata_hash = JSON.parse(metadata_file)
+      metadata_hash = Gitlab::Json.parse(metadata_file)
       metadata_hash['gitaly_filesystem_id']
     rescue Errno::ENOENT, Errno::EACCES, JSON::ParserError
       nil
@@ -462,7 +473,7 @@ module Gitlab
 
       stack_string = Gitlab::BacktraceCleaner.clean_backtrace(caller).drop(1).join("\n")
 
-      Gitlab::SafeRequestStore[:stack_counter] ||= Hash.new
+      Gitlab::SafeRequestStore[:stack_counter] ||= {}
 
       count = Gitlab::SafeRequestStore[:stack_counter][stack_string] || 0
       Gitlab::SafeRequestStore[:stack_counter][stack_string] = count + 1
@@ -488,7 +499,7 @@ module Gitlab
       return unless stack_counter
 
       max = max_call_count
-      return if max.zero?
+      return if max == 0
 
       stack_counter.select { |_, v| v == max }.keys
     end

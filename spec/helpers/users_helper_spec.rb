@@ -2,7 +2,7 @@
 
 require 'spec_helper'
 
-describe UsersHelper do
+RSpec.describe UsersHelper do
   include TermsHelper
 
   let(:user) { create(:user) }
@@ -95,9 +95,9 @@ describe UsersHelper do
     end
 
     it 'includes the settings tab if the user can update themself' do
-      expect(helper).to receive(:can?).with(user, :read_user, user) { true }
+      expect(helper).to receive(:can?).with(user, :update_user, user) { true }
 
-      expect(items).to include(:profile)
+      expect(items).to include(:settings)
     end
 
     context 'when terms are enforced' do
@@ -126,6 +126,26 @@ describe UsersHelper do
       end
     end
 
+    context 'with a pending approval user' do
+      it 'returns the pending approval badge' do
+        blocked_pending_approval_user = create(:user, :blocked_pending_approval)
+
+        badges = helper.user_badges_in_admin_section(blocked_pending_approval_user)
+
+        expect(filter_ee_badges(badges)).to eq([text: 'Pending approval', variant: 'info'])
+      end
+    end
+
+    context 'with a banned user' do
+      it 'returns the banned badge' do
+        banned_user = create(:user, :banned)
+
+        badges = helper.user_badges_in_admin_section(banned_user)
+
+        expect(filter_ee_badges(badges)).to eq([text: 'Banned', variant: 'danger'])
+      end
+    end
+
     context 'with an admin user' do
       it "returns the admin badge" do
         admin_user = create(:admin)
@@ -150,7 +170,7 @@ describe UsersHelper do
       it 'returns the "It\'s You" badge' do
         badges = helper.user_badges_in_admin_section(user)
 
-        expect(filter_ee_badges(badges)).to eq([text: "It's you!", variant: nil])
+        expect(filter_ee_badges(badges)).to eq([text: "It's you!", variant: "muted"])
       end
     end
 
@@ -175,6 +195,204 @@ describe UsersHelper do
         badges = helper.user_badges_in_admin_section(user)
 
         expect(filter_ee_badges(badges)).to be_empty
+      end
+    end
+  end
+
+  describe '#can_force_email_confirmation?' do
+    subject { helper.can_force_email_confirmation?(user) }
+
+    context 'for a user that is already confirmed' do
+      it { is_expected.to eq(false) }
+    end
+
+    context 'for a user that is not confirmed' do
+      let(:user) { create(:user, :unconfirmed) }
+
+      it { is_expected.to eq(true) }
+    end
+  end
+
+  describe '#work_information' do
+    let(:with_schema_markup) { false }
+
+    subject { helper.work_information(user, with_schema_markup: with_schema_markup) }
+
+    context 'when neither organization nor job_title are present' do
+      it { is_expected.to be_nil }
+    end
+
+    context 'when user parameter is nil' do
+      let(:user) { nil }
+
+      it { is_expected.to be_nil }
+    end
+
+    context 'without schema markup' do
+      context 'when both job_title and organization are present' do
+        let(:user) { build(:user, organization: 'GitLab', job_title: 'Frontend Engineer') }
+
+        it 'returns job title concatenated with organization' do
+          is_expected.to eq('Frontend Engineer at GitLab')
+        end
+      end
+
+      context 'when only organization is present' do
+        let(:user) { build(:user, organization: 'GitLab') }
+
+        it "returns organization" do
+          is_expected.to eq('GitLab')
+        end
+      end
+
+      context 'when only job_title is present' do
+        let(:user) { build(:user, job_title: 'Frontend Engineer') }
+
+        it 'returns job title' do
+          is_expected.to eq('Frontend Engineer')
+        end
+      end
+    end
+
+    context 'with schema markup' do
+      let(:with_schema_markup) { true }
+
+      context 'when both job_title and organization are present' do
+        let(:user) { build(:user, organization: 'GitLab', job_title: 'Frontend Engineer') }
+
+        it 'returns job title concatenated with organization' do
+          is_expected.to eq('<span itemprop="jobTitle">Frontend Engineer</span> at <span itemprop="worksFor">GitLab</span>')
+        end
+      end
+
+      context 'when only organization is present' do
+        let(:user) { build(:user, organization: 'GitLab') }
+
+        it "returns organization" do
+          is_expected.to eq('<span itemprop="worksFor">GitLab</span>')
+        end
+      end
+
+      context 'when only job_title is present' do
+        let(:user) { build(:user, job_title: 'Frontend Engineer') }
+
+        it 'returns job title' do
+          is_expected.to eq('<span itemprop="jobTitle">Frontend Engineer</span>')
+        end
+      end
+    end
+  end
+
+  describe '#user_display_name' do
+    subject { helper.user_display_name(user) }
+
+    before do
+      stub_current_user(nil)
+    end
+
+    context 'for a confirmed user' do
+      let(:user) { create(:user) }
+
+      before do
+        stub_profile_permission_allowed(true)
+      end
+
+      it { is_expected.to eq(user.name) }
+    end
+
+    context 'for an unconfirmed user' do
+      let(:user) { create(:user, :unconfirmed) }
+
+      before do
+        stub_profile_permission_allowed(false)
+      end
+
+      it { is_expected.to eq('Unconfirmed user') }
+
+      context 'when current user is an admin' do
+        before do
+          admin_user = create(:admin)
+          stub_current_user(admin_user)
+          stub_profile_permission_allowed(true, admin_user)
+        end
+
+        it { is_expected.to eq(user.name) }
+      end
+
+      context 'when the current user is self' do
+        before do
+          stub_current_user(user)
+          stub_profile_permission_allowed(true, user)
+        end
+
+        it { is_expected.to eq(user.name) }
+      end
+    end
+
+    context 'for a blocked user' do
+      let(:user) { create(:user, :blocked) }
+
+      it { is_expected.to eq('Blocked user') }
+    end
+
+    def stub_current_user(user)
+      allow(helper).to receive(:current_user).and_return(user)
+    end
+
+    def stub_profile_permission_allowed(allowed, current_user = nil)
+      allow(helper).to receive(:can?).with(current_user, :read_user_profile, user).and_return(allowed)
+    end
+  end
+
+  describe '#admin_users_data_attributes' do
+    subject(:data) { helper.admin_users_data_attributes([user]) }
+
+    before do
+      allow(helper).to receive(:current_user).and_return(user)
+    end
+
+    it 'users matches the serialized json' do
+      entity = double
+      expect_next_instance_of(Admin::UserSerializer) do |instance|
+        expect(instance).to receive(:represent).with([user], current_user: user).and_return(entity)
+      end
+      expect(entity).to receive(:to_json).and_return("{\"username\":\"admin\"}")
+      expect(data[:users]).to eq "{\"username\":\"admin\"}"
+    end
+
+    it 'paths matches the schema' do
+      expect(data[:paths]).to match_schema('entities/admin_users_data_attributes_paths')
+    end
+  end
+
+  describe '#confirm_user_data' do
+    confirm_admin_user_path = '/admin/users/root/confirm'
+
+    before do
+      allow(helper).to receive(:confirm_admin_user_path).with(user).and_return(confirm_admin_user_path)
+    end
+
+    subject(:confirm_user_data) { helper.confirm_user_data(user) }
+
+    it 'sets `path` key correctly' do
+      expect(confirm_user_data[:path]).to eq(confirm_admin_user_path)
+    end
+
+    it 'sets `modal_attributes` key to valid json' do
+      expect(confirm_user_data[:modal_attributes]).to be_valid_json
+    end
+
+    context 'when `user.unconfirmed_email` is set' do
+      let(:user) { create(:user, unconfirmed_email: 'foo@bar.com') }
+
+      it 'sets `modal_attributes.messageHtml` correctly' do
+        expect(Gitlab::Json.parse(confirm_user_data[:modal_attributes])['messageHtml']).to eq('This user has an unconfirmed email address (foo@bar.com). You may force a confirmation.')
+      end
+    end
+
+    context 'when `user.unconfirmed_email` is not set' do
+      it 'sets `modal_attributes.messageHtml` correctly' do
+        expect(Gitlab::Json.parse(confirm_user_data[:modal_attributes])['messageHtml']).to eq('This user has an unconfirmed email address. You may force a confirmation.')
       end
     end
   end

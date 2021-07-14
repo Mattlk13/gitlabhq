@@ -52,7 +52,7 @@
     top: $system-header-height + $header-height;
   }
 
-  .content-wrapper {
+  .content-wrapper-margin {
     margin-top: $system-header-height + $header-height;
   }
 
@@ -60,7 +60,8 @@
   // System Header
   &.with-performance-bar {
     // main navigation
-    header.navbar-gitlab {
+    header.navbar-gitlab,
+    .fixed-top {
       top: $performance-bar-height + $system-header-height;
     }
 
@@ -83,11 +84,20 @@
   // right sidebar eg: mr page
   .nav-sidebar,
   .right-sidebar,
-    // navless pages' footer eg: login page
-    // navless pages' footer border eg: login page
+  // navless pages' footer eg: login page
+  // navless pages' footer border eg: login page
   &.devise-layout-html body .footer-container,
   &.devise-layout-html body hr.footer-fixed {
     bottom: $system-footer-height;
+  }
+
+  .content-wrapper-margin {
+    margin-bottom: 16px;
+  }
+
+  .boards-list,
+  .board-swimlanes {
+    height: calc(100vh - #{$header-height + $breadcrumb-min-height + $performance-bar-height + $system-footer-height + $gl-padding-32});
   }
 }
 

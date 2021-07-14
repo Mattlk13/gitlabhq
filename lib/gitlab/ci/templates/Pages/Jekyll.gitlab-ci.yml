@@ -1,12 +1,18 @@
+# To contribute improvements to CI/CD templates, please follow the Development guide at:
+# https://docs.gitlab.com/ee/development/cicd/templates.html
+# This specific template is located at:
+# https://gitlab.com/gitlab-org/gitlab/-/blob/master/lib/gitlab/ci/templates/Pages/Jekyll.gitlab-ci.yml
+
 # Template project: https://gitlab.com/pages/jekyll
-# Docs: https://docs.gitlab.com/ce/pages/
-image: ruby:2.3
+# Docs: https://docs.gitlab.com/ee/pages/
+image: ruby:2.6
 
 variables:
   JEKYLL_ENV: production
   LC_ALL: C.UTF-8
 
 before_script:
+  - gem install bundler
   - bundle install
 
 test:
@@ -17,7 +23,8 @@ test:
     paths:
       - test
   except:
-    - master
+    variables:
+      - $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
 
 pages:
   stage: deploy
@@ -27,4 +34,5 @@ pages:
     paths:
       - public
   only:
-    - master
+    variables:
+      - $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH

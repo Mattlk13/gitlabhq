@@ -2,6 +2,7 @@
 
 module MergeRequests
   class RefreshService < MergeRequests::BaseService
+    include Gitlab::Utils::StrongMemoize
     attr_reader :push
 
     def execute(oldrev, newrev, ref)
@@ -23,23 +24,37 @@ module MergeRequests
       post_merge_manually_merged
       link_forks_lfs_objects
       reload_merge_requests
-      outdate_suggestions
-      refresh_pipelines_on_merge_requests
-      abort_auto_merges
-      abort_ff_merge_requests_with_when_pipeline_succeeds
-      mark_pending_todos_done
-      cache_merge_requests_closing_issues
 
-      # Leave a system note if a branch was deleted/added
-      if @push.branch_added? || @push.branch_removed?
-        comment_mr_branch_presence_changed
+      merge_requests_for_source_branch.each do |mr|
+        outdate_suggestions(mr)
+        abort_auto_merges(mr)
+        mark_pending_todos_done(mr)
       end
 
-      notify_about_push
-      mark_mr_as_wip_from_commits
-      execute_mr_web_hooks
+      abort_ff_merge_requests_with_when_pipeline_succeeds
+      cache_merge_requests_closing_issues
+
+      merge_requests_for_source_branch.each do |mr|
+        # Leave a system note if a branch was deleted/added
+        if branch_added_or_removed?
+          comment_mr_branch_presence_changed(mr)
+        end
+
+        notify_about_push(mr)
+        mark_mr_as_draft_from_commits(mr)
+        execute_mr_web_hooks(mr)
+        # Run at the end of the loop to avoid any potential contention on the MR object
+        refresh_pipelines_on_merge_requests(mr)
+        merge_request_activity_counter.track_mr_including_ci_config(user: mr.author, merge_request: mr)
+      end
 
       true
+    end
+
+    def branch_added_or_removed?
+      strong_memoize(:branch_added_or_removed) do
+        @push.branch_added? || @push.branch_removed?
+      end
     end
 
     def close_upon_missing_source_branch_ref
@@ -48,7 +63,7 @@ module MergeRequests
       # the latest diff state as the last _valid_ one.
       merge_requests_for_source_branch.reject(&:source_branch_exists?).each do |mr|
         MergeRequests::CloseService
-          .new(mr.target_project, @current_user)
+          .new(project: mr.target_project, current_user: @current_user)
           .execute(mr)
       end
     end
@@ -61,7 +76,8 @@ module MergeRequests
     def post_merge_manually_merged
       commit_ids = @commits.map(&:id)
       merge_requests = @project.merge_requests.opened
-        .preload(:latest_merge_request_diff)
+        .preload_project_and_latest_diff
+        .preload_latest_diff_commit
         .where(target_branch: @push.branch_name).to_a
         .select(&:diff_head_commit)
         .select do |merge_request|
@@ -72,21 +88,16 @@ module MergeRequests
 
       return if merge_requests.empty?
 
-      commit_analyze_enabled = Feature.enabled?(:branch_push_merge_commit_analyze, @project, default_enabled: true)
-      if commit_analyze_enabled
-        analyzer = Gitlab::BranchPushMergeCommitAnalyzer.new(
-          @commits.reverse,
-          relevant_commit_ids: merge_requests.map(&:diff_head_sha)
-        )
-      end
+      analyzer = Gitlab::BranchPushMergeCommitAnalyzer.new(
+        @commits.reverse,
+        relevant_commit_ids: merge_requests.map(&:diff_head_sha)
+      )
 
       merge_requests.each do |merge_request|
-        if commit_analyze_enabled
-          merge_request.merge_commit_sha = analyzer.get_merge_commit(merge_request.diff_head_sha)
-        end
+        merge_request.merge_commit_sha = analyzer.get_merge_commit(merge_request.diff_head_sha)
 
         MergeRequests::PostMergeService
-          .new(merge_request.target_project, @current_user)
+          .new(project: merge_request.target_project, current_user: @current_user)
           .execute(merge_request)
       end
     end
@@ -99,7 +110,7 @@ module MergeRequests
 
       merge_requests_for_forks.find_each do |mr|
         LinkLfsObjectsService
-          .new(mr.target_project)
+          .new(project: mr.target_project)
           .execute(mr, oldrev: @push.oldrev, newrev: @push.newrev)
       end
     end
@@ -108,13 +119,20 @@ module MergeRequests
     # Note: we should update merge requests from forks too
     def reload_merge_requests
       merge_requests = @project.merge_requests.opened
-        .by_source_or_target_branch(@push.branch_name).to_a
+        .by_source_or_target_branch(@push.branch_name)
+        .preload_project_and_latest_diff
 
-      merge_requests += merge_requests_for_forks.to_a
+      merge_requests_from_forks = merge_requests_for_forks
+        .preload_project_and_latest_diff
 
-      filter_merge_requests(merge_requests).each do |merge_request|
+      merge_requests_array = merge_requests.to_a + merge_requests_from_forks.to_a
+      filter_merge_requests(merge_requests_array).each do |merge_request|
         if branch_and_project_match?(merge_request) || @push.force_push?
           merge_request.reload_diff(current_user)
+          # Clear existing merge error if the push were directed at the
+          # source branch. Clearing the error when the target branch
+          # changes will hide the error from the user.
+          merge_request.merge_error = nil
         elsif merge_request.merge_request_diff.includes_any_commits?(push_commit_ids)
           merge_request.reload_diff(current_user)
         end
@@ -136,25 +154,20 @@ module MergeRequests
         merge_request.source_branch == @push.branch_name
     end
 
-    def outdate_suggestions
-      outdate_service = Suggestions::OutdateService.new
-
-      merge_requests_for_source_branch.each do |merge_request|
-        outdate_service.execute(merge_request)
-      end
+    def outdate_suggestions(merge_request)
+      outdate_service.execute(merge_request)
     end
 
-    def refresh_pipelines_on_merge_requests
-      merge_requests_for_source_branch.each do |merge_request|
-        create_pipeline_for(merge_request, current_user)
-        UpdateHeadPipelineForMergeRequestWorker.perform_async(merge_request.id)
-      end
+    def outdate_service
+      @outdate_service ||= Suggestions::OutdateService.new
     end
 
-    def abort_auto_merges
-      merge_requests_for_source_branch.each do |merge_request|
-        abort_auto_merge(merge_request, 'source branch was updated')
-      end
+    def refresh_pipelines_on_merge_requests(merge_request)
+      create_pipeline_for(merge_request, current_user, async: true)
+    end
+
+    def abort_auto_merges(merge_request)
+      abort_auto_merge(merge_request, 'source branch was updated')
     end
 
     def abort_ff_merge_requests_with_when_pipeline_succeeds
@@ -170,7 +183,7 @@ module MergeRequests
 
     def abort_auto_merge_with_todo(merge_request, reason)
       response = abort_auto_merge(merge_request, reason)
-      response = ServiceResponse.new(response)
+      response = ServiceResponse.new(**response)
       return unless response.success?
 
       todo_service.merge_request_became_unmergeable(merge_request)
@@ -183,10 +196,8 @@ module MergeRequests
         .with_auto_merge_enabled
     end
 
-    def mark_pending_todos_done
-      merge_requests_for_source_branch.each do |merge_request|
-        todo_service.merge_request_push(merge_request, @current_user)
-      end
+    def mark_pending_todos_done(merge_request)
+      todo_service.merge_request_push(merge_request, @current_user)
     end
 
     def find_new_commits
@@ -203,7 +214,7 @@ module MergeRequests
           # If the a commit no longer exists in this repo, gitlab_git throws
           # a Rugged::OdbError. This is fixed in https://gitlab.com/gitlab-org/gitlab_git/merge_requests/52
           @commits = @project.repository.commits_between(common_ref, @push.newrev) if common_ref
-        rescue
+        rescue StandardError
         end
       elsif @push.branch_removed?
         # No commits for a deleted branch.
@@ -214,62 +225,54 @@ module MergeRequests
     end
 
     # Add comment about branches being deleted or added to merge requests
-    def comment_mr_branch_presence_changed
+    def comment_mr_branch_presence_changed(merge_request)
       presence = @push.branch_added? ? :add : :delete
 
-      merge_requests_for_source_branch.each do |merge_request|
-        SystemNoteService.change_branch_presence(
-          merge_request, merge_request.project, @current_user,
-          :source, @push.branch_name, presence)
-      end
+      SystemNoteService.change_branch_presence(
+        merge_request, merge_request.project, @current_user,
+        :source, @push.branch_name, presence)
     end
 
     # Add comment about pushing new commits to merge requests and send nofitication emails
-    def notify_about_push
+    def notify_about_push(merge_request)
       return unless @commits.present?
 
-      merge_requests_for_source_branch.each do |merge_request|
-        mr_commit_ids = Set.new(merge_request.commit_shas)
+      mr_commit_ids = Set.new(merge_request.commit_shas)
 
-        new_commits, existing_commits = @commits.partition do |commit|
-          mr_commit_ids.include?(commit.id)
-        end
-
-        SystemNoteService.add_commits(merge_request, merge_request.project,
-                                      @current_user, new_commits,
-                                      existing_commits, @push.oldrev)
-
-        notification_service.push_to_merge_request(merge_request, @current_user, new_commits: new_commits, existing_commits: existing_commits)
+      new_commits, existing_commits = @commits.partition do |commit|
+        mr_commit_ids.include?(commit.id)
       end
+
+      SystemNoteService.add_commits(merge_request, merge_request.project,
+                                    @current_user, new_commits,
+                                    existing_commits, @push.oldrev)
+
+      notification_service.push_to_merge_request(merge_request, @current_user, new_commits: new_commits, existing_commits: existing_commits)
     end
 
-    def mark_mr_as_wip_from_commits
+    def mark_mr_as_draft_from_commits(merge_request)
       return unless @commits.present?
 
-      merge_requests_for_source_branch.each do |merge_request|
-        commit_shas = merge_request.commit_shas
+      commit_shas = merge_request.commit_shas
 
-        wip_commit = @commits.detect do |commit|
-          commit.work_in_progress? && commit_shas.include?(commit.sha)
-        end
+      wip_commit = @commits.detect do |commit|
+        commit.work_in_progress? && commit_shas.include?(commit.sha)
+      end
 
-        if wip_commit && !merge_request.work_in_progress?
-          merge_request.update(title: merge_request.wip_title)
-          SystemNoteService.add_merge_request_wip_from_commit(
-            merge_request,
-            merge_request.project,
-            @current_user,
-            wip_commit
-          )
-        end
+      if wip_commit && !merge_request.work_in_progress?
+        merge_request.update(title: merge_request.wip_title)
+        SystemNoteService.add_merge_request_draft_from_commit(
+          merge_request,
+          merge_request.project,
+          @current_user,
+          wip_commit
+        )
       end
     end
 
     # Call merge request webhook with update branches
-    def execute_mr_web_hooks
-      merge_requests_for_source_branch.each do |merge_request|
-        execute_hooks(merge_request, 'update', old_rev: @push.oldrev)
-      end
+    def execute_mr_web_hooks(merge_request)
+      execute_hooks(merge_request, 'update', old_rev: @push.oldrev)
     end
 
     # If the merge requests closes any issues, save this information in the
@@ -291,15 +294,15 @@ module MergeRequests
       @source_merge_requests ||= merge_requests_for(@push.branch_name)
     end
 
-    # rubocop: disable CodeReuse/ActiveRecord
     def merge_requests_for_forks
       @merge_requests_for_forks ||=
-        MergeRequest.opened
-          .where(source_branch: @push.branch_name, source_project: @project)
-          .where.not(target_project: @project)
+        MergeRequest
+          .opened
+          .from_project(project)
+          .from_source_branches(@push.branch_name)
+          .from_fork
     end
-    # rubocop: enable CodeReuse/ActiveRecord
   end
 end
 
-MergeRequests::RefreshService.prepend_if_ee('EE::MergeRequests::RefreshService')
+MergeRequests::RefreshService.prepend_mod_with('MergeRequests::RefreshService')

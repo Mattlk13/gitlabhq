@@ -2,7 +2,7 @@
 
 require 'spec_helper'
 
-describe Projects::StarrersController do
+RSpec.describe Projects::StarrersController do
   let(:user_1) { create(:user, name: 'John') }
   let(:user_2) { create(:user, name: 'Michael') }
   let(:private_user) { create(:user, name: 'Michael Douglas', private_profile: true) }
@@ -170,7 +170,7 @@ describe Projects::StarrersController do
 
     context 'when project is private' do
       before do
-        project.update(visibility_level: Project::PRIVATE)
+        project.update!(visibility_level: Project::PRIVATE)
       end
 
       it 'starrers are not visible for non logged in users' do

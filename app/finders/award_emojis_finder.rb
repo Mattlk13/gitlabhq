@@ -13,8 +13,7 @@ class AwardEmojisFinder
   def execute
     awards = awardable.award_emoji
     awards = by_name(awards)
-    awards = by_awarded_by(awards)
-    awards
+    by_awarded_by(awards)
   end
 
   private
@@ -41,7 +40,7 @@ class AwardEmojisFinder
   def validate_name_param
     return unless params[:name]
 
-    raise ArgumentError, 'Invalid name param' unless params[:name].in?(Gitlab::Emoji.emojis_names)
+    raise ArgumentError, 'Invalid name param' unless params[:name].to_s.in?(Gitlab::Emoji.emojis_names)
   end
 
   def validate_awarded_by_param

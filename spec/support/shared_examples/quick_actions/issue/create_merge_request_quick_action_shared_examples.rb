@@ -22,8 +22,6 @@ RSpec.shared_examples 'create_merge_request quick action' do
       branch_name = 'invalid branch name'
       add_note("/create_merge_request #{branch_name}")
 
-      wait_for_requests
-
       expect_mr_quickaction(false, branch_name)
     end
 
@@ -31,15 +29,11 @@ RSpec.shared_examples 'create_merge_request quick action' do
       branch_name = 'feature'
       add_note("/create_merge_request #{branch_name}")
 
-      wait_for_requests
-
       expect_mr_quickaction(false, branch_name)
     end
 
     it 'creates a new merge request using issue iid and title as branch name when the branch name is empty' do
       add_note("/create_merge_request")
-
-      wait_for_requests
 
       expect_mr_quickaction(true)
 
@@ -47,7 +41,7 @@ RSpec.shared_examples 'create_merge_request quick action' do
       expect(created_mr.source_branch).to eq(issue.to_branch_name)
 
       visit project_merge_request_path(project, created_mr)
-      expect(page).to have_content %{WIP: Resolve "#{issue.title}"}
+      expect(page).to have_content %{Draft: Resolve "#{issue.title}"}
     end
 
     it 'creates a merge request using the given branch name' do
@@ -60,7 +54,7 @@ RSpec.shared_examples 'create_merge_request quick action' do
       expect(created_mr.source_branch).to eq(branch_name)
 
       visit project_merge_request_path(project, created_mr)
-      expect(page).to have_content %{WIP: Resolve "#{issue.title}"}
+      expect(page).to have_content %{Draft: Resolve "#{issue.title}"}
     end
   end
 end

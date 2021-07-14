@@ -3,6 +3,8 @@
 class Admin::LabelsController < Admin::ApplicationController
   before_action :set_label, only: [:show, :edit, :update, :destroy]
 
+  feature_category :issue_tracking
+
   def index
     @labels = Label.templates.page(params[:page])
   end
@@ -45,7 +47,7 @@ class Admin::LabelsController < Admin::ApplicationController
       format.html do
         redirect_to admin_labels_path, status: :found, notice: _('Label was removed')
       end
-      format.js
+      format.js { head :ok }
     end
   end
 

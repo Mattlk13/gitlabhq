@@ -1,32 +1,36 @@
 # frozen_string_literal: true
 
 module QA
-  context 'Create' do
-    describe 'Git clone over HTTP', :ldap_no_tls do
-      before(:all) do
-        @project = Resource::Project.fabricate_via_api! do |scenario|
+  RSpec.describe 'Create' do
+    describe 'Git clone over HTTP' do
+      let(:project) do
+        Resource::Project.fabricate_via_api! do |scenario|
           scenario.name = 'project-with-code'
           scenario.description = 'project for git clone tests'
         end
+      end
 
+      before do
         Git::Repository.perform do |repository|
-          repository.uri = @project.repository_http_location.uri
+          repository.uri = project.repository_http_location.uri
           repository.use_default_credentials
+          repository.default_branch = project.default_branch
 
           repository.act do
             clone
             configure_identity('GitLab QA', 'root@gitlab.com')
+            checkout(default_branch, new_branch: true)
             commit_file('test.rb', 'class Test; end', 'Add Test class')
             commit_file('README.md', '# Test', 'Add Readme')
             push_changes
           end
         end
-        @project.wait_for_push_new_branch
+        project.wait_for_push_new_branch
       end
 
-      it 'user performs a deep clone' do
+      it 'user performs a deep clone', testcase: 'https://gitlab.com/gitlab-org/quality/testcases/-/issues/475' do
         Git::Repository.perform do |repository|
-          repository.uri = @project.repository_http_location.uri
+          repository.uri = project.repository_http_location.uri
           repository.use_default_credentials
 
           repository.clone
@@ -35,9 +39,9 @@ module QA
         end
       end
 
-      it 'user performs a shallow clone' do
+      it 'user performs a shallow clone', testcase: 'https://gitlab.com/gitlab-org/quality/testcases/-/issues/411' do
         Git::Repository.perform do |repository|
-          repository.uri = @project.repository_http_location.uri
+          repository.uri = project.repository_http_location.uri
           repository.use_default_credentials
 
           repository.shallow_clone

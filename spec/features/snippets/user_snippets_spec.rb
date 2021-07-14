@@ -2,7 +2,7 @@
 
 require 'spec_helper'
 
-describe 'User Snippets' do
+RSpec.describe 'User Snippets' do
   let(:author) { create(:user) }
   let!(:public_snippet) { create(:personal_snippet, :public, author: author, title: "This is a public snippet") }
   let!(:internal_snippet) { create(:personal_snippet, :internal, author: author, title: "This is an internal snippet") }
@@ -13,13 +13,13 @@ describe 'User Snippets' do
     visit dashboard_snippets_path
   end
 
-  it 'View all of my snippets' do
+  it 'view all of my snippets' do
     expect(page).to have_link(public_snippet.title, href: snippet_path(public_snippet))
     expect(page).to have_link(internal_snippet.title, href: snippet_path(internal_snippet))
     expect(page).to have_link(private_snippet.title, href: snippet_path(private_snippet))
   end
 
-  it 'View my public snippets' do
+  it 'view my public snippets' do
     page.within('.snippet-scope-menu') do
       click_link "Public"
     end
@@ -29,7 +29,7 @@ describe 'User Snippets' do
     expect(page).not_to have_content(private_snippet.title)
   end
 
-  it 'View my internal snippets' do
+  it 'view my internal snippets' do
     page.within('.snippet-scope-menu') do
       click_link "Internal"
     end
@@ -39,7 +39,7 @@ describe 'User Snippets' do
     expect(page).not_to have_content(private_snippet.title)
   end
 
-  it 'View my private snippets' do
+  it 'view my private snippets' do
     page.within('.snippet-scope-menu') do
       click_link "Private"
     end

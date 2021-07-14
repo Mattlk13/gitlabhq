@@ -2,7 +2,7 @@
 
 require 'rake_helper'
 
-describe 'rake gitlab:storage:*' do
+RSpec.describe 'rake gitlab:storage:*', :silence_stdout do
   before do
     Rake.application.rake_require 'tasks/gitlab/storage'
 
@@ -88,6 +88,27 @@ describe 'rake gitlab:storage:*' do
     end
   end
 
+  shared_examples 'wait until database is ready' do
+    it 'checks if the database is ready once' do
+      expect(Gitlab::Database).to receive(:exists?).once
+
+      run_rake_task(task)
+    end
+
+    context 'handles custom env vars' do
+      before do
+        stub_env('MAX_DATABASE_CONNECTION_CHECKS' => 3)
+        stub_env('MAX_DATABASE_CONNECTION_INTERVAL' => 0.1)
+      end
+
+      it 'tries for 3 times, polling every 0.1 seconds' do
+        expect(Gitlab::Database).to receive(:exists?).exactly(3).times.and_return(false)
+
+        run_rake_task(task)
+      end
+    end
+  end
+
   describe 'gitlab:storage:migrate_to_hashed' do
     let(:task) { 'gitlab:storage:migrate_to_hashed' }
 
@@ -128,10 +149,10 @@ describe 'rake gitlab:storage:*' do
 
     context 'with same id in range' do
       it 'displays message when project cant be found' do
-        stub_env('ID_FROM', 99999)
-        stub_env('ID_TO', 99999)
+        stub_env('ID_FROM', non_existing_record_id)
+        stub_env('ID_TO', non_existing_record_id)
 
-        expect { run_rake_task(task) }.to abort_execution.with_message(/There are no projects requiring storage migration with ID=99999/)
+        expect { run_rake_task(task) }.to abort_execution.with_message(/There are no projects requiring storage migration with ID=#{non_existing_record_id}/)
       end
 
       it 'displays a message when project exists but its already migrated' do
@@ -198,6 +219,10 @@ describe 'rake gitlab:storage:*' do
       let(:task) { 'gitlab:storage:legacy_projects' }
       let(:create_collection) { create_list(:project, 3, :legacy_storage) }
     end
+
+    it_behaves_like 'wait until database is ready' do
+      let(:task) { 'gitlab:storage:legacy_projects' }
+    end
   end
 
   describe 'gitlab:storage:list_legacy_projects' do
@@ -226,6 +251,10 @@ describe 'rake gitlab:storage:*' do
       let(:task) { 'gitlab:storage:legacy_attachments' }
       let(:project) { create(:project, storage_version: 1) }
       let(:create_collection) { create_list(:upload, 3, model: project) }
+    end
+
+    it_behaves_like 'wait until database is ready' do
+      let(:task) { 'gitlab:storage:legacy_attachments' }
     end
   end
 

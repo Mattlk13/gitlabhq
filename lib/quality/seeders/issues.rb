@@ -29,7 +29,8 @@ module Quality
               assignee_ids: Array(team.pluck(:id).sample(3)),
               labels: labels.join(',')
             }
-            issue = ::Issues::CreateService.new(project, team.sample, params).execute
+            params[:closed_at] = params[:created_at] + rand(35).days if params[:state] == 'closed'
+            issue = ::Issues::CreateService.new(project: project, current_user: team.sample, params: params, spam_params: nil).execute
 
             if issue.persisted?
               created_issues_count += 1

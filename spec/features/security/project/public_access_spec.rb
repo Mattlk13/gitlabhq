@@ -2,7 +2,7 @@
 
 require 'spec_helper'
 
-describe "Public Project Access" do
+RSpec.describe "Public Project Access" do
   include AccessMatchers
 
   let_it_be(:project, reload: true) { create(:project, :public, :repository) }
@@ -85,8 +85,8 @@ describe "Public Project Access" do
     it { is_expected.to be_allowed_for(:visitor) }
   end
 
-  describe "GET /:project_path/-/settings/members" do
-    subject { project_settings_members_path(project) }
+  describe "GET /:project_path/-/project_members" do
+    subject { project_project_members_path(project) }
 
     it { is_expected.to be_allowed_for(:admin) }
     it { is_expected.to be_allowed_for(:owner).of(project) }
@@ -102,7 +102,8 @@ describe "Public Project Access" do
   describe "GET /:project_path/-/settings/ci_cd" do
     subject { project_settings_ci_cd_path(project) }
 
-    it { is_expected.to be_allowed_for(:admin) }
+    it('is allowed for admin when admin mode is enabled', :enable_admin_mode) { is_expected.to be_allowed_for(:admin) }
+    it('is denied for admin when admin mode is disabled') { is_expected.to be_denied_for(:admin) }
     it { is_expected.to be_allowed_for(:owner).of(project) }
     it { is_expected.to be_allowed_for(:maintainer).of(project) }
     it { is_expected.to be_denied_for(:developer).of(project) }
@@ -116,7 +117,8 @@ describe "Public Project Access" do
   describe "GET /:project_path/-/settings/repository" do
     subject { project_settings_repository_path(project) }
 
-    it { is_expected.to be_allowed_for(:admin) }
+    it('is allowed for admin when admin mode is enabled', :enable_admin_mode) { is_expected.to be_allowed_for(:admin) }
+    it('is denied for admin when admin mode is disabled') { is_expected.to be_denied_for(:admin) }
     it { is_expected.to be_allowed_for(:owner).of(project) }
     it { is_expected.to be_allowed_for(:maintainer).of(project) }
     it { is_expected.to be_denied_for(:developer).of(project) }
@@ -162,7 +164,7 @@ describe "Public Project Access" do
 
     context "when allowed for public" do
       before do
-        project.update(public_builds: true)
+        project.update!(public_builds: true)
       end
 
       it { is_expected.to be_allowed_for(:admin) }
@@ -178,10 +180,11 @@ describe "Public Project Access" do
 
     context "when disallowed for public" do
       before do
-        project.update(public_builds: false)
+        project.update!(public_builds: false)
       end
 
-      it { is_expected.to be_allowed_for(:admin) }
+      it('is allowed for admin when admin mode is enabled', :enable_admin_mode) { is_expected.to be_allowed_for(:admin) }
+      it('is denied for admin when admin mode is disabled') { is_expected.to be_denied_for(:admin) }
       it { is_expected.to be_allowed_for(:owner).of(project) }
       it { is_expected.to be_allowed_for(:maintainer).of(project) }
       it { is_expected.to be_allowed_for(:developer).of(project) }
@@ -201,7 +204,7 @@ describe "Public Project Access" do
 
     context "when allowed for public" do
       before do
-        project.update(public_builds: true)
+        project.update!(public_builds: true)
       end
 
       it { is_expected.to be_allowed_for(:admin) }
@@ -217,10 +220,11 @@ describe "Public Project Access" do
 
     context "when disallowed for public" do
       before do
-        project.update(public_builds: false)
+        project.update!(public_builds: false)
       end
 
-      it { is_expected.to be_allowed_for(:admin) }
+      it('is allowed for admin when admin mode is enabled', :enable_admin_mode) { is_expected.to be_allowed_for(:admin) }
+      it('is denied for admin when admin mode is disabled') { is_expected.to be_denied_for(:admin) }
       it { is_expected.to be_allowed_for(:owner).of(project) }
       it { is_expected.to be_allowed_for(:maintainer).of(project) }
       it { is_expected.to be_allowed_for(:developer).of(project) }
@@ -234,13 +238,13 @@ describe "Public Project Access" do
 
   describe 'GET /:project_path/builds/:id/trace' do
     let(:pipeline) { create(:ci_pipeline, project: project) }
-    let(:build) { create(:ci_build, pipeline: pipeline) }
+    let(:build) { create(:ci_build, :trace_artifact, pipeline: pipeline) }
 
     subject { trace_project_job_path(project, build.id) }
 
     context 'when allowed for public' do
       before do
-        project.update(public_builds: true)
+        project.update!(public_builds: true)
       end
 
       it { is_expected.to be_allowed_for(:admin) }
@@ -256,10 +260,11 @@ describe "Public Project Access" do
 
     context 'when disallowed for public' do
       before do
-        project.update(public_builds: false)
+        project.update!(public_builds: false)
       end
 
-      it { is_expected.to be_allowed_for(:admin) }
+      it('is allowed for admin when admin mode is enabled', :enable_admin_mode) { is_expected.to be_allowed_for(:admin) }
+      it('is denied for admin when admin mode is disabled') { is_expected.to be_denied_for(:admin) }
       it { is_expected.to be_allowed_for(:owner).of(project) }
       it { is_expected.to be_allowed_for(:maintainer).of(project) }
       it { is_expected.to be_allowed_for(:developer).of(project) }
@@ -274,29 +279,31 @@ describe "Public Project Access" do
   describe "GET /:project_path/pipeline_schedules" do
     subject { project_pipeline_schedules_path(project) }
 
-    it { is_expected.to be_allowed_for(:admin) }
+    it('is allowed for admin when admin mode is enabled', :enable_admin_mode) { is_expected.to be_allowed_for(:admin) }
+    it('is allowed for admin when admin mode is disabled') { is_expected.to be_allowed_for(:admin) }
     it { is_expected.to be_allowed_for(:owner).of(project) }
     it { is_expected.to be_allowed_for(:maintainer).of(project) }
     it { is_expected.to be_allowed_for(:developer).of(project) }
-    it { is_expected.to be_denied_for(:reporter).of(project) }
-    it { is_expected.to be_denied_for(:guest).of(project) }
-    it { is_expected.to be_denied_for(:user) }
-    it { is_expected.to be_denied_for(:external) }
-    it { is_expected.to be_denied_for(:visitor) }
+    it { is_expected.to be_allowed_for(:reporter).of(project) }
+    it { is_expected.to be_allowed_for(:guest).of(project) }
+    it { is_expected.to be_allowed_for(:user) }
+    it { is_expected.to be_allowed_for(:external) }
+    it { is_expected.to be_allowed_for(:visitor) }
   end
 
   describe "GET /:project_path/-/environments" do
     subject { project_environments_path(project) }
 
-    it { is_expected.to be_allowed_for(:admin) }
+    it('is allowed for admin when admin mode is enabled', :enable_admin_mode) { is_expected.to be_allowed_for(:admin) }
+    it('is allowed for admin when admin mode is disabled') { is_expected.to be_allowed_for(:admin) }
     it { is_expected.to be_allowed_for(:owner).of(project) }
     it { is_expected.to be_allowed_for(:maintainer).of(project) }
     it { is_expected.to be_allowed_for(:developer).of(project) }
     it { is_expected.to be_allowed_for(:reporter).of(project) }
-    it { is_expected.to be_denied_for(:guest).of(project) }
-    it { is_expected.to be_denied_for(:user) }
-    it { is_expected.to be_denied_for(:external) }
-    it { is_expected.to be_denied_for(:visitor) }
+    it { is_expected.to be_allowed_for(:guest).of(project) }
+    it { is_expected.to be_allowed_for(:user) }
+    it { is_expected.to be_allowed_for(:external) }
+    it { is_expected.to be_allowed_for(:visitor) }
   end
 
   describe "GET /:project_path/-/environments/:id" do
@@ -304,15 +311,16 @@ describe "Public Project Access" do
 
     subject { project_environment_path(project, environment) }
 
-    it { is_expected.to be_allowed_for(:admin) }
+    it('is allowed for admin when admin mode is enabled', :enable_admin_mode) { is_expected.to be_allowed_for(:admin) }
+    it('is allowed for admin when admin mode is disabled') { is_expected.to be_allowed_for(:admin) }
     it { is_expected.to be_allowed_for(:owner).of(project) }
     it { is_expected.to be_allowed_for(:maintainer).of(project) }
     it { is_expected.to be_allowed_for(:developer).of(project) }
     it { is_expected.to be_allowed_for(:reporter).of(project) }
-    it { is_expected.to be_denied_for(:guest).of(project) }
-    it { is_expected.to be_denied_for(:user) }
-    it { is_expected.to be_denied_for(:external) }
-    it { is_expected.to be_denied_for(:visitor) }
+    it { is_expected.to be_allowed_for(:guest).of(project) }
+    it { is_expected.to be_allowed_for(:user) }
+    it { is_expected.to be_allowed_for(:external) }
+    it { is_expected.to be_allowed_for(:visitor) }
   end
 
   describe "GET /:project_path/-/environments/:id/deployments" do
@@ -320,21 +328,23 @@ describe "Public Project Access" do
 
     subject { project_environment_deployments_path(project, environment) }
 
-    it { is_expected.to be_allowed_for(:admin) }
+    it('is allowed for admin when admin mode is enabled', :enable_admin_mode) { is_expected.to be_allowed_for(:admin) }
+    it('is allowed for admin when admin mode is disabled') { is_expected.to be_allowed_for(:admin) }
     it { is_expected.to be_allowed_for(:owner).of(project) }
     it { is_expected.to be_allowed_for(:maintainer).of(project) }
     it { is_expected.to be_allowed_for(:developer).of(project) }
     it { is_expected.to be_allowed_for(:reporter).of(project) }
-    it { is_expected.to be_denied_for(:guest).of(project) }
-    it { is_expected.to be_denied_for(:user) }
-    it { is_expected.to be_denied_for(:external) }
-    it { is_expected.to be_denied_for(:visitor) }
+    it { is_expected.to be_allowed_for(:guest).of(project) }
+    it { is_expected.to be_allowed_for(:user) }
+    it { is_expected.to be_allowed_for(:external) }
+    it { is_expected.to be_allowed_for(:visitor) }
   end
 
   describe "GET /:project_path/-/environments/new" do
     subject { new_project_environment_path(project) }
 
-    it { is_expected.to be_allowed_for(:admin) }
+    it('is allowed for admin when admin mode is enabled', :enable_admin_mode) { is_expected.to be_allowed_for(:admin) }
+    it('is denied for admin when admin mode is disabled') { is_expected.to be_denied_for(:admin) }
     it { is_expected.to be_allowed_for(:owner).of(project) }
     it { is_expected.to be_allowed_for(:maintainer).of(project) }
     it { is_expected.to be_allowed_for(:developer).of(project) }
@@ -363,7 +373,8 @@ describe "Public Project Access" do
   describe "GET /:project_path/edit" do
     subject { edit_project_path(project) }
 
-    it { is_expected.to be_allowed_for(:admin) }
+    it('is allowed for admin when admin mode is enabled', :enable_admin_mode) { is_expected.to be_allowed_for(:admin) }
+    it('is denied for admin when admin mode is disabled') { is_expected.to be_denied_for(:admin) }
     it { is_expected.to be_allowed_for(:owner).of(project) }
     it { is_expected.to be_allowed_for(:maintainer).of(project) }
     it { is_expected.to be_denied_for(:developer).of(project) }
@@ -377,7 +388,8 @@ describe "Public Project Access" do
   describe "GET /:project_path/deploy_keys" do
     subject { project_deploy_keys_path(project) }
 
-    it { is_expected.to be_allowed_for(:admin) }
+    it('is allowed for admin when admin mode is enabled', :enable_admin_mode) { is_expected.to be_allowed_for(:admin) }
+    it('is denied for admin when admin mode is disabled') { is_expected.to be_denied_for(:admin) }
     it { is_expected.to be_allowed_for(:owner).of(project) }
     it { is_expected.to be_allowed_for(:maintainer).of(project) }
     it { is_expected.to be_denied_for(:developer).of(project) }
@@ -407,7 +419,8 @@ describe "Public Project Access" do
 
     subject { edit_project_issue_path(project, issue) }
 
-    it { is_expected.to be_allowed_for(:admin) }
+    it('is allowed for admin when admin mode is enabled', :enable_admin_mode) { is_expected.to be_allowed_for(:admin) }
+    it('is denied for admin when admin mode is disabled') { is_expected.to be_denied_for(:admin) }
     it { is_expected.to be_allowed_for(:owner).of(project) }
     it { is_expected.to be_allowed_for(:maintainer).of(project) }
     it { is_expected.to be_allowed_for(:developer).of(project) }
@@ -435,7 +448,8 @@ describe "Public Project Access" do
   describe "GET /:project_path/snippets/new" do
     subject { new_project_snippet_path(project) }
 
-    it { is_expected.to be_allowed_for(:admin) }
+    it('is allowed for admin when admin mode is enabled', :enable_admin_mode) { is_expected.to be_allowed_for(:admin) }
+    it('is denied for admin when admin mode is disabled') { is_expected.to be_denied_for(:admin) }
     it { is_expected.to be_allowed_for(:owner).of(project) }
     it { is_expected.to be_allowed_for(:maintainer).of(project) }
     it { is_expected.to be_allowed_for(:developer).of(project) }
@@ -463,7 +477,8 @@ describe "Public Project Access" do
   describe "GET /:project_path/-/merge_requests/new" do
     subject { project_new_merge_request_path(project) }
 
-    it { is_expected.to be_allowed_for(:admin) }
+    it('is allowed for admin when admin mode is enabled', :enable_admin_mode) { is_expected.to be_allowed_for(:admin) }
+    it('is denied for admin when admin mode is disabled') { is_expected.to be_denied_for(:admin) }
     it { is_expected.to be_allowed_for(:owner).of(project) }
     it { is_expected.to be_allowed_for(:maintainer).of(project) }
     it { is_expected.to be_allowed_for(:developer).of(project) }
@@ -519,7 +534,8 @@ describe "Public Project Access" do
   describe "GET /:project_path/-/settings/integrations" do
     subject { project_settings_integrations_path(project) }
 
-    it { is_expected.to be_allowed_for(:admin) }
+    it('is allowed for admin when admin mode is enabled', :enable_admin_mode) { is_expected.to be_allowed_for(:admin) }
+    it('is denied for admin when admin mode is disabled') { is_expected.to be_denied_for(:admin) }
     it { is_expected.to be_allowed_for(:owner).of(project) }
     it { is_expected.to be_allowed_for(:maintainer).of(project) }
     it { is_expected.to be_denied_for(:developer).of(project) }

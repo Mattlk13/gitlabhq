@@ -2,7 +2,7 @@
 
 require 'spec_helper'
 
-describe 'create a merge request, allowing commits from members who can merge to the target branch', :js do
+RSpec.describe 'create a merge request, allowing commits from members who can merge to the target branch', :js do
   include ProjectForksHelper
   let(:user) { create(:user) }
   let(:target_project) { create(:project, :public, :repository) }
@@ -28,11 +28,11 @@ describe 'create a merge request, allowing commits from members who can merge to
 
     check 'Allow commits from members who can merge to the target branch'
 
-    click_button 'Submit merge request'
+    click_button 'Create merge request'
 
     wait_for_requests
 
-    expect(page).to have_content('Allows commits from members who can merge to the target branch')
+    expect(page).to have_content('Members who can merge are allowed to add commits.')
   end
 
   it 'shows a message when one of the projects is private', :sidekiq_might_not_need_inline do
@@ -59,7 +59,7 @@ describe 'create a merge request, allowing commits from members who can merge to
 
       visit_new_merge_request
 
-      expect(page).not_to have_content('Allows commits from members who can merge to the target branch')
+      expect(page).not_to have_content('The fork project allows commits from members who can write to the target branch.')
     end
   end
 
@@ -81,7 +81,7 @@ describe 'create a merge request, allowing commits from members who can merge to
     it 'hides the option from members' do
       visit edit_project_merge_request_path(target_project, merge_request)
 
-      expect(page).not_to have_content('Allows commits from members who can merge to the target branch')
+      expect(page).not_to have_content('The fork project allows commits from members who can write to the target branch.')
     end
   end
 end

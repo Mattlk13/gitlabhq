@@ -1,58 +1,64 @@
-import Vue from 'vue';
-import emptyStateComp from '~/pipelines/components/empty_state.vue';
-import mountComponent from '../helpers/vue_mount_component_helper';
+import '~/commons';
+import { mount } from '@vue/test-utils';
+import EmptyState from '~/pipelines/components/pipelines_list/empty_state.vue';
+import PipelinesCiTemplates from '~/pipelines/components/pipelines_list/pipelines_ci_templates.vue';
 
 describe('Pipelines Empty State', () => {
-  let component;
-  let EmptyStateComponent;
+  let wrapper;
 
-  beforeEach(() => {
-    EmptyStateComponent = Vue.extend(emptyStateComp);
+  const findIllustration = () => wrapper.find('img');
+  const findButton = () => wrapper.find('a');
+  const pipelinesCiTemplates = () => wrapper.findComponent(PipelinesCiTemplates);
 
-    component = mountComponent(EmptyStateComponent, {
-      helpPagePath: 'foo',
-      emptyStateSvgPath: 'foo',
-      canSetCi: true,
+  const createWrapper = (props = {}) => {
+    wrapper = mount(EmptyState, {
+      provide: {
+        pipelineEditorPath: '',
+        suggestedCiTemplates: [],
+      },
+      propsData: {
+        emptyStateSvgPath: 'foo.svg',
+        canSetCi: true,
+        ...props,
+      },
+    });
+  };
+
+  describe('when user can configure CI', () => {
+    beforeEach(() => {
+      createWrapper({}, mount);
+    });
+
+    afterEach(() => {
+      wrapper.destroy();
+      wrapper = null;
+    });
+
+    it('should render the CI/CD templates', () => {
+      expect(pipelinesCiTemplates()).toExist();
     });
   });
 
-  afterEach(() => {
-    component.$destroy();
-  });
+  describe('when user cannot configure CI', () => {
+    beforeEach(() => {
+      createWrapper({ canSetCi: false }, mount);
+    });
 
-  it('should render empty state SVG', () => {
-    expect(component.$el.querySelector('.svg-content svg')).toBeDefined();
-  });
+    afterEach(() => {
+      wrapper.destroy();
+      wrapper = null;
+    });
 
-  it('should render empty state information', () => {
-    expect(component.$el.querySelector('h4').textContent).toContain('Build with confidence');
+    it('should render empty state SVG', () => {
+      expect(findIllustration().attributes('src')).toBe('foo.svg');
+    });
 
-    expect(
-      component.$el
-        .querySelector('p')
-        .innerHTML.trim()
-        .replace(/\n+\s+/m, ' ')
-        .replace(/\s\s+/g, ' '),
-    ).toContain('Continuous Integration can help catch bugs by running your tests automatically,');
+    it('should render empty state header', () => {
+      expect(wrapper.text()).toBe('This project is not currently set up to run pipelines.');
+    });
 
-    expect(
-      component.$el
-        .querySelector('p')
-        .innerHTML.trim()
-        .replace(/\n+\s+/m, ' ')
-        .replace(/\s\s+/g, ' '),
-    ).toContain(
-      'while Continuous Deployment can help you deliver code to your product environment',
-    );
-  });
-
-  it('should render a link with provided help path', () => {
-    expect(component.$el.querySelector('.js-get-started-pipelines').getAttribute('href')).toEqual(
-      'foo',
-    );
-
-    expect(component.$el.querySelector('.js-get-started-pipelines').textContent).toContain(
-      'Get started with Pipelines',
-    );
+    it('should not render a link', () => {
+      expect(findButton().exists()).toBe(false);
+    });
   });
 });

@@ -1,173 +1,271 @@
 ---
+stage: Create
+group: Source Code
+info: To determine the technical writer assigned to the Stage/Group associated with this page, see https://about.gitlab.com/handbook/engineering/ux/technical-writing/#assignments
 type: howto, tutorial
+description: "Introduction to using Git through the command line."
 ---
 
-# Start using Git on the command line
+# Start using Git on the command line **(FREE)**
 
-While GitLab has a powerful user interface, if you want to use Git itself, you will
-have to do so from the command line. If you want to start using Git and GitLab together,
-make sure that you have created and/or signed into an account on GitLab.
+[Git](https://git-scm.com/) is an open-source distributed version control system. GitLab is built
+on top of Git.
 
-## Open a shell
+You can do many Git operations directly in GitLab. However, the command line is required for advanced tasks,
+like fixing complex merge conflicts or rolling back commits.
 
-Depending on your operating system, you will need to use a shell of your preference.
-Here are some suggestions:
+For a quick reference of Git commands, download a [Git Cheat Sheet](https://about.gitlab.com/images/press/git-cheat-sheet.pdf).
 
-- [Terminal](https://blog.teamtreehouse.com/introduction-to-the-mac-os-x-command-line) on macOS
-- [GitBash](https://msysgit.github.io) on Windows
-- [Linux Terminal](https://www.howtogeek.com/140679/beginner-geek-how-to-start-using-the-linux-terminal/) on Linux
+For more information about the advantages of working with Git and GitLab:
 
-## Check if Git has already been installed
+- <i class="fa fa-youtube-play youtube" aria-hidden="true"></i>&nbsp;Watch the [GitLab Source Code Management Walkthrough](https://www.youtube.com/watch?v=wTQ3aXJswtM) video.
+- Learn how [GitLab became the backbone of the Worldline](https://about.gitlab.com/customers/worldline/) development environment.
 
-Git is usually preinstalled on Mac and Linux, so run the following command:
+To help you visualize what you're doing locally, you can install a
+[Git GUI app](https://git-scm.com/download/gui/).
+
+## Git terminology
+
+If you're familiar with Git terminology, you might want to skip this section and
+go directly to [prerequisites](#prerequisites).
+
+### Repository
+
+In GitLab, files are stored in a **repository**. A repository is similar to how you
+store files in a folder or directory on your computer.
+
+- A **remote repository** refers to the files in GitLab.
+- A **local copy** refers to the files on your computer.
+
+<!-- vale gitlab.Spelling = NO -->
+<!-- vale gitlab.SubstitutionWarning = NO -->
+Often, the word "repository" is shortened to "repo".
+<!-- vale gitlab.Spelling = YES -->
+<!-- vale gitlab.SubstitutionWarning = YES -->
+
+In GitLab, a repository is contained in a **project**.
+
+### Fork
+
+When you want to contribute to someone else's repository, you make a copy of it.
+This copy is called a [**fork**](../user/project/repository/forking_workflow.md#creating-a-fork).
+The process is called "creating a fork."
+
+When you fork a repo, you create a copy of the project in your own
+[namespace](../user/group/#namespaces). You then have write permissions to modify the project files
+and settings.
+
+For example, you can fork this project, <https://gitlab.com/gitlab-tests/sample-project/>, into your namespace.
+You now have your own copy of the repository. You can view the namespace in the URL, for example
+`https://gitlab.com/your-namespace/sample-project/`.
+Then you can clone the repository to your local machine, work on the files, and submit changes back to the
+original repository.
+
+### Difference between download and clone
+
+To create a copy of a remote repository's files on your computer, you can either
+**download** or **clone** the repository. If you download it, you cannot sync the repository with the
+remote repository on GitLab.
+
+[Cloning](#clone-a-repository) a repository is the same as downloading, except it preserves the Git connection
+with the remote repository. You can then modify the files locally and
+upload the changes to the remote repository on GitLab.
+
+### Pull and push
+
+After you save a local copy of a repository and modify the files on your computer, you can upload the
+changes to GitLab. This is referred to as **pushing** to the remote, because you use the command
+[`git push`](#send-changes-to-gitlabcom).
+
+When the remote repository changes, your local copy is behind. You can update your local copy with the new
+changes in the remote repository.
+This is referred to as **pulling** from the remote, because you use the command
+[`git pull`](#download-the-latest-changes-in-the-project).
+
+## Prerequisites
+
+To start using GitLab with Git, complete the following tasks:
+
+- Create and sign in to a GitLab account.
+- [Open a terminal](#open-a-terminal).
+- [Install Git](#install-git) on your computer.
+- [Configure Git](#configure-git).
+- [Choose a repository](#choose-a-repository).
+
+### Open a terminal
+
+To execute Git commands on your computer, you must open a terminal (also known as command
+prompt, command shell, and command line). Here are some options:
+
+- For macOS users:
+  - Built-in [Terminal](https://blog.teamtreehouse.com/introduction-to-the-mac-os-x-command-line). Press <kbd>⌘ command</kbd> + <kbd>space</kbd> and type `terminal`.
+  - [iTerm2](https://iterm2.com/). You can integrate it with [zsh](https://git-scm.com/book/id/v2/Appendix-A%3A-Git-in-Other-Environments-Git-in-Zsh) and [oh my zsh](https://ohmyz.sh/) for color highlighting and other advanced features.
+- For Windows users:
+  - Built-in command line. On the Windows taskbar, select the search icon and type `cmd`.
+  - [PowerShell](https://docs.microsoft.com/en-us/powershell/scripting/windows-powershell/install/installing-windows-powershell?view=powershell-7).
+  - Git Bash. It is built into [Git for Windows](https://gitforwindows.org/).
+- For Linux users:
+  - Built-in [Linux Terminal](https://ubuntu.com/tutorials/command-line-for-beginners#3-opening-a-terminal).
+
+### Install Git
+
+Determine if Git is already installed on your computer by opening a terminal
+and running this command:
 
 ```shell
 git --version
 ```
 
-You should receive a message that tells you which Git version you have on your computer.
-If you don’t receive a "Git version" message, it means that you need to
-[download Git](https://git-scm.com/book/en/v2/Getting-Started-Installing-Git).
-
-After you are finished installing Git, open a new shell and type `git --version` again
-to verify that it was correctly installed.
-
-## Add your Git username and set your email
-
-It is important to configure your Git username and email address, since every Git
-commit will use this information to identify you as the author.
-
-In your shell, type the following command to add your username:
+If Git is installed, the output is:
 
 ```shell
-git config --global user.name "YOUR_USERNAME"
+git version X.Y.Z
 ```
 
-Then verify that you have the correct username:
+If your computer doesn't recognize `git` as a command, you must [install Git](../topics/git/how_to_install_git/index.md).
+After you install Git, run `git --version` to confirm that it installed correctly.
 
-```shell
-git config --global user.name
-```
+### Configure Git
 
-To set your email address, type the following command:
+To start using Git from your computer, you must enter your credentials
+to identify yourself as the author of your work. The username and email address
+should match the ones you use in GitLab.
 
-```shell
-git config --global user.email "your_email_address@example.com"
-```
+1. In your shell, add your user name:
 
-To verify that you entered your email correctly, type:
+   ```shell
+   git config --global user.name "your_username"
+   ```
 
-```shell
-git config --global user.email
-```
+1. Add your email address:
 
-You'll need to do this only once, since you are using the `--global` option. It
-tells Git to always use this information for anything you do on that system. If
-you want to override this with a different username or email address for specific
-projects or repositories, you can run the command without the `--global` option
-when you’re in that project, and that will default to `--local`. You can read more
-on how Git manages configurations in the [Git Config](https://git-scm.com/book/en/v2/Customizing-Git-Git-Configuration) documentation.
+   ```shell
+   git config --global user.email "your_email_address@example.com"
+   ```
 
-## Check your information
+1. To check the configuration, run:
 
-To view the information that you entered, along with other global options, type:
+   ```shell
+   git config --global --list
+   ```
 
-```shell
-git config --global --list
-```
+   The `--global` option tells Git to always use this information for anything you do on your system.
+   If you omit `--global` or use `--local`, the configuration applies only to the current
+   repository.
 
-## Basic Git commands
+You can read more on how Git manages configurations in the
+[Git configuration documentation](https://git-scm.com/book/en/v2/Customizing-Git-Git-Configuration).
 
-Start using Git via the command line with the most basic commands as described below.
+### Choose a repository
 
-### Initialize a local directory for Git version control
+Before you begin, choose the repository you want to work in. You can use any project you have permission to
+access on GitLab.com or any other GitLab instance.
 
-If you have an existing local directory that you want to *initialize* for version
-control, use the `init` command to instruct Git to begin tracking the directory:
+To use the repository in the examples on this page:
 
-```shell
-git init
-```
+1. Go to [https://gitlab.com/gitlab-tests/sample-project/](https://gitlab.com/gitlab-tests/sample-project/).
+1. In the top right, select **Fork**.
+1. Choose a namespace for your fork.
 
-This creates a `.git` directory that contains the Git configuration files.
+The project becomes available at `https://gitlab.com/<your-namespace>/sample-project/`.
 
-Once the directory has been initialized, you can [add a remote repository](#add-a-remote-repository)
-and [send changes to GitLab.com](#send-changes-to-gitlabcom). You will also need to
-[create a new project in GitLab](../gitlab-basics/create-project.md#push-to-create-a-new-project)
-for your Git repository.
+You can [fork](../user/project/repository/forking_workflow.md#creating-a-fork) any project you have access to.
 
-### Clone a repository
+## Clone a repository
 
-To start working locally on an existing remote repository, clone it with the command
-`git clone <repository path>`. By cloning a repository, you'll download a copy of its
-files to your local computer, automatically preserving the Git connection with the
-remote repository.
+When you clone a repository, the files from the remote repository are downloaded to your computer,
+and a connection is created.
 
-You can either clone it via HTTPS or [SSH](../ssh/README.md). If you chose to clone
-it via HTTPS, you'll have to enter your credentials every time you pull and push.
-You can read more about credential storage in the
-[Git Credentials documentation](https://git-scm.com/book/en/v2/Git-Tools-Credential-Storage).
-With SSH, you enter your credentials only once.
+This connection requires you to add credentials. You can either use SSH or HTTPS. SSH is recommended.
 
-You can find both paths (HTTPS and SSH) by navigating to your project's landing page
-and clicking **Clone**. GitLab will prompt you with both paths, from which you can copy
-and paste in your command line.
+### Clone with SSH
 
-As an example, consider this repository path:
+Clone with SSH when you want to authenticate only one time.
 
-- HTTPS: `https://gitlab.com/gitlab-org/gitlab.git`
-- SSH: `git@gitlab.com:gitlab-org/gitlab.git`
+1. Authenticate with GitLab by following the instructions in the [SSH documentation](../ssh/index.md).
+1. Go to your project's landing page and select **Clone**. Copy the URL for **Clone with SSH**.
+1. Open a terminal and go to the directory where you want to clone the files. Git automatically creates a folder with the repository name and downloads the files there.
+1. Run this command:
 
-To get started, open a terminal window in the directory you wish to clone the
-repository files into, and run one of the following commands.
+   ```shell
+   git clone git@gitlab.com:gitlab-tests/sample-project.git
+   ```
 
-Clone via HTTPS:
+1. To view the files, go to the new directory:
 
-```shell
-git clone https://gitlab.com/gitlab-org/gitlab.git
-```
+   ```shell
+   cd sample-project
+   ```
 
-Clone via SSH:
+You can also
+[clone a repository and open it directly in Visual Studio Code](../user/project/repository/index.md#clone-and-open-in-visual-studio-code).
 
-```shell
-git clone git@gitlab.com:gitlab-org/gitlab.git
-```
+### Clone with HTTPS
 
-Both commands will download a copy of the files in a folder named after the project's
-name. You can then navigate to the directory and start working
-on it locally.
+Clone with HTTPS when you want to authenticate each time you perform an operation
+between your computer and GitLab.
 
-### Switch to the master branch
+1. Go to your project's landing page and select **Clone**. Copy the URL for **Clone with HTTPS**.
+1. Open a terminal and go to the directory where you want to clone the files.
+1. Run the following command. Git automatically creates a folder with the repository name and downloads the files there.
 
-You are always in a branch when working with Git. The main branch is the master
-branch, but you can use the same command to switch to a different branch by
-changing `master` to the branch name.
+   ```shell
+   git clone https://gitlab.com/gitlab-tests/sample-project.git
+   ```
 
-```shell
-git checkout master
-```
+1. GitLab requests your username and password:
+   - If you have 2FA enabled for your account, you must use a [Personal Access Token](../user/profile/personal_access_tokens.md)
+     with **read_repository** or **write_repository** permissions instead of your account's password.
+   - If you don't have 2FA enabled, use your account's password.
 
-### Download the latest changes in the project
+1. To view the files, go to the new directory:
 
-To work on an up-to-date copy of the project (it is important to do this every time
-you start working on a project), you `pull` to get all the changes made by users
-since the last time you cloned or pulled the project. Use `master` for the
-`<name-of-branch>` to get the main branch code, or the branch name of the branch
-you are currently working in.
+   ```shell
+   cd sample-project
+   ```
 
-```shell
-git pull <REMOTE> <name-of-branch>
-```
+NOTE:
+On Windows, if you enter your password incorrectly multiple times and an `Access denied` message appears,
+add your namespace (username or group) to the path:
+`git clone https://namespace@gitlab.com/gitlab-org/gitlab.git`.
 
-When you clone a repository, `REMOTE` is typically `origin`. This is where the
-repository was cloned from, and it indicates the SSH or HTTPS URL of the repository
-on the remote server. `<name-of-branch>` is usually `master`, but it may be any
-existing branch. You can create additional named remotes and branches as necessary.
+### Convert a local directory into a repository
 
-You can learn more on how Git manages remote repositories in the
-[Git Remote documentation](https://git-scm.com/book/en/v2/Git-Basics-Working-with-Remotes).
+You can initialize a local folder so Git tracks it as a repository.
 
-### View your remote repositories
+1. Open the terminal in the directory you'd like to convert.
+1. Run this command:
+
+   ```shell
+   git init
+   ```
+
+   A `.git` folder is created in your directory. This folder contains Git
+   records and configuration files. You should not edit these files
+   directly.
+
+1. Add the [path to your remote repository](#add-a-remote)
+   so Git can upload your files into the correct project.
+
+#### Add a remote
+
+You add a "remote" to tell Git which remote repository in GitLab is tied
+to the specific local folder on your computer.
+The remote tells Git where to push or pull from.
+
+To add a remote to your local copy:
+
+1. In GitLab, [create a project](../user/project/working_with_projects.md#create-a-project) to hold your files.
+1. Visit this project's homepage, scroll down to **Push an existing folder**, and copy the command that starts with `git remote add`.
+1. On your computer, open the terminal in the directory you've initialized, paste the command you copied, and press <kbd>enter</kbd>:
+
+   ```shell
+   git remote add origin git@gitlab.com:username/projectpath.git
+   ```
+
+After you've done that, you can [stage your files](#add-and-commit-local-changes) and [upload them to GitLab](#send-changes-to-gitlabcom).
+
+#### View your remote repositories
 
 To view your remote repositories, type:
 
@@ -177,150 +275,205 @@ git remote -v
 
 The `-v` flag stands for verbose.
 
-### Add a remote repository
+### Download the latest changes in the project
 
-To add a link to a remote repository:
+To work on an up-to-date copy of the project, you `pull` to get all the changes made by users
+since the last time you cloned or pulled the project. Replace `<name-of-branch>`
+with the name of your [default branch](../user/project/repository/branches/default.md)
+to get the main branch code, or replace it with the branch name of the branch
+you are currently working in.
 
 ```shell
-git remote add <source-name> <repository-path>
+git pull <REMOTE> <name-of-branch>
 ```
 
-You'll use this source name every time you [push changes to GitLab.com](#send-changes-to-gitlabcom),
-so use something easy to remember and type.
+When you clone a repository, `REMOTE` is typically `origin`. This is where the
+repository was cloned from, and it indicates the SSH or HTTPS URL of the repository
+on the remote server. `<name-of-branch>` is usually the name of your
+[default branch](../user/project/repository/branches/default.md), but it may be any
+existing branch. You can create additional named remotes and branches as necessary.
+
+You can learn more on how Git manages remote repositories in the
+[Git Remote documentation](https://git-scm.com/book/en/v2/Git-Basics-Working-with-Remotes).
+
+## Branches
+
+A **branch** is a copy of the files in the repository at the time you create the branch.
+You can work in your branch without affecting other branches. When
+you're ready to add your changes to the main codebase, you can merge your branch into
+the default branch, for example, `main`.
+
+Use branches when you:
+
+- Want to add code to a project but you're not sure if it works properly.
+- Are collaborating on the project with others, and don't want your work to get mixed up.
+
+A new branch is often called **feature branch** to differentiate from the
+[default branch](../user/project/repository/branches/default.md).
 
 ### Create a branch
 
-To create a new branch, to work from without affecting the `master` branch, type
-the following (spaces won't be recognized in the branch name, so you will need to
-use a hyphen or underscore):
+To create a feature branch:
 
 ```shell
 git checkout -b <name-of-branch>
 ```
 
-### Work on an existing branch
+Branch names cannot contain empty spaces and special characters. Use only lowercase letters, numbers,
+hyphens (`-`), and underscores (`_`).
 
-To switch to an existing branch, so you can work on it:
+### Switch to a branch
+
+All work in Git is done in a branch.
+You can switch between branches to see the state of the files and work in that branch.
+
+To switch to an existing branch:
 
 ```shell
 git checkout <name-of-branch>
 ```
 
-### View the changes you've made
-
-It's important to be aware of what's happening and the status of your changes. When
-you add, change, or delete files/folders, Git knows about it. To check the status of
-your changes:
+For example, to change to the `main` branch:
 
 ```shell
-git status
+git checkout main
 ```
 
 ### View differences
 
-To view the differences between your local, unstaged changes and the repository versions
-that you cloned or pulled, type:
+To view the differences between your local unstaged changes and the latest version
+that you cloned or pulled:
 
 ```shell
 git diff
 ```
 
+### View the files that have changes
+
+When you add, change, or delete files or folders, Git knows about the changes.
+To check which files have been changed:
+
+```shell
+git status
+```
+
 ### Add and commit local changes
 
-You'll see any local changes in red when you type `git status`. These changes may
-be new, modified, or deleted files/folders. Use `git add` to first stage (prepare)
-a local file/folder for committing. Then use `git commit` to commit (save) the staged
-files:
+When you type `git status`, locally changed files are shown in red. These changes may
+be new, modified, or deleted files or folders.
+
+1. To stage a file for commit:
+
+   ```shell
+   git add <file-name OR folder-name>
+   ```
+
+1. Repeat step 1 for each file or folder you want to add.
+   Or, to stage all files in the current directory and subdirectory, type `git add .`.
+
+1. Confirm that the files have been added to staging:
+
+   ```shell
+   git status
+   ```
+
+   The files should be displayed in green text.
+
+1. To commit the staged files:
+
+   ```shell
+   git commit -m "COMMENT TO DESCRIBE THE INTENTION OF THE COMMIT"
+   ```
+
+#### Stage and commit all changes
+
+As a shortcut, you can add all local changes to staging and commit them with one command:
 
 ```shell
-git add <file-name OR folder-name>
-git commit -m "COMMENT TO DESCRIBE THE INTENTION OF THE COMMIT"
+git commit -a -m "COMMENT TO DESCRIBE THE INTENTION OF THE COMMIT"
 ```
-
-### Add all changes to commit
-
-To add and commit (save) all local changes quickly:
-
-```shell
-git add .
-git commit -m "COMMENT TO DESCRIBE THE INTENTION OF THE COMMIT"
-```
-
-NOTE: **Note:**
-The `.` character means _all file changes in the current directory and all subdirectories_.
 
 ### Send changes to GitLab.com
 
-NOTE: **Note:**
-To create a merge request from a fork to an upstream repository, see the
-[forking workflow](../user/project/repository/forking_workflow.md)
-
-To push all local commits (saved changes) to the remote repository:
+To push all local changes to the remote repository:
 
 ```shell
 git push <remote> <name-of-branch>
 ```
 
-For example, to push your local commits to the _`master`_ branch of the _`origin`_ remote:
+For example, to push your local commits to the `main` branch of the `origin` remote:
 
 ```shell
-git push origin master
+git push origin main
 ```
+
+Sometimes Git does not allow you to push to a repository. Instead,
+you must [force an update](../topics/git/git_rebase.md#force-push).
 
 ### Delete all changes in the branch
 
-To delete all local changes in the branch that have not been added to the staging
-area, and leave unstaged files/folders, type:
+To discard all changes to tracked files:
 
 ```shell
 git checkout .
 ```
 
-Note that this removes *changes* to files, not the files themselves.
+This action removes *changes* to files, not the files themselves.
+Untracked (new) files do not change.
 
 ### Unstage all changes that have been added to the staging area
 
-To undo the most recently added, but not committed, changes to files/folders:
+To unstage (remove) all files that have not been committed:
 
 ```shell
-git reset .
+git reset
 ```
 
 ### Undo most recent commit
 
-To undo the most recent commit, type:
+To undo the most recent commit:
 
 ```shell
 git reset HEAD~1
 ```
 
-This leaves the changed files and folders unstaged in your local repository.
+This action leaves the changed files and folders unstaged in your local repository.
 
-CAUTION: **Warning:**
-A Git commit should not usually be reversed, particularly if you already pushed it
+WARNING:
+A Git commit should not be reversed if you already pushed it
 to the remote repository. Although you can undo a commit, the best option is to avoid
 the situation altogether by working carefully.
 
-### Merge a branch with master branch
+You can learn more about the different ways Git can undo changes in the
+[Git Undoing Things documentation](https://git-scm.com/book/en/v2/Git-Basics-Undoing-Things).
 
-When you are ready to make all the changes in a branch a permanent addition to
-the master branch, you `merge` the two together:
+### Merge a branch with default branch
+
+When you are ready to add your changes to
+the default branch, you `merge` the two together:
 
 ```shell
-git checkout <name-of-branch>
-git merge master
+git checkout <feature-branch>
+git merge <default-branch>
 ```
 
-### Synchronize changes in a forked repository with the upstream
+In GitLab, you typically use a [merge request](../user/project/merge_requests/) to merge your changes, instead of using the command line.
 
-[Forking a repository](../user/project/repository/forking_workflow.md) lets you create
-a copy of a repository in your namespace. Changes made to your copy of the repository
-are not synchronized automatically with the original.
-Your local fork (copy) contains changes made by you only, so to keep the project
-in sync with the original project, you need to `pull` from the original repository.
+To create a merge request from a fork to an upstream repository, see the
+[forking workflow](../user/project/repository/forking_workflow.md).
 
-You must [create a link to the remote repository](#add-a-remote-repository) to pull
-changes from the original repository. It is common to call this remote the `upstream`.
+## Advanced use of Git through the command line
+
+For an introduction of more advanced Git techniques, see [Git rebase, force-push, and merge conflicts](../topics/git/git_rebase.md).
+
+## Synchronize changes in a forked repository with the upstream
+
+To create a copy of a repository in your namespace, you [fork it](../user/project/repository/forking_workflow.md).
+Changes made to your copy of the repository are not automatically synchronized with the original.
+To keep the project in sync with the original project, you need to `pull` from the original repository.
+
+You must [create a link to the remote repository](#add-a-remote) to pull
+changes from the original repository. It is common to call this remote repository the `upstream`.
 
 You can now use the `upstream` as a [`<remote>` to `pull` new updates](#download-the-latest-changes-in-the-project)
 from the original repository, and use the `origin`

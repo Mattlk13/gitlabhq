@@ -2,7 +2,7 @@
 
 require 'spec_helper'
 
-describe Discussion do
+RSpec.describe Discussion do
   subject { described_class.new([first_note, second_note, third_note]) }
 
   let(:first_note) { create(:diff_note_on_merge_request) }
@@ -49,6 +49,24 @@ describe Discussion do
       policy = DeclarativePolicy.policy_for(instance_double(User, id: 1), subject)
 
       expect(policy).to be_a(NotePolicy)
+    end
+  end
+
+  describe '#cache_key' do
+    let(:notes_sha) { Digest::SHA1.hexdigest("#{first_note.id}:#{second_note.id}:#{third_note.id}") }
+
+    it 'returns the cache key with ID and latest updated note updated at' do
+      expect(subject.cache_key).to eq("#{described_class::CACHE_VERSION}:#{third_note.latest_cached_markdown_version}:#{subject.id}:#{notes_sha}:#{third_note.updated_at}:")
+    end
+
+    context 'when discussion is resolved' do
+      before do
+        subject.resolve!(first_note.author)
+      end
+
+      it 'returns the cache key with resolved at' do
+        expect(subject.cache_key).to eq("#{described_class::CACHE_VERSION}:#{third_note.latest_cached_markdown_version}:#{subject.id}:#{notes_sha}:#{third_note.updated_at}:#{subject.resolved_at}")
+      end
     end
   end
 end

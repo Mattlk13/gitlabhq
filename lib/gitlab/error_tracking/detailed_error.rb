@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+# This should be in the ErrorTracking namespace. For more details, see:
+# https://gitlab.com/gitlab-org/gitlab/-/issues/323342
 module Gitlab
   module ErrorTracking
     class DetailedError
@@ -22,6 +24,7 @@ module Gitlab
                     :id,
                     :last_release_last_commit,
                     :last_release_short_version,
+                    :last_release_version,
                     :last_seen,
                     :message,
                     :project_id,

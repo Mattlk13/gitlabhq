@@ -1,6 +1,7 @@
-import VisualTokenValue from './visual_token_value';
-import { objectToQueryString } from '~/lib/utils/common_utils';
+import { spriteIcon } from '~/lib/utils/common_utils';
+import { objectToQuery } from '~/lib/utils/url_utility';
 import FilteredSearchContainer from './container';
+import VisualTokenValue from './visual_token_value';
 
 export default class FilteredSearchVisualTokens {
   static permissibleOperatorValues = ['=', '!='];
@@ -8,7 +9,7 @@ export default class FilteredSearchVisualTokens {
   static getOperatorToken(value) {
     let token = null;
 
-    FilteredSearchVisualTokens.permissibleOperatorValues.forEach(operatorToken => {
+    FilteredSearchVisualTokens.permissibleOperatorValues.forEach((operatorToken) => {
       if (value.startsWith(operatorToken)) {
         token = operatorToken;
       }
@@ -20,7 +21,7 @@ export default class FilteredSearchVisualTokens {
   static getValueToken(value) {
     let newValue = value;
 
-    FilteredSearchVisualTokens.permissibleOperatorValues.forEach(operatorToken => {
+    FilteredSearchVisualTokens.permissibleOperatorValues.forEach((operatorToken) => {
       if (value.startsWith(operatorToken)) {
         newValue = value.slice(operatorToken.length);
       }
@@ -48,7 +49,7 @@ export default class FilteredSearchVisualTokens {
     const otherTokens = FilteredSearchContainer.container.querySelectorAll(
       '.js-visual-token .selectable.selected',
     );
-    [].forEach.call(otherTokens, t => t.classList.remove('selected'));
+    [].forEach.call(otherTokens, (t) => t.classList.remove('selected'));
   }
 
   static selectToken(tokenButton, forceSelection = false) {
@@ -84,7 +85,7 @@ export default class FilteredSearchVisualTokens {
         <div class="value-container">
           <div class="${capitalizeTokenValue ? 'text-capitalize' : ''} value"></div>
           <div class="remove-token" role="button">
-            <i class="fa fa-close"></i>
+            ${spriteIcon('close', 's16 close-icon')}
           </div>
         </div>
       </div>
@@ -95,7 +96,7 @@ export default class FilteredSearchVisualTokens {
     const tokenType = tokenName.toLowerCase();
     const tokenValueContainer = parentElement.querySelector('.value-container');
     const tokenValueElement = tokenValueContainer.querySelector('.value');
-    tokenValueElement.innerText = tokenValue;
+    tokenValueElement.textContent = tokenValue;
 
     const visualTokenValue = new VisualTokenValue(tokenValue, tokenType, tokenOperator);
 
@@ -140,9 +141,9 @@ export default class FilteredSearchVisualTokens {
       li.innerHTML = nameHTML + operatorHTML;
     }
 
-    li.querySelector('.name').innerText = name;
+    li.querySelector('.name').textContent = name;
     if (hasOperator) {
-      li.querySelector('.operator').innerText = operator;
+      li.querySelector('.operator').textContent = operator;
     }
 
     const tokensContainer = FilteredSearchContainer.container.querySelector('.tokens-container');
@@ -162,8 +163,8 @@ export default class FilteredSearchVisualTokens {
       lastVisualToken.innerHTML = FilteredSearchVisualTokens.createVisualTokenElementHTML({
         hasOperator: Boolean(operator),
       });
-      lastVisualToken.querySelector('.name').innerText = name;
-      lastVisualToken.querySelector('.operator').innerText = operator;
+      lastVisualToken.querySelector('.name').textContent = name;
+      lastVisualToken.querySelector('.operator').textContent = operator;
       FilteredSearchVisualTokens.renderVisualTokenValue(lastVisualToken, name, value, operator);
     }
   }
@@ -193,7 +194,8 @@ export default class FilteredSearchVisualTokens {
       });
     } else if (
       !isLastVisualTokenValid &&
-      (lastVisualToken && !lastVisualToken.querySelector('.operator'))
+      lastVisualToken &&
+      !lastVisualToken.querySelector('.operator')
     ) {
       const tokensContainer = FilteredSearchContainer.container.querySelector('.tokens-container');
       tokensContainer.removeChild(lastVisualToken);
@@ -208,8 +210,8 @@ export default class FilteredSearchVisualTokens {
         },
       });
     } else {
-      const previousTokenName = lastVisualToken.querySelector('.name').innerText;
-      const previousTokenOperator = lastVisualToken.querySelector('.operator').innerText;
+      const previousTokenName = lastVisualToken.querySelector('.name').textContent;
+      const previousTokenOperator = lastVisualToken.querySelector('.operator').textContent;
       const tokensContainer = FilteredSearchContainer.container.querySelector('.tokens-container');
       tokensContainer.removeChild(lastVisualToken);
 
@@ -234,7 +236,7 @@ export default class FilteredSearchVisualTokens {
     const { lastVisualToken } = FilteredSearchVisualTokens.getLastVisualTokenBeforeInput();
 
     if (lastVisualToken && lastVisualToken.classList.contains('filtered-search-term')) {
-      lastVisualToken.querySelector('.name').innerText += ` ${searchTerm}`;
+      lastVisualToken.querySelector('.name').textContent += ` ${searchTerm}`;
     } else {
       FilteredSearchVisualTokens.addVisualTokenElement({
         name: searchTerm,
@@ -261,12 +263,12 @@ export default class FilteredSearchVisualTokens {
     const value = lastVisualToken.querySelector('.value');
     const name = lastVisualToken.querySelector('.name');
 
-    const valueText = value ? value.innerText : '';
-    const nameText = name ? name.innerText : '';
+    const valueText = value ? value.textContent : '';
+    const nameText = name ? name.textContent : '';
 
     if (includeOperator) {
       const operator = lastVisualToken.querySelector('.operator');
-      const operatorText = operator ? operator.innerText : '';
+      const operatorText = operator ? operator.textContent : '';
       return valueText || operatorText || nameText;
     }
 
@@ -278,7 +280,7 @@ export default class FilteredSearchVisualTokens {
 
     const operator = lastVisualToken && lastVisualToken.querySelector('.operator');
 
-    return operator?.innerText;
+    return operator?.textContent;
   }
 
   static removeLastTokenPartial() {
@@ -326,7 +328,7 @@ export default class FilteredSearchVisualTokens {
       return endpoint;
     }
 
-    const queryString = objectToQueryString(JSON.parse(endpointQueryParams));
+    const queryString = objectToQuery(JSON.parse(endpointQueryParams));
     return `${endpoint}?${queryString}`;
   }
 
@@ -346,8 +348,8 @@ export default class FilteredSearchVisualTokens {
 
     if (token.classList.contains('filtered-search-token')) {
       FilteredSearchVisualTokens.addFilterVisualToken(
-        nameElement.innerText,
-        operatorElement.innerText,
+        nameElement.textContent,
+        operatorElement.textContent,
         null,
         {
           uppercaseTokenName: nameElement.classList.contains('text-uppercase'),
@@ -359,13 +361,13 @@ export default class FilteredSearchVisualTokens {
 
       if (!value) {
         const valueElement = valueContainerElement.querySelector('.value');
-        value = valueElement.innerText;
+        value = valueElement.textContent;
       }
     }
 
     // token is a search term
     if (!value) {
-      value = nameElement.innerText;
+      value = nameElement.textContent;
     }
 
     input.value = value;

@@ -2,7 +2,7 @@
 
 require 'spec_helper'
 
-describe 'Static Object External Storage Content Security Policy' do
+RSpec.describe 'Static Object External Storage Content Security Policy' do
   let_it_be(:user) { create(:user) }
 
   shared_context 'disable feature' do
@@ -11,7 +11,7 @@ describe 'Static Object External Storage Content Security Policy' do
     end
   end
 
-  it_behaves_like 'setting CSP connect-src' do
+  it_behaves_like 'setting CSP', 'connect-src' do
     let_it_be(:whitelisted_url) { 'https://static-objects.test' }
     let_it_be(:extended_controller_class) { IdeController }
 

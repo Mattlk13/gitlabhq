@@ -1,6 +1,7 @@
 import $ from 'jquery';
-import '~/gl_dropdown';
-import _ from 'underscore';
+import { escape } from 'lodash';
+import initDeprecatedJQueryDropdown from '~/deprecated_jquery_dropdown';
+import createFlash from '~/flash';
 import { __ } from '~/locale';
 
 function isValidProjectId(id) {
@@ -27,7 +28,7 @@ class SidebarMoveIssue {
   }
 
   initDropdown() {
-    this.$dropdownToggle.glDropdown({
+    initDeprecatedJQueryDropdown(this.$dropdownToggle, {
       search: {
         fields: ['name_with_namespace'],
       },
@@ -42,18 +43,20 @@ class SidebarMoveIssue {
         this.mediator
           .fetchAutocompleteProjects(searchTerm)
           .then(callback)
-          .catch(
-            () => new window.Flash(__('An error occurred while fetching projects autocomplete.')),
+          .catch(() =>
+            createFlash({
+              message: __('An error occurred while fetching projects autocomplete.'),
+            }),
           );
       },
-      renderRow: project => `
+      renderRow: (project) => `
         <li>
           <a href="#" class="js-move-issue-dropdown-item">
-            ${_.escape(project.name_with_namespace)}
+            ${escape(project.name_with_namespace)}
           </a>
         </li>
       `,
-      clicked: options => {
+      clicked: (options) => {
         const project = options.selectedObj;
         const selectedProjectId = options.isMarking ? project.id : 0;
         this.mediator.setMoveToProjectId(selectedProjectId);
@@ -76,7 +79,7 @@ class SidebarMoveIssue {
       this.$confirmButton.disable().addClass('is-loading');
 
       this.mediator.moveIssue().catch(() => {
-        window.Flash(__('An error occurred while moving the issue.'));
+        createFlash({ message: __('An error occurred while moving the issue.') });
         this.$confirmButton.enable().removeClass('is-loading');
       });
     }

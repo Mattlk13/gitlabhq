@@ -1,4 +1,5 @@
 {
+  "$schema": "http://json-schema.org/draft-07/schema#",
   "type": "object",
   "required": [
     "label",
@@ -10,8 +11,8 @@
   ],
   "properties": {
     "id": { "type": "string" },
-    "query_range": { "type": "string" },
-    "query": { "type": "string" },
+    "query_range": { "type": ["string", "number"] },
+    "query": { "type": ["string", "number"] },
     "unit": { "type": "string" },
     "label": { "type": "string" },
     "track": { "type": "string" },

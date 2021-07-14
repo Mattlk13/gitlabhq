@@ -1,5 +1,9 @@
 # frozen_string_literal: true
 
+# This controller shared examples will be migrated to
+# spec/support/shared_examples/requests/sessionless_auth_request_shared_examples.rb
+# See also https://gitlab.com/groups/gitlab-org/-/epics/5076
+
 RSpec.shared_examples 'authenticates sessionless user' do |path, format, params|
   params ||= {}
 
@@ -44,7 +48,7 @@ RSpec.shared_examples 'authenticates sessionless user' do |path, format, params|
           .to increment(:user_unauthenticated_counter)
       end
 
-      personal_access_token.update(scopes: [:read_user])
+      personal_access_token.update!(scopes: [:read_user])
 
       get path, params: default_params.merge(private_token: personal_access_token.token)
 
@@ -86,7 +90,7 @@ RSpec.shared_examples 'authenticates sessionless user' do |path, format, params|
 
       get path, params: default_params.merge(feed_token: 'token')
 
-      expect(response.status).not_to eq 200
+      expect(response).not_to have_gitlab_http_status(:ok)
     end
   end
 
@@ -103,6 +107,6 @@ RSpec.shared_examples 'authenticates sessionless user' do |path, format, params|
 
     get path, params: default_params.merge(private_token: 'token')
 
-    expect(response.status).not_to eq(200)
+    expect(response).not_to have_gitlab_http_status(:ok)
   end
 end

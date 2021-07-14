@@ -44,11 +44,17 @@ Note: GitLab QA uses [Selenium WebDriver](https://www.seleniumhq.org/) via
 the browser to use. You will need to have Chrome (or Chromium) and
 [chromedriver](https://chromedriver.chromium.org/) installed / in your `$PATH`.
 
+### Writing tests
+
+- [Writing tests from scratch tutorial](../doc/development/testing_guide/end_to_end/beginners_guide.md)
+    - [Best practices](../doc/development/testing_guide/best_practices.md)
+    - [Using page objects](../doc/development/testing_guide/end_to_end/page_objects.md)
+    - [Guidelines](../doc/development/testing_guide/index.md)
+    - [Tests with special setup for local environments](../doc/development/testing_guide/end_to_end/running_tests_that_require_special_setup.md)
+
 ### Run the end-to-end tests in a local development environment
 
-Follow the GDK instructions to [prepare](https://gitlab.com/gitlab-org/gitlab-development-kit/blob/master/doc/prepare.md)
-and [install](https://gitlab.com/gitlab-org/gitlab-development-kit/blob/master/doc/set-up-gdk.md)
-your local GitLab development environment.
+Follow the GDK instructions to [install](https://gitlab.com/gitlab-org/gitlab-development-kit/blob/main/doc/index.md) your local GitLab development environment.
 
 Once you have GDK running, switch to the `qa` directory. E.g., if you setup
 GDK to develop in the main `gitlab-ce` repo, the GitLab source code will be
@@ -77,13 +83,6 @@ Once you have the license file you can export it as an environment variable and 
 export EE_LICENSE=$(cat /path/to/gitlab_license)
 ```
 
-### Writing tests
-
-- [Writing tests from scratch tutorial](../doc/development/testing_guide/end_to_end/quick_start_guide.md)
-    - [Best practices](../doc/development/testing_guide/best_practices.md)
-    - [Using page objects](../doc/development/testing_guide/end_to_end/page_objects.md)
-    - [Guidelines](../doc/development/testing_guide/index.md)
-
 ### Running specific tests
 
 You can also supply specific tests to run as another parameter. For example, to
@@ -102,6 +101,15 @@ bundle exec bin/qa Test::Instance::All http://localhost:3000 -- qa/specs/feature
 
 Note that the separator `--` is required; all subsequent options will be
 ignored by the QA framework and passed to `rspec`.
+
+#### Running tests for transient bugs
+
+A suite of tests have been written to test for [transient bugs](https://about.gitlab.com/handbook/engineering/quality/issue-triage/#transient-bugs).
+Those tests are tagged `:transient` and therefore can be run via:
+
+```shell
+bundle exec bin/qa Test::Instance::All http://localhost:3000 -- --tag transient
+```
 
 ### Overriding the authenticated user
 
@@ -177,11 +185,13 @@ another test has `:ldap` and `:quarantine` metadata. If the tests are run with
 `--tag smoke --tag quarantine`, only the first test will run. The test with
 `:ldap` will not run even though it also has `:quarantine`.
 
-### Running tests with a feature flag enabled
+### Running tests with a feature flag enabled or disabled
 
-Tests can be run with with a feature flag enabled by using the command-line
-option `--enable-feature FEATURE_FLAG`. For example, to enable the feature flag
-that enforces Gitaly request limits, you would use the command:
+Tests can be run with with a feature flag enabled or disabled by using the command-line
+option `--enable-feature FEATURE_FLAG` or `--disable-feature FEATURE_FLAG`.
+
+For example, to enable the feature flag that enforces Gitaly request limits,
+you would use the command:
 
 ```
 bundle exec bin/qa Test::Instance::All http://localhost:3000 --enable-feature gitaly_enforce_requests_limits
@@ -192,9 +202,20 @@ feature flag ([via the API](https://docs.gitlab.com/ee/api/features.html)), run
 all the tests in the `Test::Instance::All` scenario, and then disable the
 feature flag again.
 
+Similarly, to disable the feature flag that enforces Gitaly request limits,
+you would use the command:
+
+```
+bundle exec bin/qa Test::Instance::All http://localhost:3000 --disable-feature gitaly_enforce_requests_limits
+```
+This will instruct the QA framework to disable the `gitaly_enforce_requests_limits`
+feature flag ([via the API](https://docs.gitlab.com/ee/api/features.html)) if not already disabled,
+run all the tests in the `Test::Instance::All` scenario, and then enable the
+feature flag again if it was enabled earlier.
+
 Note: the QA framework doesn't currently allow you to easily toggle a feature
-flag during a single test, [as you can in unit tests](https://docs.gitlab.com/ee/development/feature_flags.html#specs),
+flag during a single test, [as you can in unit tests](https://docs.gitlab.com/ee/development/feature_flags/index.html),
 but [that capability is planned](https://gitlab.com/gitlab-org/quality/team-tasks/issues/77).
 
-Note also that the `--` separator isn't used because `--enable-feature` is a QA
-framework option, not an `rspec` option.
+Note also that the `--` separator isn't used because `--enable-feature` and `--disable-feature`
+are QA framework options, not `rspec` options.

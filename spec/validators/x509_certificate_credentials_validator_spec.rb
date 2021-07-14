@@ -2,7 +2,7 @@
 
 require 'spec_helper'
 
-describe X509CertificateCredentialsValidator do
+RSpec.describe X509CertificateCredentialsValidator do
   let(:certificate_data) { File.read('spec/fixtures/x509_certificate.crt') }
   let(:pkey_data) { File.read('spec/fixtures/x509_certificate_pk.key') }
 
@@ -13,7 +13,9 @@ describe X509CertificateCredentialsValidator do
       attr_accessor :certificate, :private_key, :passphrase
 
       def initialize(certificate, private_key, passphrase = nil)
-        @certificate, @private_key, @passphrase = certificate, private_key, passphrase
+        @certificate = certificate
+        @private_key = private_key
+        @passphrase = passphrase
       end
     end
   end

@@ -2,11 +2,13 @@
 
 require 'spec_helper'
 
-describe 'Dropdown hint', :js do
+RSpec.describe 'Dropdown hint', :js do
   include FilteredSearchHelpers
 
-  let!(:project) { create(:project, :public) }
-  let!(:user) { create(:user) }
+  let_it_be(:project) { create(:project, :public) }
+  let_it_be(:user) { create(:user) }
+  let_it_be(:issue) { create(:issue, project: project) }
+
   let(:filtered_search) { find('.filtered-search') }
   let(:js_dropdown_hint) { '#js-dropdown-hint' }
   let(:js_dropdown_operator) { '#js-dropdown-operator' }
@@ -21,8 +23,6 @@ describe 'Dropdown hint', :js do
 
   before do
     project.add_maintainer(user)
-    create(:issue, project: project)
-    create(:merge_request, source_project: project, target_project: project)
   end
 
   context 'when user not logged in' do

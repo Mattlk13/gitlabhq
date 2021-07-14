@@ -2,7 +2,7 @@
 
 require 'spec_helper'
 
-describe 'Multi Select Issue', :js do
+RSpec.describe 'Multi Select Issue', :js do
   include DragTo
 
   let(:group) { create(:group, :nested) }
@@ -40,6 +40,10 @@ describe 'Multi Select Issue', :js do
 
   before do
     project.add_maintainer(user)
+
+    # Multi select drag&drop support is temporarily disabled
+    # https://gitlab.com/gitlab-org/gitlab/-/issues/289797
+    stub_feature_flags(graphql_board_lists: false, board_multi_select: project)
 
     sign_in(user)
   end

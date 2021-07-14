@@ -1,12 +1,13 @@
 <script>
-import { mapActions, mapGetters, mapState } from 'vuex';
-import _ from 'underscore';
-import { Manager } from 'smooshpack';
-import { listen } from 'codesandbox-api';
 import { GlLoadingIcon } from '@gitlab/ui';
-import Navigator from './navigator.vue';
-import { packageJsonPath } from '../../constants';
+import { listen } from 'codesandbox-api';
+import { isEmpty, debounce } from 'lodash';
+import { Manager } from 'smooshpack';
+import { mapActions, mapGetters, mapState } from 'vuex';
+import { packageJsonPath, LIVE_PREVIEW_DEBOUNCE } from '../../constants';
+import eventHub from '../../eventhub';
 import { createPathWithExt } from '../../utils';
+import Navigator from './navigator.vue';
 
 export default {
   components: {
@@ -21,7 +22,7 @@ export default {
     };
   },
   computed: {
-    ...mapState(['entries', 'promotionSvgPath', 'links']),
+    ...mapState(['entries', 'promotionSvgPath', 'links', 'codesandboxBundlerUrl']),
     ...mapGetters(['packageJson', 'currentProject']),
     normalizedEntries() {
       return Object.keys(this.entries).reduce((acc, path) => {
@@ -61,13 +62,10 @@ export default {
       };
     },
   },
-  watch: {
-    entries: {
-      deep: true,
-      handler: 'update',
-    },
-  },
   mounted() {
+    this.onFilesChangeCallback = debounce(() => this.update(), LIVE_PREVIEW_DEBOUNCE);
+    eventHub.$on('ide.files.change', this.onFilesChangeCallback);
+
     this.loading = true;
 
     return this.loadFileContent(packageJsonPath)
@@ -78,17 +76,19 @@ export default {
       .then(() => this.initPreview());
   },
   beforeDestroy() {
-    if (!_.isEmpty(this.manager)) {
+    // Setting sandpackReady = false protects us form a phantom `update()` being called when `debounce` finishes.
+    this.sandpackReady = false;
+    eventHub.$off('ide.files.change', this.onFilesChangeCallback);
+
+    if (!isEmpty(this.manager)) {
       this.manager.listener();
     }
+
     this.manager = {};
 
     if (this.listener) {
       this.listener();
     }
-
-    clearTimeout(this.timeout);
-    this.timeout = null;
   },
   methods: {
     ...mapActions(['getFileData', 'getRawFileData']),
@@ -106,14 +106,9 @@ export default {
       return this.loadFileContent(this.mainEntry)
         .then(() => this.$nextTick())
         .then(() => {
-          this.initManager('#ide-preview', this.sandboxOpts, {
-            fileResolver: {
-              isFile: p => Promise.resolve(Boolean(this.entries[createPathWithExt(p)])),
-              readFile: p => this.loadFileContent(createPathWithExt(p)).then(content => content),
-            },
-          });
+          this.initManager();
 
-          this.listener = listen(e => {
+          this.listener = listen((e) => {
             switch (e.type) {
               case 'done':
                 this.sandpackReady = true;
@@ -127,27 +122,33 @@ export default {
     update() {
       if (!this.sandpackReady) return;
 
-      clearTimeout(this.timeout);
+      if (isEmpty(this.manager)) {
+        this.initPreview();
 
-      this.timeout = setTimeout(() => {
-        if (_.isEmpty(this.manager)) {
-          this.initPreview();
+        return;
+      }
 
-          return;
-        }
-
-        this.manager.updatePreview(this.sandboxOpts);
-      }, 250);
+      this.manager.updatePreview(this.sandboxOpts);
     },
-    initManager(el, opts, resolver) {
-      this.manager = new Manager(el, opts, resolver);
+    initManager() {
+      const { codesandboxBundlerUrl: bundlerURL } = this;
+
+      const settings = {
+        fileResolver: {
+          isFile: (p) => Promise.resolve(Boolean(this.entries[createPathWithExt(p)])),
+          readFile: (p) => this.loadFileContent(createPathWithExt(p)).then((content) => content),
+        },
+        ...(bundlerURL ? { bundlerURL } : {}),
+      };
+
+      this.manager = new Manager('#ide-preview', this.sandboxOpts, settings);
     },
   },
 };
 </script>
 
 <template>
-  <div class="preview h-100 w-100 d-flex flex-column">
+  <div class="preview h-100 w-100 d-flex flex-column gl-bg-white">
     <template v-if="showPreview">
       <navigator :manager="manager" />
       <div id="ide-preview"></div>
@@ -164,13 +165,13 @@ export default {
       </p>
       <a
         :href="links.webIDEHelpPagePath"
-        class="btn btn-primary"
+        class="btn gl-button btn-confirm"
         target="_blank"
         rel="noopener noreferrer"
       >
         {{ s__('IDE|Get started with Live Preview') }}
       </a>
     </div>
-    <gl-loading-icon v-else :size="2" class="align-self-center mt-auto mb-auto" />
+    <gl-loading-icon v-else size="lg" class="align-self-center mt-auto mb-auto" />
   </div>
 </template>

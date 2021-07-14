@@ -2,43 +2,52 @@
 
 require 'spec_helper'
 
-describe ReactiveCaching, :use_clean_rails_memory_store_caching do
+RSpec.describe ReactiveCaching, :use_clean_rails_memory_store_caching do
   include ExclusiveLeaseHelpers
   include ReactiveCachingHelpers
 
-  class CacheTest
-    include ReactiveCaching
+  let(:cache_class_test) do
+    Class.new do
+      include ReactiveCaching
 
-    self.reactive_cache_key = ->(thing) { ["foo", thing.id] }
+      self.reactive_cache_key = ->(thing) { ["foo", thing.id] }
 
-    self.reactive_cache_lifetime = 5.minutes
-    self.reactive_cache_refresh_interval = 15.seconds
+      self.reactive_cache_lifetime = 5.minutes
+      self.reactive_cache_refresh_interval = 15.seconds
+      self.reactive_cache_work_type = :no_dependency
 
-    attr_reader :id
+      attr_reader :id
 
-    def self.primary_key
-      :id
-    end
-
-    def initialize(id, &blk)
-      @id = id
-      @calculator = blk
-    end
-
-    def calculate_reactive_cache
-      @calculator.call
-    end
-
-    def result
-      with_reactive_cache do |data|
-        data
+      def self.primary_key
+        :id
       end
+
+      def initialize(id, &blk)
+        @id = id
+        @calculator = blk
+      end
+
+      def calculate_reactive_cache
+        @calculator.call
+      end
+
+      def result
+        with_reactive_cache do |data|
+          data
+        end
+      end
+    end
+  end
+
+  let(:external_dependency_cache_class_test) do
+    Class.new(cache_class_test) do
+      self.reactive_cache_work_type = :external_dependency
     end
   end
 
   let(:calculation) { -> { 2 + 2 } }
   let(:cache_key) { "foo:666" }
-  let(:instance) { CacheTest.new(666, &calculation) }
+  let(:instance) { cache_class_test.new(666, &calculation) }
 
   describe '#with_reactive_cache' do
     before do
@@ -46,6 +55,18 @@ describe ReactiveCaching, :use_clean_rails_memory_store_caching do
     end
 
     subject(:go!) { instance.result }
+
+    shared_examples 'reactive worker call' do |worker_class|
+      let(:instance) do
+        test_class.new(666, &calculation)
+      end
+
+      it 'performs caching with correct worker' do
+        expect(worker_class).to receive(:perform_async).with(test_class, 666)
+
+        go!
+      end
+    end
 
     shared_examples 'a cacheable value' do |cached_value|
       before do
@@ -73,10 +94,12 @@ describe ReactiveCaching, :use_clean_rails_memory_store_caching do
 
         it { is_expected.to be_nil }
 
-        it 'refreshes cache' do
-          expect(ReactiveCachingWorker).to receive(:perform_async).with(CacheTest, 666)
+        it_behaves_like 'reactive worker call', ReactiveCachingWorker do
+          let(:test_class) { cache_class_test }
+        end
 
-          instance.with_reactive_cache { raise described_class::InvalidateReactiveCache }
+        it_behaves_like 'reactive worker call', ExternalServiceReactiveCachingWorker do
+          let(:test_class) { external_dependency_cache_class_test }
         end
       end
     end
@@ -84,10 +107,12 @@ describe ReactiveCaching, :use_clean_rails_memory_store_caching do
     context 'when cache is empty' do
       it { is_expected.to be_nil }
 
-      it 'enqueues a background worker to bootstrap the cache' do
-        expect(ReactiveCachingWorker).to receive(:perform_async).with(CacheTest, 666)
+      it_behaves_like 'reactive worker call', ReactiveCachingWorker do
+        let(:test_class) { cache_class_test }
+      end
 
-        go!
+      it_behaves_like 'reactive worker call', ExternalServiceReactiveCachingWorker do
+        let(:test_class) { external_dependency_cache_class_test }
       end
 
       it 'updates the cache lifespan' do
@@ -168,12 +193,14 @@ describe ReactiveCaching, :use_clean_rails_memory_store_caching do
 
     context 'with custom reactive_cache_worker_finder' do
       let(:args) { %w(arg1 arg2) }
-      let(:instance) { CustomFinderCacheTest.new(666, &calculation) }
+      let(:instance) { custom_finder_cache_test.new(666, &calculation) }
 
-      class CustomFinderCacheTest < CacheTest
-        self.reactive_cache_worker_finder = ->(_id, *args) { from_cache(*args) }
+      let(:custom_finder_cache_test) do
+        Class.new(cache_class_test) do
+          self.reactive_cache_worker_finder = ->(_id, *args) { from_cache(*args) }
 
-        def self.from_cache(*args); end
+          def self.from_cache(*args); end
+        end
       end
 
       before do
@@ -234,6 +261,18 @@ describe ReactiveCaching, :use_clean_rails_memory_store_caching do
         go!
       end
 
+      context 'when :external_dependency cache' do
+        let(:instance) do
+          external_dependency_cache_class_test.new(666, &calculation)
+        end
+
+        it 'enqueues a repeat worker' do
+          expect_reactive_cache_update_queued(instance, worker_klass: ExternalServiceReactiveCachingWorker)
+
+          go!
+        end
+      end
+
       it 'calls a reactive_cache_updated only once if content did not change on subsequent update' do
         expect(instance).to receive(:calculate_reactive_cache).twice
         expect(instance).to receive(:reactive_cache_updated).once
@@ -247,38 +286,30 @@ describe ReactiveCaching, :use_clean_rails_memory_store_caching do
         go!
       end
 
-      context 'when calculated object size exceeds default reactive_cache_hard_limit' do
-        let(:calculation) { -> { 'a' * 2 * 1.megabyte } }
+      context 'when reactive_cache_hard_limit is set' do
+        let(:test_class) { Class.new(cache_class_test) { self.reactive_cache_hard_limit = 1.megabyte } }
+        let(:instance) { test_class.new(666, &calculation) }
 
-        shared_examples 'ExceededReactiveCacheLimit' do
+        context 'when cache size is over the overridden limit' do
+          let(:calculation) { -> { 'a' * 2 * 1.megabyte } }
+
           it 'raises ExceededReactiveCacheLimit exception and does not cache new data' do
             expect { go! }.to raise_exception(ReactiveCaching::ExceededReactiveCacheLimit)
 
             expect(read_reactive_cache(instance)).not_to eq(calculation.call)
           end
-        end
 
-        context 'when reactive_cache_hard_limit feature flag is enabled' do
-          it_behaves_like 'ExceededReactiveCacheLimit'
-
-          context 'when reactive_cache_hard_limit is overridden' do
-            let(:test_class) { Class.new(CacheTest) { self.reactive_cache_hard_limit = 3.megabytes } }
-            let(:instance) { test_class.new(666, &calculation) }
+          context 'when reactive_cache_limit_enabled? is overridden to return false' do
+            before do
+              allow(instance).to receive(:reactive_cache_limit_enabled?).and_return(false)
+            end
 
             it_behaves_like 'successful cache'
-
-            context 'when cache size is over the overridden limit' do
-              let(:calculation) { -> { 'a' * 4 * 1.megabyte } }
-
-              it_behaves_like 'ExceededReactiveCacheLimit'
-            end
           end
         end
 
-        context 'when reactive_cache_limit feature flag is disabled' do
-          before do
-            stub_feature_flags(reactive_cache_limit: false)
-          end
+        context 'when cache size is within the overridden limit' do
+          let(:calculation) { -> { 'Smaller than 1Mb reactive_cache_hard_limit' } }
 
           it_behaves_like 'successful cache'
         end
@@ -339,7 +370,17 @@ describe ReactiveCaching, :use_clean_rails_memory_store_caching do
     it { expect(subject.reactive_cache_refresh_interval).to be_a(ActiveSupport::Duration) }
     it { expect(subject.reactive_cache_lifetime).to be_a(ActiveSupport::Duration) }
     it { expect(subject.reactive_cache_key).to respond_to(:call) }
-    it { expect(subject.reactive_cache_hard_limit).to be_a(Integer) }
+    it { expect(subject.reactive_cache_hard_limit).to be_nil }
     it { expect(subject.reactive_cache_worker_finder).to respond_to(:call) }
+  end
+
+  describe 'classes including this concern' do
+    it 'sets reactive_cache_work_type' do
+      classes = ObjectSpace.each_object(Class).select do |klass|
+        klass < described_class && klass.name
+      end
+
+      expect(classes).to all(have_attributes(reactive_cache_work_type: be_in(described_class::WORK_TYPE.keys)))
+    end
   end
 end

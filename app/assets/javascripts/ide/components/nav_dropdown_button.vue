@@ -1,13 +1,13 @@
 <script>
+import { GlIcon } from '@gitlab/ui';
 import { mapState } from 'vuex';
 import DropdownButton from '~/vue_shared/components/dropdown/dropdown_button.vue';
-import Icon from '~/vue_shared/components/icon.vue';
 
 const EMPTY_LABEL = '-';
 
 export default {
   components: {
-    Icon,
+    GlIcon,
     DropdownButton,
   },
   props: {
@@ -31,12 +31,12 @@ export default {
 
 <template>
   <dropdown-button>
-    <span class="row flex-nowrap">
+    <span class="row gl-flex-nowrap">
       <span class="col-auto flex-fill text-truncate">
-        <icon :size="16" :aria-label="__('Current Branch')" name="branch" /> {{ branchLabel }}
+        <gl-icon :size="16" :aria-label="__('Current Branch')" name="branch" /> {{ branchLabel }}
       </span>
       <span v-if="showMergeRequests" class="col-5 pl-0 text-truncate">
-        <icon :size="16" :aria-label="__('Merge Request')" name="merge-request" />
+        <gl-icon :size="16" :aria-label="__('Merge request')" name="merge-request" />
         {{ mergeRequestLabel }}
       </span>
     </span>

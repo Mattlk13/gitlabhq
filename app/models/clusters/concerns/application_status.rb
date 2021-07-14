@@ -9,6 +9,7 @@ module Clusters
         scope :available, -> do
           where(
             status: [
+              self.state_machines[:status].states[:externally_installed].value,
               self.state_machines[:status].states[:installed].value,
               self.state_machines[:status].states[:updated].value
             ]
@@ -27,6 +28,8 @@ module Clusters
           state :update_errored, value: 6
           state :uninstalling, value: 7
           state :uninstall_errored, value: 8
+          state :uninstalled, value: 10
+          state :externally_installed, value: 11
 
           # Used for applications that are pre-installed by the cluster,
           # e.g. Knative in GCP Cloud Run enabled clusters
@@ -34,6 +37,14 @@ module Clusters
           # we define only one simple state transition to enter the `pre_installed` state,
           # and no exit transitions.
           state :pre_installed, value: 9
+
+          event :make_externally_installed do
+            transition any => :externally_installed
+          end
+
+          event :make_externally_uninstalled do
+            transition any => :uninstalled
+          end
 
           event :make_scheduled do
             transition [:installable, :errored, :installed, :updated, :update_errored, :uninstall_errored] => :scheduled
@@ -70,7 +81,7 @@ module Clusters
             transition [:scheduled] => :uninstalling
           end
 
-          before_transition any => [:scheduled] do |application, _|
+          before_transition any => [:scheduled, :installed, :uninstalled, :externally_installed] do |application, _|
             application.status_reason = nil
           end
 
@@ -86,16 +97,6 @@ module Clusters
           before_transition any => [:update_errored, :uninstall_errored] do |application, transition|
             status_reason = transition.args.first
             application.status_reason = status_reason if status_reason
-          end
-
-          before_transition any => [:installed, :updated] do |application, _|
-            # When installing any application we are also performing an update
-            # of tiller (see Gitlab::Kubernetes::Helm::ClientCommand) so
-            # therefore we need to reflect that in the database.
-
-            unless ::Gitlab::Kubernetes::Helm.local_tiller_enabled?
-              application.cluster.application_helm.update!(version: Gitlab::Kubernetes::Helm::HELM_VERSION)
-            end
           end
 
           after_transition any => [:uninstalling], :use_transactions => false do |application, _|
@@ -115,7 +116,7 @@ module Clusters
       end
 
       def available?
-        pre_installed? || installed? || updated?
+        pre_installed? || installed? || externally_installed? || updated?
       end
 
       def update_in_progress?

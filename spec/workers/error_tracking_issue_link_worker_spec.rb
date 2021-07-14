@@ -2,7 +2,7 @@
 
 require 'spec_helper'
 
-describe ErrorTrackingIssueLinkWorker do
+RSpec.describe ErrorTrackingIssueLinkWorker do
   let_it_be(:error_tracking) { create(:project_error_tracking_setting) }
   let_it_be(:project) { error_tracking.project }
   let_it_be(:issue) { create(:issue, project: project) }
@@ -20,7 +20,7 @@ describe ErrorTrackingIssueLinkWorker do
 
   describe '#perform' do
     it 'creates a link between an issue and a Sentry issue in Sentry' do
-      expect_next_instance_of(Sentry::Client) do |client|
+      expect_next_instance_of(ErrorTracking::SentryClient) do |client|
         expect(client).to receive(:repos).with('sentry-org').and_return([repo])
         expect(client)
           .to receive(:create_issue_link)
@@ -33,8 +33,8 @@ describe ErrorTrackingIssueLinkWorker do
 
     shared_examples_for 'makes no external API requests' do
       it 'takes no action' do
-        expect_any_instance_of(Sentry::Client).not_to receive(:repos)
-        expect_any_instance_of(Sentry::Client).not_to receive(:create_issue_link)
+        expect_any_instance_of(ErrorTracking::SentryClient).not_to receive(:repos)
+        expect_any_instance_of(ErrorTracking::SentryClient).not_to receive(:create_issue_link)
 
         expect(subject).to be nil
       end
@@ -42,7 +42,7 @@ describe ErrorTrackingIssueLinkWorker do
 
     shared_examples_for 'attempts to create a link via plugin' do
       it 'takes no action' do
-        expect_next_instance_of(Sentry::Client) do |client|
+        expect_next_instance_of(ErrorTracking::SentryClient) do |client|
           expect(client).to receive(:repos).with('sentry-org').and_return([repo])
           expect(client)
             .to receive(:create_issue_link)
@@ -94,6 +94,20 @@ describe ErrorTrackingIssueLinkWorker do
       end
 
       it_behaves_like 'attempts to create a link via plugin'
+    end
+
+    context 'when Sentry repos request errors' do
+      it 'falls back to creating a link via plugin' do
+        expect_next_instance_of(ErrorTracking::SentryClient) do |client|
+          expect(client).to receive(:repos).with('sentry-org').and_raise(ErrorTracking::SentryClient::Error)
+          expect(client)
+            .to receive(:create_issue_link)
+            .with(nil, sentry_issue.sentry_issue_identifier, issue)
+            .and_return(true)
+        end
+
+        expect(subject).to be true
+      end
     end
   end
 end

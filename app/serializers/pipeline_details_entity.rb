@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-class PipelineDetailsEntity < PipelineEntity
+class PipelineDetailsEntity < Ci::PipelineEntity
   expose :project, using: ProjectEntity
 
   expose :flags do
@@ -8,14 +8,13 @@ class PipelineDetailsEntity < PipelineEntity
   end
 
   expose :details do
-    expose :artifacts do |pipeline, options|
-      rel = pipeline.artifacts
-      rel = rel.eager_load_job_artifacts_archive if options.fetch(:preload_job_artifacts_archive, true)
-
-      BuildArtifactEntity.represent(rel, options)
-    end
     expose :manual_actions, using: BuildActionEntity
     expose :scheduled_actions, using: BuildActionEntity
+    expose :code_quality_build_path, if: -> (_, options) { options[:code_quality_walkthrough] } do |pipeline|
+      next unless code_quality_build = pipeline.builds.finished.find_by_name('code_quality')
+
+      project_job_path(pipeline.project, code_quality_build, code_quality_walkthrough: true)
+    end
   end
 
   expose :triggered_by_pipeline, as: :triggered_by, with: TriggeredPipelineEntity

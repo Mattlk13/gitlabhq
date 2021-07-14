@@ -1,9 +1,9 @@
 # frozen_string_literal: true
 
 require 'spec_helper'
-require Rails.root.join('db', 'post_migrate', '20191002031332_schedule_pages_metadata_migration')
+require_migration!
 
-describe SchedulePagesMetadataMigration, :migration do
+RSpec.describe SchedulePagesMetadataMigration do
   let(:namespaces) { table(:namespaces) }
   let(:projects) { table(:projects) }
 
@@ -17,7 +17,7 @@ describe SchedulePagesMetadataMigration, :migration do
 
   it 'schedules pages metadata migration' do
     Sidekiq::Testing.fake! do
-      Timecop.freeze do
+      freeze_time do
         migrate!
 
         expect(described_class::MIGRATION).to be_scheduled_delayed_migration(2.minutes, 111, 111)

@@ -18,12 +18,26 @@ class ServiceResponse
     self.http_status = http_status
   end
 
+  def [](key)
+    to_h[key]
+  end
+
+  def to_h
+    (payload || {}).merge(status: status, message: message, http_status: http_status)
+  end
+
   def success?
     status == :success
   end
 
   def error?
     status == :error
+  end
+
+  def errors
+    return [] unless error?
+
+    Array.wrap(message)
   end
 
   private

@@ -1,36 +1,38 @@
-import Vuex from 'vuex';
 import { mount, createLocalVue } from '@vue/test-utils';
-import { createStore } from '~/ide/stores';
+import Vuex from 'vuex';
 import EditorHeader from '~/ide/components/commit_sidebar/editor_header.vue';
+import { createStore } from '~/ide/stores';
 import { file } from '../../helpers';
 
 const localVue = createLocalVue();
 localVue.use(Vuex);
 
+const TEST_FILE_PATH = 'test/file/path';
+
 describe('IDE commit editor header', () => {
   let wrapper;
-  let f;
   let store;
 
-  const findDiscardModal = () => wrapper.find({ ref: 'discardModal' });
-  const findDiscardButton = () => wrapper.find({ ref: 'discardButton' });
-  const findActionButton = () => wrapper.find({ ref: 'actionButton' });
-
-  beforeEach(() => {
-    f = file('file');
-    store = createStore();
-
+  const createComponent = (fileProps = {}) => {
     wrapper = mount(EditorHeader, {
       store,
       localVue,
       propsData: {
-        activeFile: f,
+        activeFile: {
+          ...file(TEST_FILE_PATH),
+          staged: true,
+          ...fileProps,
+        },
       },
     });
+  };
 
-    jest.spyOn(wrapper.vm, 'stageChange').mockImplementation();
-    jest.spyOn(wrapper.vm, 'unstageChange').mockImplementation();
-    jest.spyOn(wrapper.vm, 'discardFileChanges').mockImplementation();
+  const findDiscardModal = () => wrapper.find({ ref: 'discardModal' });
+  const findDiscardButton = () => wrapper.find({ ref: 'discardButton' });
+
+  beforeEach(() => {
+    store = createStore();
+    jest.spyOn(store, 'dispatch').mockImplementation();
   });
 
   afterEach(() => {
@@ -38,45 +40,38 @@ describe('IDE commit editor header', () => {
     wrapper = null;
   });
 
-  it('renders button to discard & stage', () => {
-    expect(wrapper.vm.$el.querySelectorAll('.btn').length).toBe(2);
+  it.each`
+    fileProps                            | shouldExist
+    ${{ staged: false, changed: false }} | ${false}
+    ${{ staged: true, changed: false }}  | ${true}
+    ${{ staged: false, changed: true }}  | ${true}
+    ${{ staged: true, changed: true }}   | ${true}
+  `('with $fileProps, show discard button is $shouldExist', ({ fileProps, shouldExist }) => {
+    createComponent(fileProps);
+
+    expect(findDiscardButton().exists()).toBe(shouldExist);
   });
 
   describe('discard button', () => {
-    let modal;
-
     beforeEach(() => {
-      modal = findDiscardModal();
+      createComponent();
 
+      const modal = findDiscardModal();
       jest.spyOn(modal.vm, 'show');
 
       findDiscardButton().trigger('click');
     });
 
     it('opens a dialog confirming discard', () => {
-      expect(modal.vm.show).toHaveBeenCalled();
+      expect(findDiscardModal().vm.show).toHaveBeenCalled();
     });
 
     it('calls discardFileChanges if dialog result is confirmed', () => {
-      modal.vm.$emit('ok');
+      expect(store.dispatch).not.toHaveBeenCalled();
 
-      expect(wrapper.vm.discardFileChanges).toHaveBeenCalledWith(f.path);
-    });
-  });
+      findDiscardModal().vm.$emit('ok');
 
-  describe('stage/unstage button', () => {
-    it('unstages the file if it was already staged', () => {
-      f.staged = true;
-
-      findActionButton().trigger('click');
-
-      expect(wrapper.vm.unstageChange).toHaveBeenCalledWith(f.path);
-    });
-
-    it('stages the file if it was not staged', () => {
-      findActionButton().trigger('click');
-
-      expect(wrapper.vm.stageChange).toHaveBeenCalledWith(f.path);
+      expect(store.dispatch).toHaveBeenCalledWith('discardFileChanges', TEST_FILE_PATH);
     });
   });
 });

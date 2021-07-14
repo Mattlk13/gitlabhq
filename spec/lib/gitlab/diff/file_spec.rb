@@ -2,7 +2,7 @@
 
 require 'spec_helper'
 
-describe Gitlab::Diff::File do
+RSpec.describe Gitlab::Diff::File do
   include RepoHelpers
 
   let(:project) { create(:project, :repository) }
@@ -186,26 +186,46 @@ describe Gitlab::Diff::File do
   end
 
   describe '#diffable?' do
-    let(:commit) { project.commit('1a0b36b3cdad1d2ee32457c102a8c0b7056fa863') }
-    let(:diffs) { commit.diffs }
+    context 'when attributes exist' do
+      let(:commit) { project.commit('1a0b36b3cdad1d2ee32457c102a8c0b7056fa863') }
+      let(:diffs) { commit.diffs }
 
-    before do
-      info_dir_path = Gitlab::GitalyClient::StorageSettings.allow_disk_access do
-        File.join(project.repository.path_to_repo, 'info')
+      before do
+        info_dir_path = Gitlab::GitalyClient::StorageSettings.allow_disk_access do
+          File.join(project.repository.path_to_repo, 'info')
+        end
+
+        FileUtils.mkdir(info_dir_path) unless File.exist?(info_dir_path)
+        File.write(File.join(info_dir_path, 'attributes'), "*.md -diff\n")
       end
 
-      FileUtils.mkdir(info_dir_path) unless File.exist?(info_dir_path)
-      File.write(File.join(info_dir_path, 'attributes'), "*.md -diff\n")
+      it "returns true for files that do not have attributes" do
+        diff_file = diffs.diff_file_with_new_path('LICENSE')
+        expect(diff_file.diffable?).to be_truthy
+      end
+
+      it "returns false for files that have been marked as not being diffable in attributes" do
+        diff_file = diffs.diff_file_with_new_path('README.md')
+        expect(diff_file.diffable?).to be_falsey
+      end
     end
 
-    it "returns true for files that do not have attributes" do
-      diff_file = diffs.diff_file_with_new_path('LICENSE')
-      expect(diff_file.diffable?).to be_truthy
+    context 'when the text has binary notice' do
+      let(:commit) { project.commit('f05a98786e4274708e1fa118c7ad3a29d1d1b9a3') }
+      let(:diff_file) { commit.diffs.diff_file_with_new_path('VERSION') }
+
+      it "returns false" do
+        expect(diff_file.diffable?).to be_falsey
+      end
     end
 
-    it "returns false for files that have been marked as not being diffable in attributes" do
-      diff_file = diffs.diff_file_with_new_path('README.md')
-      expect(diff_file.diffable?).to be_falsey
+    context 'when the content is binary' do
+      let(:commit) { project.commit('2f63565e7aac07bcdadb654e253078b727143ec4') }
+      let(:diff_file) { commit.diffs.diff_file_with_new_path('files/images/6049019_460s.jpg') }
+
+      it "returns true" do
+        expect(diff_file.diffable?).to be_truthy
+      end
     end
   end
 
@@ -279,6 +299,18 @@ describe Gitlab::Diff::File do
           end
         end
       end
+    end
+  end
+
+  describe '#file_hash' do
+    it 'returns a hash of file_path' do
+      expect(diff_file.file_hash).to eq(Digest::SHA1.hexdigest(diff_file.file_path))
+    end
+  end
+
+  describe '#file_identifier_hash' do
+    it 'returns a hash of file_identifier' do
+      expect(diff_file.file_identifier_hash).to eq(Digest::SHA1.hexdigest(diff_file.file_identifier))
     end
   end
 
@@ -567,6 +599,61 @@ describe Gitlab::Diff::File do
     end
   end
 
+  describe '#alternate_viewer' do
+    subject { diff_file.alternate_viewer }
+
+    where(:viewer_class) do
+      [
+        DiffViewer::Image,
+        DiffViewer::Collapsed,
+        DiffViewer::NotDiffable,
+        DiffViewer::Text,
+        DiffViewer::NoPreview,
+        DiffViewer::Added,
+        DiffViewer::Deleted,
+        DiffViewer::ModeChanged,
+        DiffViewer::ModeChanged,
+        DiffViewer::NoPreview
+      ]
+    end
+
+    with_them do
+      let(:viewer) { viewer_class.new(diff_file) }
+
+      before do
+        allow(diff_file).to receive(:viewer).and_return(viewer)
+      end
+
+      it { is_expected.to be_nil }
+    end
+
+    context 'when viewer is DiffViewer::Renamed' do
+      let(:viewer) { DiffViewer::Renamed.new(diff_file) }
+
+      before do
+        allow(diff_file).to receive(:viewer).and_return(viewer)
+      end
+
+      context 'when it can be rendered as text' do
+        it { is_expected.to be_a(DiffViewer::Text) }
+      end
+
+      context 'when it can be rendered as image' do
+        let(:commit) { project.commit('2f63565e7aac07bcdadb654e253078b727143ec4') }
+        let(:diff_file) { commit.diffs.diff_file_with_new_path('files/images/6049019_460s.jpg') }
+
+        it { is_expected.to be_a(DiffViewer::Image) }
+      end
+
+      context 'when it is something else' do
+        let(:commit) { project.commit('ae73cb07c9eeaf35924a10f713b364d32b2dd34f') }
+        let(:diff_file) { commit.diffs.diff_file_with_new_path('Gemfile.zip') }
+
+        it { is_expected.to be_nil }
+      end
+    end
+  end
+
   describe '#rendered_as_text?' do
     context 'when the simple viewer is text-based' do
       let(:commit) { project.commit('570e7b2abdd848b95f2f578043fc23bd6f6fd24d') }
@@ -662,6 +749,18 @@ describe Gitlab::Diff::File do
     end
   end
 
+  context 'when the the encoding of the file is unsupported' do
+    let(:commit) { project.commit('f05a98786e4274708e1fa118c7ad3a29d1d1b9a3') }
+    let(:diff_file) { commit.diffs.diff_file_with_new_path('VERSION') }
+
+    it 'returns a Not Diffable viewer' do
+      expect(diff_file.simple_viewer).to be_a(DiffViewer::NotDiffable)
+    end
+
+    it { expect(diff_file.highlighted_diff_lines).to eq([]) }
+    it { expect(diff_file.parallel_diff_lines).to eq([]) }
+  end
+
   describe '#diff_hunk' do
     context 'when first line is a match' do
       let(:raw_diff) do
@@ -733,6 +832,7 @@ describe Gitlab::Diff::File do
     let(:project) do
       create(:project, :custom_repo, files: {})
     end
+
     let(:branch_name) { 'master' }
 
     context 'when empty file is created' do
@@ -775,6 +875,7 @@ describe Gitlab::Diff::File do
     let(:project) do
       create(:project, :custom_repo, files: {})
     end
+
     let(:branch_name) { 'master' }
 
     context 'when empty file is created' do

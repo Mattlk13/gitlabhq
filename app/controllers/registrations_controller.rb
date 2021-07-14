@@ -3,41 +3,42 @@
 class RegistrationsController < Devise::RegistrationsController
   include Recaptcha::Verify
   include AcceptsPendingInvitations
-  include RecaptchaExperimentHelper
-  include InvisibleCaptcha
+  include RecaptchaHelper
+  include InvisibleCaptchaOnSignup
 
-  layout :choose_layout
+  layout 'devise'
 
-  skip_before_action :required_signup_info, only: [:welcome, :update_registration]
   prepend_before_action :check_captcha, only: :create
-  before_action :whitelist_query_limiting, only: [:destroy]
-  before_action :ensure_terms_accepted,
-    if: -> { action_name == 'create' && Gitlab::CurrentSettings.current_application_settings.enforce_terms? }
+  before_action :ensure_destroy_prerequisites_met, only: [:destroy]
   before_action :load_recaptcha, only: :new
+  before_action :set_invite_params, only: :new
+
+  feature_category :authentication_and_authorization
 
   def new
-    if experiment_enabled?(:signup_flow)
-      track_experiment_event(:signup_flow, 'start') # We want this event to be tracked when the user is _in_ the experimental group
-      @resource = build_resource
-    else
-      redirect_to new_user_session_path(anchor: 'register-pane')
-    end
+    @resource = build_resource
   end
 
   def create
-    track_experiment_event(:signup_flow, 'end') unless experiment_enabled?(:signup_flow) # We want this event to be tracked when the user is _in_ the control group
-
+    set_user_state
     accept_pending_invitations
 
     super do |new_user|
       persist_accepted_terms_if_required(new_user)
       set_role_required(new_user)
+
+      if pending_approval?
+        NotificationService.new.new_instance_access_request(new_user)
+      end
+
+      after_request_hook(new_user)
+
       yield new_user if block_given?
     end
 
-    # Do not show the signed_up notice message when the signup_flow experiment is enabled.
-    # Instead, show it after successfully updating the role.
-    flash[:notice] = nil if experiment_enabled?(:signup_flow)
+    # Devise sets a flash message on both successful & failed signups,
+    # but we only want to show a message if the resource is blocked by a pending approval.
+    flash[:notice] = nil unless resource.blocked_pending_approval?
   rescue Gitlab::Access::AccessDeniedError
     redirect_to(new_user_session_path)
   end
@@ -52,38 +53,18 @@ class RegistrationsController < Devise::RegistrationsController
     end
   end
 
-  def welcome
-    return redirect_to new_user_registration_path unless current_user
-    return redirect_to stored_location_or_dashboard(current_user) if current_user.role.present? && !current_user.setup_for_company.nil?
-  end
-
-  def update_registration
-    user_params = params.require(:user).permit(:role, :setup_for_company)
-    result = ::Users::SignupService.new(current_user, user_params).execute
-
-    if result[:status] == :success
-      track_experiment_event(:signup_flow, 'end') # We want this event to be tracked when the user is _in_ the experimental group
-      set_flash_message! :notice, :signed_up
-      redirect_to stored_location_or_dashboard(current_user)
-    else
-      render :welcome
-    end
-  end
-
   protected
 
   def persist_accepted_terms_if_required(new_user)
     return unless new_user.persisted?
     return unless Gitlab::CurrentSettings.current_application_settings.enforce_terms?
 
-    if terms_accepted?
-      terms = ApplicationSetting::Term.latest
-      Users::RespondToTermsService.new(new_user, terms).execute(accepted: true)
-    end
+    terms = ApplicationSetting::Term.latest
+    Users::RespondToTermsService.new(new_user, terms).execute(accepted: true)
   end
 
   def set_role_required(new_user)
-    new_user.set_role_required! if new_user.persisted? && experiment_enabled?(:signup_flow)
+    new_user.set_role_required! if new_user.persisted?
   end
 
   def destroy_confirmation_valid?
@@ -106,22 +87,32 @@ class RegistrationsController < Devise::RegistrationsController
     super
   end
 
+  def after_request_hook(user)
+    # overridden by EE module
+  end
+
   def after_sign_up_path_for(user)
     Gitlab::AppLogger.info(user_created_message(confirmed: user.confirmed?))
 
-    return users_sign_up_welcome_path if experiment_enabled?(:signup_flow)
-
-    stored_location_or_dashboard(user)
+    users_sign_up_welcome_path
   end
 
   def after_inactive_sign_up_path_for(resource)
-    # With the current `allow_unconfirmed_access_for` Devise setting in config/initializers/8_devise.rb,
-    # this method is never called. Leaving this here in case that value is set to 0.
     Gitlab::AppLogger.info(user_created_message)
-    users_almost_there_path
+    return new_user_session_path(anchor: 'login-pane') if resource.blocked_pending_approval?
+
+    Feature.enabled?(:soft_email_confirmation) ? dashboard_projects_path : users_almost_there_path(email: resource.email)
   end
 
   private
+
+  def ensure_destroy_prerequisites_met
+    if current_user.solo_owned_groups.present?
+      redirect_to profile_account_path,
+        status: :see_other,
+        alert: s_('Profiles|You must transfer ownership or delete groups you are an owner of before you can delete your account')
+    end
+  end
 
   def user_created_message(confirmed: false)
     "User Created: username=#{resource.username} email=#{resource.email} ip=#{request.remote_ip} confirmed:#{confirmed}"
@@ -139,7 +130,6 @@ class RegistrationsController < Devise::RegistrationsController
   def check_captcha
     ensure_correct_params!
 
-    return unless Feature.enabled?(:registrations_recaptcha, default_enabled: true) # reCAPTCHA on the UI will still display however
     return unless show_recaptcha_sign_up?
     return unless Gitlab::Recaptcha.load_configurations!
 
@@ -150,8 +140,14 @@ class RegistrationsController < Devise::RegistrationsController
     render action: 'new'
   end
 
+  def pending_approval?
+    return false unless Gitlab::CurrentSettings.require_admin_approval_after_user_signup
+
+    resource.persisted? && resource.blocked_pending_approval?
+  end
+
   def sign_up_params
-    params.require(:user).permit(:username, :email, :email_confirmation, :name, :first_name, :last_name, :password)
+    params.require(:user).permit(:username, :email, :name, :first_name, :last_name, :password)
   end
 
   def resource_name
@@ -159,44 +155,56 @@ class RegistrationsController < Devise::RegistrationsController
   end
 
   def resource
-    @resource ||= Users::BuildService.new(current_user, sign_up_params).execute
+    @resource ||= Users::RegistrationsBuildService
+                    .new(current_user, sign_up_params.merge({ skip_confirmation: skip_email_confirmation? }))
+                    .execute
   end
 
   def devise_mapping
     @devise_mapping ||= Devise.mappings[:user]
   end
 
-  def whitelist_query_limiting
-    Gitlab::QueryLimiting.whitelist('https://gitlab.com/gitlab-org/gitlab-foss/issues/42380')
-  end
+  def skip_email_confirmation?
+    invite_email = session.delete(:invite_email)
 
-  def ensure_terms_accepted
-    return if terms_accepted?
-
-    redirect_to new_user_session_path, alert: _('You must accept our Terms of Service and privacy policy in order to register an account')
-  end
-
-  def terms_accepted?
-    Gitlab::Utils.to_boolean(params[:terms_opt_in])
-  end
-
-  def stored_location_or_dashboard(user)
-    stored_location_for(user) || dashboard_projects_path
+    sign_up_params[:email] == invite_email
   end
 
   def load_recaptcha
     Gitlab::Recaptcha.load_configurations!
   end
 
-  # Part of an experiment to build a new sign up flow. Will be resolved
-  # with https://gitlab.com/gitlab-org/growth/engineering/issues/64
-  def choose_layout
-    if experiment_enabled?(:signup_flow)
-      'devise_experimental_separate_sign_up_flow'
-    else
-      'devise'
-    end
+  def set_user_state
+    return unless set_blocked_pending_approval?
+
+    resource.state = User::BLOCKED_PENDING_APPROVAL_STATE
+  end
+
+  def set_blocked_pending_approval?
+    Gitlab::CurrentSettings.require_admin_approval_after_user_signup
+  end
+
+  def set_invite_params
+    @invite_email = ActionController::Base.helpers.sanitize(params[:invite_email])
+  end
+
+  def after_pending_invitations_hook
+    member_id = session.delete(:originating_member_id)
+
+    return unless member_id
+
+    # if invited multiple times to different projects, only the email clicked will be counted as accepted
+    # for the specific member on a project or group
+    member = resource.members.find_by(id: member_id) # rubocop: disable CodeReuse/ActiveRecord
+
+    return unless member
+
+    experiment('members/invite_email', actor: member).track(:accepted)
+  end
+
+  def context_user
+    current_user
   end
 end
 
-RegistrationsController.prepend_if_ee('EE::RegistrationsController')
+RegistrationsController.prepend_mod_with('RegistrationsController')

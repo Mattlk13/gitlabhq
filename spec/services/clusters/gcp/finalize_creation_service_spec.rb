@@ -2,7 +2,7 @@
 
 require 'spec_helper'
 
-describe Clusters::Gcp::FinalizeCreationService, '#execute' do
+RSpec.describe Clusters::Gcp::FinalizeCreationService, '#execute' do
   include GoogleApi::CloudPlatformHelpers
   include KubernetesHelpers
 
@@ -11,8 +11,6 @@ describe Clusters::Gcp::FinalizeCreationService, '#execute' do
   let(:platform) { cluster.platform }
   let(:endpoint) { '111.111.111.111' }
   let(:api_url) { 'https://' + endpoint }
-  let(:username) { 'sample-username' }
-  let(:password) { 'sample-password' }
   let(:secret_name) { 'gitlab-token' }
   let(:token) { 'sample-token' }
   let(:namespace) { "#{cluster.project.path}-#{cluster.project.id}" }
@@ -34,8 +32,6 @@ describe Clusters::Gcp::FinalizeCreationService, '#execute' do
       expect(provider.endpoint).to eq(endpoint)
       expect(platform.api_url).to eq(api_url)
       expect(platform.ca_cert).to eq(Base64.decode64(load_sample_cert).strip)
-      expect(platform.username).to eq(username)
-      expect(platform.password).to eq(password)
       expect(platform.token).to eq(token)
     end
   end
@@ -83,12 +79,7 @@ describe Clusters::Gcp::FinalizeCreationService, '#execute' do
   shared_context 'kubernetes information successfully fetched' do
     before do
       stub_cloud_platform_get_zone_cluster(
-        provider.gcp_project_id, provider.zone, cluster.name,
-        {
-          endpoint: endpoint,
-          username: username,
-          password: password
-        }
+        provider.gcp_project_id, provider.zone, cluster.name, { endpoint: endpoint }
       )
 
       stub_kubeclient_discover(api_url)
@@ -101,15 +92,12 @@ describe Clusters::Gcp::FinalizeCreationService, '#execute' do
 
       stub_kubeclient_get_secret(
         api_url,
-        {
-          metadata_name: secret_name,
-          token: Base64.encode64(token),
-          namespace: 'default'
-        }
+        metadata_name: secret_name,
+        token: Base64.encode64(token),
+        namespace: 'default'
       )
 
-      stub_kubeclient_get_cluster_role_binding_error(api_url, 'gitlab-admin')
-      stub_kubeclient_create_cluster_role_binding(api_url)
+      stub_kubeclient_put_cluster_role_binding(api_url, 'gitlab-admin')
     end
   end
 

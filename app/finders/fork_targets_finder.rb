@@ -7,8 +7,10 @@ class ForkTargetsFinder
   end
 
   # rubocop: disable CodeReuse/ActiveRecord
-  def execute
-    ::Namespace.where(id: user.manageable_namespaces).where.not(id: project.namespace).sort_by_type
+  def execute(options = {})
+    return ::Namespace.where(id: user.manageable_namespaces).sort_by_type unless options[:only_groups]
+
+    ::Group.where(id: user.manageable_groups)
   end
   # rubocop: enable CodeReuse/ActiveRecord
 
@@ -17,4 +19,4 @@ class ForkTargetsFinder
   attr_reader :project, :user
 end
 
-ForkTargetsFinder.prepend_if_ee('EE::ForkTargetsFinder')
+ForkTargetsFinder.prepend_mod_with('ForkTargetsFinder')

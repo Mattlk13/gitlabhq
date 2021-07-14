@@ -2,7 +2,7 @@
 
 require 'spec_helper'
 
-describe Gitlab::GithubImport::PageCounter, :clean_gitlab_redis_cache do
+RSpec.describe Gitlab::GithubImport::PageCounter, :clean_gitlab_redis_cache do
   let(:project) { double(:project, id: 1) }
   let(:counter) { described_class.new(project, :issues) }
 
@@ -12,7 +12,7 @@ describe Gitlab::GithubImport::PageCounter, :clean_gitlab_redis_cache do
     end
 
     it 'sets the initial page number to the cached value when one is present' do
-      Gitlab::GithubImport::Caching.write(counter.cache_key, 2)
+      Gitlab::Cache::Import::Caching.write(counter.cache_key, 2)
 
       expect(described_class.new(project, :issues).current).to eq(2)
     end
@@ -29,6 +29,17 @@ describe Gitlab::GithubImport::PageCounter, :clean_gitlab_redis_cache do
       counter.set(1)
 
       expect(counter.current).to eq(2)
+    end
+  end
+
+  describe '#expire!' do
+    it 'expires the current page counter' do
+      counter.set(2)
+
+      counter.expire!
+
+      expect(Gitlab::Cache::Import::Caching.read_integer(counter.cache_key)).to be_nil
+      expect(counter.current).to eq(1)
     end
   end
 end

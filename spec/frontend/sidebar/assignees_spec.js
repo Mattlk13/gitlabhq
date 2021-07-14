@@ -1,8 +1,9 @@
+import { GlIcon } from '@gitlab/ui';
 import { mount } from '@vue/test-utils';
 import { trimText } from 'helpers/text_helper';
+import UsersMockHelper from 'helpers/user_mock_data_helper';
 import Assignee from '~/sidebar/components/assignees/assignees.vue';
 import UsersMock from './mock_data';
-import UsersMockHelper from '../helpers/user_mock_data_helper';
 
 describe('Assignee component', () => {
   const getDefaultProps = () => ({
@@ -18,7 +19,7 @@ describe('Assignee component', () => {
     });
   };
 
-  const findComponentTextNoUsers = () => wrapper.find('.assign-yourself');
+  const findComponentTextNoUsers = () => wrapper.find('[data-testid="no-value"]');
   const findCollapsedChildren = () => wrapper.findAll('.sidebar-collapsed-icon > *');
 
   afterEach(() => {
@@ -29,10 +30,12 @@ describe('Assignee component', () => {
     it('displays no assignee icon when collapsed', () => {
       createWrapper();
       const collapsedChildren = findCollapsedChildren();
+      const userIcon = collapsedChildren.at(0).find(GlIcon);
 
       expect(collapsedChildren.length).toBe(1);
       expect(collapsedChildren.at(0).attributes('aria-label')).toBe('None');
-      expect(collapsedChildren.at(0).classes()).toContain('fa', 'fa-user');
+      expect(userIcon.exists()).toBe(true);
+      expect(userIcon.props('name')).toBe('user');
     });
 
     it('displays only "None" when no users are assigned and the issue is read-only', () => {
@@ -61,7 +64,7 @@ describe('Assignee component', () => {
       });
 
       jest.spyOn(wrapper.vm, '$emit');
-      wrapper.find('.assign-yourself .btn-link').trigger('click');
+      wrapper.find('[data-testid="assign-yourself"]').trigger('click');
 
       return wrapper.vm.$nextTick().then(() => {
         expect(wrapper.emitted('assign-self')).toBeTruthy();
@@ -101,14 +104,14 @@ describe('Assignee component', () => {
 
       const first = collapsedChildren.at(0);
 
-      expect(first.find('.avatar').attributes('src')).toBe(users[0].avatar);
+      expect(first.find('.avatar').attributes('src')).toBe(users[0].avatar_url);
       expect(first.find('.avatar').attributes('alt')).toBe(`${users[0].name}'s avatar`);
 
       expect(trimText(first.find('.author').text())).toBe(users[0].name);
 
       const second = collapsedChildren.at(1);
 
-      expect(second.find('.avatar').attributes('src')).toBe(users[1].avatar);
+      expect(second.find('.avatar').attributes('src')).toBe(users[1].avatar_url);
       expect(second.find('.avatar').attributes('alt')).toBe(`${users[1].name}'s avatar`);
 
       expect(trimText(second.find('.author').text())).toBe(users[1].name);
@@ -127,7 +130,7 @@ describe('Assignee component', () => {
 
       const first = collapsedChildren.at(0);
 
-      expect(first.find('.avatar').attributes('src')).toBe(users[0].avatar);
+      expect(first.find('.avatar').attributes('src')).toBe(users[0].avatar_url);
       expect(first.find('.avatar').attributes('alt')).toBe(`${users[0].name}'s avatar`);
 
       expect(trimText(first.find('.author').text())).toBe(users[0].name);

@@ -1,5 +1,5 @@
 - is_admin = defined?(admin) ? true : false
-.row.prepend-top-default
+.row.gl-mt-3
   .col-md-4
     .card
       .card-header
@@ -12,8 +12,11 @@
           %span.light= _('Created on:')
           %strong= @key.created_at.to_s(:medium)
         %li
+          %span.light= _('Expires:')
+          %strong= @key.expires_at.try(:to_s, :medium) || _('Never')
+        %li
           %span.light= _('Last used on:')
-          %strong= @key.last_used_at.try(:to_s, :medium) || 'N/A'
+          %strong= @key.last_used_at.try(:to_s, :medium) || _('Never')
 
   .col-md-8
     = form_errors(@key, type: 'key') unless @key.valid?
@@ -35,4 +38,4 @@
   .col-md-12
     .float-right
       - if @key.can_delete?
-        = link_to _('Remove'), path_to_key(@key, is_admin), data: {confirm: _('Are you sure?')}, method: :delete, class: "btn btn-remove delete-key qa-delete-key-button"
+        = render 'shared/ssh_keys/key_delete', text: _('Delete'), html_class: "btn btn-danger gl-button delete-key js-confirm-modal-button", button_data: ssh_key_delete_modal_data(@key, path_to_key(@key, is_admin))

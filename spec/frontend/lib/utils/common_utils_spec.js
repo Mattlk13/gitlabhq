@@ -1,6 +1,56 @@
 import * as commonUtils from '~/lib/utils/common_utils';
 
 describe('common_utils', () => {
+  describe('getPagePath', () => {
+    const { getPagePath } = commonUtils;
+
+    let originalBody;
+
+    beforeEach(() => {
+      originalBody = document.body;
+      document.body = document.createElement('body');
+    });
+
+    afterEach(() => {
+      document.body = originalBody;
+    });
+
+    it('returns an empty path if none is defined', () => {
+      expect(getPagePath()).toBe('');
+      expect(getPagePath(0)).toBe('');
+    });
+
+    describe('returns a path', () => {
+      const mockSection = 'my_section';
+      const mockSubSection = 'my_sub_section';
+      const mockPage = 'my_page';
+
+      it('returns a page', () => {
+        document.body.dataset.page = mockPage;
+
+        expect(getPagePath()).toBe(mockPage);
+        expect(getPagePath(0)).toBe(mockPage);
+      });
+
+      it('returns a section and page', () => {
+        document.body.dataset.page = `${mockSection}:${mockPage}`;
+
+        expect(getPagePath()).toBe(mockSection);
+        expect(getPagePath(0)).toBe(mockSection);
+        expect(getPagePath(1)).toBe(mockPage);
+      });
+
+      it('returns a section and subsection', () => {
+        document.body.dataset.page = `${mockSection}:${mockSubSection}:${mockPage}`;
+
+        expect(getPagePath()).toBe(mockSection);
+        expect(getPagePath(0)).toBe(mockSection);
+        expect(getPagePath(1)).toBe(mockSubSection);
+        expect(getPagePath(2)).toBe(mockPage);
+      });
+    });
+  });
+
   describe('parseUrl', () => {
     it('returns an anchor tag with url', () => {
       expect(commonUtils.parseUrl('/some/absolute/url').pathname).toContain('some/absolute/url');
@@ -23,42 +73,6 @@ describe('common_utils', () => {
 
     it('returns an absolute url when given a relative url', () => {
       expect(commonUtils.parseUrlPathname('some/relative/url')).toEqual('/some/relative/url');
-    });
-  });
-
-  describe('urlParamsToArray', () => {
-    it('returns empty array for empty querystring', () => {
-      expect(commonUtils.urlParamsToArray('')).toEqual([]);
-    });
-
-    it('should decode params', () => {
-      expect(commonUtils.urlParamsToArray('?label_name%5B%5D=test')[0]).toBe('label_name[]=test');
-    });
-
-    it('should remove the question mark from the search params', () => {
-      const paramsArray = commonUtils.urlParamsToArray('?test=thing');
-
-      expect(paramsArray[0][0]).not.toBe('?');
-    });
-  });
-
-  describe('urlParamsToObject', () => {
-    it('parses path for label with trailing +', () => {
-      expect(commonUtils.urlParamsToObject('label_name[]=label%2B', {})).toEqual({
-        label_name: ['label+'],
-      });
-    });
-
-    it('parses path for milestone with trailing +', () => {
-      expect(commonUtils.urlParamsToObject('milestone_title=A%2B', {})).toEqual({
-        milestone_title: 'A+',
-      });
-    });
-
-    it('parses path for search terms with spaces', () => {
-      expect(commonUtils.urlParamsToObject('search=two+words', {})).toEqual({
-        search: 'two words',
-      });
     });
   });
 
@@ -175,33 +189,6 @@ describe('common_utils', () => {
     });
   });
 
-  describe('parseQueryStringIntoObject', () => {
-    it('should return object with query parameters', () => {
-      expect(commonUtils.parseQueryStringIntoObject('scope=all&page=2')).toEqual({
-        scope: 'all',
-        page: '2',
-      });
-
-      expect(commonUtils.parseQueryStringIntoObject('scope=all')).toEqual({ scope: 'all' });
-      expect(commonUtils.parseQueryStringIntoObject()).toEqual({});
-    });
-  });
-
-  describe('objectToQueryString', () => {
-    it('returns empty string when `param` is undefined, null or empty string', () => {
-      expect(commonUtils.objectToQueryString()).toBe('');
-      expect(commonUtils.objectToQueryString('')).toBe('');
-    });
-
-    it('returns query string with values of `params`', () => {
-      const singleQueryParams = { foo: true };
-      const multipleQueryParams = { foo: true, bar: true };
-
-      expect(commonUtils.objectToQueryString(singleQueryParams)).toBe('foo=true');
-      expect(commonUtils.objectToQueryString(multipleQueryParams)).toBe('foo=true&bar=true');
-    });
-  });
-
   describe('buildUrlWithCurrentLocation', () => {
     it('should build an url with current location and given parameters', () => {
       expect(commonUtils.buildUrlWithCurrentLocation()).toEqual(window.location.pathname);
@@ -211,8 +198,92 @@ describe('common_utils', () => {
     });
   });
 
+  describe('scrollToElement*', () => {
+    let elem;
+    const windowHeight = 550;
+    const elemTop = 100;
+    const id = 'scroll_test';
+
+    beforeEach(() => {
+      elem = document.createElement('div');
+      elem.id = id;
+      document.body.appendChild(elem);
+      window.innerHeight = windowHeight;
+      window.mrTabs = { currentAction: 'show' };
+      jest.spyOn(window, 'scrollTo').mockImplementation(() => {});
+      jest.spyOn(Element.prototype, 'getBoundingClientRect').mockReturnValue({ top: elemTop });
+    });
+
+    afterEach(() => {
+      window.scrollTo.mockRestore();
+      Element.prototype.getBoundingClientRect.mockRestore();
+      elem.remove();
+    });
+
+    describe('scrollToElement with HTMLElement', () => {
+      it('scrolls to element', () => {
+        commonUtils.scrollToElement(elem);
+        expect(window.scrollTo).toHaveBeenCalledWith({
+          behavior: 'smooth',
+          top: elemTop,
+        });
+      });
+
+      it('scrolls to element with offset', () => {
+        const offset = 50;
+        commonUtils.scrollToElement(elem, { offset });
+        expect(window.scrollTo).toHaveBeenCalledWith({
+          behavior: 'smooth',
+          top: elemTop + offset,
+        });
+      });
+    });
+
+    describe('scrollToElement with Selector', () => {
+      it('scrolls to element', () => {
+        commonUtils.scrollToElement(`#${id}`);
+        expect(window.scrollTo).toHaveBeenCalledWith({
+          behavior: 'smooth',
+          top: elemTop,
+        });
+      });
+
+      it('scrolls to element with offset', () => {
+        const offset = 50;
+        commonUtils.scrollToElement(`#${id}`, { offset });
+        expect(window.scrollTo).toHaveBeenCalledWith({
+          behavior: 'smooth',
+          top: elemTop + offset,
+        });
+      });
+    });
+
+    describe('scrollToElementWithContext', () => {
+      // This is what the implementation of scrollToElementWithContext
+      // scrolls to, in case we change tha implementation
+      // it needs to be adjusted
+      const elementTopWithContext = elemTop - windowHeight * 0.1;
+
+      it('with HTMLElement scrolls with context', () => {
+        commonUtils.scrollToElementWithContext(elem);
+        expect(window.scrollTo).toHaveBeenCalledWith({
+          behavior: 'smooth',
+          top: elementTopWithContext,
+        });
+      });
+
+      it('with Selector scrolls with context', () => {
+        commonUtils.scrollToElementWithContext(`#${id}`);
+        expect(window.scrollTo).toHaveBeenCalledWith({
+          behavior: 'smooth',
+          top: elementTopWithContext,
+        });
+      });
+    });
+  });
+
   describe('debounceByAnimationFrame', () => {
-    it('debounces a function to allow a maximum of one call per animation frame', done => {
+    it('debounces a function to allow a maximum of one call per animation frame', (done) => {
       const spy = jest.fn();
       const debouncedSpy = commonUtils.debounceByAnimationFrame(spy);
       window.requestAnimationFrame(() => {
@@ -223,39 +294,6 @@ describe('common_utils', () => {
           done();
         });
       });
-    });
-  });
-
-  describe('getParameterByName', () => {
-    beforeEach(() => {
-      window.history.pushState({}, null, '?scope=all&p=2');
-    });
-
-    afterEach(() => {
-      window.history.replaceState({}, null, null);
-    });
-
-    it('should return valid parameter', () => {
-      const value = commonUtils.getParameterByName('scope');
-
-      expect(commonUtils.getParameterByName('p')).toEqual('2');
-      expect(value).toBe('all');
-    });
-
-    it('should return invalid parameter', () => {
-      const value = commonUtils.getParameterByName('fakeParameter');
-
-      expect(value).toBe(null);
-    });
-
-    it('should return valid paramentes if URL is provided', () => {
-      let value = commonUtils.getParameterByName('foo', 'http://cocteau.twins/?foo=bar');
-
-      expect(value).toBe('bar');
-
-      value = commonUtils.getParameterByName('manan', 'http://cocteau.twins/?foo=bar&manan=canchu');
-
-      expect(value).toBe('canchu');
     });
   });
 
@@ -273,32 +311,6 @@ describe('common_utils', () => {
 
       expect(normalized[WORKHORSE].workhorse).toBe('ok');
       expect(normalized[NGINX].nginx).toBe('ok');
-    });
-  });
-
-  describe('normalizeCRLFHeaders', () => {
-    const testContext = {};
-    beforeEach(() => {
-      testContext.CLRFHeaders =
-        'a-header: a-value\nAnother-Header: ANOTHER-VALUE\nLaSt-HeAdEr: last-VALUE';
-      jest.spyOn(String.prototype, 'split');
-      testContext.normalizeCRLFHeaders = commonUtils.normalizeCRLFHeaders(testContext.CLRFHeaders);
-    });
-
-    it('should split by newline', () => {
-      expect(String.prototype.split).toHaveBeenCalledWith('\n');
-    });
-
-    it('should split by colon+space for each header', () => {
-      expect(String.prototype.split.mock.calls.filter(args => args[0] === ': ').length).toBe(3);
-    });
-
-    it('should return a normalized headers object', () => {
-      expect(testContext.normalizeCRLFHeaders).toEqual({
-        'A-HEADER': 'a-value',
-        'ANOTHER-HEADER': 'ANOTHER-VALUE',
-        'LAST-HEADER': 'last-VALUE',
-      });
     });
   });
 
@@ -359,85 +371,70 @@ describe('common_utils', () => {
   });
 
   describe('parseBoolean', () => {
-    const { parseBoolean } = commonUtils;
-
-    it('returns true for "true"', () => {
-      expect(parseBoolean('true')).toEqual(true);
-    });
-
-    it('returns false for "false"', () => {
-      expect(parseBoolean('false')).toEqual(false);
-    });
-
-    it('returns false for "something"', () => {
-      expect(parseBoolean('something')).toEqual(false);
-    });
-
-    it('returns false for null', () => {
-      expect(parseBoolean(null)).toEqual(false);
-    });
-
-    it('is idempotent', () => {
-      const input = ['true', 'false', 'something', null];
-      input.forEach(value => {
-        const result = parseBoolean(value);
-
-        expect(parseBoolean(result)).toBe(result);
-      });
+    it.each`
+      input          | expected
+      ${'true'}      | ${true}
+      ${'false'}     | ${false}
+      ${'something'} | ${false}
+      ${null}        | ${false}
+      ${true}        | ${true}
+      ${false}       | ${false}
+    `('returns $expected for $input', ({ input, expected }) => {
+      expect(commonUtils.parseBoolean(input)).toBe(expected);
     });
   });
 
   describe('backOff', () => {
     beforeEach(() => {
       // shortcut our timeouts otherwise these tests will take a long time to finish
-      jest.spyOn(window, 'setTimeout').mockImplementation(cb => setImmediate(cb, 0));
+      jest.spyOn(window, 'setTimeout').mockImplementation((cb) => setImmediate(cb, 0));
     });
 
-    it('solves the promise from the callback', done => {
+    it('solves the promise from the callback', (done) => {
       const expectedResponseValue = 'Success!';
       commonUtils
         .backOff((next, stop) =>
-          new Promise(resolve => {
+          new Promise((resolve) => {
             resolve(expectedResponseValue);
           })
-            .then(resp => {
+            .then((resp) => {
               stop(resp);
             })
             .catch(done.fail),
         )
-        .then(respBackoff => {
+        .then((respBackoff) => {
           expect(respBackoff).toBe(expectedResponseValue);
           done();
         })
         .catch(done.fail);
     });
 
-    it('catches the rejected promise from the callback ', done => {
+    it('catches the rejected promise from the callback ', (done) => {
       const errorMessage = 'Mistakes were made!';
       commonUtils
         .backOff((next, stop) => {
           new Promise((resolve, reject) => {
             reject(new Error(errorMessage));
           })
-            .then(resp => {
+            .then((resp) => {
               stop(resp);
             })
-            .catch(err => stop(err));
+            .catch((err) => stop(err));
         })
-        .catch(errBackoffResp => {
+        .catch((errBackoffResp) => {
           expect(errBackoffResp instanceof Error).toBe(true);
           expect(errBackoffResp.message).toBe(errorMessage);
           done();
         });
     });
 
-    it('solves the promise correctly after retrying a third time', done => {
+    it('solves the promise correctly after retrying a third time', (done) => {
       let numberOfCalls = 1;
       const expectedResponseValue = 'Success!';
       commonUtils
         .backOff((next, stop) =>
           Promise.resolve(expectedResponseValue)
-            .then(resp => {
+            .then((resp) => {
               if (numberOfCalls < 3) {
                 numberOfCalls += 1;
                 next();
@@ -447,7 +444,7 @@ describe('common_utils', () => {
             })
             .catch(done.fail),
         )
-        .then(respBackoff => {
+        .then((respBackoff) => {
           const timeouts = window.setTimeout.mock.calls.map(([, timeout]) => timeout);
 
           expect(timeouts).toEqual([2000, 4000]);
@@ -457,10 +454,10 @@ describe('common_utils', () => {
         .catch(done.fail);
     });
 
-    it('rejects the backOff promise after timing out', done => {
+    it('rejects the backOff promise after timing out', (done) => {
       commonUtils
-        .backOff(next => next(), 64000)
-        .catch(errBackoffResp => {
+        .backOff((next) => next(), 64000)
+        .catch((errBackoffResp) => {
           const timeouts = window.setTimeout.mock.calls.map(([, timeout]) => timeout);
 
           expect(timeouts).toEqual([2000, 4000, 8000, 16000, 32000, 32000]);
@@ -471,54 +468,12 @@ describe('common_utils', () => {
     });
   });
 
-  describe('setFavicon', () => {
-    beforeEach(() => {
-      const favicon = document.createElement('link');
-      favicon.setAttribute('id', 'favicon');
-      favicon.setAttribute('href', 'default/favicon');
-      favicon.setAttribute('data-default-href', 'default/favicon');
-      document.body.appendChild(favicon);
-    });
-
-    afterEach(() => {
-      document.body.removeChild(document.getElementById('favicon'));
-    });
-
-    it('should set page favicon to provided favicon', () => {
-      const faviconPath = '//custom_favicon';
-      commonUtils.setFavicon(faviconPath);
-
-      expect(document.getElementById('favicon').getAttribute('href')).toEqual(faviconPath);
-    });
-  });
-
-  describe('resetFavicon', () => {
-    beforeEach(() => {
-      const favicon = document.createElement('link');
-      favicon.setAttribute('id', 'favicon');
-      favicon.setAttribute('data-original-href', 'default/favicon');
-      document.body.appendChild(favicon);
-    });
-
-    afterEach(() => {
-      document.body.removeChild(document.getElementById('favicon'));
-    });
-
-    it('should reset page favicon to the default icon', () => {
-      const favicon = document.getElementById('favicon');
-      favicon.setAttribute('href', 'new/favicon');
-      commonUtils.resetFavicon();
-
-      expect(document.getElementById('favicon').getAttribute('href')).toEqual('default/favicon');
-    });
-  });
-
   describe('spriteIcon', () => {
     let beforeGon;
 
     beforeEach(() => {
       window.gon = window.gon || {};
-      beforeGon = Object.assign({}, window.gon);
+      beforeGon = { ...window.gon };
       window.gon.sprite_icons = 'icons.svg';
     });
 
@@ -533,199 +488,415 @@ describe('common_utils', () => {
     });
 
     it('should set svg className when passed', () => {
-      expect(commonUtils.spriteIcon('test', 'fa fa-test')).toEqual(
-        '<svg class="fa fa-test"><use xlink:href="icons.svg#test" /></svg>',
+      expect(commonUtils.spriteIcon('test', 'first-icon-class second-icon-class')).toEqual(
+        '<svg class="first-icon-class second-icon-class"><use xlink:href="icons.svg#test" /></svg>',
       );
     });
   });
 
-  describe('convertObjectPropsToCamelCase', () => {
-    it('returns new object with camelCase property names by converting object with snake_case names', () => {
-      const snakeRegEx = /(_\w)/g;
-      const mockObj = {
-        id: 1,
-        group_name: 'GitLab.org',
-        absolute_web_url: 'https://gitlab.com/gitlab-org/',
-      };
-      const mappings = {
-        id: 'id',
-        groupName: 'group_name',
-        absoluteWebUrl: 'absolute_web_url',
-      };
+  describe('convertObjectProps*', () => {
+    const mockConversionFunction = (prop) => `${prop}_converted`;
+    const isEmptyObject = (obj) =>
+      typeof obj === 'object' && obj !== null && Object.keys(obj).length === 0;
 
-      const convertedObj = commonUtils.convertObjectPropsToCamelCase(mockObj);
+    const mockObjects = {
+      convertObjectProps: {
+        obj: {
+          id: 1,
+          group_name: 'GitLab.org',
+          absolute_web_url: 'https://gitlab.com/gitlab-org/',
+          milestones: ['12.3', '12.4'],
+        },
+        objNested: {
+          project_name: 'GitLab CE',
+          group_name: 'GitLab.org',
+          license_type: 'MIT',
+          tech_stack: {
+            backend: 'Ruby',
+            frontend_framework: 'Vue',
+            database: 'PostgreSQL',
+          },
+          milestones: ['12.3', '12.4'],
+        },
+      },
+      convertObjectPropsToCamelCase: {
+        obj: {
+          id: 1,
+          group_name: 'GitLab.org',
+          absolute_web_url: 'https://gitlab.com/gitlab-org/',
+          milestones: ['12.3', '12.4'],
+        },
+        objNested: {
+          project_name: 'GitLab CE',
+          group_name: 'GitLab.org',
+          license_type: 'MIT',
+          tech_stack: {
+            backend: 'Ruby',
+            frontend_framework: 'Vue',
+            database: 'PostgreSQL',
+          },
+          milestones: ['12.3', '12.4'],
+        },
+      },
+      convertObjectPropsToSnakeCase: {
+        obj: {
+          id: 1,
+          groupName: 'GitLab.org',
+          absoluteWebUrl: 'https://gitlab.com/gitlab-org/',
+          milestones: ['12.3', '12.4'],
+        },
+        objNested: {
+          projectName: 'GitLab CE',
+          groupName: 'GitLab.org',
+          licenseType: 'MIT',
+          techStack: {
+            backend: 'Ruby',
+            frontendFramework: 'Vue',
+            database: 'PostgreSQL',
+          },
+          milestones: ['12.3', '12.4'],
+        },
+      },
+    };
 
-      Object.keys(convertedObj).forEach(prop => {
-        expect(snakeRegEx.test(prop)).toBeFalsy();
-        expect(convertedObj[prop]).toBe(mockObj[mappings[prop]]);
+    describe('convertObjectProps', () => {
+      it('returns an empty object if `conversionFunction` parameter is not a function', () => {
+        const result = commonUtils.convertObjectProps(null, mockObjects.convertObjectProps.obj);
+
+        expect(isEmptyObject(result)).toBeTruthy();
       });
     });
 
-    it('return empty object if method is called with null or undefined', () => {
-      expect(Object.keys(commonUtils.convertObjectPropsToCamelCase(null)).length).toBe(0);
-      expect(Object.keys(commonUtils.convertObjectPropsToCamelCase()).length).toBe(0);
-      expect(Object.keys(commonUtils.convertObjectPropsToCamelCase({})).length).toBe(0);
-    });
+    describe.each`
+      functionName                       | mockObj                                          | mockObjNested
+      ${'convertObjectProps'}            | ${mockObjects.convertObjectProps.obj}            | ${mockObjects.convertObjectProps.objNested}
+      ${'convertObjectPropsToCamelCase'} | ${mockObjects.convertObjectPropsToCamelCase.obj} | ${mockObjects.convertObjectPropsToCamelCase.objNested}
+      ${'convertObjectPropsToSnakeCase'} | ${mockObjects.convertObjectPropsToSnakeCase.obj} | ${mockObjects.convertObjectPropsToSnakeCase.objNested}
+    `('$functionName', ({ functionName, mockObj, mockObjNested }) => {
+      const testFunction =
+        functionName === 'convertObjectProps'
+          ? (obj, options = {}) =>
+              commonUtils.convertObjectProps(mockConversionFunction, obj, options)
+          : commonUtils[functionName];
 
-    it('does not deep-convert by default', () => {
-      const obj = {
-        snake_key: {
-          child_snake_key: 'value',
-        },
-      };
-
-      expect(commonUtils.convertObjectPropsToCamelCase(obj)).toEqual({
-        snakeKey: {
-          child_snake_key: 'value',
-        },
+      it('returns an empty object if `obj` parameter is null, undefined or an empty object', () => {
+        expect(isEmptyObject(testFunction(null))).toBeTruthy();
+        expect(isEmptyObject(testFunction())).toBeTruthy();
+        expect(isEmptyObject(testFunction({}))).toBeTruthy();
       });
-    });
 
-    describe('convertObjectPropsToSnakeCase', () => {
-      it('converts each object key to snake case', () => {
-        const obj = {
-          some: 'some',
-          'cool object': 'cool object',
-          likeThisLongOne: 'likeThisLongOne',
+      it('converts object properties', () => {
+        const expected = {
+          convertObjectProps: {
+            id_converted: 1,
+            group_name_converted: 'GitLab.org',
+            absolute_web_url_converted: 'https://gitlab.com/gitlab-org/',
+            milestones_converted: ['12.3', '12.4'],
+          },
+          convertObjectPropsToCamelCase: {
+            id: 1,
+            groupName: 'GitLab.org',
+            absoluteWebUrl: 'https://gitlab.com/gitlab-org/',
+            milestones: ['12.3', '12.4'],
+          },
+          convertObjectPropsToSnakeCase: {
+            id: 1,
+            group_name: 'GitLab.org',
+            absolute_web_url: 'https://gitlab.com/gitlab-org/',
+            milestones: ['12.3', '12.4'],
+          },
         };
 
-        expect(commonUtils.convertObjectPropsToSnakeCase(obj)).toEqual({
-          some: 'some',
-          cool_object: 'cool object',
-          like_this_long_one: 'likeThisLongOne',
-        });
+        expect(testFunction(mockObj)).toEqual(expected[functionName]);
       });
 
-      it('returns an empty object if there are no keys', () => {
-        ['', {}, [], null].forEach(badObj => {
-          expect(commonUtils.convertObjectPropsToSnakeCase(badObj)).toEqual({});
-        });
-      });
-    });
-
-    describe('with options', () => {
-      const objWithoutChildren = {
-        project_name: 'GitLab CE',
-        group_name: 'GitLab.org',
-        license_type: 'MIT',
-      };
-
-      const objWithChildren = {
-        project_name: 'GitLab CE',
-        group_name: 'GitLab.org',
-        license_type: 'MIT',
-        tech_stack: {
-          backend: 'Ruby',
-          frontend_framework: 'Vue',
-          database: 'PostgreSQL',
-        },
-      };
-
-      describe('when options.deep is true', () => {
-        it('converts object with child objects', () => {
-          const obj = {
-            snake_key: {
-              child_snake_key: 'value',
-            },
-          };
-
-          expect(commonUtils.convertObjectPropsToCamelCase(obj, { deep: true })).toEqual({
-            snakeKey: {
-              childSnakeKey: 'value',
-            },
-          });
-        });
-
-        it('converts array with child objects', () => {
-          const arr = [
-            {
-              child_snake_key: 'value',
-            },
-          ];
-
-          expect(commonUtils.convertObjectPropsToCamelCase(arr, { deep: true })).toEqual([
-            {
-              childSnakeKey: 'value',
-            },
-          ]);
-        });
-
-        it('converts array with child arrays', () => {
-          const arr = [
-            [
-              {
-                child_snake_key: 'value',
-              },
-            ],
-          ];
-
-          expect(commonUtils.convertObjectPropsToCamelCase(arr, { deep: true })).toEqual([
-            [
-              {
-                childSnakeKey: 'value',
-              },
-            ],
-          ]);
-        });
-      });
-
-      describe('when options.dropKeys is provided', () => {
-        it('discards properties mentioned in `dropKeys` array', () => {
-          expect(
-            commonUtils.convertObjectPropsToCamelCase(objWithoutChildren, {
-              dropKeys: ['group_name'],
-            }),
-          ).toEqual({
-            projectName: 'GitLab CE',
-            licenseType: 'MIT',
-          });
-        });
-
-        it('discards properties mentioned in `dropKeys` array when `deep` is true', () => {
-          expect(
-            commonUtils.convertObjectPropsToCamelCase(objWithChildren, {
-              deep: true,
-              dropKeys: ['group_name', 'database'],
-            }),
-          ).toEqual({
-            projectName: 'GitLab CE',
-            licenseType: 'MIT',
-            techStack: {
+      it('does not deep-convert by default', () => {
+        const expected = {
+          convertObjectProps: {
+            project_name_converted: 'GitLab CE',
+            group_name_converted: 'GitLab.org',
+            license_type_converted: 'MIT',
+            tech_stack_converted: {
               backend: 'Ruby',
-              frontendFramework: 'Vue',
+              frontend_framework: 'Vue',
+              database: 'PostgreSQL',
             },
-          });
-        });
-      });
-
-      describe('when options.ignoreKeyNames is provided', () => {
-        it('leaves properties mentioned in `ignoreKeyNames` array intact', () => {
-          expect(
-            commonUtils.convertObjectPropsToCamelCase(objWithoutChildren, {
-              ignoreKeyNames: ['group_name'],
-            }),
-          ).toEqual({
+            milestones_converted: ['12.3', '12.4'],
+          },
+          convertObjectPropsToCamelCase: {
             projectName: 'GitLab CE',
-            licenseType: 'MIT',
-            group_name: 'GitLab.org',
-          });
-        });
-
-        it('leaves properties mentioned in `ignoreKeyNames` array intact when `deep` is true', () => {
-          expect(
-            commonUtils.convertObjectPropsToCamelCase(objWithChildren, {
-              deep: true,
-              ignoreKeyNames: ['group_name', 'frontend_framework'],
-            }),
-          ).toEqual({
-            projectName: 'GitLab CE',
-            group_name: 'GitLab.org',
+            groupName: 'GitLab.org',
             licenseType: 'MIT',
             techStack: {
               backend: 'Ruby',
               frontend_framework: 'Vue',
               database: 'PostgreSQL',
             },
+            milestones: ['12.3', '12.4'],
+          },
+          convertObjectPropsToSnakeCase: {
+            project_name: 'GitLab CE',
+            group_name: 'GitLab.org',
+            license_type: 'MIT',
+            tech_stack: {
+              backend: 'Ruby',
+              frontendFramework: 'Vue',
+              database: 'PostgreSQL',
+            },
+            milestones: ['12.3', '12.4'],
+          },
+        };
+
+        expect(testFunction(mockObjNested)).toEqual(expected[functionName]);
+      });
+
+      describe('with options', () => {
+        describe('when options.deep is true', () => {
+          const expected = {
+            convertObjectProps: {
+              project_name_converted: 'GitLab CE',
+              group_name_converted: 'GitLab.org',
+              license_type_converted: 'MIT',
+              tech_stack_converted: {
+                backend_converted: 'Ruby',
+                frontend_framework_converted: 'Vue',
+                database_converted: 'PostgreSQL',
+              },
+              milestones_converted: ['12.3', '12.4'],
+            },
+            convertObjectPropsToCamelCase: {
+              projectName: 'GitLab CE',
+              groupName: 'GitLab.org',
+              licenseType: 'MIT',
+              techStack: {
+                backend: 'Ruby',
+                frontendFramework: 'Vue',
+                database: 'PostgreSQL',
+              },
+              milestones: ['12.3', '12.4'],
+            },
+            convertObjectPropsToSnakeCase: {
+              project_name: 'GitLab CE',
+              group_name: 'GitLab.org',
+              license_type: 'MIT',
+              tech_stack: {
+                backend: 'Ruby',
+                frontend_framework: 'Vue',
+                database: 'PostgreSQL',
+              },
+              milestones: ['12.3', '12.4'],
+            },
+          };
+
+          it('converts nested objects', () => {
+            expect(testFunction(mockObjNested, { deep: true })).toEqual(expected[functionName]);
+          });
+
+          it('converts array of nested objects', () => {
+            expect(testFunction([mockObjNested], { deep: true })).toEqual([expected[functionName]]);
+          });
+
+          it('converts array with child arrays', () => {
+            expect(testFunction([[mockObjNested]], { deep: true })).toEqual([
+              [expected[functionName]],
+            ]);
+          });
+        });
+
+        describe('when options.dropKeys is provided', () => {
+          it('discards properties mentioned in `dropKeys` array', () => {
+            const expected = {
+              convertObjectProps: {
+                project_name_converted: 'GitLab CE',
+                license_type_converted: 'MIT',
+                tech_stack_converted: {
+                  backend: 'Ruby',
+                  frontend_framework: 'Vue',
+                  database: 'PostgreSQL',
+                },
+                milestones_converted: ['12.3', '12.4'],
+              },
+              convertObjectPropsToCamelCase: {
+                projectName: 'GitLab CE',
+                licenseType: 'MIT',
+                techStack: {
+                  backend: 'Ruby',
+                  frontend_framework: 'Vue',
+                  database: 'PostgreSQL',
+                },
+                milestones: ['12.3', '12.4'],
+              },
+              convertObjectPropsToSnakeCase: {
+                project_name: 'GitLab CE',
+                license_type: 'MIT',
+                tech_stack: {
+                  backend: 'Ruby',
+                  frontendFramework: 'Vue',
+                  database: 'PostgreSQL',
+                },
+                milestones: ['12.3', '12.4'],
+              },
+            };
+
+            const dropKeys = {
+              convertObjectProps: ['group_name'],
+              convertObjectPropsToCamelCase: ['group_name'],
+              convertObjectPropsToSnakeCase: ['groupName'],
+            };
+
+            expect(
+              testFunction(mockObjNested, {
+                dropKeys: dropKeys[functionName],
+              }),
+            ).toEqual(expected[functionName]);
+          });
+
+          it('discards properties mentioned in `dropKeys` array when `deep` is true', () => {
+            const expected = {
+              convertObjectProps: {
+                project_name_converted: 'GitLab CE',
+                license_type_converted: 'MIT',
+                tech_stack_converted: {
+                  backend_converted: 'Ruby',
+                  frontend_framework_converted: 'Vue',
+                },
+                milestones_converted: ['12.3', '12.4'],
+              },
+              convertObjectPropsToCamelCase: {
+                projectName: 'GitLab CE',
+                licenseType: 'MIT',
+                techStack: {
+                  backend: 'Ruby',
+                  frontendFramework: 'Vue',
+                },
+                milestones: ['12.3', '12.4'],
+              },
+              convertObjectPropsToSnakeCase: {
+                project_name: 'GitLab CE',
+                license_type: 'MIT',
+                tech_stack: {
+                  backend: 'Ruby',
+                  frontend_framework: 'Vue',
+                },
+                milestones: ['12.3', '12.4'],
+              },
+            };
+
+            const dropKeys = {
+              convertObjectProps: ['group_name', 'database'],
+              convertObjectPropsToCamelCase: ['group_name', 'database'],
+              convertObjectPropsToSnakeCase: ['groupName', 'database'],
+            };
+
+            expect(
+              testFunction(mockObjNested, {
+                dropKeys: dropKeys[functionName],
+                deep: true,
+              }),
+            ).toEqual(expected[functionName]);
+          });
+        });
+
+        describe('when options.ignoreKeyNames is provided', () => {
+          it('leaves properties mentioned in `ignoreKeyNames` array intact', () => {
+            const expected = {
+              convertObjectProps: {
+                project_name_converted: 'GitLab CE',
+                group_name: 'GitLab.org',
+                license_type_converted: 'MIT',
+                tech_stack_converted: {
+                  backend: 'Ruby',
+                  frontend_framework: 'Vue',
+                  database: 'PostgreSQL',
+                },
+                milestones_converted: ['12.3', '12.4'],
+              },
+              convertObjectPropsToCamelCase: {
+                projectName: 'GitLab CE',
+                group_name: 'GitLab.org',
+                licenseType: 'MIT',
+                techStack: {
+                  backend: 'Ruby',
+                  frontend_framework: 'Vue',
+                  database: 'PostgreSQL',
+                },
+                milestones: ['12.3', '12.4'],
+              },
+              convertObjectPropsToSnakeCase: {
+                project_name: 'GitLab CE',
+                groupName: 'GitLab.org',
+                license_type: 'MIT',
+                tech_stack: {
+                  backend: 'Ruby',
+                  frontendFramework: 'Vue',
+                  database: 'PostgreSQL',
+                },
+                milestones: ['12.3', '12.4'],
+              },
+            };
+
+            const ignoreKeyNames = {
+              convertObjectProps: ['group_name'],
+              convertObjectPropsToCamelCase: ['group_name'],
+              convertObjectPropsToSnakeCase: ['groupName'],
+            };
+
+            expect(
+              testFunction(mockObjNested, {
+                ignoreKeyNames: ignoreKeyNames[functionName],
+              }),
+            ).toEqual(expected[functionName]);
+          });
+
+          it('leaves properties mentioned in `ignoreKeyNames` array intact when `deep` is true', () => {
+            const expected = {
+              convertObjectProps: {
+                project_name_converted: 'GitLab CE',
+                group_name: 'GitLab.org',
+                license_type_converted: 'MIT',
+                tech_stack_converted: {
+                  backend_converted: 'Ruby',
+                  frontend_framework: 'Vue',
+                  database_converted: 'PostgreSQL',
+                },
+                milestones_converted: ['12.3', '12.4'],
+              },
+              convertObjectPropsToCamelCase: {
+                projectName: 'GitLab CE',
+                group_name: 'GitLab.org',
+                licenseType: 'MIT',
+                techStack: {
+                  backend: 'Ruby',
+                  frontend_framework: 'Vue',
+                  database: 'PostgreSQL',
+                },
+                milestones: ['12.3', '12.4'],
+              },
+              convertObjectPropsToSnakeCase: {
+                project_name: 'GitLab CE',
+                groupName: 'GitLab.org',
+                license_type: 'MIT',
+                tech_stack: {
+                  backend: 'Ruby',
+                  frontendFramework: 'Vue',
+                  database: 'PostgreSQL',
+                },
+                milestones: ['12.3', '12.4'],
+              },
+            };
+
+            const ignoreKeyNames = {
+              convertObjectProps: ['group_name', 'frontend_framework'],
+              convertObjectPropsToCamelCase: ['group_name', 'frontend_framework'],
+              convertObjectPropsToSnakeCase: ['groupName', 'frontendFramework'],
+            };
+
+            expect(
+              testFunction(mockObjNested, {
+                deep: true,
+                ignoreKeyNames: ignoreKeyNames[functionName],
+              }),
+            ).toEqual(expected[functionName]);
           });
         });
       });
@@ -748,6 +919,35 @@ describe('common_utils', () => {
       expect(commonUtils.roundOffFloat(34567.14159, -3)).toBeCloseTo(35000);
       expect(commonUtils.roundOffFloat(34567.14159, -4)).toBeCloseTo(30000);
       expect(commonUtils.roundOffFloat(34567.14159, -5)).toBeCloseTo(0);
+    });
+  });
+
+  describe('roundDownFloat', () => {
+    it('Rounds down decimal places of a float number with provided precision', () => {
+      expect(commonUtils.roundDownFloat(3.141592, 3)).toBe(3.141);
+    });
+
+    it('Rounds down a float number to a whole number when provided precision is zero', () => {
+      expect(commonUtils.roundDownFloat(3.141592, 0)).toBe(3);
+      expect(commonUtils.roundDownFloat(3.9, 0)).toBe(3);
+    });
+
+    it('Rounds down float number to nearest 0, 10, 100, 1000 and so on when provided precision is below 0', () => {
+      expect(commonUtils.roundDownFloat(34567.14159, -1)).toBeCloseTo(34560);
+      expect(commonUtils.roundDownFloat(34567.14159, -2)).toBeCloseTo(34500);
+      expect(commonUtils.roundDownFloat(34567.14159, -3)).toBeCloseTo(34000);
+      expect(commonUtils.roundDownFloat(34567.14159, -4)).toBeCloseTo(30000);
+      expect(commonUtils.roundDownFloat(34567.14159, -5)).toBeCloseTo(0);
+    });
+  });
+
+  describe('roundToNearestHalf', () => {
+    it('Rounds decimals ot the nearest half', () => {
+      expect(commonUtils.roundToNearestHalf(3.141592)).toBe(3);
+      expect(commonUtils.roundToNearestHalf(3.41592)).toBe(3.5);
+      expect(commonUtils.roundToNearestHalf(1.27)).toBe(1.5);
+      expect(commonUtils.roundToNearestHalf(1.23)).toBe(1);
+      expect(commonUtils.roundToNearestHalf(1.778)).toBe(2);
     });
   });
 
@@ -807,6 +1007,14 @@ describe('common_utils', () => {
 
     it('returns null when no path follows /-/', () => {
       expect(commonUtils.getDashPath('/some/url')).toEqual(null);
+    });
+  });
+
+  describe('convertArrayToCamelCase', () => {
+    it('returns a new array with snake_case string elements converted camelCase', () => {
+      const result = commonUtils.convertArrayToCamelCase(['hello', 'hello_world']);
+
+      expect(result).toEqual(['hello', 'helloWorld']);
     });
   });
 });

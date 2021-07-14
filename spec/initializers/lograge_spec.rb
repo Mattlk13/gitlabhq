@@ -2,7 +2,7 @@
 
 require 'spec_helper'
 
-describe 'lograge', type: :request do
+RSpec.describe 'lograge', type: :request do
   let(:headers) { { 'X-Request-ID' => 'new-correlation-id' } }
 
   let(:large_params) do
@@ -64,11 +64,11 @@ describe 'lograge', type: :request do
         )
 
       expect(Lograge.formatter).to receive(:call)
-        .with(a_hash_including(cpu_s: 0.1111115))
+        .with(a_hash_including(cpu_s: 0.111112))
         .and_call_original
 
       expect(Lograge.logger).to receive(:send)
-        .with(anything, include('"cpu_s":0.1111115'))
+        .with(anything, include('"cpu_s":0.111112'))
         .and_call_original
 
       subject
@@ -89,6 +89,26 @@ describe 'lograge', type: :request do
       subject
     end
 
+    context 'when logging memory allocations' do
+      include MemoryInstrumentationHelper
+
+      before do
+        skip_memory_instrumentation!
+      end
+
+      it 'logs memory usage metrics' do
+        expect(Lograge.formatter).to receive(:call)
+          .with(a_hash_including(:mem_objects))
+          .and_call_original
+
+        expect(Lograge.logger).to receive(:send)
+          .with(anything, include('"mem_objects":'))
+          .and_call_original
+
+        subject
+      end
+    end
+
     it 'limits param size' do
       expect(Lograge.formatter).to receive(:call)
         .with(a_hash_including(params: limited_params))
@@ -99,7 +119,10 @@ describe 'lograge', type: :request do
   end
 
   context 'with a log subscriber' do
-    let(:subscriber) { Lograge::RequestLogSubscriber.new }
+    include_context 'parsed logs'
+    include_context 'clear DB Load Balancing configuration'
+
+    let(:subscriber) { Lograge::LogSubscribers::ActionController.new }
 
     let(:event) do
       ActiveSupport::Notifications::Event.new(
@@ -117,16 +140,6 @@ describe 'lograge', type: :request do
         db_runtime: 0.02,
         view_runtime: 0.01
       )
-    end
-
-    let(:log_output) { StringIO.new }
-    let(:logger) do
-      Logger.new(log_output).tap { |logger| logger.formatter = ->(_, _, _, msg) { msg } }
-    end
-    let(:log_data) { JSON.parse(log_output.string) }
-
-    before do
-      Lograge.logger = logger
     end
 
     describe 'with an exception' do
@@ -158,6 +171,100 @@ describe 'lograge', type: :request do
         subscriber.process_action(event)
 
         expect(log_data['etag_route']).to eq(etag_route)
+      end
+    end
+
+    describe 'with access token in url' do
+      before do
+        event.payload[:location] = 'http://example.com/auth.html#access_token=secret_token&token_type=Bearer'
+      end
+
+      it 'strips location from sensitive information' do
+        subscriber.redirect_to(event)
+        subscriber.process_action(event)
+
+        expect(log_data['location']).not_to include('secret_token')
+        expect(log_data['location']).to include('filtered')
+      end
+
+      it 'leaves non-sensitive information from location' do
+        subscriber.redirect_to(event)
+        subscriber.process_action(event)
+
+        expect(log_data['location']).to include('&token_type=Bearer')
+      end
+    end
+
+    context 'with db payload' do
+      let(:db_load_balancing_logging_keys) do
+        %w[
+          db_primary_wal_count
+          db_replica_wal_count
+          db_primary_wal_cached_count
+          db_replica_wal_cached_count
+          db_replica_count
+          db_replica_cached_count
+          db_primary_count
+          db_primary_cached_count
+          db_primary_duration_s
+          db_replica_duration_s
+        ]
+      end
+
+      before do
+        ActiveRecord::Base.connection.execute('SELECT pg_sleep(0.1);')
+      end
+
+      context 'when RequestStore is enabled', :request_store do
+        it 'includes db counters' do
+          subscriber.process_action(event)
+
+          expect(log_data).to include("db_count" => a_value >= 1, "db_write_count" => 0, "db_cached_count" => 0)
+        end
+      end
+
+      context 'when RequestStore is disabled' do
+        it 'does not include db counters' do
+          subscriber.process_action(event)
+
+          expect(log_data).not_to include("db_count", "db_write_count", "db_cached_count")
+        end
+      end
+
+      context 'when load balancing is enabled' do
+        before do
+          allow(Gitlab::Database::LoadBalancing).to receive(:enable?).and_return(true)
+        end
+
+        context 'with db payload' do
+          context 'when RequestStore is enabled', :request_store do
+            it 'includes db counters for load balancing' do
+              subscriber.process_action(event)
+
+              expect(log_data).to include(*db_load_balancing_logging_keys)
+            end
+          end
+
+          context 'when RequestStore is disabled' do
+            it 'does not include db counters for load balancing' do
+              subscriber.process_action(event)
+
+              expect(log_data).not_to include(*db_load_balancing_logging_keys)
+            end
+          end
+        end
+      end
+
+      context 'when load balancing is disabled' do
+        before do
+          allow(Gitlab::Database::LoadBalancing).to receive(:enable?).and_return(false)
+        end
+
+        it 'does not include db counters for load balancing' do
+          subscriber.process_action(event)
+
+          expect(log_data).not_to include(*db_load_balancing_logging_keys)
+        end
       end
     end
   end

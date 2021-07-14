@@ -1,20 +1,20 @@
-import { mount } from '@vue/test-utils';
 import { GlProgressBar, GlLink, GlBadge, GlButton } from '@gitlab/ui';
+import { mount } from '@vue/test-utils';
+import { getJSONFixture } from 'helpers/fixtures';
 import { trimText } from 'helpers/text_helper';
-import ReleaseBlockMilestoneInfo from '~/releases/components/release_block_milestone_info.vue';
-import { milestones as originalMilestones } from '../mock_data';
-import { MAX_MILESTONES_TO_DISPLAY } from '~/releases/constants';
 import { convertObjectPropsToCamelCase } from '~/lib/utils/common_utils';
+import ReleaseBlockMilestoneInfo from '~/releases/components/release_block_milestone_info.vue';
+import { MAX_MILESTONES_TO_DISPLAY } from '~/releases/constants';
+
+const { milestones: originalMilestones } = getJSONFixture('api/releases/release.json');
 
 describe('Release block milestone info', () => {
   let wrapper;
   let milestones;
 
-  const factory = milestonesProp => {
+  const factory = (props) => {
     wrapper = mount(ReleaseBlockMilestoneInfo, {
-      propsData: {
-        milestones: milestonesProp,
-      },
+      propsData: props,
     });
 
     return wrapper.vm.$nextTick();
@@ -26,17 +26,19 @@ describe('Release block milestone info', () => {
 
   afterEach(() => {
     wrapper.destroy();
+    wrapper = null;
   });
 
   const milestoneProgressBarContainer = () => wrapper.find('.js-milestone-progress-bar-container');
   const milestoneListContainer = () => wrapper.find('.js-milestone-list-container');
-  const issuesContainer = () => wrapper.find('.js-issues-container');
+  const issuesContainer = () => wrapper.find('[data-testid="issue-stats"]');
+  const mergeRequestsContainer = () => wrapper.find('[data-testid="merge-request-stats"]');
 
   describe('with default props', () => {
-    beforeEach(() => factory(milestones));
+    beforeEach(() => factory({ milestones }));
 
     it('renders the correct percentage', () => {
-      expect(milestoneProgressBarContainer().text()).toContain('41% complete');
+      expect(milestoneProgressBarContainer().text()).toContain('44% complete');
     });
 
     it('renders a progress bar that displays the correct percentage', () => {
@@ -45,19 +47,17 @@ describe('Release block milestone info', () => {
       expect(progressBar.exists()).toBe(true);
       expect(progressBar.attributes()).toEqual(
         expect.objectContaining({
-          value: '22',
-          max: '54',
+          value: '4',
+          max: '9',
         }),
       );
     });
 
     it('renders a list of links to all associated milestones', () => {
-      expect(trimText(milestoneListContainer().text())).toContain('Milestones 13.6 • 13.5');
+      expect(milestoneListContainer().text()).toMatchInterpolatedText('Milestones 12.3 • 12.4');
 
       milestones.forEach((m, i) => {
-        const milestoneLink = milestoneListContainer()
-          .findAll(GlLink)
-          .at(i);
+        const milestoneLink = milestoneListContainer().findAll(GlLink).at(i);
 
         expect(milestoneLink.text()).toBe(m.title);
         expect(milestoneLink.attributes('href')).toBe(m.webUrl);
@@ -66,7 +66,7 @@ describe('Release block milestone info', () => {
     });
 
     it('renders the "Issues" section with a total count of issues associated to the milestone(s)', () => {
-      const totalIssueCount = 54;
+      const totalIssueCount = 9;
       const issuesContainerText = trimText(issuesContainer().text());
 
       expect(issuesContainerText).toContain(`Issues ${totalIssueCount}`);
@@ -74,7 +74,7 @@ describe('Release block milestone info', () => {
       const badge = issuesContainer().find(GlBadge);
       expect(badge.text()).toBe(totalIssueCount.toString());
 
-      expect(issuesContainerText).toContain('Open: 32 • Closed: 22');
+      expect(issuesContainerText).toContain('Open: 5 • Closed: 4');
     });
   });
 
@@ -96,19 +96,17 @@ describe('Release block milestone info', () => {
         });
       }
 
-      fullListString = lotsOfMilestones.map(m => m.title).join(' • ');
+      fullListString = lotsOfMilestones.map((m) => m.title).join(' • ');
       abbreviatedListString = lotsOfMilestones
         .slice(0, MAX_MILESTONES_TO_DISPLAY)
-        .map(m => m.title)
+        .map((m) => m.title)
         .join(' • ');
 
-      return factory(lotsOfMilestones);
+      return factory({ milestones: lotsOfMilestones });
     });
 
     const clickShowMoreFewerButton = () => {
-      milestoneListContainer()
-        .find(GlButton)
-        .trigger('click');
+      milestoneListContainer().find(GlButton).trigger('click');
 
       return wrapper.vm.$nextTick();
     };
@@ -149,16 +147,16 @@ describe('Release block milestone info', () => {
   /** Ensures we don't have any issues with dividing by zero when computing percentages */
   describe('when all issue counts are zero', () => {
     beforeEach(() => {
-      milestones = milestones.map(m => ({
+      milestones = milestones.map((m) => ({
         ...m,
         issueStats: {
           ...m.issueStats,
-          opened: 0,
+          total: 0,
           closed: 0,
         },
       }));
 
-      return factory(milestones);
+      return factory({ milestones });
     });
 
     expectAllZeros();
@@ -166,14 +164,43 @@ describe('Release block milestone info', () => {
 
   describe('if the API response is missing the "issue_stats" property', () => {
     beforeEach(() => {
-      milestones = milestones.map(m => ({
+      milestones = milestones.map((m) => ({
         ...m,
         issueStats: undefined,
       }));
 
-      return factory(milestones);
+      return factory({ milestones });
     });
 
     expectAllZeros();
+  });
+
+  describe('if the API response is missing the "mr_stats" property', () => {
+    beforeEach(() => factory({ milestones }));
+
+    it('does not render merge request stats', () => {
+      expect(mergeRequestsContainer().exists()).toBe(false);
+    });
+  });
+
+  describe('if the API response includes the "mr_stats" property', () => {
+    beforeEach(() => {
+      milestones = milestones.map((m) => ({
+        ...m,
+        mrStats: {
+          total: 15,
+          merged: 12,
+          closed: 1,
+        },
+      }));
+
+      return factory({ milestones });
+    });
+
+    it('renders merge request stats', () => {
+      expect(trimText(mergeRequestsContainer().text())).toBe(
+        'Merge requests 30 Open: 4 • Merged: 24 • Closed: 2',
+      );
+    });
   });
 });

@@ -6,7 +6,6 @@ module Banzai
     # a given link format. To transform references to DB
     # resources in place, prefer to inherit from AbstractReferenceFilter.
     class InlineEmbedsFilter < HTML::Pipeline::Filter
-      include Gitlab::Utils::StrongMemoize
       # Find every relevant link, create a new node based on
       # the link, and insert this node after any html content
       # surrounding the link.
@@ -22,11 +21,18 @@ module Banzai
         doc
       end
 
-      # Implement in child class.
+      # Child class must provide the metrics_dashboard_url.
       #
       # Return a Nokogiri::XML::Element to embed in the
-      # markdown.
+      # markdown which provides a url to the metric_dashboard endpoint where
+      # data can be requested through a prometheus proxy. InlineMetricsRedactorFilter
+      # is responsible for premissions to see this div (and relies on the class 'js-render-metrics' ).
       def create_element(params)
+        doc.document.create_element(
+          'div',
+          class: 'js-render-metrics',
+          'data-dashboard-url': metrics_dashboard_url(params)
+        )
       end
 
       # Implement in child class unless overriding #embed_params
@@ -67,9 +73,18 @@ module Banzai
       # Ex) 'https://<root>/<project>/<environment>/metrics?title=Title&group=Group'
       #       --> { title: 'Title', group: 'Group' }
       def query_params(url)
-        strong_memoize(:query_params) do
-          Gitlab::Metrics::Dashboard::Url.parse_query(url)
-        end
+        Gitlab::Metrics::Dashboard::Url.parse_query(url)
+      end
+
+      # Implement in child class.
+      #
+      # Provides a full url to request the relevant panels of metric data.
+      def metrics_dashboard_url
+        raise NotImplementedError
+      end
+
+      def gitlab_domain
+        ::Gitlab.config.gitlab.url
       end
     end
   end

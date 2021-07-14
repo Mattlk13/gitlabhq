@@ -1,21 +1,12 @@
 import MockAdapter from 'axios-mock-adapter';
-import $ from 'jquery';
 import { loadHTMLFixture } from 'helpers/fixtures';
 import { setTestTimeout } from 'helpers/timeout';
 import Clusters from '~/clusters/clusters_bundle';
-import {
-  APPLICATION_STATUS,
-  INGRESS_DOMAIN_SUFFIX,
-  APPLICATIONS,
-  RUNNER,
-} from '~/clusters/constants';
 import axios from '~/lib/utils/axios_utils';
 import initProjectSelectDropdown from '~/project_select';
 
 jest.mock('~/lib/utils/poll');
 jest.mock('~/project_select');
-
-const { INSTALLING, INSTALLABLE, INSTALLED, UNINSTALLING } = APPLICATION_STATUS;
 
 describe('Clusters', () => {
   setTestTimeout(1000);
@@ -60,108 +51,6 @@ describe('Clusters', () => {
 
     it('should call initProjectSelectDropdown on construct', () => {
       expect(initProjectSelectDropdown).toHaveBeenCalled();
-    });
-  });
-
-  describe('toggle', () => {
-    it('should update the button and the input field on click', done => {
-      const toggleButton = document.querySelector(
-        '.js-cluster-enable-toggle-area .js-project-feature-toggle',
-      );
-      const toggleInput = document.querySelector(
-        '.js-cluster-enable-toggle-area .js-project-feature-toggle-input',
-      );
-
-      $(toggleInput).one('trigger-change', () => {
-        expect(toggleButton.classList).not.toContain('is-checked');
-        expect(toggleInput.getAttribute('value')).toEqual('false');
-        done();
-      });
-
-      toggleButton.click();
-    });
-  });
-
-  describe('showToken', () => {
-    it('should update token field type', () => {
-      cluster.showTokenButton.click();
-
-      expect(cluster.tokenField.getAttribute('type')).toEqual('text');
-
-      cluster.showTokenButton.click();
-
-      expect(cluster.tokenField.getAttribute('type')).toEqual('password');
-    });
-
-    it('should update show token button text', () => {
-      cluster.showTokenButton.click();
-
-      expect(cluster.showTokenButton.textContent).toEqual('Hide');
-
-      cluster.showTokenButton.click();
-
-      expect(cluster.showTokenButton.textContent).toEqual('Show');
-    });
-  });
-
-  describe('checkForNewInstalls', () => {
-    const INITIAL_APP_MAP = {
-      helm: { status: null, title: 'Helm Tiller' },
-      ingress: { status: null, title: 'Ingress' },
-      runner: { status: null, title: 'GitLab Runner' },
-    };
-
-    it('does not show alert when things transition from initial null state to something', () => {
-      cluster.checkForNewInstalls(INITIAL_APP_MAP, {
-        ...INITIAL_APP_MAP,
-        helm: { status: INSTALLABLE, title: 'Helm Tiller' },
-      });
-
-      const flashMessage = document.querySelector('.js-cluster-application-notice .flash-text');
-
-      expect(flashMessage).toBeNull();
-    });
-
-    it('shows an alert when something gets newly installed', () => {
-      cluster.checkForNewInstalls(
-        {
-          ...INITIAL_APP_MAP,
-          helm: { status: INSTALLING, title: 'Helm Tiller' },
-        },
-        {
-          ...INITIAL_APP_MAP,
-          helm: { status: INSTALLED, title: 'Helm Tiller' },
-        },
-      );
-
-      const flashMessage = document.querySelector('.js-cluster-application-notice .flash-text');
-
-      expect(flashMessage).not.toBeNull();
-      expect(flashMessage.textContent.trim()).toEqual(
-        'Helm Tiller was successfully installed on your Kubernetes cluster',
-      );
-    });
-
-    it('shows an alert when multiple things gets newly installed', () => {
-      cluster.checkForNewInstalls(
-        {
-          ...INITIAL_APP_MAP,
-          helm: { status: INSTALLING, title: 'Helm Tiller' },
-          ingress: { status: INSTALLABLE, title: 'Ingress' },
-        },
-        {
-          ...INITIAL_APP_MAP,
-          helm: { status: INSTALLED, title: 'Helm Tiller' },
-          ingress: { status: INSTALLED, title: 'Ingress' },
-        },
-      );
-
-      const flashMessage = document.querySelector('.js-cluster-application-notice .flash-text');
-
-      expect(flashMessage).not.toBeNull();
-      expect(flashMessage.textContent.trim()).toEqual(
-        'Helm Tiller, Ingress was successfully installed on your Kubernetes cluster',
-      );
     });
   });
 
@@ -284,73 +173,6 @@ describe('Clusters', () => {
     });
   });
 
-  describe('installApplication', () => {
-    it.each(APPLICATIONS)('tries to install %s', (applicationId, done) => {
-      jest.spyOn(cluster.service, 'installApplication').mockResolvedValue();
-
-      cluster.store.state.applications[applicationId].status = INSTALLABLE;
-
-      // eslint-disable-next-line promise/valid-params
-      cluster
-        .installApplication({ id: applicationId })
-        .then(() => {
-          expect(cluster.store.state.applications[applicationId].status).toEqual(INSTALLING);
-          expect(cluster.store.state.applications[applicationId].requestReason).toEqual(null);
-          expect(cluster.service.installApplication).toHaveBeenCalledWith(applicationId, undefined);
-          done();
-        })
-        .catch();
-    });
-
-    it('sets error request status when the request fails', () => {
-      jest
-        .spyOn(cluster.service, 'installApplication')
-        .mockRejectedValueOnce(new Error('STUBBED ERROR'));
-
-      cluster.store.state.applications.helm.status = INSTALLABLE;
-
-      const promise = cluster.installApplication({ id: 'helm' });
-
-      return promise.then(() => {
-        expect(cluster.store.state.applications.helm.status).toEqual(INSTALLABLE);
-        expect(cluster.store.state.applications.helm.installFailed).toBe(true);
-
-        expect(cluster.store.state.applications.helm.requestReason).toBeDefined();
-      });
-    });
-  });
-
-  describe('uninstallApplication', () => {
-    it.each(APPLICATIONS)('tries to uninstall %s', applicationId => {
-      jest.spyOn(cluster.service, 'uninstallApplication').mockResolvedValueOnce();
-
-      cluster.store.state.applications[applicationId].status = INSTALLED;
-
-      cluster.uninstallApplication({ id: applicationId });
-
-      expect(cluster.store.state.applications[applicationId].status).toEqual(UNINSTALLING);
-      expect(cluster.store.state.applications[applicationId].requestReason).toEqual(null);
-      expect(cluster.service.uninstallApplication).toHaveBeenCalledWith(applicationId);
-    });
-
-    it('sets error request status when the uninstall request fails', () => {
-      jest
-        .spyOn(cluster.service, 'uninstallApplication')
-        .mockRejectedValueOnce(new Error('STUBBED ERROR'));
-
-      cluster.store.state.applications.helm.status = INSTALLED;
-
-      const promise = cluster.uninstallApplication({ id: 'helm' });
-
-      return promise.then(() => {
-        expect(cluster.store.state.applications.helm.status).toEqual(INSTALLED);
-        expect(cluster.store.state.applications.helm.uninstallFailed).toBe(true);
-
-        expect(cluster.store.state.applications.helm.requestReason).toBeDefined();
-      });
-    });
-  });
-
   describe('fetch cluster environments success', () => {
     beforeEach(() => {
       jest.spyOn(cluster.store, 'toggleFetchEnvironments').mockReturnThis();
@@ -371,10 +193,7 @@ describe('Clusters', () => {
   describe('handleClusterStatusSuccess', () => {
     beforeEach(() => {
       jest.spyOn(cluster.store, 'updateStateFromServer').mockReturnThis();
-      jest.spyOn(cluster, 'toggleIngressDomainHelpText').mockReturnThis();
-      jest.spyOn(cluster, 'checkForNewInstalls').mockReturnThis();
       jest.spyOn(cluster, 'updateContainer').mockReturnThis();
-
       cluster.handleClusterStatusSuccess({ data: {} });
     });
 
@@ -382,80 +201,8 @@ describe('Clusters', () => {
       expect(cluster.store.updateStateFromServer).toHaveBeenCalled();
     });
 
-    it('checks for new installable apps', () => {
-      expect(cluster.checkForNewInstalls).toHaveBeenCalled();
-    });
-
-    it('toggles ingress domain help text', () => {
-      expect(cluster.toggleIngressDomainHelpText).toHaveBeenCalled();
-    });
-
     it('updates message containers', () => {
       expect(cluster.updateContainer).toHaveBeenCalled();
-    });
-  });
-
-  describe('toggleIngressDomainHelpText', () => {
-    let ingressPreviousState;
-    let ingressNewState;
-
-    beforeEach(() => {
-      ingressPreviousState = { externalIp: null };
-      ingressNewState = { externalIp: '127.0.0.1' };
-    });
-
-    describe(`when ingress have an external ip assigned`, () => {
-      beforeEach(() => {
-        cluster.toggleIngressDomainHelpText(ingressPreviousState, ingressNewState);
-      });
-
-      it('displays custom domain help text', () => {
-        expect(cluster.ingressDomainHelpText.classList.contains('hide')).toEqual(false);
-      });
-
-      it('updates ingress external ip address', () => {
-        expect(cluster.ingressDomainSnippet.textContent).toEqual(
-          `${ingressNewState.externalIp}${INGRESS_DOMAIN_SUFFIX}`,
-        );
-      });
-    });
-
-    describe(`when ingress does not have an external ip assigned`, () => {
-      it('hides custom domain help text', () => {
-        ingressPreviousState.externalIp = '127.0.0.1';
-        ingressNewState.externalIp = null;
-        cluster.ingressDomainHelpText.classList.remove('hide');
-
-        cluster.toggleIngressDomainHelpText(ingressPreviousState, ingressNewState);
-
-        expect(cluster.ingressDomainHelpText.classList.contains('hide')).toEqual(true);
-      });
-    });
-  });
-
-  describe('updateApplication', () => {
-    const params = { version: '1.0.0' };
-    let storeUpdateApplication;
-    let installApplication;
-
-    beforeEach(() => {
-      storeUpdateApplication = jest.spyOn(cluster.store, 'updateApplication');
-      installApplication = jest.spyOn(cluster.service, 'installApplication');
-
-      cluster.updateApplication({ id: RUNNER, params });
-    });
-
-    afterEach(() => {
-      storeUpdateApplication.mockRestore();
-      installApplication.mockRestore();
-    });
-
-    it('calls store updateApplication method', () => {
-      expect(storeUpdateApplication).toHaveBeenCalledWith(RUNNER);
-    });
-
-    it('sends installApplication request', () => {
-      expect(installApplication).toHaveBeenCalledWith(RUNNER, params);
     });
   });
 });

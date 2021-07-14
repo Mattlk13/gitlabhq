@@ -3,12 +3,13 @@
 class TemplateFinder
   include Gitlab::Utils::StrongMemoize
 
-  prepend_if_ee('::EE::TemplateFinder') # rubocop: disable Cop/InjectEnterpriseEditionModule
-
   VENDORED_TEMPLATES = HashWithIndifferentAccess.new(
     dockerfiles: ::Gitlab::Template::DockerfileTemplate,
     gitignores: ::Gitlab::Template::GitignoreTemplate,
-    gitlab_ci_ymls: ::Gitlab::Template::GitlabCiYmlTemplate
+    gitlab_ci_ymls: ::Gitlab::Template::GitlabCiYmlTemplate,
+    metrics_dashboard_ymls: ::Gitlab::Template::MetricsDashboardTemplate,
+    issues: ::Gitlab::Template::IssueTemplate,
+    merge_requests: ::Gitlab::Template::MergeRequestTemplate
   ).freeze
 
   class << self
@@ -18,6 +19,12 @@ class TemplateFinder
       else
         new(type, project, params)
       end
+    end
+
+    def all_template_names(project, type)
+      return {} if !VENDORED_TEMPLATES.key?(type.to_s) && type.to_s != 'licenses'
+
+      build(type, project).template_names
     end
   end
 
@@ -36,9 +43,15 @@ class TemplateFinder
 
   def execute
     if params[:name]
-      vendored_templates.find(params[:name])
+      vendored_templates.find(params[:name], project)
     else
-      vendored_templates.all
+      vendored_templates.all(project)
     end
   end
+
+  def template_names
+    vendored_templates.template_names(project)
+  end
 end
+
+TemplateFinder.prepend_mod_with('TemplateFinder')

@@ -2,25 +2,8 @@
 
 require 'spec_helper'
 
-describe ProjectCiCdSetting do
-  describe '.available?' do
-    before do
-      described_class.reset_column_information
-    end
-
-    it 'returns true' do
-      expect(described_class).to be_available
-    end
-
-    it 'memoizes the schema version' do
-      expect(ActiveRecord::Migrator)
-        .to receive(:current_version)
-        .and_call_original
-        .once
-
-      2.times { described_class.available? }
-    end
-  end
+RSpec.describe ProjectCiCdSetting do
+  using RSpec::Parameterized::TableSyntax
 
   describe 'validations' do
     it 'validates default_git_depth is between 0 and 1000 or nil' do
@@ -35,6 +18,12 @@ describe ProjectCiCdSetting do
   describe '#forward_deployment_enabled' do
     it 'is true by default' do
       expect(described_class.new.forward_deployment_enabled).to be_truthy
+    end
+  end
+
+  describe '#job_token_scope_enabled' do
+    it 'is false by default' do
+      expect(described_class.new.job_token_scope_enabled).to be_falsey
     end
   end
 
@@ -54,16 +43,39 @@ describe ProjectCiCdSetting do
 
       expect(project.reload.ci_cd_settings.default_git_depth).to eq(0)
     end
+  end
 
-    context 'when feature flag :ci_set_project_default_git_depth is disabled' do
-      let(:project) { create(:project) }
+  describe '#keep_latest_artifacts_available?' do
+    let(:attrs) { { keep_latest_artifact: project_enabled } }
+    let(:project_settings) { described_class.new(attrs) }
 
-      before do
-        stub_feature_flags(ci_set_project_default_git_depth: { enabled: false } )
+    subject { project_settings.keep_latest_artifacts_available? }
+
+    context 'without application setting record' do
+      where(:project_enabled, :result_keep_latest_artifact) do
+        false        | false
+        true         | true
       end
 
-      it 'does not set default value for new records' do
-        expect(project.ci_cd_settings.default_git_depth).to eq(nil)
+      with_them do
+        it { expect(subject).to eq(result_keep_latest_artifact) }
+      end
+    end
+
+    context 'with application setting record' do
+      where(:instance_enabled, :project_enabled, :result_keep_latest_artifact) do
+        false         | false        | false
+        false         | true         | false
+        true          | false        | false
+        true          | true         | true
+      end
+
+      before do
+        Gitlab::CurrentSettings.current_application_settings.update!(keep_latest_artifact: instance_enabled)
+      end
+
+      with_them do
+        it { expect(subject).to eq(result_keep_latest_artifact) }
       end
     end
   end

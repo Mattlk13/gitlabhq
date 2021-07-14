@@ -2,7 +2,7 @@
 
 require 'spec_helper'
 
-describe Postgresql::ReplicationSlot do
+RSpec.describe Postgresql::ReplicationSlot do
   describe '.in_use?' do
     it 'returns true when replication slots are present' do
       expect(described_class).to receive(:exists?).and_return(true)
@@ -22,6 +22,10 @@ describe Postgresql::ReplicationSlot do
   describe '.lag_too_great?' do
     before do
       expect(described_class).to receive(:in_use?).and_return(true)
+    end
+
+    it 'does not raise an exception' do
+      expect { described_class.lag_too_great? }.not_to raise_error
     end
 
     it 'returns true when replication lag is too great' do

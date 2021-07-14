@@ -2,12 +2,13 @@
 
 require 'spec_helper'
 
-describe 'Pipeline', :js do
+RSpec.describe 'Pipeline', :js do
   include RoutesHelpers
   include ProjectForksHelper
   include ::ExclusiveLeaseHelpers
 
-  let(:project) { create(:project) }
+  let_it_be(:project) { create(:project) }
+
   let(:user) { create(:user) }
   let(:role) { :developer }
 
@@ -19,32 +20,32 @@ describe 'Pipeline', :js do
   shared_context 'pipeline builds' do
     let!(:build_passed) do
       create(:ci_build, :success,
-             pipeline: pipeline, stage: 'build', name: 'build')
+             pipeline: pipeline, stage: 'build', stage_idx: 0, name: 'build')
     end
 
     let!(:build_failed) do
       create(:ci_build, :failed,
-             pipeline: pipeline, stage: 'test', name: 'test')
+             pipeline: pipeline, stage: 'test', stage_idx: 1, name: 'test')
     end
 
     let!(:build_preparing) do
       create(:ci_build, :preparing,
-             pipeline: pipeline, stage: 'deploy', name: 'prepare')
+             pipeline: pipeline, stage: 'deploy', stage_idx: 2, name: 'prepare')
     end
 
     let!(:build_running) do
       create(:ci_build, :running,
-             pipeline: pipeline, stage: 'deploy', name: 'deploy')
+             pipeline: pipeline, stage: 'deploy', stage_idx: 3, name: 'deploy')
     end
 
     let!(:build_manual) do
       create(:ci_build, :manual,
-             pipeline: pipeline, stage: 'deploy', name: 'manual-build')
+             pipeline: pipeline, stage: 'deploy', stage_idx: 3, name: 'manual-build')
     end
 
     let!(:build_scheduled) do
       create(:ci_build, :scheduled,
-             pipeline: pipeline, stage: 'deploy', name: 'delayed-job')
+             pipeline: pipeline, stage: 'deploy', stage_idx: 3, name: 'delayed-job')
     end
 
     let!(:build_external) do
@@ -56,11 +57,12 @@ describe 'Pipeline', :js do
     end
   end
 
-  describe 'GET /:project/pipelines/:id' do
+  describe 'GET /:project/-/pipelines/:id' do
     include_context 'pipeline builds'
 
-    let(:group) { create(:group) }
-    let(:project) { create(:project, :repository, group: group) }
+    let_it_be(:group) { create(:group) }
+    let_it_be(:project, reload: true) { create(:project, :repository, group: group) }
+
     let(:pipeline) { create(:ci_pipeline, project: project, ref: 'master', sha: project.commit.id, user: user) }
 
     subject(:visit_pipeline) { visit project_pipeline_path(project, pipeline) }
@@ -68,7 +70,7 @@ describe 'Pipeline', :js do
     it 'shows the pipeline graph' do
       visit_pipeline
 
-      expect(page).to have_selector('.pipeline-visualization')
+      expect(page).to have_selector('.js-pipeline-graph')
       expect(page).to have_content('Build')
       expect(page).to have_content('Test')
       expect(page).to have_content('Deploy')
@@ -111,7 +113,7 @@ describe 'Pipeline', :js do
       end
 
       context 'when there is one related merge request' do
-        before do
+        let!(:merge_request) do
           create(:merge_request,
             source_project: project,
             source_branch: pipeline.ref)
@@ -123,7 +125,7 @@ describe 'Pipeline', :js do
           within '.related-merge-requests' do
             expect(page).to have_content('1 related merge request: ')
             expect(page).to have_selector('.js-truncated-mr-list')
-            expect(page).to have_link('!1 My title 1')
+            expect(page).to have_link("#{merge_request.to_reference} #{merge_request.title}")
 
             expect(page).not_to have_selector('.js-full-mr-list')
             expect(page).not_to have_selector('.text-expander')
@@ -132,16 +134,17 @@ describe 'Pipeline', :js do
       end
 
       context 'when there are two related merge requests' do
-        before do
+        let!(:merge_request1) do
           create(:merge_request,
             source_project: project,
-            source_branch: pipeline.ref,
-            target_branch: 'feature-1')
+            source_branch: pipeline.ref)
+        end
 
+        let!(:merge_request2) do
           create(:merge_request,
             source_project: project,
             source_branch: pipeline.ref,
-            target_branch: 'feature-2')
+            target_branch: 'fix')
         end
 
         it 'links to the most recent related merge request' do
@@ -149,7 +152,7 @@ describe 'Pipeline', :js do
 
           within '.related-merge-requests' do
             expect(page).to have_content('2 related merge requests: ')
-            expect(page).to have_link('!2 My title 3')
+            expect(page).to have_link("#{merge_request2.to_reference} #{merge_request2.title}")
             expect(page).to have_selector('.text-expander')
             expect(page).to have_selector('.js-full-mr-list', visible: false)
           end
@@ -171,10 +174,17 @@ describe 'Pipeline', :js do
       end
     end
 
-    it_behaves_like 'showing user status' do
-      let(:user_with_status) { pipeline.user }
+    describe 'pipelines details view' do
+      let!(:status) { create(:user_status, user: pipeline.user, emoji: 'smirk', message: 'Authoring this object') }
 
-      subject { visit project_pipeline_path(project, pipeline) }
+      it 'pipeline header shows the user status and emoji' do
+        visit project_pipeline_path(project, pipeline)
+
+        within '[data-testid="ci-header-content"]' do
+          expect(page).to have_selector("[data-testid='#{status.message}']")
+          expect(page).to have_selector("[data-name='#{status.emoji}']")
+        end
+      end
     end
 
     describe 'pipeline graph' do
@@ -238,6 +248,8 @@ describe 'Pipeline', :js do
       end
 
       context 'when pipeline has a delayed job' do
+        let(:project) { create(:project, :repository, group: group) }
+
         it 'shows the scheduled icon and an unschedule action for the delayed job' do
           page.within('#ci-badge-delayed-job') do
             expect(page).to have_selector('.js-ci-status-icon-scheduled')
@@ -314,9 +326,12 @@ describe 'Pipeline', :js do
 
     context 'when the pipeline has manual stage' do
       before do
-        create(:ci_build, :manual, pipeline: pipeline, stage: 'publish', name: 'CentOS')
-        create(:ci_build, :manual, pipeline: pipeline, stage: 'publish', name: 'Debian')
-        create(:ci_build, :manual, pipeline: pipeline, stage: 'publish', name: 'OpenSUDE')
+        create(:ci_build, :manual, pipeline: pipeline, stage_idx: 10, stage: 'publish', name: 'CentOS')
+        create(:ci_build, :manual, pipeline: pipeline, stage_idx: 10, stage: 'publish', name: 'Debian')
+        create(:ci_build, :manual, pipeline: pipeline, stage_idx: 10, stage: 'publish', name: 'OpenSUDE')
+
+        # force to update stages statuses
+        Ci::ProcessPipelineService.new(pipeline).execute
 
         visit_pipeline
       end
@@ -331,9 +346,10 @@ describe 'Pipeline', :js do
         visit_pipeline
       end
 
-      it 'shows Pipeline, Jobs and Failed Jobs tabs with link' do
+      it 'shows Pipeline, Jobs, DAG and Failed Jobs tabs with link' do
         expect(page).to have_link('Pipeline')
         expect(page).to have_link('Jobs')
+        expect(page).to have_link('Needs')
         expect(page).to have_link('Failed Jobs')
       end
 
@@ -357,7 +373,7 @@ describe 'Pipeline', :js do
     end
 
     describe 'test tabs' do
-      let(:pipeline) { create(:ci_pipeline, :with_test_reports, project: project) }
+      let(:pipeline) { create(:ci_pipeline, :with_test_reports, :with_report_results, project: project) }
 
       before do
         visit_pipeline
@@ -366,28 +382,22 @@ describe 'Pipeline', :js do
 
       context 'with test reports' do
         it 'shows badge counter in Tests tab' do
-          expect(pipeline.test_reports.total_count).to eq(4)
-          expect(page.find('.js-test-report-badge-counter').text).to eq(pipeline.test_reports.total_count.to_s)
+          expect(page.find('.js-test-report-badge-counter').text).to eq(pipeline.test_report_summary.total[:count].to_s)
         end
 
-        it 'does not call test_report.json endpoint by default', :js do
-          expect(page).to have_selector('.js-no-tests-to-show', visible: :all)
-        end
-
-        it 'does call test_report.json endpoint when tab is selected', :js do
+        it 'calls summary.json endpoint', :js do
           find('.js-tests-tab-link').click
-          wait_for_requests
 
-          expect(page).to have_content('Test suites')
-          expect(page).to have_selector('.js-tests-detail', visible: :all)
+          expect(page).to have_content('Jobs')
+          expect(page).to have_selector('[data-testid="tests-detail"]', visible: :all)
         end
       end
 
       context 'without test reports' do
         let(:pipeline) { create(:ci_pipeline, project: project) }
 
-        it 'shows nothing' do
-          expect(page.find('.js-test-report-badge-counter', visible: :all).text).to eq("")
+        it 'shows zero' do
+          expect(page.find('.js-test-report-badge-counter', visible: :all).text).to eq("0")
         end
       end
     end
@@ -401,7 +411,7 @@ describe 'Pipeline', :js do
 
       context 'when retrying' do
         before do
-          find('.js-retry-button').click
+          find('[data-testid="retryPipeline"]').click
         end
 
         it 'does not show a "Retry" button', :sidekiq_might_not_need_inline do
@@ -428,30 +438,44 @@ describe 'Pipeline', :js do
       end
     end
 
-    context 'deleting pipeline' do
-      context 'when user can not delete' do
-        before do
-          visit_pipeline
+    shared_context 'delete pipeline' do
+      context 'deleting pipeline' do
+        context 'when user can not delete' do
+          before do
+            visit_pipeline
+          end
+
+          it { expect(page).not_to have_button('Delete') }
         end
 
-        it { expect(page).not_to have_button('Delete') }
+        context 'when deleting' do
+          before do
+            group.add_owner(user)
+
+            visit_pipeline
+
+            click_button 'Delete'
+            click_button 'Delete pipeline'
+          end
+
+          it 'redirects to pipeline overview page', :sidekiq_inline do
+            expect(page).to have_content('The pipeline has been deleted')
+            expect(current_path).to eq(project_pipelines_path(project))
+          end
+        end
+      end
+    end
+
+    context 'when cancel_pipelines_prior_to_destroy is enabled' do
+      include_context 'delete pipeline'
+    end
+
+    context 'when cancel_pipelines_prior_to_destroy is disabled' do
+      before do
+        stub_feature_flags(cancel_pipelines_prior_to_destroy: false)
       end
 
-      context 'when deleting' do
-        before do
-          group.add_owner(user)
-
-          visit_pipeline
-
-          click_button 'Delete'
-          click_button 'Delete pipeline'
-        end
-
-        it 'redirects to pipeline overview page', :sidekiq_might_not_need_inline do
-          expect(page).to have_content('The pipeline has been deleted')
-          expect(current_path).to eq(project_pipelines_path(project))
-        end
-      end
+      include_context 'delete pipeline'
     end
 
     context 'when pipeline ref does not exist in repository anymore' do
@@ -544,6 +568,7 @@ describe 'Pipeline', :js do
     end
 
     context 'when pipeline is merge request pipeline' do
+      let(:project) { create(:project, :repository, group: group) }
       let(:source_project) { project }
       let(:target_project) { project }
 
@@ -560,7 +585,7 @@ describe 'Pipeline', :js do
       end
 
       before do
-        pipeline.update(user: user)
+        pipeline.update!(user: user)
       end
 
       it 'shows the pipeline information' do
@@ -622,13 +647,14 @@ describe 'Pipeline', :js do
 
   context 'when user does not have access to read jobs' do
     before do
-      project.update(public_builds: false)
+      project.update!(public_builds: false)
     end
 
-    describe 'GET /:project/pipelines/:id' do
+    describe 'GET /:project/-/pipelines/:id' do
       include_context 'pipeline builds'
 
-      let(:project) { create(:project, :repository) }
+      let_it_be(:project) { create(:project, :repository) }
+
       let(:pipeline) { create(:ci_pipeline, project: project, ref: 'master', sha: project.commit.id, user: user) }
 
       before do
@@ -636,7 +662,7 @@ describe 'Pipeline', :js do
       end
 
       it 'shows the pipeline graph' do
-        expect(page).to have_selector('.pipeline-visualization')
+        expect(page).to have_selector('.js-pipeline-graph')
         expect(page).to have_content('Build')
         expect(page).to have_content('Test')
         expect(page).to have_content('Deploy')
@@ -670,13 +696,13 @@ describe 'Pipeline', :js do
                          downstream: downstream)
     end
 
-    describe 'GET /:project/pipelines/:id' do
+    describe 'GET /:project/-/pipelines/:id' do
       before do
         visit project_pipeline_path(project, pipeline)
       end
 
       it 'shows the pipeline with a bridge job' do
-        expect(page).to have_selector('.pipeline-visualization')
+        expect(page).to have_selector('.js-pipeline-graph')
         expect(page).to have_content('cross-build')
       end
 
@@ -703,9 +729,9 @@ describe 'Pipeline', :js do
           end
         end
 
-        it 'displays the PipelineSchedule in an active state' do
+        it 'displays the PipelineSchedule in an inactive state' do
           visit project_pipeline_schedules_path(project)
-          page.click_link('Active')
+          page.click_link('Inactive')
 
           expect(page).to have_selector('table.ci-table > tbody > tr > td', text: 'blocked user schedule')
         end
@@ -719,7 +745,7 @@ describe 'Pipeline', :js do
       end
     end
 
-    describe 'GET /:project/pipelines/:id/builds' do
+    describe 'GET /:project/-/pipelines/:id/builds' do
       before do
         visit builds_project_pipeline_path(project, pipeline)
       end
@@ -733,6 +759,7 @@ describe 'Pipeline', :js do
 
   context 'when build requires resource', :sidekiq_inline do
     let_it_be(:project) { create(:project, :repository) }
+
     let(:pipeline) { create(:ci_pipeline, project: project) }
     let(:resource_group) { create(:ci_resource_group, project: project) }
 
@@ -746,8 +773,63 @@ describe 'Pipeline', :js do
         stage_idx: 2, pipeline: pipeline, project: project, resource_group: resource_group)
     end
 
-    describe 'GET /:project/pipelines/:id' do
+    describe 'GET /:project/-/pipelines/:id' do
       subject { visit project_pipeline_path(project, pipeline) }
+
+      # remove when :graphql_pipeline_details flag is removed
+      # https://gitlab.com/gitlab-org/gitlab/-/issues/299112
+      context 'when :graphql_pipeline_details flag is off' do
+        before do
+          stub_feature_flags(graphql_pipeline_details: false)
+          stub_feature_flags(graphql_pipeline_details_users: false)
+        end
+
+        it 'shows deploy job as created' do
+          subject
+
+          within('.pipeline-header-container') do
+            expect(page).to have_content('pending')
+          end
+
+          within('.js-pipeline-graph') do
+            within '.stage-column:nth-child(1)' do
+              expect(page).to have_content('test')
+              expect(page).to have_css('.ci-status-icon-pending')
+            end
+
+            within '.stage-column:nth-child(2)' do
+              expect(page).to have_content('deploy')
+              expect(page).to have_css('.ci-status-icon-created')
+            end
+          end
+        end
+
+        context 'when test job succeeded' do
+          before do
+            test_job.success!
+          end
+
+          it 'shows deploy job as pending' do
+            subject
+
+            within('.pipeline-header-container') do
+              expect(page).to have_content('running')
+            end
+
+            within('.pipeline-graph') do
+              within '.stage-column:nth-child(1)' do
+                expect(page).to have_content('test')
+                expect(page).to have_css('.ci-status-icon-success')
+              end
+
+              within '.stage-column:nth-child(2)' do
+                expect(page).to have_content('deploy')
+                expect(page).to have_css('.ci-status-icon-pending')
+              end
+            end
+          end
+        end
+      end
 
       it 'shows deploy job as created' do
         subject
@@ -756,13 +838,13 @@ describe 'Pipeline', :js do
           expect(page).to have_content('pending')
         end
 
-        within('.pipeline-graph') do
-          within '.stage-column:nth-child(1)' do
+        within('.js-pipeline-graph') do
+          within(all('[data-testid="stage-column"]')[0]) do
             expect(page).to have_content('test')
             expect(page).to have_css('.ci-status-icon-pending')
           end
 
-          within '.stage-column:nth-child(2)' do
+          within(all('[data-testid="stage-column"]')[1]) do
             expect(page).to have_content('deploy')
             expect(page).to have_css('.ci-status-icon-created')
           end
@@ -781,13 +863,13 @@ describe 'Pipeline', :js do
             expect(page).to have_content('running')
           end
 
-          within('.pipeline-graph') do
-            within '.stage-column:nth-child(1)' do
+          within('.js-pipeline-graph') do
+            within(all('[data-testid="stage-column"]')[0]) do
               expect(page).to have_content('test')
               expect(page).to have_css('.ci-status-icon-success')
             end
 
-            within '.stage-column:nth-child(2)' do
+            within(all('[data-testid="stage-column"]')[1]) do
               expect(page).to have_content('deploy')
               expect(page).to have_css('.ci-status-icon-pending')
             end
@@ -810,10 +892,33 @@ describe 'Pipeline', :js do
             expect(page).to have_content('waiting')
           end
 
-          within('.pipeline-graph') do
-            within '.stage-column:nth-child(2)' do
+          within('.js-pipeline-graph') do
+            within(all('[data-testid="stage-column"]')[1]) do
               expect(page).to have_content('deploy')
               expect(page).to have_css('.ci-status-icon-waiting-for-resource')
+            end
+          end
+        end
+
+        # remove when :graphql_pipeline_details flag is removed
+        # https://gitlab.com/gitlab-org/gitlab/-/issues/299112
+        context 'when :graphql_pipeline_details flag is off' do
+          before do
+            stub_feature_flags(graphql_pipeline_details: false)
+            stub_feature_flags(graphql_pipeline_details_users: false)
+          end
+          it 'shows deploy job as waiting for resource' do
+            subject
+
+            within('.pipeline-header-container') do
+              expect(page).to have_content('waiting')
+            end
+
+            within('.pipeline-graph') do
+              within '.stage-column:nth-child(2)' do
+                expect(page).to have_content('deploy')
+                expect(page).to have_css('.ci-status-icon-waiting-for-resource')
+              end
             end
           end
         end
@@ -830,10 +935,77 @@ describe 'Pipeline', :js do
               expect(page).to have_content('running')
             end
 
-            within('.pipeline-graph') do
-              within '.stage-column:nth-child(2)' do
+            within('.js-pipeline-graph') do
+              within(all('[data-testid="stage-column"]')[1]) do
                 expect(page).to have_content('deploy')
                 expect(page).to have_css('.ci-status-icon-pending')
+              end
+            end
+          end
+
+          # remove when :graphql_pipeline_details flag is removed
+          # https://gitlab.com/gitlab-org/gitlab/-/issues/299112
+          context 'when :graphql_pipeline_details flag is off' do
+            before do
+              stub_feature_flags(graphql_pipeline_details: false)
+              stub_feature_flags(graphql_pipeline_details_users: false)
+            end
+            it 'shows deploy job as pending' do
+              subject
+
+              within('.pipeline-header-container') do
+                expect(page).to have_content('running')
+              end
+
+              within('.pipeline-graph') do
+                within '.stage-column:nth-child(2)' do
+                  expect(page).to have_content('deploy')
+                  expect(page).to have_css('.ci-status-icon-pending')
+                end
+              end
+            end
+          end
+        end
+
+        context 'when deploy job is a bridge to trigger a downstream pipeline' do
+          let!(:deploy_job) do
+            create(:ci_bridge, :created, stage: 'deploy', name: 'deploy',
+              stage_idx: 2, pipeline: pipeline, project: project, resource_group: resource_group)
+          end
+
+          it 'shows deploy job as waiting for resource' do
+            subject
+
+            within('.pipeline-header-container') do
+              expect(page).to have_content('waiting')
+            end
+
+            within('.js-pipeline-graph') do
+              within(all('[data-testid="stage-column"]')[1]) do
+                expect(page).to have_content('deploy')
+                expect(page).to have_css('.ci-status-icon-waiting-for-resource')
+              end
+            end
+          end
+        end
+
+        context 'when deploy job is a bridge to trigger a downstream pipeline' do
+          let!(:deploy_job) do
+            create(:ci_bridge, :created, stage: 'deploy', name: 'deploy',
+              stage_idx: 2, pipeline: pipeline, project: project, resource_group: resource_group)
+          end
+
+          it 'shows deploy job as waiting for resource' do
+            subject
+
+            within('.pipeline-header-container') do
+              expect(page).to have_content('waiting')
+            end
+
+            within('.js-pipeline-graph') do
+              within(all('[data-testid="stage-column"]')[1]) do
+                expect(page).to have_content('deploy')
+                expect(page).to have_css('.ci-status-icon-waiting-for-resource')
               end
             end
           end
@@ -842,10 +1014,11 @@ describe 'Pipeline', :js do
     end
   end
 
-  describe 'GET /:project/pipelines/:id/builds' do
+  describe 'GET /:project/-/pipelines/:id/builds' do
     include_context 'pipeline builds'
 
-    let(:project) { create(:project, :repository) }
+    let_it_be(:project) { create(:project, :repository) }
+
     let(:pipeline) { create(:ci_pipeline, project: project, ref: 'master', sha: project.commit.id) }
 
     before do
@@ -869,9 +1042,10 @@ describe 'Pipeline', :js do
     end
 
     context 'page tabs' do
-      it 'shows Pipeline and Jobs tabs with link' do
+      it 'shows Pipeline, Jobs and DAG tabs with link' do
         expect(page).to have_link('Pipeline')
         expect(page).to have_link('Jobs')
+        expect(page).to have_link('Needs')
       end
 
       it 'shows counter in Jobs tab' do
@@ -888,7 +1062,7 @@ describe 'Pipeline', :js do
 
       context 'when retrying' do
         before do
-          find('.js-retry-button').click
+          find('[data-testid="retryPipeline"]').click
         end
 
         it 'does not show a "Retry" button', :sidekiq_might_not_need_inline do
@@ -943,7 +1117,7 @@ describe 'Pipeline', :js do
     end
   end
 
-  describe 'GET /:project/pipelines/:id/failures' do
+  describe 'GET /:project/-/pipelines/:id/failures' do
     let(:pipeline) { create(:ci_pipeline, project: project, ref: 'master', sha: '1234') }
     let(:pipeline_failures_page) { failures_project_pipeline_path(project, pipeline) }
     let!(:failed_build) { create(:ci_build, :failed, pipeline: pipeline) }
@@ -1033,7 +1207,7 @@ describe 'Pipeline', :js do
       let(:role) { :guest }
 
       before do
-        project.update(public_builds: false)
+        project.update!(public_builds: false)
       end
 
       context 'when accessing failed jobs page' do
@@ -1056,13 +1230,62 @@ describe 'Pipeline', :js do
 
         expect(current_path).to eq(pipeline_path(pipeline))
         expect(page).not_to have_content('Failed Jobs')
-        expect(page).to have_selector('.pipeline-visualization')
+        expect(page).to have_selector('.js-pipeline-graph')
+      end
+
+      # remove when :graphql_pipeline_details flag is removed
+      # https://gitlab.com/gitlab-org/gitlab/-/issues/299112
+      context 'when :graphql_pipeline_details flag is off' do
+        before do
+          stub_feature_flags(graphql_pipeline_details: false)
+          stub_feature_flags(graphql_pipeline_details_users: false)
+        end
+
+        it 'displays the pipeline graph' do
+          subject
+
+          expect(current_path).to eq(pipeline_path(pipeline))
+          expect(page).not_to have_content('Failed Jobs')
+          expect(page).to have_selector('.pipeline-visualization')
+        end
+      end
+    end
+  end
+
+  describe 'GET /:project/-/pipelines/:id/dag' do
+    include_context 'pipeline builds'
+
+    let_it_be(:project) { create(:project, :repository) }
+
+    let(:pipeline) { create(:ci_pipeline, project: project, ref: 'master', sha: project.commit.id) }
+
+    before do
+      visit dag_project_pipeline_path(project, pipeline)
+    end
+
+    it 'shows DAG tab pane as active' do
+      expect(page).to have_css('#js-tab-dag.active', visible: false)
+    end
+
+    context 'page tabs' do
+      it 'shows Pipeline, Jobs and DAG tabs with link' do
+        expect(page).to have_link('Pipeline')
+        expect(page).to have_link('Jobs')
+        expect(page).to have_link('DAG')
+      end
+
+      it 'shows counter in Jobs tab' do
+        expect(page.find('.js-builds-counter').text).to eq(pipeline.total_size.to_s)
+      end
+
+      it 'shows DAG tab as active' do
+        expect(page).to have_css('li.js-dag-tab-link .active')
       end
     end
   end
 
   context 'when user sees pipeline flags in a pipeline detail page' do
-    let(:project) { create(:project, :repository) }
+    let_it_be(:project) { create(:project, :repository) }
 
     context 'when pipeline is latest' do
       include_context 'pipeline builds'

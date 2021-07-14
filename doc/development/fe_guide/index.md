@@ -1,44 +1,55 @@
+---
+stage: none
+group: unassigned
+info: To determine the technical writer assigned to the Stage/Group associated with this page, see https://about.gitlab.com/handbook/engineering/ux/technical-writing/#assignments
+---
+
 # Frontend Development Guidelines
 
 This document describes various guidelines to ensure consistency and quality
-across GitLab's frontend team.
+across the GitLab frontend team.
 
 ## Overview
 
-GitLab is built on top of [Ruby on Rails](https://rubyonrails.org) using [Haml][haml] and also a JavaScript based Frontend with [Vue.js](https://vuejs.org).
-Be wary of [the limitations that come with using Hamlit][hamlit-limits]. We also use [SCSS](https://sass-lang.com) and plain JavaScript with
-modern ECMAScript standards supported through [Babel][babel] and ES module support through [webpack][webpack].
+GitLab is built on top of [Ruby on Rails](https://rubyonrails.org). It uses [Haml](https://haml.info/) and a JavaScript-based frontend with [Vue.js](https://vuejs.org).
+<!-- vale gitlab.Spelling = NO -->
+Be wary of [the limitations that come with using Hamlit](https://github.com/k0kubun/hamlit/blob/master/REFERENCE.md#limitations).
+<!-- vale gitlab.Spelling = YES -->
+We also use [SCSS](https://sass-lang.com) and plain JavaScript with
+modern ECMAScript standards supported through [Babel](https://babeljs.io/) and ES module support through [webpack](https://webpack.js.org/).
 
-Working with our frontend assets requires Node (v8.10.0 or greater) and Yarn
+Working with our frontend assets requires Node (v10.13.0 or greater) and Yarn
 (v1.10.0 or greater). You can find information on how to install these on our
-[installation guide][install].
+[installation guide](../../install/installation.md#4-node).
 
 ### Browser Support
 
-For our currently-supported browsers, see our [requirements][requirements].
+For supported browsers, see our [requirements](../../install/requirements.md#supported-web-browsers).
 
-Use [BrowserStack](https://www.browserstack.com/) to test with our supported browsers. Login to BrowserStack with the credentials saved in GitLab's [shared 1Password account](https://about.gitlab.com/handbook/security/#1password-for-teams).
+Use [BrowserStack](https://www.browserstack.com/) to test with our supported browsers.
+Sign in to BrowserStack with the credentials saved in the **Engineering** vault of the GitLab
+[shared 1Password account](https://about.gitlab.com/handbook/security/#1password-guide).
 
 ## Initiatives
 
 Current high-level frontend goals are listed on [Frontend Epics](https://gitlab.com/groups/gitlab-org/-/epics?label_name%5B%5D=frontend).
 
-## [Principles](principles.md)
+## Principles
 
-High-level guidelines for contributing to GitLab.
+[High-level guidelines](principles.md) for contributing to GitLab.
 
-## [Development Process](development_process.md)
+## Development Process
 
-How we plan and execute the work on the frontend.
+How we [plan and execute](development_process.md) the work on the frontend.
 
-## [Architecture](architecture.md)
+## Architecture
 
-How we go about making fundamental design decisions in GitLab's frontend team
+How we go about [making fundamental design decisions](architecture.md) in the GitLab frontend team
 or make changes to our frontend development guidelines.
 
-## [Testing](../testing_guide/frontend_testing.md)
+## Testing
 
-How we write frontend tests, run the GitLab test suite, and debug test related
+How we write [frontend tests](../testing_guide/frontend_testing.md), run the GitLab test suite, and debug test related
 issues.
 
 ## Pajamas Design System
@@ -46,29 +57,46 @@ issues.
 Reusable components with technical and usage guidelines can be found in our
 [Pajamas Design System](https://design.gitlab.com/).
 
-## [Design Patterns](design_patterns.md)
+## Design Patterns
 
-Common JavaScript design patterns in GitLab's codebase.
+JavaScript [design patterns](design_patterns.md) in the GitLab codebase.
 
-## [Vue.js Best Practices](vue.md)
+## Design Anti-patterns
 
-Vue specific design patterns and practices.
+JavaScript [design anti-patterns](design_anti_patterns.md) we try to avoid.
 
-## [Vuex](vuex.md)
+## Vue.js Best Practices
 
-Vuex specific design patterns and practices.
+Vue specific [design patterns and practices](vue.md).
 
-## [Axios](axios.md)
+## Vuex
 
-Axios specific practices and gotchas.
+[Vuex](vuex.md) specific design patterns and practices.
 
-## [GraphQL](graphql.md)
+## Axios
 
-How to use GraphQL
+[Axios](axios.md) specific practices and gotchas.
 
-## [Icons and Illustrations](icons.md)
+## GraphQL
 
-How we use SVG for our Icons and Illustrations.
+How to use [GraphQL](graphql.md).
+
+## Icons and Illustrations
+
+How we use SVG for our [Icons and Illustrations](icons.md).
+
+## Dependencies
+
+General information about frontend [dependencies](dependencies.md) and how we manage them.
+
+## Keyboard Shortcuts
+
+How we implement [keyboard shortcuts](keyboard_shortcuts.md) that can be customized and disabled.
+
+## Editors
+
+GitLab text editing experiences are provided by the [Source Editor](source_editor.md) and
+the [Content Editor](content_editor.md).
 
 ## Frontend FAQ
 
@@ -79,9 +107,9 @@ Read the [frontend's FAQ](frontend_faq.md) for common small pieces of helpful in
 See the relevant style guides for our guidelines and for information on linting:
 
 - [JavaScript](style/javascript.md). Our guide is based on
-the excellent [Airbnb][airbnb-js-style-guide] style guide with a few small
+the excellent [Airbnb](https://github.com/airbnb/javascript) style guide with a few small
 changes.
-- [SCSS](style/scss.md): our SCSS conventions which are enforced through [`scss-lint`](https://github.com/brigade/scss-lint).
+- [SCSS](style/scss.md): [our SCSS conventions](https://gitlab.com/gitlab-org/frontend/gitlab-stylelint-config) which are enforced through [`stylelint`](https://stylelint.io).
 - [HTML](style/html.md). Guidelines for writing HTML code consistent with the rest of the codebase.
 - [Vue](style/vue.md). Guidelines and conventions for Vue code may be found here.
 
@@ -106,13 +134,6 @@ Our accessibility standards and resources.
 Frontend internationalization support is described in [this document](../i18n/).
 The [externalization part of the guide](../i18n/externalization.md) explains the helpers/methods available.
 
-[haml]: http://haml.info/
-[hamlit]: https://github.com/k0kubun/hamlit
-[hamlit-limits]: https://github.com/k0kubun/hamlit/blob/master/REFERENCE.md#limitations
-[babel]: https://babeljs.io/
-[webpack]: https://webpack.js.org/
-[jquery]: https://jquery.com/
-[axios]: https://github.com/axios/axios
-[airbnb-js-style-guide]: https://github.com/airbnb/javascript
-[install]: ../../install/installation.md#4-node
-[requirements]: ../../install/requirements.md#supported-web-browsers
+## [Troubleshooting](troubleshooting.md)
+
+Running into a Frontend development problem? Check out [this guide](troubleshooting.md) to help resolve your issue.

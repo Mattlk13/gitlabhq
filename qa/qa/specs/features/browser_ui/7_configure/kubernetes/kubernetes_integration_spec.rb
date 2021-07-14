@@ -1,11 +1,10 @@
 # frozen_string_literal: true
 
 module QA
-  context 'Configure' do
-    # This test requires GITLAB_QA_ADMIN_ACCESS_TOKEN to be specified
-    describe 'Kubernetes Cluster Integration', :orchestrated, :kubernetes, :requires_admin, :skip do
+  RSpec.describe 'Configure' do
+    describe 'Kubernetes Cluster Integration', :orchestrated, :kubernetes, :requires_admin, :skip_live_env, quarantine: { issue: 'https://gitlab.com/gitlab-org/gitlab/-/issues/225315', type: :flaky } do
       context 'Project Clusters' do
-        let(:cluster) { Service::KubernetesCluster.new(provider_class: Service::ClusterProvider::K3d).create! }
+        let!(:cluster) { Service::KubernetesCluster.new(provider_class: Service::ClusterProvider::K3s).create! }
         let(:project) do
           Resource::Project.fabricate_via_api! do |project|
             project.name = 'project-with-k8s'
@@ -14,37 +13,23 @@ module QA
         end
 
         before do
-          Flow::Login.sign_in
+          Flow::Login.sign_in_as_admin
         end
 
         after do
           cluster.remove!
         end
 
-        it 'can create and associate a project cluster', :smoke do
-          Resource::KubernetesCluster.fabricate_via_browser_ui! do |k8s_cluster|
+        it 'can create and associate a project cluster', :smoke, testcase: 'https://gitlab.com/gitlab-org/quality/testcases/-/issues/707' do
+          Resource::KubernetesCluster::ProjectCluster.fabricate_via_browser_ui! do |k8s_cluster|
             k8s_cluster.project = project
             k8s_cluster.cluster = cluster
-          end
+          end.project.visit!
 
-          project.visit!
+          Page::Project::Menu.perform(&:go_to_infrastructure_kubernetes)
 
-          Page::Project::Menu.perform(&:go_to_operations_kubernetes)
-
-          Page::Project::Operations::Kubernetes::Index.perform do |index|
+          Page::Project::Infrastructure::Kubernetes::Index.perform do |index|
             expect(index).to have_cluster(cluster)
-          end
-        end
-
-        it 'installs helm and tiller on a gitlab managed app' do
-          Resource::KubernetesCluster.fabricate_via_browser_ui! do |k8s_cluster|
-            k8s_cluster.project = project
-            k8s_cluster.cluster = cluster
-            k8s_cluster.install_helm_tiller = true
-          end
-
-          Page::Project::Operations::Kubernetes::Show.perform do |show|
-            expect(show).to have_application_installed(:helm)
           end
         end
       end

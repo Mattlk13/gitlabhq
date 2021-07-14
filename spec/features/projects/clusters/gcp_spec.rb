@@ -2,7 +2,7 @@
 
 require 'spec_helper'
 
-describe 'Gcp Cluster', :js, :do_not_mock_admin_mode do
+RSpec.describe 'Gcp Cluster', :js do
   include GoogleApi::CloudPlatformHelpers
 
   let(:project) { create(:project) }
@@ -33,7 +33,7 @@ describe 'Gcp Cluster', :js, :do_not_mock_admin_mode do
       before do
         visit project_clusters_path(project)
 
-        click_link 'Add Kubernetes cluster'
+        click_link 'Integrate with a cluster certificate'
         click_link 'Create new cluster'
         click_link 'Google GKE'
       end
@@ -119,7 +119,7 @@ describe 'Gcp Cluster', :js, :do_not_mock_admin_mode do
       context 'when user disables the cluster' do
         before do
           page.find(:css, '.js-cluster-enable-toggle-area .js-project-feature-toggle').click
-          page.within('#cluster-integration') { click_button 'Save changes' }
+          page.within('.js-cluster-details-form') { click_button 'Save changes' }
         end
 
         it 'user sees the successful message' do
@@ -130,7 +130,7 @@ describe 'Gcp Cluster', :js, :do_not_mock_admin_mode do
       context 'when user changes cluster parameters' do
         before do
           fill_in 'cluster_platform_kubernetes_attributes_namespace', with: 'my-namespace'
-          page.within('#js-cluster-details') { click_button 'Save changes' }
+          page.within('.js-provider-details') { click_button 'Save changes' }
         end
 
         it 'user sees the successful message' do
@@ -139,8 +139,22 @@ describe 'Gcp Cluster', :js, :do_not_mock_admin_mode do
         end
       end
 
+      context 'when a user adds an existing cluster' do
+        before do
+          visit project_clusters_path(project)
+
+          click_link 'Connect cluster with certificate'
+          click_link 'Connect existing cluster'
+        end
+
+        it 'user sees the "Environment scope" field' do
+          expect(page).to have_css('#cluster_environment_scope')
+        end
+      end
+
       context 'when user destroys the cluster' do
         before do
+          click_link 'Advanced Settings'
           click_button 'Remove integration and resources'
           fill_in 'confirm_cluster_name_input', with: cluster.name
           click_button 'Remove integration'
@@ -148,22 +162,9 @@ describe 'Gcp Cluster', :js, :do_not_mock_admin_mode do
 
         it 'user sees creation form with the successful message' do
           expect(page).to have_content('Kubernetes cluster integration was successfully removed.')
-          expect(page).to have_link('Add Kubernetes cluster')
+          expect(page).to have_link('Integrate with a cluster certificate')
         end
       end
-    end
-  end
-
-  context 'when a user cannot edit the environment scope' do
-    before do
-      visit project_clusters_path(project)
-
-      click_link 'Add Kubernetes cluster'
-      click_link 'Add existing cluster'
-    end
-
-    it 'user does not see the "Environment scope" field' do
-      expect(page).not_to have_css('#cluster_environment_scope')
     end
   end
 
@@ -177,7 +178,7 @@ describe 'Gcp Cluster', :js, :do_not_mock_admin_mode do
     end
 
     it 'user sees offer on cluster create page' do
-      click_link 'Add Kubernetes cluster'
+      click_link 'Integrate with a cluster certificate'
 
       expect(page).to have_css('.gcp-signup-offer')
     end
@@ -191,10 +192,10 @@ describe 'Gcp Cluster', :js, :do_not_mock_admin_mode do
     it 'user does not see offer after dismissing' do
       expect(page).to have_css('.gcp-signup-offer')
 
-      find('.gcp-signup-offer .close').click
+      find('.gcp-signup-offer .js-close').click
       wait_for_requests
 
-      click_link 'Add Kubernetes cluster'
+      click_link 'Integrate with a cluster certificate'
 
       expect(page).not_to have_css('.gcp-signup-offer')
     end
@@ -207,13 +208,13 @@ describe 'Gcp Cluster', :js, :do_not_mock_admin_mode do
       stub_env('IN_MEMORY_APPLICATION_SETTINGS', 'false')
       sign_in(admin)
       gitlab_enable_admin_mode_sign_in(admin)
-      visit integrations_admin_application_settings_path
+      visit general_admin_application_settings_path
     end
 
     it 'user does not see the offer' do
       page.within('.as-third-party-offers') do
         click_button 'Expand'
-        check 'Do not display offers from third parties within GitLab'
+        check 'Do not display offers from third parties'
         click_button 'Save changes'
       end
 

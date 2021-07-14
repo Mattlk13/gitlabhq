@@ -1,5 +1,5 @@
 <script>
-/* eslint-disable @gitlab/vue-i18n/no-bare-strings */
+/* eslint-disable @gitlab/vue-require-i18n-strings */
 export default {
   name: 'ReportIssueLink',
   props: {
@@ -21,16 +21,10 @@ export default {
       rel="noopener noreferrer nofollow"
       class="break-link"
     >
-      {{ issue.path
-      }}<template v-if="issue.line"
-        >:{{ issue.line }}</template
-      >
+      {{ issue.path }}<template v-if="issue.line">:{{ issue.line }}</template>
     </a>
     <template v-else>
-      {{ issue.path
-      }}<template v-if="issue.line"
-        >:{{ issue.line }}</template
-      >
+      {{ issue.path }}<template v-if="issue.line">:{{ issue.line }}</template>
     </template>
   </div>
 </template>

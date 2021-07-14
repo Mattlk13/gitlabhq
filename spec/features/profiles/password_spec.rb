@@ -2,7 +2,7 @@
 
 require 'spec_helper'
 
-describe 'Profile > Password' do
+RSpec.describe 'Profile > Password' do
   let(:user) { create(:user) }
 
   def fill_passwords(password, confirmation)
@@ -42,7 +42,7 @@ describe 'Profile > Password' do
           fill_passwords('mypassword', 'mypassword')
 
           page.within('.flash-notice') do
-            expect(page).to have_content('Password was successfully updated. Please login with it')
+            expect(page).to have_content('Password was successfully updated. Please sign in again.')
           end
         end
       end
@@ -119,7 +119,7 @@ describe 'Profile > Password' do
     before do
       sign_in(user)
 
-      user.update(password_expires_at: 1.hour.ago)
+      user.update!(password_expires_at: 1.hour.ago)
       user.identities.delete
       expect(user.ldap_user?).to eq false
     end

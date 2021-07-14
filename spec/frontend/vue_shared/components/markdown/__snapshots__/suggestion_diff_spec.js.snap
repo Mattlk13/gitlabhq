@@ -5,8 +5,13 @@ exports[`Suggestion Diff component matches snapshot 1`] = `
   class="md-suggestion"
 >
   <suggestion-diff-header-stub
-    class="qa-suggestion-diff-header js-suggestion-diff-header"
+    batchsuggestionscount="1"
+    class="js-suggestion-diff-header"
+    defaultcommitmessage="Apply suggestion"
     helppagepath="path_to_docs"
+    isapplyingbatch="true"
+    isbatched="true"
+    suggestionscount="0"
   />
    
   <table

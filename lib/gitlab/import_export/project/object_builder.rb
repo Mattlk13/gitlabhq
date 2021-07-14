@@ -28,6 +28,7 @@ module Gitlab
 
         def find
           return if epic? && group.nil?
+          return find_diff_commit_user if diff_commit_user?
 
           super
         end
@@ -57,6 +58,8 @@ module Gitlab
 
         # Returns Arel clause for a particular model or `nil`.
         def where_clause_for_klass
+          return attrs_to_arel(attributes.slice('filename')).and(table[:issue_id].eq(nil)) if design?
+
           attrs_to_arel(attributes.slice('iid')) if merge_request?
         end
 
@@ -79,6 +82,13 @@ module Gitlab
           end
         end
 
+        def find_diff_commit_user
+          find_with_cache do
+            MergeRequest::DiffCommitUser
+              .find_or_create(@attributes['name'], @attributes['email'])
+          end
+        end
+
         def label?
           klass == Label
         end
@@ -93,6 +103,14 @@ module Gitlab
 
         def epic?
           klass == Epic
+        end
+
+        def design?
+          klass == DesignManagement::Design
+        end
+
+        def diff_commit_user?
+          klass == MergeRequest::DiffCommitUser
         end
 
         # If an existing group milestone used the IID
@@ -115,5 +133,3 @@ module Gitlab
     end
   end
 end
-
-Gitlab::ImportExport::Project::ObjectBuilder.prepend_if_ee('EE::Gitlab::ImportExport::Project::ObjectBuilder')

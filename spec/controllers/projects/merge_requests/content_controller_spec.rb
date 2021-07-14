@@ -2,7 +2,7 @@
 
 require 'spec_helper'
 
-describe Projects::MergeRequests::ContentController do
+RSpec.describe Projects::MergeRequests::ContentController do
   let(:project) { create(:project, :repository) }
   let(:user) { create(:user) }
   let(:merge_request) { create(:merge_request, target_project: project, source_project: project) }
@@ -11,13 +11,13 @@ describe Projects::MergeRequests::ContentController do
     sign_in(user)
   end
 
-  def do_request(action = :cached_widget)
+  def do_request(action = :cached_widget, params = {})
     get action, params: {
       namespace_id: project.namespace.to_param,
       project_id: project,
       id: merge_request.iid,
       format: :json
-    }
+    }.merge(params)
   end
 
   context 'user has access to the project' do
@@ -42,18 +42,40 @@ describe Projects::MergeRequests::ContentController do
     end
 
     describe 'GET widget' do
+      before do
+        merge_request.mark_as_unchecked!
+      end
+
       it 'checks whether the MR can be merged' do
         controller.instance_variable_set(:@merge_request, merge_request)
 
         expect(merge_request).to receive(:check_mergeability)
 
         do_request(:widget)
+
+        expect(response).to match_response_schema('entities/merge_request_poll_widget')
+        expect(response.headers['Poll-Interval']).to eq('10000')
       end
 
       context 'merged merge request' do
         let(:merge_request) do
           create(:merged_merge_request, :with_test_reports, target_project: project, source_project: project)
         end
+
+        it 'renders widget MR entity as json' do
+          do_request(:widget)
+
+          expect(response).to match_response_schema('entities/merge_request_poll_widget')
+          expect(response.headers['Poll-Interval']).to eq('300000')
+        end
+      end
+
+      context 'with coverage data' do
+        let(:merge_request) { create(:merge_request, target_project: project, source_project: project, head_pipeline: head_pipeline) }
+        let!(:base_pipeline) { create(:ci_empty_pipeline, project: project, ref: merge_request.target_branch, sha: merge_request.diff_base_sha) }
+        let!(:head_pipeline) { create(:ci_empty_pipeline, project: project) }
+        let!(:rspec_base) { create(:ci_build, name: 'rspec', coverage: 93.1, pipeline: base_pipeline) }
+        let!(:rspec_head) { create(:ci_build, name: 'rspec', coverage: 97.1, pipeline: head_pipeline) }
 
         it 'renders widget MR entity as json' do
           do_request(:widget)

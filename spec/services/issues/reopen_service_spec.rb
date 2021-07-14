@@ -2,7 +2,7 @@
 
 require 'spec_helper'
 
-describe Issues::ReopenService do
+RSpec.describe Issues::ReopenService do
   let(:project) { create(:project) }
   let(:issue) { create(:issue, :closed, project: project) }
 
@@ -13,7 +13,7 @@ describe Issues::ReopenService do
         project.add_guest(guest)
 
         perform_enqueued_jobs do
-          described_class.new(project, guest).execute(issue)
+          described_class.new(project: project, current_user: guest).execute(issue)
         end
       end
 
@@ -33,22 +33,41 @@ describe Issues::ReopenService do
         issue.assignees << user
         expect_any_instance_of(User).to receive(:invalidate_issue_cache_counts)
 
-        described_class.new(project, user).execute(issue)
+        described_class.new(project: project, current_user: user).execute(issue)
       end
 
       it 'refreshes the number of opened issues' do
-        service = described_class.new(project, user)
+        service = described_class.new(project: project, current_user: user)
 
         expect { service.execute(issue) }
           .to change { project.open_issues_count }.from(0).to(1)
       end
 
+      it 'deletes milestone issue counters cache' do
+        issue.update!(milestone: create(:milestone, project: project))
+
+        expect_next_instance_of(Milestones::ClosedIssuesCountService, issue.milestone) do |service|
+          expect(service).to receive(:delete_cache).and_call_original
+        end
+
+        described_class.new(project: project, current_user: user).execute(issue)
+      end
+
+      context 'issue is incident type' do
+        let(:issue) { create(:incident, :closed, project: project) }
+        let(:current_user) { user }
+
+        subject { described_class.new(project: project, current_user: user).execute(issue) }
+
+        it_behaves_like 'an incident management tracked event', :incident_management_incident_reopened
+      end
+
       context 'when issue is not confidential' do
         it 'executes issue hooks' do
           expect(project).to receive(:execute_hooks).with(an_instance_of(Hash), :issue_hooks)
-          expect(project).to receive(:execute_services).with(an_instance_of(Hash), :issue_hooks)
+          expect(project).to receive(:execute_integrations).with(an_instance_of(Hash), :issue_hooks)
 
-          described_class.new(project, user).execute(issue)
+          described_class.new(project: project, current_user: user).execute(issue)
         end
       end
 
@@ -57,9 +76,9 @@ describe Issues::ReopenService do
           issue = create(:issue, :confidential, :closed, project: project)
 
           expect(project).to receive(:execute_hooks).with(an_instance_of(Hash), :confidential_issue_hooks)
-          expect(project).to receive(:execute_services).with(an_instance_of(Hash), :confidential_issue_hooks)
+          expect(project).to receive(:execute_integrations).with(an_instance_of(Hash), :confidential_issue_hooks)
 
-          described_class.new(project, user).execute(issue)
+          described_class.new(project: project, current_user: user).execute(issue)
         end
       end
     end

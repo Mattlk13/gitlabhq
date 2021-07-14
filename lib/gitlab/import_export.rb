@@ -42,6 +42,22 @@ module Gitlab
       "project.wiki.bundle"
     end
 
+    def design_repo_bundle_filename
+      'project.design.bundle'
+    end
+
+    def snippet_repo_bundle_dir
+      'snippets'
+    end
+
+    def snippets_repo_bundle_path(absolute_path)
+      File.join(absolute_path, ::Gitlab::ImportExport.snippet_repo_bundle_dir)
+    end
+
+    def snippet_repo_bundle_filename_for(snippet)
+      "#{snippet.hexdigest}.bundle"
+    end
+
     def config_file
       Rails.root.join('lib/gitlab/import_export/project/import_export.yml')
     end
@@ -76,10 +92,26 @@ module Gitlab
       'group.json'
     end
 
+    def legacy_group_config_file
+      Rails.root.join('lib/gitlab/import_export/group/legacy_import_export.yml')
+    end
+
     def group_config_file
       Rails.root.join('lib/gitlab/import_export/group/import_export.yml')
+    end
+
+    def group_wiki_repo_bundle_filename(group_id)
+      "#{group_id}.wiki.bundle"
+    end
+
+    def group_wiki_repo_bundle_path(shared, filename)
+      File.join(shared.export_path, 'repositories', filename)
+    end
+
+    def group_wiki_repo_bundle_full_path(shared, group_id)
+      group_wiki_repo_bundle_path(shared, group_wiki_repo_bundle_filename(group_id))
     end
   end
 end
 
-Gitlab::ImportExport.prepend_if_ee('EE::Gitlab::ImportExport')
+Gitlab::ImportExport.prepend_mod

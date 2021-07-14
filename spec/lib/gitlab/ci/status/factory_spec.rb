@@ -2,13 +2,13 @@
 
 require 'spec_helper'
 
-describe Gitlab::Ci::Status::Factory do
+RSpec.describe Gitlab::Ci::Status::Factory do
   let(:user) { create(:user) }
   let(:fabricated_status) { factory.fabricate! }
   let(:factory) { described_class.new(resource, user) }
 
   context 'when object has a core status' do
-    HasStatus::AVAILABLE_STATUSES.each do |simple_status|
+    Ci::HasStatus::AVAILABLE_STATUSES.each do |simple_status|
       context "when simple core status is #{simple_status}" do
         let(:resource) { double('resource', status: simple_status) }
 
@@ -132,6 +132,16 @@ describe Gitlab::Ci::Status::Factory do
       end
 
       it_behaves_like 'compound decorator factory'
+    end
+  end
+
+  context 'behaviour of FactoryBot traits that create associations' do
+    context 'creating a namespace with an associated aggregation_schedule record' do
+      it 'creates only one Namespace record and one Namespace::AggregationSchedule record' do
+        expect { create(:namespace, :with_aggregation_schedule) }
+          .to change { Namespace.count }.by(1)
+          .and change { Namespace::AggregationSchedule.count }.by(1)
+      end
     end
   end
 end

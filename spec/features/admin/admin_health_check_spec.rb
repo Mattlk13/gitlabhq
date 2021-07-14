@@ -2,13 +2,14 @@
 
 require 'spec_helper'
 
-describe "Admin Health Check", :feature do
+RSpec.describe "Admin Health Check", :feature do
   include StubENV
   let_it_be(:admin) { create(:admin) }
 
   before do
     stub_env('IN_MEMORY_APPLICATION_SETTINGS', 'false')
     sign_in(admin)
+    gitlab_enable_admin_mode_sign_in(admin)
   end
 
   describe '#show' do

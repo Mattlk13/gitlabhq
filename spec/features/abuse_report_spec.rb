@@ -2,14 +2,14 @@
 
 require 'spec_helper'
 
-describe 'Abuse reports' do
+RSpec.describe 'Abuse reports' do
   let(:another_user) { create(:user) }
 
   before do
     sign_in(create(:user))
   end
 
-  it 'Report abuse' do
+  it 'report abuse' do
     visit user_path(another_user)
 
     click_link 'Report abuse'

@@ -2,7 +2,7 @@
 
 require 'spec_helper'
 
-describe 'Merge request > User posts diff notes', :js do
+RSpec.describe 'Merge request > User posts diff notes', :js do
   include MergeRequestDiffHelpers
 
   let(:merge_request) { create(:merge_request) }
@@ -10,7 +10,7 @@ describe 'Merge request > User posts diff notes', :js do
   let(:user) { project.creator }
   let(:comment_button_class) { '.add-diff-note' }
   let(:notes_holder_input_class) { 'js-temp-notes-holder' }
-  let(:notes_holder_input_xpath) { './following-sibling::*[contains(concat(" ", @class, " "), " notes_holder ")]' }
+  let(:notes_holder_input_xpath) { '..//following-sibling::*[contains(concat(" ", @class, " "), " notes_holder ")]' }
   let(:test_note_comment) { 'this is a test note!' }
 
   before do
@@ -27,7 +27,7 @@ describe 'Merge request > User posts diff notes', :js do
 
     context 'with an old line on the left and no line on the right' do
       it 'allows commenting on the left side' do
-        should_allow_commenting(find('[id="6eb14e00385d2fb284765eb1cd8d420d33d63fc9_23_22"]').find(:xpath, '..'), 'left')
+        should_allow_commenting(find('[id="6eb14e00385d2fb284765eb1cd8d420d33d63fc9_23_22"]'), 'left')
       end
 
       it 'does not allow commenting on the right side' do
@@ -46,7 +46,7 @@ describe 'Merge request > User posts diff notes', :js do
     end
 
     context 'with an old line on the left and a new line on the right' do
-      it 'allows commenting on the left side', quarantine: 'https://gitlab.com/gitlab-org/gitlab/issues/199050' do
+      it 'allows commenting on the left side', quarantine: 'https://gitlab.com/gitlab-org/gitlab/-/issues/199050' do
         should_allow_commenting(find('[id="2f6fcd96b88b36ce98c38da085c795a27d92a3dd_9_9"]').find(:xpath, '..'), 'left')
       end
 
@@ -56,7 +56,7 @@ describe 'Merge request > User posts diff notes', :js do
     end
 
     context 'with an unchanged line on the left and an unchanged line on the right' do
-      it 'allows commenting on the left side', quarantine: 'https://gitlab.com/gitlab-org/gitlab/issues/196826' do
+      it 'allows commenting on the left side', quarantine: 'https://gitlab.com/gitlab-org/gitlab/-/issues/196826' do
         should_allow_commenting(find('[id="2f6fcd96b88b36ce98c38da085c795a27d92a3dd_7_7"]', match: :first).find(:xpath, '..'), 'left')
       end
 
@@ -66,34 +66,28 @@ describe 'Merge request > User posts diff notes', :js do
     end
 
     context 'with a match line' do
-      it 'does not allow commenting on the left side' do
-        line_holder = find('.match', match: :first).find(:xpath, '..')
-        match_should_not_allow_commenting(line_holder)
-      end
-
-      it 'does not allow commenting on the right side' do
-        line_holder = find('.match', match: :first).find(:xpath, '..')
+      it 'does not allow commenting' do
+        line_holder = find('.match', match: :first)
         match_should_not_allow_commenting(line_holder)
       end
     end
 
     context 'with an unfolded line' do
       before do
-        find('.js-unfold', match: :first).click
+        page.within('.file-holder[id="a5cc2925ca8258af241be7e5b0381edf30266302"]') do
+          find('.js-unfold', match: :first).click
+        end
+
         wait_for_requests
       end
 
-      # The first `.js-unfold` unfolds upwards, therefore the first
-      # `.line_holder` will be an unfolded line.
-      let(:line_holder) { first('#a5cc2925ca8258af241be7e5b0381edf30266302 .line_holder') }
-
       it 'allows commenting on the left side' do
-        should_allow_commenting(line_holder, 'left')
+        should_allow_commenting(first('#a5cc2925ca8258af241be7e5b0381edf30266302 .line_holder [data-testid="left-side"]'))
       end
 
       it 'allows commenting on the right side' do
         # Automatically shifts comment box to left side.
-        should_allow_commenting(line_holder, 'right')
+        should_allow_commenting(first('#a5cc2925ca8258af241be7e5b0381edf30266302 .line_holder [data-testid="right-side"]'))
       end
     end
   end
@@ -142,13 +136,16 @@ describe 'Merge request > User posts diff notes', :js do
 
     context 'with an unfolded line' do
       before do
-        find('.js-unfold', match: :first).click
+        page.within('.file-holder[id="a5cc2925ca8258af241be7e5b0381edf30266302"]') do
+          find('.js-unfold', match: :first).click
+        end
+
         wait_for_requests
       end
 
       # The first `.js-unfold` unfolds upwards, therefore the first
       # `.line_holder` will be an unfolded line.
-      let(:line_holder) { first('.line_holder[id="a5cc2925ca8258af241be7e5b0381edf30266302_1_1"]') }
+      let(:line_holder) { first('[id="a5cc2925ca8258af241be7e5b0381edf30266302_1_1"]') }
 
       it 'allows commenting' do
         should_allow_commenting line_holder
@@ -191,14 +188,14 @@ describe 'Merge request > User posts diff notes', :js do
       it 'adds as discussion' do
         should_allow_commenting(find('[id="6eb14e00385d2fb284765eb1cd8d420d33d63fc9_22_22"]'), asset_form_reset: false)
         expect(page).to have_css('.notes_holder .note.note-discussion', count: 1)
-        expect(page).to have_button('Reply...')
+        expect(page).to have_field('Reply…')
       end
     end
   end
 
   context 'when the MR only supports legacy diff notes' do
     before do
-      merge_request.merge_request_diff.update(start_commit_sha: nil)
+      merge_request.merge_request_diff.update!(start_commit_sha: nil)
       visit diffs_project_merge_request_path(project, merge_request, view: 'inline')
     end
 
@@ -230,7 +227,7 @@ describe 'Merge request > User posts diff notes', :js do
   def should_allow_commenting(line_holder, diff_side = nil, asset_form_reset: true)
     write_comment_on_line(line_holder, diff_side)
 
-    click_button 'Comment'
+    click_button 'Add comment now'
 
     wait_for_requests
 
@@ -240,7 +237,9 @@ describe 'Merge request > User posts diff notes', :js do
   def should_allow_dismissing_a_comment(line_holder, diff_side = nil)
     write_comment_on_line(line_holder, diff_side)
 
-    find('.js-close-discussion-note-form').click
+    accept_confirm do
+      find('.js-close-discussion-note-form').click
+    end
 
     assert_comment_dismissal(line_holder)
   end

@@ -1,16 +1,17 @@
 import dateformat from 'dateformat';
 import { pick, omit, isEqual, isEmpty } from 'lodash';
+import { DATETIME_RANGE_TYPES } from './constants';
 import { secondsToMilliseconds } from './datetime_utility';
 
 const MINIMUM_DATE = new Date(0);
 
 const DEFAULT_DIRECTION = 'before';
 
-const durationToMillis = duration => {
+const durationToMillis = (duration) => {
   if (Object.entries(duration).length === 1 && Number.isFinite(duration.seconds)) {
     return secondsToMilliseconds(duration.seconds);
   }
-  // eslint-disable-next-line @gitlab/i18n/no-non-i18n-strings
+  // eslint-disable-next-line @gitlab/require-i18n-strings
   throw new Error('Invalid duration: only `seconds` is supported');
 };
 
@@ -18,21 +19,14 @@ const dateMinusDuration = (date, duration) => new Date(date.getTime() - duration
 
 const datePlusDuration = (date, duration) => new Date(date.getTime() + durationToMillis(duration));
 
-const isValidDuration = duration => Boolean(duration && Number.isFinite(duration.seconds));
+const isValidDuration = (duration) => Boolean(duration && Number.isFinite(duration.seconds));
 
-const isValidDateString = dateString => {
+const isValidDateString = (dateString) => {
   if (typeof dateString !== 'string' || !dateString.trim()) {
     return false;
   }
 
-  try {
-    // dateformat throws error that can be caught.
-    // This is better than using `new Date()`
-    dateformat(dateString, 'isoUtcDateTime');
-    return true;
-  } catch (e) {
-    return false;
-  }
+  return !Number.isNaN(Date.parse(dateformat(dateString, 'isoUtcDateTime')));
 };
 
 const handleRangeDirection = ({ direction = DEFAULT_DIRECTION, anchorDate, minDate, maxDate }) => {
@@ -131,7 +125,7 @@ const convertOpenToFixed = ({ anchor, direction }) => {
  * Handles invalid date ranges
  */
 const handleInvalidRange = () => {
-  // eslint-disable-next-line @gitlab/i18n/no-non-i18n-strings
+  // eslint-disable-next-line @gitlab/require-i18n-strings
   throw new Error('The input range does not have the right format.');
 };
 
@@ -153,18 +147,22 @@ export function getRangeType(range) {
   const { start, end, anchor, duration } = range;
 
   if ((start || end) && !anchor && !duration) {
-    return isValidDateString(start) && isValidDateString(end) ? 'fixed' : 'invalid';
+    return isValidDateString(start) && isValidDateString(end)
+      ? DATETIME_RANGE_TYPES.fixed
+      : DATETIME_RANGE_TYPES.invalid;
   }
   if (anchor && duration) {
-    return isValidDateString(anchor) && isValidDuration(duration) ? 'anchored' : 'invalid';
+    return isValidDateString(anchor) && isValidDuration(duration)
+      ? DATETIME_RANGE_TYPES.anchored
+      : DATETIME_RANGE_TYPES.invalid;
   }
   if (duration && !anchor) {
-    return isValidDuration(duration) ? 'rolling' : 'invalid';
+    return isValidDuration(duration) ? DATETIME_RANGE_TYPES.rolling : DATETIME_RANGE_TYPES.invalid;
   }
   if (anchor && !duration) {
-    return isValidDateString(anchor) ? 'open' : 'invalid';
+    return isValidDateString(anchor) ? DATETIME_RANGE_TYPES.open : DATETIME_RANGE_TYPES.invalid;
   }
-  return 'invalid';
+  return DATETIME_RANGE_TYPES.invalid;
 }
 
 /**
@@ -220,7 +218,7 @@ export function getRangeType(range) {
  *
  * @returns {FixedRange} An object with a start and end in ISO8601 format.
  */
-export const convertToFixedRange = dateTimeRange =>
+export const convertToFixedRange = (dateTimeRange) =>
   handlers[getRangeType(dateTimeRange)](dateTimeRange);
 
 /**
@@ -237,7 +235,7 @@ export const convertToFixedRange = dateTimeRange =>
  * @param {Object} timeRange - A time range object
  * @returns Copy of time range
  */
-const pruneTimeRange = timeRange => {
+const pruneTimeRange = (timeRange) => {
   const res = pick(timeRange, ['start', 'end', 'anchor', 'duration', 'direction']);
   if (res.direction === DEFAULT_DIRECTION) {
     return omit(res, 'direction');
@@ -267,7 +265,7 @@ export const isEqualTimeRanges = (timeRange, other) => {
  * @param {Array} timeRanges - Array of time tanges (haystack)
  */
 export const findTimeRange = (timeRange, timeRanges) =>
-  timeRanges.find(element => isEqualTimeRanges(element, timeRange));
+  timeRanges.find((element) => isEqualTimeRanges(element, timeRange));
 
 // Time Ranges as URL Parameters Utils
 
@@ -284,11 +282,11 @@ export const timeRangeParamNames = ['start', 'end', 'anchor', 'duration_seconds'
  * @param {Object} A time range
  * @returns key-value pairs object that can be used as parameters in a URL.
  */
-export const timeRangeToParams = timeRange => {
+export const timeRangeToParams = (timeRange) => {
   let params = pruneTimeRange(timeRange);
   if (timeRange.duration) {
     const durationParms = {};
-    Object.keys(timeRange.duration).forEach(key => {
+    Object.keys(timeRange.duration).forEach((key) => {
       durationParms[`duration_${key}`] = timeRange.duration[key].toString();
     });
     params = { ...durationParms, ...params };
@@ -304,7 +302,7 @@ export const timeRangeToParams = timeRange => {
  *
  * @param {params} params - key-value pairs object.
  */
-export const timeRangeFromParams = params => {
+export const timeRangeFromParams = (params) => {
   const timeRangeParams = pick(params, timeRangeParamNames);
   let range = Object.entries(timeRangeParams).reduce((acc, [key, val]) => {
     // unflatten duration

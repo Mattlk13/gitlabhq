@@ -14,21 +14,46 @@ module QA
 
       ElementNotFound = Class.new(RuntimeError)
 
+      class NoRequiredElementsError < RuntimeError
+        def initialize(page_class)
+          @page_class = page_class
+          super
+        end
+
+        def to_s
+          <<~MSG.strip % { page: @page_class }
+            %{page} has no required elements.
+            See https://docs.gitlab.com/ee/development/testing_guide/end_to_end/dynamic_element_validation.html#required-elements
+          MSG
+        end
+      end
+
       def_delegators :evaluator, :view, :views
+
+      def initialize
+        @retry_later_backoff = QA::Support::Repeater::DEFAULT_MAX_WAIT_TIME
+      end
+
+      def inspect
+        # For prettier failure messages
+        # Eg.: "expected QA::Page::File::Show not to have file "QA Test - File name"
+        # Instead of "expected #<QA::Page::File::Show:0x000055c6511e07b8 @retry_later_backoff=60> not to have file "QA Test - File name"
+        self.class.to_s
+      end
 
       def assert_no_element(name)
         assert_no_selector(element_selector_css(name))
       end
 
-      def refresh
+      def refresh(skip_finished_loading_check: false)
         page.refresh
 
-        wait_for_requests
+        wait_for_requests(skip_finished_loading_check: skip_finished_loading_check)
       end
 
-      def wait_until(max_duration: 60, sleep_interval: 0.1, reload: true, raise_on_failure: true)
+      def wait_until(max_duration: 60, sleep_interval: 0.1, reload: true, raise_on_failure: true, skip_finished_loading_check_on_refresh: false)
         Support::Waiter.wait_until(max_duration: max_duration, sleep_interval: sleep_interval, raise_on_failure: raise_on_failure) do
-          yield || (reload && refresh && false)
+          yield || (reload && refresh(skip_finished_loading_check: skip_finished_loading_check_on_refresh) && false)
         end
       end
 
@@ -79,9 +104,19 @@ module QA
       end
 
       def find_element(name, **kwargs)
-        wait_for_requests
+        skip_finished_loading_check = kwargs.delete(:skip_finished_loading_check)
+        wait_for_requests(skip_finished_loading_check: skip_finished_loading_check)
 
-        find(element_selector_css(name), kwargs)
+        element_selector = element_selector_css(name, reject_capybara_query_keywords(kwargs))
+        find(element_selector, only_capybara_query_keywords(kwargs))
+      end
+
+      def only_capybara_query_keywords(kwargs)
+        kwargs.select { |kwarg| Capybara::Queries::SelectorQuery::VALID_KEYS.include?(kwarg) }
+      end
+
+      def reject_capybara_query_keywords(kwargs)
+        kwargs.reject { |kwarg| Capybara::Queries::SelectorQuery::VALID_KEYS.include?(kwarg) }
       end
 
       def active_element?(name)
@@ -98,25 +133,77 @@ module QA
         all(element_selector_css(name), **kwargs)
       end
 
-      def check_element(name)
-        retry_until(sleep_interval: 1) do
-          find_element(name).set(true)
+      def check_element(name, click_by_js = false, visibility = false)
+        if find_element(name, visible: visibility).checked?
+          QA::Runtime::Logger.debug("#{name} is already checked")
 
-          find_element(name).checked?
+          return
+        end
+
+        retry_until(sleep_interval: 1) do
+          click_checkbox_or_radio(name, click_by_js, visibility)
+          checked = find_element(name, visible: visibility).checked?
+
+          QA::Runtime::Logger.debug(checked ? "#{name} was checked" : "#{name} was not checked")
+
+          checked
         end
       end
 
-      def uncheck_element(name)
-        retry_until(sleep_interval: 1) do
-          find_element(name).set(false)
+      def uncheck_element(name, click_by_js = false, visibility = false)
+        unless find_element(name, visible: visibility).checked?
+          QA::Runtime::Logger.debug("#{name} is already unchecked")
 
-          !find_element(name).checked?
+          return
         end
+
+        retry_until(sleep_interval: 1) do
+          click_checkbox_or_radio(name, click_by_js, visibility)
+          unchecked = !find_element(name, visible: visibility).checked?
+
+          QA::Runtime::Logger.debug(unchecked ? "#{name} was unchecked" : "#{name} was not unchecked")
+
+          unchecked
+        end
+      end
+
+      # Method for selecting radios
+      def choose_element(name, click_by_js = false, visibility = false)
+        if find_element(name, visible: visibility).checked?
+          QA::Runtime::Logger.debug("#{name} is already selected")
+
+          return
+        end
+
+        retry_until(sleep_interval: 1) do
+          click_checkbox_or_radio(name, click_by_js, visibility)
+          selected = find_element(name, visible: visibility).checked?
+
+          QA::Runtime::Logger.debug(selected ? "#{name} was selected" : "#{name} was not selected")
+
+          selected
+        end
+        wait_for_requests
+      end
+
+      # Use this to simulate moving the pointer to an element's coordinate
+      # and sending a click event.
+      # This is a helpful workaround when there is a transparent element overlapping
+      # the target element and so, normal `click_element` on target would raise
+      # Selenium::WebDriver::Error::ElementClickInterceptedError
+      def click_element_coordinates(name, **kwargs)
+        page.driver.browser.action.move_to(find_element(name, **kwargs).native).click.perform
       end
 
       # replace with (..., page = self.class)
-      def click_element(name, page = nil, text: nil, wait: Capybara.default_max_wait_time)
-        find_element(name, text: text, wait: wait).click
+      def click_element(name, page = nil, **kwargs)
+        skip_finished_loading_check = kwargs.delete(:skip_finished_loading_check)
+        wait_for_requests(skip_finished_loading_check: skip_finished_loading_check)
+
+        wait = kwargs.delete(:wait) || Capybara.default_max_wait_time
+        text = kwargs.delete(:text)
+
+        find(element_selector_css(name, kwargs), text: text, wait: wait).click
         page.validate_elements_present! if page
       end
 
@@ -137,13 +224,33 @@ module QA
       end
 
       def has_element?(name, **kwargs)
-        wait_for_requests
-
+        disabled = kwargs.delete(:disabled)
+        original_kwargs = kwargs.dup
         wait = kwargs.delete(:wait) || Capybara.default_max_wait_time
         text = kwargs.delete(:text)
         klass = kwargs.delete(:class)
+        visible = kwargs.delete(:visible)
+        visible = visible.nil? && true
 
-        has_css?(element_selector_css(name, kwargs), text: text, wait: wait, class: klass)
+        try_find_element = ->(wait) do
+          if disabled.nil?
+            has_css?(element_selector_css(name, kwargs), text: text, wait: wait, class: klass, visible: visible)
+          else
+            find_element(name, original_kwargs).disabled? == disabled
+          end
+        end
+
+        # Check for the element before waiting for requests, just in case unrelated requests are in progress.
+        # This is to avoid waiting unnecessarily after the element we're interested in has already appeared.
+        return true if try_find_element.call(wait)
+
+        # If the element didn't appear, wait for requests and then check again
+        wait_for_requests(skip_finished_loading_check: !!kwargs.delete(:skip_finished_loading_check))
+
+        # We only wait one second now because we previously waited the full expected duration,
+        # plus however long it took for requests to complete. One second should be enough
+        # for the UI to update after requests complete.
+        try_find_element.call(1)
       end
 
       def has_no_element?(name, **kwargs)
@@ -171,19 +278,10 @@ module QA
         has_text?(text.gsub(/\s+/, " "), wait: wait)
       end
 
-      def finished_loading?
-        wait_for_requests
-
-        # The number of selectors should be able to be reduced after
-        # migration to the new spinner is complete.
-        # https://gitlab.com/groups/gitlab-org/-/epics/956
-        has_no_css?('.gl-spinner, .fa-spinner, .spinner', wait: QA::Support::Repeater::DEFAULT_MAX_WAIT_TIME)
-      end
-
       def finished_loading_block?
         wait_for_requests
 
-        has_no_css?('.fa-spinner.block-loading', wait: Capybara.default_max_wait_time)
+        has_no_css?('.gl-spinner', wait: Capybara.default_max_wait_time)
       end
 
       def has_loaded_all_images?
@@ -229,8 +327,11 @@ module QA
         sleep 1
       end
 
-      def within_element(name, text: nil)
-        page.within(element_selector_css(name), text: text) do
+      def within_element(name, **kwargs)
+        wait_for_requests
+        text = kwargs.delete(:text)
+
+        page.within(element_selector_css(name, kwargs), text: text) do
           yield
         end
       end
@@ -241,11 +342,15 @@ module QA
         end
       end
 
-      def scroll_to_element(name, *args)
-        scroll_to(element_selector_css(name), *args)
+      def scroll_to_element(name, *kwargs)
+        text = kwargs.delete(:text)
+
+        scroll_to(element_selector_css(name, kwargs), text: text)
       end
 
       def element_selector_css(name, *attributes)
+        return name.selector_css if name.is_a? Page::Element
+
         Page::Element.new(name, *attributes).selector_css
       end
 
@@ -257,6 +362,19 @@ module QA
 
       def visit_link_in_element(name)
         visit find_element(name)['href']
+      end
+
+      def wait_if_retry_later
+        return if @retry_later_backoff > QA::Support::Repeater::DEFAULT_MAX_WAIT_TIME * 5
+
+        if has_css?('body', text: 'Retry later', wait: 0)
+          QA::Runtime::Logger.warn("`Retry later` error occurred. Sleeping for #{@retry_later_backoff} seconds...")
+          sleep @retry_later_backoff
+          refresh
+          @retry_later_backoff += QA::Support::Repeater::DEFAULT_MAX_WAIT_TIME
+
+          wait_if_retry_later
+        end
       end
 
       def self.path
@@ -279,8 +397,22 @@ module QA
         views.flat_map(&:elements)
       end
 
+      def self.required_elements
+        elements.select(&:required?)
+      end
+
       def send_keys_to_element(name, keys)
         find_element(name).send_keys(keys)
+      end
+
+      def visible?
+        raise NoRequiredElementsError, self.class if self.class.required_elements.empty?
+
+        self.class.required_elements.each do |required_element|
+          return false if has_no_element? required_element
+        end
+
+        true
       end
 
       class DSL
@@ -295,6 +427,14 @@ module QA
             @views.push(Page::View.new(path, view.elements))
           end
         end
+      end
+
+      private
+
+      def click_checkbox_or_radio(name, click_by_js, visibility)
+        box = find_element(name, visible: visibility)
+        # Some checkboxes and radio buttons are hidden by their labels and cannot be clicked directly
+        click_by_js ? page.execute_script("arguments[0].click();", box) : box.click
       end
     end
   end

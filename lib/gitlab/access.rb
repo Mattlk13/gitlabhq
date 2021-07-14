@@ -9,14 +9,13 @@ module Gitlab
   module Access
     AccessDeniedError = Class.new(StandardError)
 
-    NO_ACCESS  = 0
-    GUEST      = 10
-    REPORTER   = 20
-    DEVELOPER  = 30
-    MAINTAINER = 40
-    # @deprecated
-    MASTER     = MAINTAINER
-    OWNER      = 50
+    NO_ACCESS      = 0
+    MINIMAL_ACCESS = 5
+    GUEST          = 10
+    REPORTER       = 20
+    DEVELOPER      = 30
+    MAINTAINER     = 40
+    OWNER          = 50
 
     # Branch protection settings
     PROTECTION_NONE          = 0
@@ -160,4 +159,4 @@ module Gitlab
   end
 end
 
-Gitlab::Access.prepend_if_ee('EE::Gitlab::Access')
+Gitlab::Access.prepend_mod_with('Gitlab::Access')

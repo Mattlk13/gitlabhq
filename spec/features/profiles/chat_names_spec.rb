@@ -2,9 +2,9 @@
 
 require 'spec_helper'
 
-describe 'Profile > Chat' do
+RSpec.describe 'Profile > Chat' do
   let(:user) { create(:user) }
-  let(:service) { create(:service) }
+  let(:integration) { create(:service) }
 
   before do
     sign_in(user)
@@ -14,7 +14,8 @@ describe 'Profile > Chat' do
     let(:params) do
       { team_id: 'T00', team_domain: 'my_chat_team', user_id: 'U01', user_name: 'my_chat_user' }
     end
-    let!(:authorize_url) { ChatNames::AuthorizeUserService.new(service, params).execute }
+
+    let!(:authorize_url) { ChatNames::AuthorizeUserService.new(integration, params).execute }
     let(:authorize_path) { URI.parse(authorize_url).request_uri }
 
     before do
@@ -59,7 +60,7 @@ describe 'Profile > Chat' do
   end
 
   describe 'visits chat accounts' do
-    let!(:chat_name) { create(:chat_name, user: user, service: service) }
+    let!(:chat_name) { create(:chat_name, user: user, integration: integration) }
 
     before do
       visit profile_chat_names_path

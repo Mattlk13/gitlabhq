@@ -10,7 +10,7 @@ exports[`Repository last commit component renders commit widget 1`] = `
     imgcssclasses=""
     imgsize="40"
     imgsrc="https://test.com"
-    linkhref="https://test.com/test"
+    linkhref="/test"
     tooltipplacement="top"
     tooltiptext=""
     username=""
@@ -24,11 +24,9 @@ exports[`Repository last commit component renders commit widget 1`] = `
     >
       <gl-link-stub
         class="commit-row-message item-title"
-        href="https://test.com/commit/123"
+        href="/commit/123"
       >
-        
-          Commit title
-        
+        Commit title
       </gl-link-stub>
        
       <!---->
@@ -38,11 +36,10 @@ exports[`Repository last commit component renders commit widget 1`] = `
       >
         <gl-link-stub
           class="commit-author-link js-user-link"
-          href="https://test.com/test"
+          href="/test"
         >
           
             Test
-          
         </gl-link-stub>
         
           authored
@@ -68,10 +65,10 @@ exports[`Repository last commit component renders commit widget 1`] = `
         <gl-link-stub
           class="js-commit-pipeline"
           href="https://test.com/pipeline"
-          title="Commit: failed"
+          title="Pipeline: failed"
         >
           <ci-icon-stub
-            aria-label="Commit: failed"
+            aria-label="Pipeline: failed"
             cssclasses=""
             size="24"
             status="[object Object]"
@@ -79,24 +76,31 @@ exports[`Repository last commit component renders commit widget 1`] = `
         </gl-link-stub>
       </div>
        
-      <div
-        class="commit-sha-group d-flex"
+      <gl-button-group-stub
+        class="gl-ml-4 js-commit-sha-group"
       >
-        <div
-          class="label label-monospace monospace"
+        <gl-button-stub
+          buttontextclasses=""
+          category="primary"
+          class="gl-font-monospace"
+          data-testid="last-commit-id-label"
+          icon=""
+          label="true"
+          size="medium"
+          variant="default"
         >
-          
-            12345678
-          
-        </div>
+          12345678
+        </gl-button-stub>
          
         <clipboard-button-stub
-          cssclass="btn-default"
+          category="secondary"
+          class="input-group-text"
+          size="medium"
           text="123456789"
           title="Copy commit SHA"
-          tooltipplacement="bottom"
+          tooltipplacement="top"
         />
-      </div>
+      </gl-button-group-stub>
     </div>
   </div>
 </div>
@@ -112,7 +116,7 @@ exports[`Repository last commit component renders the signature HTML as returned
     imgcssclasses=""
     imgsize="40"
     imgsrc="https://test.com"
-    linkhref="https://test.com/test"
+    linkhref="/test"
     tooltipplacement="top"
     tooltiptext=""
     username=""
@@ -126,11 +130,9 @@ exports[`Repository last commit component renders the signature HTML as returned
     >
       <gl-link-stub
         class="commit-row-message item-title"
-        href="https://test.com/commit/123"
+        href="/commit/123"
       >
-        
-          Commit title
-        
+        Commit title
       </gl-link-stub>
        
       <!---->
@@ -140,11 +142,10 @@ exports[`Repository last commit component renders the signature HTML as returned
       >
         <gl-link-stub
           class="commit-author-link js-user-link"
-          href="https://test.com/test"
+          href="/test"
         >
           
             Test
-          
         </gl-link-stub>
         
           authored
@@ -174,10 +175,10 @@ exports[`Repository last commit component renders the signature HTML as returned
         <gl-link-stub
           class="js-commit-pipeline"
           href="https://test.com/pipeline"
-          title="Commit: failed"
+          title="Pipeline: failed"
         >
           <ci-icon-stub
-            aria-label="Commit: failed"
+            aria-label="Pipeline: failed"
             cssclasses=""
             size="24"
             status="[object Object]"
@@ -185,24 +186,31 @@ exports[`Repository last commit component renders the signature HTML as returned
         </gl-link-stub>
       </div>
        
-      <div
-        class="commit-sha-group d-flex"
+      <gl-button-group-stub
+        class="gl-ml-4 js-commit-sha-group"
       >
-        <div
-          class="label label-monospace monospace"
+        <gl-button-stub
+          buttontextclasses=""
+          category="primary"
+          class="gl-font-monospace"
+          data-testid="last-commit-id-label"
+          icon=""
+          label="true"
+          size="medium"
+          variant="default"
         >
-          
-            12345678
-          
-        </div>
+          12345678
+        </gl-button-stub>
          
         <clipboard-button-stub
-          cssclass="btn-default"
+          category="secondary"
+          class="input-group-text"
+          size="medium"
           text="123456789"
           title="Copy commit SHA"
-          tooltipplacement="bottom"
+          tooltipplacement="top"
         />
-      </div>
+      </gl-button-group-stub>
     </div>
   </div>
 </div>

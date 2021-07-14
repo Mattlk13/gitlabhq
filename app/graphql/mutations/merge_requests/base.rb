@@ -3,31 +3,27 @@
 module Mutations
   module MergeRequests
     class Base < BaseMutation
-      include Mutations::ResolvesProject
+      include Mutations::ResolvesIssuable
 
       argument :project_path, GraphQL::ID_TYPE,
                required: true,
-               description: "The project the merge request to mutate is in"
+               description: "The project the merge request to mutate is in."
 
       argument :iid, GraphQL::STRING_TYPE,
                required: true,
-               description: "The iid of the merge request to mutate"
+               description: "The IID of the merge request to mutate."
 
       field :merge_request,
             Types::MergeRequestType,
             null: true,
-            description: "The merge request after mutation"
+            description: "The merge request after mutation."
 
       authorize :update_merge_request
 
       private
 
       def find_object(project_path:, iid:)
-        project = resolve_project(full_path: project_path)
-        resolver = Resolvers::MergeRequestsResolver
-          .single.new(object: project, context: context)
-
-        resolver.resolve(iid: iid)
+        resolve_issuable(type: :merge_request, parent_path: project_path, iid: iid)
       end
     end
   end

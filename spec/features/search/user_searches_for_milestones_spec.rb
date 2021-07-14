@@ -2,7 +2,7 @@
 
 require 'spec_helper'
 
-describe 'User searches for milestones', :js do
+RSpec.describe 'User searches for milestones', :js do
   let(:user) { create(:user) }
   let(:project) { create(:project, namespace: user.namespace) }
   let!(:milestone1) { create(:milestone, title: 'Foo', project: project) }
@@ -16,6 +16,7 @@ describe 'User searches for milestones', :js do
   end
 
   include_examples 'top right search form'
+  include_examples 'search timeouts', 'milestones'
 
   it 'finds a milestone' do
     fill_in('dashboard_search', with: milestone1.title)
@@ -30,10 +31,12 @@ describe 'User searches for milestones', :js do
 
   context 'when on a project page' do
     it 'finds a milestone' do
-      find('.js-search-project-dropdown').click
+      find('[data-testid="project-filter"]').click
 
-      page.within('.project-filter') do
-        click_link(project.full_name)
+      wait_for_requests
+
+      page.within('[data-testid="project-filter"]') do
+        click_on(project.name)
       end
 
       fill_in('dashboard_search', with: milestone1.title)

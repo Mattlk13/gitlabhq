@@ -1,29 +1,33 @@
 # frozen_string_literal: true
 
 module API
-  class ProjectImport < Grape::API
+  class ProjectImport < ::API::Base
     include PaginationParams
-
-    MAXIMUM_FILE_SIZE = 50.megabytes
 
     helpers Helpers::ProjectsHelpers
     helpers Helpers::FileUploadHelpers
+    helpers Helpers::RateLimiter
+
+    feature_category :importers
 
     helpers do
       def import_params
         declared_params(include_missing: false)
       end
 
-      def throttled?(key, scope)
-        rate_limiter.throttled?(key, scope: scope)
+      def namespace_from(params, current_user)
+        if params[:namespace]
+          find_namespace!(params[:namespace])
+        else
+          current_user.namespace
+        end
       end
 
-      def rate_limiter
-        ::Gitlab::ApplicationRateLimiter
-      end
+      def filtered_override_params(params)
+        override_params = params.delete(:override_params)
+        filter_attributes_using_license!(override_params) if override_params
 
-      def with_workhorse_upload_acceleration?
-        request.headers[Gitlab::Workhorse::INTERNAL_API_REQUEST_HEADER].present?
+        override_params
       end
     end
 
@@ -41,16 +45,15 @@ module API
         status 200
         content_type Gitlab::Workhorse::INTERNAL_API_CONTENT_TYPE
 
-        ImportExportUploader.workhorse_authorize(has_length: false, maximum_size: MAXIMUM_FILE_SIZE)
+        ImportExportUploader.workhorse_authorize(
+          has_length: false,
+          maximum_size: Gitlab::CurrentSettings.max_import_size.megabytes
+        )
       end
 
       params do
         requires :path, type: String, desc: 'The new project path and name'
-        # TODO: remove rubocop disable - https://gitlab.com/gitlab-org/gitlab/issues/14960
-        # and mark WH fields as required (instead of optional) after the WH version including
-        # https://gitlab.com/gitlab-org/gitlab-workhorse/-/merge_requests/459
-        # is deployed and GITLAB_WORKHORSE_VERSION is updated accordingly.
-        requires :file, types: [::API::Validations::Types::WorkhorseFile, File], desc: 'The project export file to be imported' # rubocop:disable Scalability/FileUploads
+        requires :file, type: ::API::Validations::Types::WorkhorseFile, desc: 'The project export file to be imported'
         optional :name, type: String, desc: 'The name of the project to be imported. Defaults to the path of the project if not provided.'
         optional :namespace, type: String, desc: "The ID or name of the namespace that the project will be imported into. Defaults to the current user's namespace."
         optional :overwrite, type: Boolean, default: false, desc: 'If there is a project in the same namespace and with the same name overwrite it'
@@ -75,52 +78,29 @@ module API
         success Entities::ProjectImportStatus
       end
       post 'import' do
-        require_gitlab_workhorse! if with_workhorse_upload_acceleration?
+        require_gitlab_workhorse!
 
-        key = "project_import".to_sym
+        check_rate_limit! :project_import, [current_user, :project_import]
 
-        if throttled?(key, [current_user, key])
-          rate_limiter.log_request(request, "#{key}_request_limit".to_sym, current_user)
+        Gitlab::QueryLimiting.disable!('https://gitlab.com/gitlab-org/gitlab/-/issues/21041')
 
-          render_api_error!({ error: _('This endpoint has been requested too many times. Try again later.') }, 429)
-        end
+        validate_file!
 
-        Gitlab::QueryLimiting.whitelist('https://gitlab.com/gitlab-org/gitlab-foss/issues/42437')
-
-        namespace = if import_params[:namespace]
-                      find_namespace!(import_params[:namespace])
-                    else
-                      current_user.namespace
-                    end
-
-        # TODO: remove the condition after the WH version including
-        # https://gitlab.com/gitlab-org/gitlab-workhorse/-/merge_requests/459
-        # is deployed and GITLAB_WORKHORSE_VERSION is updated accordingly.
-        file = if with_workhorse_upload_acceleration?
-                 import_params[:file] || bad_request!('Unable to process project import file')
-               else
-                 validate_file!
-                 import_params[:file]['tempfile']
-               end
-
-        project_params = {
-            path: import_params[:path],
-            namespace_id: namespace.id,
-            name: import_params[:name],
-            file: file,
-            overwrite: import_params[:overwrite]
-        }
-
-        override_params = import_params.delete(:override_params)
-        filter_attributes_using_license!(override_params) if override_params
-
-        project = ::Projects::GitlabProjectsImportService.new(
-          current_user, project_params, override_params
+        response = ::Import::GitlabProjects::CreateProjectFromUploadedFileService.new(
+          current_user,
+          path: import_params[:path],
+          namespace: namespace_from(import_params, current_user),
+          name: import_params[:name],
+          file: import_params[:file],
+          overwrite: import_params[:overwrite],
+          override: filtered_override_params(import_params)
         ).execute
 
-        render_api_error!(project.errors.full_messages&.first, 400) unless project.saved?
-
-        present project, with: Entities::ProjectImportStatus
+        if response.success?
+          present(response.payload, with: Entities::ProjectImportStatus)
+        else
+          render_api_error!(response.message, response.http_status)
+        end
       end
 
       params do
@@ -132,6 +112,44 @@ module API
       end
       get ':id/import' do
         present user_project, with: Entities::ProjectImportStatus
+      end
+
+      params do
+        requires :url, type: String, desc: 'The URL for the file.'
+        requires :path, type: String, desc: 'The new project path and name'
+        optional :name, type: String, desc: 'The name of the project to be imported. Defaults to the path of the project if not provided.'
+        optional :namespace, type: String, desc: "The ID or name of the namespace that the project will be imported into. Defaults to the current user's namespace."
+        optional :overwrite, type: Boolean, default: false, desc: 'If there is a project in the same namespace and with the same name overwrite it'
+        optional :override_params,
+          type: Hash,
+          desc: 'New project params to override values in the export' do
+            use :optional_project_params
+          end
+      end
+      desc 'Create a new project import using a remote object storage path' do
+        detail 'This feature was introduced in GitLab 13.2.'
+        success Entities::ProjectImportStatus
+      end
+      post 'remote-import' do
+        not_found! unless ::Feature.enabled?(:import_project_from_remote_file)
+
+        check_rate_limit! :project_import, [current_user, :project_import]
+
+        response = ::Import::GitlabProjects::CreateProjectFromRemoteFileService.new(
+          current_user,
+          path: import_params[:path],
+          namespace: namespace_from(import_params, current_user),
+          name: import_params[:name],
+          remote_import_url: import_params[:url],
+          overwrite: import_params[:overwrite],
+          override: filtered_override_params(import_params)
+        ).execute
+
+        if response.success?
+          present(response.payload, with: Entities::ProjectImportStatus)
+        else
+          render_api_error!(response.message, response.http_status)
+        end
       end
     end
   end

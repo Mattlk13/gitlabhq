@@ -2,7 +2,7 @@
 
 require 'spec_helper'
 
-describe 'Diff file viewer', :js do
+RSpec.describe 'Diff file viewer', :js, :with_clean_rails_cache do
   let(:project) { create(:project, :public, :repository) }
 
   def visit_commit(sha, anchor: nil)
@@ -155,10 +155,6 @@ describe 'Diff file viewer', :js do
 
   context 'binary file that appears to be text in the first 1024 bytes' do
     before do
-      # The file we're visiting is smaller than 10 KB and we want it collapsed
-      # so we need to disable the size increase feature.
-      stub_feature_flags(gitlab_git_diff_size_limit_increase: false)
-
       visit_commit('7b1cf4336b528e0f3d1d140ee50cafdbc703597c')
     end
 
@@ -176,6 +172,16 @@ describe 'Diff file viewer', :js do
       it 'shows there is no preview' do
         expect(page).to have_content('No preview for this file type')
       end
+    end
+  end
+
+  context 'when the the encoding of the file is unsupported' do
+    before do
+      visit_commit('f05a98786e4274708e1fa118c7ad3a29d1d1b9a3')
+    end
+
+    it 'shows it is not diffable' do
+      expect(page).to have_content("File suppressed by a .gitattributes entry or the file's encoding is unsupported.")
     end
   end
 end

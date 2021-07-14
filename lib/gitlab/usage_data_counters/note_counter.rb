@@ -24,12 +24,20 @@ module Gitlab::UsageDataCounters
       end
 
       def totals
-        COUNTABLE_TYPES.map do |countable_type|
-          [:"#{countable_type.underscore}_comment", read(:create, countable_type)]
-        end.to_h
+        COUNTABLE_TYPES.to_h do |countable_type|
+          [counter_key(countable_type), read(:create, countable_type)]
+        end
+      end
+
+      def fallback_totals
+        COUNTABLE_TYPES.to_h { |counter_key| [counter_key(counter_key), -1] }
       end
 
       private
+
+      def counter_key(countable_type)
+        "#{countable_type.underscore}_comment".to_sym
+      end
 
       def countable?(noteable_type)
         COUNTABLE_TYPES.include?(noteable_type.to_s)

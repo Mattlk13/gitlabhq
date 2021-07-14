@@ -8,21 +8,9 @@
 #
 module Gitlab
   module Auth
-    module LDAP
+    module Ldap
       class User < Gitlab::Auth::OAuth::User
         extend ::Gitlab::Utils::Override
-        prepend_if_ee('::EE::Gitlab::Auth::LDAP::User') # rubocop: disable Cop/InjectEnterpriseEditionModule
-
-        class << self
-          # rubocop: disable CodeReuse/ActiveRecord
-          def find_by_uid_and_provider(uid, provider)
-            identity = ::Identity.with_extern_uid(provider, uid).take
-
-            identity && identity.user
-          end
-          # rubocop: enable CodeReuse/ActiveRecord
-        end
-
         def save
           super('LDAP')
         end
@@ -30,10 +18,6 @@ module Gitlab
         # instance methods
         def find_user
           find_by_uid_and_provider || find_by_email || build_new_user
-        end
-
-        def find_by_uid_and_provider
-          self.class.find_by_uid_and_provider(auth_hash.uid, auth_hash.provider)
         end
 
         override :should_save?
@@ -46,7 +30,7 @@ module Gitlab
         end
 
         def allowed?
-          Gitlab::Auth::LDAP::Access.allowed?(gl_user)
+          Gitlab::Auth::Ldap::Access.allowed?(gl_user)
         end
 
         def valid_sign_in?
@@ -54,13 +38,15 @@ module Gitlab
         end
 
         def ldap_config
-          Gitlab::Auth::LDAP::Config.new(auth_hash.provider)
+          Gitlab::Auth::Ldap::Config.new(auth_hash.provider)
         end
 
         def auth_hash=(auth_hash)
-          @auth_hash = Gitlab::Auth::LDAP::AuthHash.new(auth_hash)
+          @auth_hash = Gitlab::Auth::Ldap::AuthHash.new(auth_hash)
         end
       end
     end
   end
 end
+
+Gitlab::Auth::Ldap::User.prepend_mod_with('Gitlab::Auth::Ldap::User')

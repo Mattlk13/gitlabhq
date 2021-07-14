@@ -2,20 +2,21 @@
 
 require 'spec_helper'
 
-describe Projects::AutocompleteSourcesController, '(JavaScript fixtures)', type: :controller do
+RSpec.describe Projects::AutocompleteSourcesController, '(JavaScript fixtures)', type: :controller do
   include JavaScriptFixturesHelpers
 
-  set(:admin) { create(:admin) }
-  set(:group) { create(:group, name: 'frontend-fixtures') }
-  set(:project) { create(:project, namespace: group, path: 'autocomplete-sources-project') }
-  set(:issue) { create(:issue, project: project) }
+  let_it_be(:user) { create(:user) }
+  let_it_be(:group) { create(:group, name: 'frontend-fixtures') }
+  let_it_be(:project) { create(:project, namespace: group, path: 'autocomplete-sources-project') }
+  let_it_be(:issue) { create(:issue, project: project) }
 
   before(:all) do
     clean_frontend_fixtures('autocomplete_sources/')
   end
 
   before do
-    sign_in(admin)
+    group.add_owner(user)
+    sign_in(user)
   end
 
   it 'autocomplete_sources/labels.json' do

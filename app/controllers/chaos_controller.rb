@@ -20,7 +20,20 @@ class ChaosController < ActionController::Base
   end
 
   def kill
-    do_chaos :kill, Chaos::KillWorker
+    do_chaos :kill, Chaos::KillWorker, 'KILL'
+  end
+
+  def quit
+    do_chaos :kill, Chaos::KillWorker, 'QUIT'
+  end
+
+  def gc
+    gc_stat = Gitlab::Chaos.run_gc
+
+    render json: {
+      worker_id: ::Prometheus::PidProvider.worker_id,
+      gc_stat: gc_stat
+    }
   end
 
   private
@@ -45,7 +58,6 @@ class ChaosController < ActionController::Base
     unless Devise.secure_compare(chaos_secret_configured, chaos_secret_request)
       render plain: "To experience chaos, please set a valid `X-Chaos-Secret` header or `token` param",
              status: :unauthorized
-      return
     end
   end
 

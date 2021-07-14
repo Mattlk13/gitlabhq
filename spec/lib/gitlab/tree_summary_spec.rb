@@ -2,18 +2,20 @@
 
 require 'spec_helper'
 
-describe Gitlab::TreeSummary do
+RSpec.describe Gitlab::TreeSummary do
+  include RepoHelpers
   using RSpec::Parameterized::TableSyntax
 
   let(:project) { create(:project, :empty_repo) }
   let(:repo) { project.repository }
   let(:commit) { repo.head_commit }
+  let_it_be(:user) { create(:user) }
 
   let(:path) { nil }
   let(:offset) { nil }
   let(:limit) { nil }
 
-  subject(:summary) { described_class.new(commit, project, path: path, offset: offset, limit: limit) }
+  subject(:summary) { described_class.new(commit, project, user, path: path, offset: offset, limit: limit) }
 
   describe '#initialize' do
     it 'defaults offset to 0' do
@@ -43,18 +45,75 @@ describe Gitlab::TreeSummary do
         expect(commits).to match_array(entries.map { |entry| entry[:commit] })
       end
     end
+
+    context 'when offset is over the limit' do
+      let(:offset) { 100 }
+
+      it 'returns an empty array' do
+        expect(summarized).to eq([[], []])
+      end
+    end
+
+    context 'with caching', :use_clean_rails_memory_store_caching do
+      subject { Rails.cache.fetch(key) }
+
+      context 'Repository tree cache' do
+        let(:key) { ['projects', project.id, 'content', commit.id, path] }
+
+        it 'creates a cache for repository content' do
+          summarized
+
+          is_expected.to eq([{ file_name: 'a.txt', type: :blob }])
+        end
+      end
+
+      context 'Commits list cache' do
+        let(:offset) { 0 }
+        let(:limit) { 25 }
+        let(:key) { ['projects', project.id, 'last_commits', commit.id, path, offset, limit] }
+
+        it 'creates a cache for commits list' do
+          summarized
+
+          is_expected.to eq('a.txt' => commit.to_hash)
+        end
+
+        context 'when commit has a very long message' do
+          before do
+            repo.create_file(
+              project.creator,
+              'long.txt',
+              '',
+              message: message,
+              branch_name: project.default_branch
+            )
+          end
+
+          let(:message) { 'a' * 1025 }
+          let(:expected_message) { message[0...1021] + '...' }
+
+          it 'truncates commit message to 1 kilobyte' do
+            summarized
+
+            is_expected.to include('long.txt' => a_hash_including(message: expected_message))
+          end
+        end
+      end
+    end
   end
 
   describe '#summarize (entries)' do
-    let(:limit) { 2 }
+    let(:limit) { 4 }
 
     custom_files = {
       'a.txt' => '',
       'b.txt' => '',
-      'directory/c.txt' => ''
+      'directory/c.txt' => '',
+      ':dir/test.txt' => '',
+      ':file' => ''
     }
 
-    let(:project) { create(:project, :custom_repo, files: custom_files) }
+    let!(:project) { create(:project, :custom_repo, files: custom_files) }
     let(:commit) { repo.head_commit }
 
     subject(:entries) { summary.summarize.first }
@@ -62,17 +121,21 @@ describe Gitlab::TreeSummary do
     it 'summarizes the entries within the window' do
       is_expected.to contain_exactly(
         a_hash_including(type: :tree, file_name: 'directory'),
-        a_hash_including(type: :blob, file_name: 'a.txt')
+        a_hash_including(type: :blob, file_name: 'a.txt'),
+        a_hash_including(type: :blob, file_name: ':file'),
+        a_hash_including(type: :tree, file_name: ':dir')
         # b.txt is excluded by the limit
       )
     end
 
     it 'references the commit and commit path in entries' do
-      entry = entries.first
+      # There are 2 trees and the summary is not ordered
+      entry = entries.find { |entry| entry[:commit].id == commit.id }
       expected_commit_path = Gitlab::Routing.url_helpers.project_commit_path(project, commit)
 
       expect(entry[:commit]).to be_a(::Commit)
-      expect(entry[:commit_path]).to eq expected_commit_path
+      expect(entry[:commit_path]).to eq(expected_commit_path)
+      expect(entry[:commit_title_html]).to eq(commit.message)
     end
 
     context 'in a good subdirectory' do
@@ -83,6 +146,14 @@ describe Gitlab::TreeSummary do
       end
     end
 
+    context 'in a subdirectory with a pathspec character' do
+      let(:path) { ':dir' }
+
+      it 'summarizes the entries in the subdirectory' do
+        is_expected.to contain_exactly(a_hash_including(type: :blob, file_name: 'test.txt'))
+      end
+    end
+
     context 'in a non-existent subdirectory' do
       let(:path) { 'tmp' }
 
@@ -90,7 +161,7 @@ describe Gitlab::TreeSummary do
     end
 
     context 'custom offset and limit' do
-      let(:offset) { 2 }
+      let(:offset) { 4 }
 
       it 'returns entries from the offset' do
         is_expected.to contain_exactly(a_hash_including(type: :blob, file_name: 'b.txt'))
@@ -140,6 +211,57 @@ describe Gitlab::TreeSummary do
         expect(entry).to include(:commit)
       end
     end
+
+    context 'rendering commits' do
+      it 'does not perform N + 1 request' do
+        summary
+
+        queries = ActiveRecord::QueryRecorder.new { summary.summarize }
+
+        expect(queries.count).to be <= 3
+      end
+    end
+  end
+
+  describe 'References in commit messages' do
+    let_it_be(:project) { create(:project, :empty_repo) }
+    let_it_be(:issue) { create(:issue, project: project) }
+
+    let(:entries) { summary.summarize.first }
+    let(:entry) { entries.find { |entry| entry[:file_name] == 'issue.txt' } }
+
+    before_all do
+      create_file_in_repo(project, 'master', 'master', 'issue.txt', '', commit_message: "Issue ##{issue.iid}")
+    end
+
+    where(:project_visibility, :user_role, :issue_confidential, :expected_result) do
+      'private'  | :guest    | false | true
+      'private'  | :guest    | true  | false
+      'private'  | :reporter | false | true
+      'private'  | :reporter | true  | true
+
+      'internal' | :guest    | false | true
+      'internal' | :guest    | true  | false
+      'internal' | :reporter | false | true
+      'internal' | :reporter | true  | true
+
+      'public'   | :guest    | false | true
+      'public'   | :guest    | true  | false
+      'public'   | :reporter | false | true
+      'public'   | :reporter | true  | true
+    end
+
+    with_them do
+      subject { entry[:commit_title_html].include?("title=\"#{issue.title}\"") }
+
+      before do
+        project.add_role(user, user_role)
+        project.update!(visibility_level: Gitlab::VisibilityLevel.level_value(project_visibility))
+        issue.update!(confidential: issue_confidential)
+      end
+
+      it { is_expected.to eq(expected_result) }
+    end
   end
 
   describe '#more?' do
@@ -166,7 +288,7 @@ describe Gitlab::TreeSummary do
 
     with_them do
       before do
-        create_file('dummy', path: 'other') if num_entries.zero?
+        create_file('dummy', path: 'other') if num_entries == 0
         1.upto(num_entries) { |n| create_file(n, path: path) }
       end
 
@@ -193,7 +315,7 @@ describe Gitlab::TreeSummary do
 
     with_them do
       before do
-        create_file('dummy', path: 'other') if num_entries.zero?
+        create_file('dummy', path: 'other') if num_entries == 0
         1.upto(num_entries) { |n| create_file(n, path: path) }
       end
 

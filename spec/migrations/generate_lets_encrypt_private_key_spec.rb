@@ -1,9 +1,9 @@
 # frozen_string_literal: true
 
 require 'spec_helper'
-require Rails.root.join('db', 'migrate', '20190524062810_generate_lets_encrypt_private_key.rb')
+require_migration!
 
-describe GenerateLetsEncryptPrivateKey, :migration do
+RSpec.describe GenerateLetsEncryptPrivateKey do
   describe '#up' do
     it 'does not fail' do
       expect do

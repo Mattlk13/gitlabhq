@@ -5,28 +5,27 @@
 # of directly having a repository, like project or snippet.
 #
 # It also includes `Referable`, therefore the method
-# `to_reference` should be overriden in case the object
+# `to_reference` should be overridden in case the object
 # needs any special behavior.
 module HasRepository
   extend ActiveSupport::Concern
-  include Gitlab::ShellAdapter
-  include AfterCommitQueue
   include Referable
+  include Gitlab::ShellAdapter
   include Gitlab::Utils::StrongMemoize
 
   delegate :base_dir, :disk_path, to: :storage
 
   def valid_repo?
     repository.exists?
-  rescue
-    errors.add(:path, _('Invalid repository path'))
+  rescue StandardError
+    errors.add(:base, _('Invalid repository path'))
     false
   end
 
   def repo_exists?
     strong_memoize(:repo_exists) do
       repository.exists?
-    rescue
+    rescue StandardError
       false
     end
   end
@@ -63,12 +62,29 @@ module HasRepository
     raise NotImplementedError
   end
 
+  def lfs_enabled?
+    false
+  end
+
   def empty_repo?
     repository.empty?
   end
 
   def default_branch
-    @default_branch ||= repository.root_ref
+    @default_branch ||= repository.root_ref || default_branch_from_preferences
+  end
+
+  def default_branch_from_preferences
+    return unless empty_repo?
+
+    (default_branch_from_group_preferences || Gitlab::CurrentSettings.default_branch_name).presence
+  end
+
+  def default_branch_from_group_preferences
+    return unless respond_to?(:group)
+    return unless group
+
+    group.default_branch_name || group.root_ancestor.default_branch_name
   end
 
   def reload_default_branch
@@ -78,29 +94,27 @@ module HasRepository
   end
 
   def url_to_repo
-    gitlab_shell.url_to_repo(full_path)
+    ssh_url_to_repo
   end
 
   def ssh_url_to_repo
-    url_to_repo
+    Gitlab::RepositoryUrlBuilder.build(repository.full_path, protocol: :ssh)
   end
 
   def http_url_to_repo
-    custom_root = Gitlab::CurrentSettings.custom_http_clone_url_root
+    Gitlab::RepositoryUrlBuilder.build(repository.full_path, protocol: :http)
+  end
 
-    url = if custom_root.present?
-            Gitlab::Utils.append_path(
-              custom_root,
-              web_url(only_path: true)
-            )
-          else
-            web_url
-          end
-
-    "#{url}.git"
+  # Is overridden in EE::Project for Geo support
+  def lfs_http_url_to_repo(_operation = nil)
+    http_url_to_repo
   end
 
   def web_url(only_path: nil)
+    Gitlab::UrlBuilder.build(self, only_path: only_path)
+  end
+
+  def repository_size_checker
     raise NotImplementedError
   end
 end

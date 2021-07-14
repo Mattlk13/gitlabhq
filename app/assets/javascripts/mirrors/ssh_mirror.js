@@ -1,9 +1,9 @@
 import $ from 'jquery';
-import { escape as esc } from 'lodash';
-import { __ } from '~/locale';
+import { escape } from 'lodash';
+import createFlash from '~/flash';
 import axios from '~/lib/utils/axios_utils';
-import Flash from '~/flash';
 import { backOff } from '~/lib/utils/common_utils';
+import { __ } from '~/locale';
 import AUTH_METHOD from './constants';
 
 export default class SSHMirror {
@@ -22,7 +22,6 @@ export default class SSHMirror {
     this.$dropdownAuthType = this.$form.find('.js-mirror-auth-type');
     this.$hiddenAuthType = this.$form.find('.js-hidden-mirror-auth-type');
 
-    this.$wellAuthTypeChanging = this.$form.find('.js-well-changing-auth');
     this.$wellPasswordAuth = this.$form.find('.js-well-password-auth');
   }
 
@@ -30,10 +29,10 @@ export default class SSHMirror {
     this.handleRepositoryUrlInput(true);
 
     this.$repositoryUrl.on('keyup', () => this.handleRepositoryUrlInput());
-    this.$knownHosts.on('keyup', e => this.handleSSHKnownHostsInput(e));
-    this.$dropdownAuthType.on('change', e => this.handleAuthTypeChange(e));
-    this.$btnDetectHostKeys.on('click', e => this.handleDetectHostKeys(e));
-    this.$btnSSHHostsShowAdvanced.on('click', e => this.handleSSHHostsAdvanced(e));
+    this.$knownHosts.on('keyup', (e) => this.handleSSHKnownHostsInput(e));
+    this.$dropdownAuthType.on('change', (e) => this.handleAuthTypeChange(e));
+    this.$btnDetectHostKeys.on('click', (e) => this.handleDetectHostKeys(e));
+    this.$btnSSHHostsShowAdvanced.on('click', (e) => this.handleSSHHostsAdvanced(e));
   }
 
   /**
@@ -101,7 +100,7 @@ export default class SSHMirror {
         })
         .catch(stop);
     })
-      .then(res => {
+      .then((res) => {
         $btnLoadSpinner.addClass('d-none');
         // Once data is received, we show verification info along with Host keys and fingerprints
         this.$hostKeysInformation
@@ -116,7 +115,9 @@ export default class SSHMirror {
         const failureMessage = response.data
           ? response.data.message
           : __('An error occurred while detecting host keys');
-        Flash(failureMessage);
+        createFlash({
+          message: failureMessage,
+        });
 
         $btnLoadSpinner.addClass('hidden');
         this.$btnDetectHostKeys.enable();
@@ -161,8 +162,8 @@ export default class SSHMirror {
   showSSHInformation(sshHostKeys) {
     const $fingerprintsList = this.$hostKeysInformation.find('.js-fingerprints-list');
     let fingerprints = '';
-    sshHostKeys.fingerprints.forEach(fingerprint => {
-      const escFingerprints = esc(fingerprint.fingerprint);
+    sshHostKeys.fingerprints.forEach((fingerprint) => {
+      const escFingerprints = escape(fingerprint.fingerprint);
       fingerprints += `<code>${escFingerprints}</code>`;
     });
 
@@ -186,10 +187,15 @@ export default class SSHMirror {
   }
 
   destroy() {
+    // eslint-disable-next-line @gitlab/no-global-event-off
     this.$repositoryUrl.off('keyup');
+    // eslint-disable-next-line @gitlab/no-global-event-off
     this.$form.find('.js-known-hosts').off('keyup');
+    // eslint-disable-next-line @gitlab/no-global-event-off
     this.$dropdownAuthType.off('change');
+    // eslint-disable-next-line @gitlab/no-global-event-off
     this.$btnDetectHostKeys.off('click');
+    // eslint-disable-next-line @gitlab/no-global-event-off
     this.$btnSSHHostsShowAdvanced.off('click');
   }
 }

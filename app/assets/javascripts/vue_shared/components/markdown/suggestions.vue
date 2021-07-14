@@ -1,10 +1,14 @@
 <script>
+import { GlSafeHtmlDirective as SafeHtml } from '@gitlab/ui';
 import Vue from 'vue';
+import createFlash from '~/flash';
 import { __ } from '~/locale';
 import SuggestionDiff from './suggestion_diff.vue';
-import Flash from '~/flash';
 
 export default {
+  directives: {
+    SafeHtml,
+  },
   props: {
     lineType: {
       type: String,
@@ -12,6 +16,11 @@ export default {
       default: '',
     },
     suggestions: {
+      type: Array,
+      required: false,
+      default: () => [],
+    },
+    batchSuggestionsInfo: {
       type: Array,
       required: false,
       default: () => [],
@@ -28,6 +37,15 @@ export default {
     helpPagePath: {
       type: String,
       required: true,
+    },
+    defaultCommitMessage: {
+      type: String,
+      required: true,
+    },
+    suggestionsCount: {
+      type: Number,
+      required: false,
+      default: 0,
     },
   },
   data() {
@@ -46,6 +64,11 @@ export default {
   mounted() {
     this.renderSuggestions();
   },
+  beforeDestroy() {
+    if (this.suggestionsWatch) {
+      this.suggestionsWatch();
+    }
+  },
   methods: {
     renderSuggestions() {
       // swaps out suggestion(s) markdown with rich diff components
@@ -56,7 +79,10 @@ export default {
       const suggestionElements = container.querySelectorAll('.js-render-suggestion');
 
       if (this.lineType === 'old') {
-        Flash(__('Unable to apply suggestions to a deleted line.'), 'alert', this.$el);
+        createFlash({
+          message: __('Unable to apply suggestions to a deleted line.'),
+          parent: this.$el,
+        });
       }
 
       suggestionElements.forEach((suggestionEl, i) => {
@@ -68,16 +94,49 @@ export default {
       this.isRendered = true;
     },
     generateDiff(suggestionIndex) {
-      const { suggestions, disabled, helpPagePath } = this;
+      const {
+        suggestions,
+        disabled,
+        batchSuggestionsInfo,
+        helpPagePath,
+        defaultCommitMessage,
+        suggestionsCount,
+      } = this;
       const suggestion =
         suggestions && suggestions[suggestionIndex] ? suggestions[suggestionIndex] : {};
       const SuggestionDiffComponent = Vue.extend(SuggestionDiff);
       const suggestionDiff = new SuggestionDiffComponent({
-        propsData: { disabled, suggestion, helpPagePath },
+        propsData: {
+          disabled,
+          suggestion,
+          batchSuggestionsInfo,
+          helpPagePath,
+          defaultCommitMessage,
+          suggestionsCount,
+        },
       });
 
-      suggestionDiff.$on('apply', ({ suggestionId, callback }) => {
-        this.$emit('apply', { suggestionId, callback, flashContainer: this.$el });
+      // We're using `$watch` as `suggestionsCount` updates do not
+      // propagate to this component for some unknown reason while
+      // using a traditional prop watcher.
+      this.suggestionsWatch = this.$watch('suggestionsCount', () => {
+        suggestionDiff.suggestionsCount = this.suggestionsCount;
+      });
+
+      suggestionDiff.$on('apply', ({ suggestionId, callback, message }) => {
+        this.$emit('apply', { suggestionId, callback, flashContainer: this.$el, message });
+      });
+
+      suggestionDiff.$on('applyBatch', () => {
+        this.$emit('applyBatch', { flashContainer: this.$el });
+      });
+
+      suggestionDiff.$on('addToBatch', (suggestionId) => {
+        this.$emit('addToBatch', suggestionId);
+      });
+
+      suggestionDiff.$on('removeFromBatch', (suggestionId) => {
+        this.$emit('removeFromBatch', suggestionId);
       });
 
       return suggestionDiff;
@@ -98,6 +157,6 @@ export default {
 <template>
   <div>
     <div class="flash-container js-suggestions-flash"></div>
-    <div v-show="isRendered" ref="container" class="md" v-html="noteHtml"></div>
+    <div v-show="isRendered" ref="container" v-safe-html="noteHtml" class="md"></div>
   </div>
 </template>

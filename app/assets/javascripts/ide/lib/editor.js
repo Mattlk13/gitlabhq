@@ -1,30 +1,31 @@
-import _ from 'underscore';
-import { editor as monacoEditor, KeyCode, KeyMod } from 'monaco-editor';
-import store from '../stores';
-import DecorationsController from './decorations/controller';
-import DirtyDiffController from './diff/controller';
+import { debounce } from 'lodash';
+import { editor as monacoEditor, KeyCode, KeyMod, Range } from 'monaco-editor';
+import { clearDomElement } from '~/editor/utils';
+import { registerLanguages } from '../utils';
 import Disposable from './common/disposable';
 import ModelManager from './common/model_manager';
-import editorOptions, { defaultEditorOptions } from './editor_options';
-import { themes } from './themes';
+import DecorationsController from './decorations/controller';
+import DirtyDiffController from './diff/controller';
+import { editorOptions, defaultEditorOptions, defaultDiffEditorOptions } from './editor_options';
 import keymap from './keymap.json';
-import { clearDomElement } from '~/editor/utils';
+import languages from './languages';
+import { themes } from './themes';
 
 function setupThemes() {
-  themes.forEach(theme => {
+  themes.forEach((theme) => {
     monacoEditor.defineTheme(theme.name, theme.data);
   });
 }
 
 export default class Editor {
-  static create(options = {}) {
+  static create(...args) {
     if (!this.editorInstance) {
-      this.editorInstance = new Editor(options);
+      this.editorInstance = new Editor(...args);
     }
     return this.editorInstance;
   }
 
-  constructor(options = {}) {
+  constructor(store, options = {}) {
     this.currentModel = null;
     this.instance = null;
     this.dirtyDiffController = null;
@@ -35,10 +36,16 @@ export default class Editor {
       ...defaultEditorOptions,
       ...options,
     };
+    this.diffOptions = {
+      ...defaultDiffEditorOptions,
+      ...options,
+    };
+    this.store = store;
 
     setupThemes();
+    registerLanguages(...languages);
 
-    this.debouncedUpdate = _.debounce(() => {
+    this.debouncedUpdate = debounce(() => {
       this.updateDimensions();
     }, 200);
   }
@@ -63,19 +70,14 @@ export default class Editor {
     }
   }
 
-  createDiffInstance(domElement, readOnly = true) {
+  createDiffInstance(domElement) {
     if (!this.instance) {
       clearDomElement(domElement);
 
       this.disposable.add(
         (this.instance = monacoEditor.createDiffEditor(domElement, {
-          ...this.options,
-          quickSuggestions: false,
-          occurrencesHighlight: false,
+          ...this.diffOptions,
           renderSideBySide: Editor.renderSideBySide(domElement),
-          readOnly,
-          renderLineHighlight: readOnly ? 'all' : 'none',
-          hideCursorInOverviewRuler: !readOnly,
         })),
       );
 
@@ -106,7 +108,7 @@ export default class Editor {
 
     this.instance.updateOptions(
       editorOptions.reduce((acc, obj) => {
-        Object.keys(obj).forEach(key => {
+        Object.keys(obj).forEach((key) => {
           Object.assign(acc, {
             [key]: obj[key](model),
           });
@@ -155,8 +157,10 @@ export default class Editor {
   }
 
   updateDimensions() {
-    this.instance.layout();
-    this.updateDiffView();
+    if (this.instance) {
+      this.instance.layout();
+      this.updateDiffView();
+    }
   }
 
   setPosition({ lineNumber, column }) {
@@ -173,7 +177,7 @@ export default class Editor {
   onPositionChange(cb) {
     if (!this.instance.onDidChangeCursorPosition) return;
 
-    this.disposable.add(this.instance.onDidChangeCursorPosition(e => cb(this.instance, e)));
+    this.disposable.add(this.instance.onDidChangeCursorPosition((e) => cb(this.instance, e)));
   }
 
   updateDiffView() {
@@ -182,6 +186,21 @@ export default class Editor {
     this.instance.updateOptions({
       renderSideBySide: Editor.renderSideBySide(this.instance.getDomNode()),
     });
+  }
+
+  replaceSelectedText(text) {
+    let selection = this.instance.getSelection();
+    const range = new Range(
+      selection.startLineNumber,
+      selection.startColumn,
+      selection.endLineNumber,
+      selection.endColumn,
+    );
+
+    this.instance.executeEdits('', [{ range, text }]);
+
+    selection = this.instance.getSelection();
+    this.instance.setPosition({ lineNumber: selection.endLineNumber, column: selection.endColumn });
   }
 
   get isDiffEditorType() {
@@ -193,14 +212,15 @@ export default class Editor {
   }
 
   addCommands() {
-    const getKeyCode = key => {
+    const { store } = this;
+    const getKeyCode = (key) => {
       const monacoKeyMod = key.indexOf('KEY_') === 0;
 
       return monacoKeyMod ? KeyCode[key] : KeyMod[key];
     };
 
-    keymap.forEach(command => {
-      const keybindings = command.bindings.map(binding => {
+    keymap.forEach((command) => {
+      const keybindings = command.bindings.map((binding) => {
         const keys = binding.split('+');
 
         // eslint-disable-next-line no-bitwise

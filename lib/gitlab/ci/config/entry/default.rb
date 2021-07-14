@@ -37,7 +37,7 @@ module Gitlab
             description: 'Script that will be executed after each job.',
             inherit: true
 
-          entry :cache, Entry::Cache,
+          entry :cache, Entry::Caches,
             description: 'Configure caching between build jobs.',
             inherit: true
 
@@ -60,8 +60,6 @@ module Gitlab
           entry :artifacts, Entry::Artifacts,
             description: 'Default artifacts.',
             inherit: false
-
-          helpers :before_script, :image, :services, :after_script, :cache
 
           private
 

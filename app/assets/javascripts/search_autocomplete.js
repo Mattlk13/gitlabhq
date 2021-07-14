@@ -1,17 +1,20 @@
 /* eslint-disable no-return-assign, consistent-return, class-methods-use-this */
 
 import $ from 'jquery';
-import { escape, throttle } from 'underscore';
-import { s__, __ } from '~/locale';
+import { escape, throttle } from 'lodash';
+import initDeprecatedJQueryDropdown from '~/deprecated_jquery_dropdown';
 import { getIdenticonBackgroundClass, getIdenticonTitle } from '~/helpers/avatar_helper';
+import { DEFAULT_DEBOUNCE_AND_THROTTLE_MS } from '~/lib/utils/constants';
+import { s__, __, sprintf } from '~/locale';
+import Tracking from '~/tracking';
 import axios from './lib/utils/axios_utils';
+import { spriteIcon } from './lib/utils/common_utils';
 import {
   isInGroupsPage,
   isInProjectPage,
   getGroupSlug,
   getProjectSlug,
-  spriteIcon,
-} from './lib/utils/common_utils';
+} from './search_autocomplete_utils';
 
 /**
  * Search input in top navigation bar.
@@ -74,8 +77,8 @@ export class SearchAutocomplete {
     this.wrap = wrap || $('.search');
     this.optsEl = optsEl || this.wrap.find('.search-autocomplete-opts');
     this.autocompletePath = autocompletePath || this.optsEl.data('autocompletePath');
-    this.projectId = projectId || (this.optsEl.data('autocompleteProjectId') || '');
-    this.projectRef = projectRef || (this.optsEl.data('autocompleteProjectRef') || '');
+    this.projectId = projectId || this.optsEl.data('autocompleteProjectId') || '';
+    this.projectRef = projectRef || this.optsEl.data('autocompleteProjectRef') || '';
     this.dropdown = this.wrap.find('.dropdown');
     this.dropdownToggle = this.wrap.find('.js-dropdown-search-toggle');
     this.dropdownMenu = this.dropdown.find('.dropdown-menu');
@@ -118,7 +121,7 @@ export class SearchAutocomplete {
   }
 
   createAutocomplete() {
-    return this.searchInput.glDropdown({
+    return initDeprecatedJQueryDropdown(this.searchInput, {
       filterInputBlur: false,
       filterable: true,
       filterRemote: true,
@@ -133,6 +136,7 @@ export class SearchAutocomplete {
       data: this.getData.bind(this),
       selectable: true,
       clicked: this.onClick.bind(this),
+      trackSuggestionClickedLabel: 'search_autocomplete_suggestion',
     });
   }
 
@@ -144,10 +148,10 @@ export class SearchAutocomplete {
     if (!term) {
       const contents = this.getCategoryContents();
       if (contents) {
-        const glDropdownInstance = this.searchInput.data('glDropdown');
+        const deprecatedJQueryDropdownInstance = this.searchInput.data('deprecatedJQueryDropdown');
 
-        if (glDropdownInstance) {
-          glDropdownInstance.filter.options.callback(contents);
+        if (deprecatedJQueryDropdownInstance) {
+          deprecatedJQueryDropdownInstance.filter.options.callback(contents);
         }
         this.enableAutocomplete();
       }
@@ -169,34 +173,25 @@ export class SearchAutocomplete {
           term,
         },
       })
-      .then(response => {
-        // Hide dropdown menu if no suggestions returns
-        if (!response.data.length) {
-          this.disableAutocomplete();
-          return;
-        }
+      .then((response) => {
+        const options = this.scopedSearchOptions(term);
 
-        const data = [];
         // List results
-        let firstCategory = true;
-        let lastCategory;
+        let lastCategory = null;
         for (let i = 0, len = response.data.length; i < len; i += 1) {
           const suggestion = response.data[i];
           // Add group header before list each group
           if (lastCategory !== suggestion.category) {
-            if (!firstCategory) {
-              data.push({ type: 'separator' });
-            }
-            if (firstCategory) {
-              firstCategory = false;
-            }
-            data.push({
+            options.push({ type: 'separator' });
+            options.push({
               type: 'header',
               content: suggestion.category,
             });
             lastCategory = suggestion.category;
           }
-          data.push({
+
+          // Add the suggestion
+          options.push({
             id: `${suggestion.category.toLowerCase()}-${suggestion.id}`,
             icon: this.getAvatar(suggestion),
             category: suggestion.category,
@@ -204,39 +199,8 @@ export class SearchAutocomplete {
             url: suggestion.url,
           });
         }
-        // Add option to proceed with the search
-        if (data.length) {
-          const icon = spriteIcon('search', 's16 inline-search-icon');
-          let template;
 
-          if (this.projectInputEl.val()) {
-            template = s__('SearchAutocomplete|in this project');
-          }
-          if (this.groupInputEl.val()) {
-            template = s__('SearchAutocomplete|in this group');
-          }
-
-          data.unshift({ type: 'separator' });
-          data.unshift({
-            icon,
-            text: term,
-            template: s__('SearchAutocomplete|in all GitLab'),
-            url: `${gon.relative_url_root}/search?search=${term}`,
-          });
-
-          if (template) {
-            data.unshift({
-              icon,
-              text: term,
-              template,
-              url: `${
-                gon.relative_url_root
-              }/search?search=${term}&project_id=${this.projectInputEl.val()}&group_id=${this.groupInputEl.val()}`,
-            });
-          }
-        }
-
-        callback(data);
+        callback(options);
 
         this.loadingSuggestions = false;
         this.highlightFirstRow();
@@ -253,10 +217,10 @@ export class SearchAutocomplete {
 
     // Get options
     let options;
-    if (isInGroupsPage() && groupOptions) {
-      options = groupOptions[getGroupSlug()];
-    } else if (isInProjectPage() && projectOptions) {
+    if (isInProjectPage() && projectOptions) {
       options = projectOptions[getProjectSlug()];
+    } else if (isInGroupsPage() && groupOptions) {
+      options = groupOptions[getGroupSlug()];
     } else if (dashboardOptions) {
       options = dashboardOptions;
     }
@@ -287,6 +251,10 @@ export class SearchAutocomplete {
         url: `${mrPath}/?assignee_username=${userName}`,
       },
       {
+        text: s__("SearchAutocomplete|Merge requests that I'm a reviewer"),
+        url: `${mrPath}/?reviewer_username=${userName}`,
+      },
+      {
         text: s__("SearchAutocomplete|Merge requests I've created"),
         url: `${mrPath}/?author_username=${userName}`,
       },
@@ -299,6 +267,64 @@ export class SearchAutocomplete {
       items = baseItems.concat(...issueItems, ...mergeRequestItems);
     }
     return items;
+  }
+
+  // Add option to proceed with the search for each
+  // scope that is currently available, namely:
+  //
+  // - Search in this project
+  // - Search in this group (or project's group)
+  // - Search in all GitLab
+  scopedSearchOptions(term) {
+    const icon = spriteIcon('search', 's16 inline-search-icon');
+    const projectId = this.projectInputEl.val();
+    const groupId = this.groupInputEl.val();
+    const options = [];
+
+    if (projectId) {
+      const projectOptions = gl.projectOptions[getProjectSlug()];
+      const url = groupId
+        ? `${gon.relative_url_root}/search?search=${term}&project_id=${projectId}&group_id=${groupId}`
+        : `${gon.relative_url_root}/search?search=${term}&project_id=${projectId}`;
+
+      options.push({
+        icon,
+        text: term,
+        template: sprintf(
+          s__(`SearchAutocomplete|in project %{projectName}`),
+          {
+            projectName: `<i>${projectOptions.name}</i>`,
+          },
+          false,
+        ),
+        url,
+      });
+    }
+
+    if (groupId) {
+      const groupOptions = gl.groupOptions[getGroupSlug()];
+      options.push({
+        icon,
+        text: term,
+        template: sprintf(
+          s__(`SearchAutocomplete|in group %{groupName}`),
+          {
+            groupName: `<i>${groupOptions.name}</i>`,
+          },
+          false,
+        ),
+        url: `${gon.relative_url_root}/search?search=${term}&group_id=${groupId}`,
+      });
+    }
+
+    options.push({
+      icon,
+      text: term,
+      template: s__('SearchAutocomplete|in all GitLab'),
+      url: `${gon.relative_url_root}/search?search=${term}`,
+    });
+
+    return options;
   }
 
   serializeState() {
@@ -318,9 +344,12 @@ export class SearchAutocomplete {
     this.searchInput.on('focus', this.onSearchInputFocus);
     this.searchInput.on('blur', this.onSearchInputBlur);
     this.clearInput.on('click', this.onClearInputClick);
-    this.dropdownContent.on('scroll', throttle(this.setScrollFade, 250));
+    this.dropdownContent.on(
+      'scroll',
+      throttle(this.setScrollFade, DEFAULT_DEBOUNCE_AND_THROTTLE_MS),
+    );
 
-    this.searchInput.on('click', e => {
+    this.searchInput.on('click', (e) => {
       e.stopPropagation();
     });
   }
@@ -337,6 +366,15 @@ export class SearchAutocomplete {
     if (!this.dropdown.hasClass('show')) {
       this.loadingSuggestions = false;
       this.dropdownToggle.dropdown('toggle');
+
+      const trackEvent = 'click_search_bar';
+      const trackCategory = undefined; // will be default set in event method
+
+      Tracking.event(trackCategory, trackEvent, {
+        label: 'main_navigation',
+        property: 'navigation',
+      });
+
       return this.searchInput.removeClass('js-autocomplete-disabled');
     }
   }
@@ -407,7 +445,7 @@ export class SearchAutocomplete {
   disableAutocomplete() {
     if (!this.searchInput.hasClass('js-autocomplete-disabled') && this.dropdown.hasClass('show')) {
       this.searchInput.addClass('js-autocomplete-disabled');
-      this.dropdown.dropdown('toggle');
+      this.dropdownToggle.dropdown('toggle');
       this.restoreMenu();
     }
   }
@@ -420,11 +458,11 @@ export class SearchAutocomplete {
   onClick(item, $el, e) {
     if (window.location.pathname.indexOf(item.url) !== -1) {
       if (!e.metaKey) e.preventDefault();
-      /* eslint-disable-next-line @gitlab/i18n/no-non-i18n-strings */
+      /* eslint-disable-next-line @gitlab/require-i18n-strings */
       if (item.category === 'Projects') {
         this.projectInputEl.val(item.id);
       }
-      /* eslint-disable-next-line @gitlab/i18n/no-non-i18n-strings */
+      // eslint-disable-next-line @gitlab/require-i18n-strings
       if (item.category === 'Groups') {
         this.groupInputEl.val(item.id);
       }
@@ -435,7 +473,7 @@ export class SearchAutocomplete {
   }
 
   highlightFirstRow() {
-    this.searchInput.data('glDropdown').highlightRowAtIndex(null, 0);
+    this.searchInput.data('deprecatedJQueryDropdown').highlightRowAtIndex(null, 0);
   }
 
   getAvatar(item) {

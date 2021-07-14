@@ -3,8 +3,20 @@
 module Gitlab
   module CurrentSettings
     class << self
+      def signup_disabled?
+        !signup_enabled?
+      end
+
+      def signup_limited?
+        domain_allowlist.present? || email_restrictions_enabled? || require_admin_approval_after_user_signup?
+      end
+
       def current_application_settings
         Gitlab::SafeRequestStore.fetch(:current_application_settings) { ensure_application_settings! }
+      end
+
+      def current_application_settings?
+        Gitlab::SafeRequestStore.exist?(:current_application_settings) || ::ApplicationSetting.current.present?
       end
 
       def expire_current_application_settings
@@ -16,8 +28,8 @@ module Gitlab
         @in_memory_application_settings = nil
       end
 
-      def method_missing(name, *args, &block)
-        current_application_settings.send(name, *args, &block) # rubocop:disable GitlabSecurity/PublicSend
+      def method_missing(name, *args, **kwargs, &block)
+        current_application_settings.send(name, *args, **kwargs, &block) # rubocop:disable GitlabSecurity/PublicSend
       end
 
       def respond_to_missing?(name, include_private = false)
@@ -35,7 +47,7 @@ module Gitlab
 
         begin
           ::ApplicationSetting.cached
-        rescue
+        rescue StandardError
           # In case Redis isn't running
           # or the Redis UNIX socket file is not available
           # or the DB is not running (we use migrations in the cache key)
@@ -43,7 +55,7 @@ module Gitlab
       end
 
       def uncached_application_settings
-        return fake_application_settings unless connect_to_db?
+        return fake_application_settings if Gitlab::Runtime.rake? && !connect_to_db?
 
         current_settings = ::ApplicationSetting.current
         # If there are pending migrations, it's possible there are columns that

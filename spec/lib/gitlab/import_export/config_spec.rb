@@ -3,7 +3,7 @@
 require 'fast_spec_helper'
 require 'rspec-parameterized'
 
-describe Gitlab::ImportExport::Config do
+RSpec.describe Gitlab::ImportExport::Config do
   let(:yaml_file) { described_class.new }
 
   describe '#to_h' do
@@ -25,7 +25,7 @@ describe Gitlab::ImportExport::Config do
           expect { subject }.not_to raise_error
           expect(subject).to be_a(Hash)
           expect(subject.keys).to contain_exactly(
-            :tree, :excluded_attributes, :included_attributes, :methods, :preloads)
+            :tree, :excluded_attributes, :included_attributes, :methods, :preloads, :export_reorders)
         end
       end
     end

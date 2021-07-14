@@ -70,7 +70,7 @@ module Gitlab
     #
     # @param [String] id identifier of the key to be removed prefixed by `key-`
     # @return [Boolean]
-    def rm_key(id)
+    def remove_key(id)
       lock do
         logger.info("Removing key (#{id})")
         open_authorized_keys_file('r+') do |f|
@@ -161,7 +161,7 @@ module Gitlab
     end
 
     def strip(key)
-      key.split(/[ ]+/)[0, 2].join(' ')
+      key.split(/ +/)[0, 2].join(' ')
     end
   end
 end

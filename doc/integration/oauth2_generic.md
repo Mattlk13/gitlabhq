@@ -1,6 +1,12 @@
-# Sign into GitLab with (almost) any OAuth2 provider
+---
+stage: Create
+group: Ecosystem
+info: To determine the technical writer assigned to the Stage/Group associated with this page, see https://about.gitlab.com/handbook/engineering/ux/technical-writing/#assignments
+---
 
-The `omniauth-oauth2-generic` gem allows Single Sign On between GitLab and your own OAuth2 provider
+# Sign into GitLab with (almost) any OAuth2 provider **(FREE)**
+
+The `omniauth-oauth2-generic` gem allows Single Sign-On between GitLab and your own OAuth2 provider
 (or any OAuth2 provider compatible with this gem)
 
 This strategy is designed to allow configuration of the simple OmniAuth SSO process outlined below:
@@ -14,24 +20,24 @@ This strategy is designed to allow configuration of the simple OmniAuth SSO proc
 
 ## Limitations of this Strategy
 
-- It can only be used for Single Sign on, and will not provide any other access granted by any OAuth provider
+- It can only be used for Single Sign on, and doesn't provide any other access granted by any OAuth provider
   (importing projects or users, etc)
 - It only supports the Authorization Grant flow (most common for client-server applications, like GitLab)
 - It is not able to fetch user information from more than one URL
 - It has not been tested with user information formats other than JSON
 
-## Config Instructions
+## Configuration Instructions
 
 1. Register your application in the OAuth2 provider you wish to authenticate with.
 
    The redirect URI you provide when registering the application should be:
 
-   ```
+   ```plaintext
    http://your-gitlab.host.com/users/auth/oauth2_generic/callback
    ```
 
 1. You should now be able to get a Client ID and Client Secret.
-   Where this shows up will differ for each provider.
+   Where this shows up differs for each provider.
    This may also be called Application ID and Secret
 
 1. On your GitLab server, open the configuration file.
@@ -51,15 +57,13 @@ This strategy is designed to allow configuration of the simple OmniAuth SSO proc
 
 1. See [Initial OmniAuth Configuration](omniauth.md#initial-omniauth-configuration) for initial settings
 
-1. Add the provider-specific configuration for your provider, as [described in the gem's README][1]
+1. Add the provider-specific configuration for your provider, as [described in the gem's README](https://gitlab.com/satorix/omniauth-oauth2-generic#gitlab-config-example)
 
 1. Save the configuration file
 
 1. Restart GitLab for the changes to take effect
 
 On the sign in page there should now be a new button below the regular sign in form.
-Click the button to begin your provider's authentication process. This will direct
+Click the button to begin your provider's authentication process. This directs
 the browser to your OAuth2 Provider's authentication page. If everything goes well
-the user will be returned to your GitLab instance and will be signed in.
-
-[1]: https://gitlab.com/satorix/omniauth-oauth2-generic#gitlab-config-example
+the user is returned to your GitLab instance and is signed in.

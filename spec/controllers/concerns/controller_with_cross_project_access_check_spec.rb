@@ -2,7 +2,7 @@
 
 require 'spec_helper'
 
-describe ControllerWithCrossProjectAccessCheck do
+RSpec.describe ControllerWithCrossProjectAccessCheck do
   let(:user) { create(:user) }
 
   before do
@@ -14,6 +14,7 @@ describe ControllerWithCrossProjectAccessCheck do
   context 'When reading cross project is not allowed' do
     before do
       allow(Ability).to receive(:allowed).and_call_original
+      expect(Ability).to receive(:allowed?).with(user, :log_in, :global).and_call_original
       allow(Ability).to receive(:allowed?)
                           .with(user, :read_cross_project, :global)
                           .and_return(false)

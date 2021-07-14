@@ -8,7 +8,19 @@ module Gitlab
           strategy :JobString, if: -> (config) { config.is_a?(String) }
 
           strategy :JobHash,
-            if: -> (config) { config.is_a?(Hash) && config.key?(:job) && !(config.key?(:project) || config.key?(:ref)) }
+            if: -> (config) { config.is_a?(Hash) && same_pipeline_need?(config) }
+
+          strategy :CrossPipelineDependency,
+            if: -> (config) { config.is_a?(Hash) && cross_pipeline_need?(config) }
+
+          def self.same_pipeline_need?(config)
+            config.key?(:job) &&
+              !(config.key?(:project) || config.key?(:ref) || config.key?(:pipeline))
+          end
+
+          def self.cross_pipeline_need?(config)
+            config.key?(:job) && config.key?(:pipeline) && !config.key?(:project)
+          end
 
           class JobString < ::Gitlab::Config::Entry::Node
             include ::Gitlab::Config::Entry::Validatable
@@ -23,7 +35,9 @@ module Gitlab
             end
 
             def value
-              { name: @config, artifacts: true }
+              { name: @config,
+                artifacts: true,
+                optional: false }
             end
           end
 
@@ -31,14 +45,15 @@ module Gitlab
             include ::Gitlab::Config::Entry::Validatable
             include ::Gitlab::Config::Entry::Attributable
 
-            ALLOWED_KEYS = %i[job artifacts].freeze
-            attributes :job, :artifacts
+            ALLOWED_KEYS = %i[job artifacts optional].freeze
+            attributes :job, :artifacts, :optional
 
             validations do
               validates :config, presence: true
               validates :config, allowed_keys: ALLOWED_KEYS
               validates :job, type: String, presence: true
               validates :artifacts, boolean: true, allow_nil: true
+              validates :optional, boolean: true, allow_nil: true
             end
 
             def type
@@ -46,7 +61,33 @@ module Gitlab
             end
 
             def value
-              { name: job, artifacts: artifacts || artifacts.nil? }
+              { name: job,
+                artifacts: artifacts || artifacts.nil?,
+                optional: !!optional }
+            end
+          end
+
+          class CrossPipelineDependency < ::Gitlab::Config::Entry::Node
+            include ::Gitlab::Config::Entry::Validatable
+            include ::Gitlab::Config::Entry::Attributable
+
+            ALLOWED_KEYS = %i[pipeline job artifacts].freeze
+            attributes :pipeline, :job, :artifacts
+
+            validations do
+              validates :config, presence: true
+              validates :config, allowed_keys: ALLOWED_KEYS
+              validates :pipeline, type: String, presence: true
+              validates :job, type: String, presence: true
+              validates :artifacts, boolean: true, allow_nil: true
+            end
+
+            def type
+              :cross_dependency
+            end
+
+            def value
+              super.merge(artifacts: artifacts || artifacts.nil?)
             end
           end
 
@@ -67,4 +108,4 @@ module Gitlab
   end
 end
 
-::Gitlab::Ci::Config::Entry::Need.prepend_if_ee('::EE::Gitlab::Ci::Config::Entry::Need')
+::Gitlab::Ci::Config::Entry::Need.prepend_mod_with('Gitlab::Ci::Config::Entry::Need')

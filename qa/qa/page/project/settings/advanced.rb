@@ -11,17 +11,22 @@ module QA
           view 'app/views/projects/edit.html.haml' do
             element :project_path_field
             element :change_path_button
+          end
+
+          view 'app/views/projects/_transfer.html.haml' do
             element :transfer_button
           end
 
           view 'app/views/projects/settings/_archive.html.haml' do
             element :archive_project_link
             element :unarchive_project_link
+            element :archive_project_content
           end
 
           view 'app/views/projects/_export.html.haml' do
             element :export_project_link
             element :download_export_link
+            element :export_project_content
           end
 
           def update_project_path_to(path)
@@ -37,16 +42,20 @@ module QA
             click_element :change_path_button
           end
 
-          def select_transfer_option(namespace)
-            search_and_select(namespace)
-          end
-
           def transfer_project!(project_name, namespace)
+            QA::Runtime::Logger.info "Transferring project: #{project_name} to namespace: #{namespace}"
+
+            click_element_coordinates(:archive_project_content)
+
             expand_select_list
-            select_transfer_option(namespace)
+
+            # Workaround for a failure to search when there are no spaces around the /
+            # https://gitlab.com/gitlab-org/gitlab/-/issues/218965
+            search_and_select(namespace.gsub(%r{([^\s])/([^\s])}, '\1 / \2'))
+
             click_element(:transfer_button)
             fill_confirmation_text(project_name)
-            click_confirm_button
+            confirm_transfer
           end
 
           def click_export_project_link
@@ -55,6 +64,10 @@ module QA
 
           def click_download_export_link
             click_element :download_export_link
+          end
+
+          def has_download_export_link?
+            has_element? :download_export_link
           end
 
           def archive_project

@@ -2,8 +2,9 @@
 
 require 'spec_helper'
 
-describe Gitlab::Template::Finders::RepoTemplateFinder do
+RSpec.describe Gitlab::Template::Finders::RepoTemplateFinder do
   let_it_be(:project) { create(:project, :repository) }
+
   let(:categories) { { 'HTML' => 'html' } }
 
   subject(:finder) { described_class.new(project, 'files/', '.html', categories) }

@@ -2,9 +2,9 @@
 
 require 'spec_helper'
 
-require Rails.root.join('db', 'migrate', '20200116175538_update_timestamp_softwarelicensespolicy.rb')
+require_migration!
 
-describe UpdateTimestampSoftwarelicensespolicy, :migration do
+RSpec.describe UpdateTimestampSoftwarelicensespolicy do
   let(:software_licenses_policy) { table(:software_license_policies) }
   let(:projects) { table(:projects) }
   let(:licenses) { table(:software_licenses) }

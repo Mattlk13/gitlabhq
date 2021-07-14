@@ -2,7 +2,7 @@
 
 require 'spec_helper'
 
-describe 'Project Graph', :js do
+RSpec.describe 'Project Graph', :js do
   let(:user) { create :user }
   let(:project) { create(:project, :repository, namespace: user.namespace) }
   let(:branch_name) { 'master' }
@@ -59,7 +59,7 @@ describe 'Project Graph', :js do
 
     it 'HTML escapes branch name' do
       expect(page.body).to include("Commit statistics for <strong>#{ERB::Util.html_escape(branch_name)}</strong>")
-      expect(page.body).not_to include(branch_name)
+      expect(page.find('.dropdown-toggle-text')['innerHTML']).to eq(ERB::Util.html_escape(branch_name))
     end
   end
 
@@ -72,10 +72,10 @@ describe 'Project Graph', :js do
 
     it 'renders CI graphs' do
       expect(page).to have_content 'Overall'
-      expect(page).to have_content 'Pipelines for last week'
-      expect(page).to have_content 'Pipelines for last month'
-      expect(page).to have_content 'Pipelines for last year'
-      expect(page).to have_content 'Duration for the last 30 commits'
+      expect(page).to have_content 'Last week'
+      expect(page).to have_content 'Last month'
+      expect(page).to have_content 'Last year'
+      expect(page).to have_content 'Pipeline durations for the last 30 commits'
     end
   end
 end

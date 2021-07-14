@@ -2,7 +2,7 @@
 
 require 'spec_helper'
 
-describe 'New merge request breadcrumb' do
+RSpec.describe 'New merge request breadcrumb' do
   let(:project) { create(:project, :repository) }
   let(:user) { project.creator }
 
@@ -13,7 +13,7 @@ describe 'New merge request breadcrumb' do
 
   it 'displays link to project merge requests and new merge request' do
     page.within '.breadcrumbs' do
-      expect(find_link('Merge Requests')[:href]).to end_with(project_merge_requests_path(project))
+      expect(find_link('Merge requests')[:href]).to end_with(project_merge_requests_path(project))
       expect(find_link('New')[:href]).to end_with(project_new_merge_request_path(project))
     end
   end

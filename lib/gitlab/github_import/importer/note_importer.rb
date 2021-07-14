@@ -21,8 +21,7 @@ module Gitlab
 
           author_id, author_found = user_finder.author_id_for(note)
 
-          note_body =
-            MarkdownText.format(note.note, note.author, author_found)
+          note_body = MarkdownText.format(note.note, note.author, author_found)
 
           attributes = {
             noteable_type: note.noteable_type,
@@ -38,7 +37,7 @@ module Gitlab
           # We're using bulk_insert here so we can bypass any validations and
           # callbacks. Running these would result in a lot of unnecessary SQL
           # queries being executed when importing large projects.
-          Gitlab::Database.bulk_insert(Note.table_name, [attributes])
+          Gitlab::Database.bulk_insert(Note.table_name, [attributes]) # rubocop:disable Gitlab/BulkInsert
         rescue ActiveRecord::InvalidForeignKey
           # It's possible the project and the issue have been deleted since
           # scheduling this job. In this case we'll just skip creating the note.

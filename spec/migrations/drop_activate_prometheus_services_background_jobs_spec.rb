@@ -1,9 +1,9 @@
 # frozen_string_literal: true
 
 require 'spec_helper'
-require Rails.root.join('db', 'migrate', '20200221144534_drop_activate_prometheus_services_background_jobs.rb')
+require_migration!
 
-describe DropActivatePrometheusServicesBackgroundJobs, :sidekiq, :redis, :migration, schema: 2020_02_21_144534 do
+RSpec.describe DropActivatePrometheusServicesBackgroundJobs, :sidekiq, :redis, schema: 2020_02_21_144534 do
   subject(:migration) { described_class.new }
 
   describe '#up' do

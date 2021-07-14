@@ -1,17 +1,12 @@
-/* eslint-disable import/no-commonjs, filenames/match-regex */
-
 const BABEL_ENV = process.env.BABEL_ENV || process.env.NODE_ENV || null;
 
-const presets = [
+let presets = [
   [
     '@babel/preset-env',
     {
       useBuiltIns: 'usage',
       corejs: { version: 3, proposals: true },
       modules: false,
-      targets: {
-        ie: '11',
-      },
     },
   ],
 ];
@@ -22,6 +17,8 @@ const plugins = [
   '@babel/plugin-proposal-class-properties',
   '@babel/plugin-proposal-json-strings',
   '@babel/plugin-proposal-private-methods',
+  // See: https://gitlab.com/gitlab-org/gitlab/-/issues/229146
+  '@babel/plugin-transform-arrow-functions',
   'lodash',
 ];
 
@@ -35,11 +32,6 @@ if (BABEL_ENV === 'coverage') {
   ]);
 }
 
-// add rewire support when running tests
-if (BABEL_ENV === 'karma' || BABEL_ENV === 'coverage') {
-  plugins.push('babel-plugin-rewire');
-}
-
 // Jest is running in node environment, so we need additional plugins
 const isJest = Boolean(process.env.JEST_WORKER_ID);
 if (isJest) {
@@ -49,6 +41,17 @@ if (isJest) {
   https://gitlab.com/gitlab-org/gitlab-foss/issues/58390
   */
   plugins.push('babel-plugin-dynamic-import-node');
+
+  presets = [
+    [
+      '@babel/preset-env',
+      {
+        targets: {
+          node: 'current',
+        },
+      },
+    ],
+  ];
 }
 
 module.exports = { presets, plugins, sourceType: 'unambiguous' };

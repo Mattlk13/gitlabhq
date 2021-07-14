@@ -2,76 +2,53 @@
 
 require 'spec_helper'
 
-describe 'Group navbar' do
-  let(:user) { create(:user) }
-  let(:group) { create(:group) }
+RSpec.describe 'Group navbar' do
+  include NavbarStructureHelper
+  include WikiHelpers
 
-  let(:analytics_nav_item) do
-    {
-      nav_item: _('Analytics'),
-      nav_sub_items: [
-        _('Contribution Analytics')
-      ]
-    }
-  end
+  include_context 'group navbar structure'
 
-  let(:structure) do
-    [
-      {
-        nav_item: _('Group overview'),
-        nav_sub_items: [
-          _('Details'),
-          _('Activity')
-        ]
-      },
-      {
-        nav_item: _('Issues'),
-        nav_sub_items: [
-          _('List'),
-          _('Board'),
-          _('Labels'),
-          _('Milestones')
-        ]
-      },
-      {
-        nav_item: _('Merge Requests'),
-        nav_sub_items: []
-      },
-      {
-        nav_item: _('Kubernetes'),
-        nav_sub_items: []
-      },
-      (analytics_nav_item if Gitlab.ee?),
-      {
-        nav_item: _('Members'),
-        nav_sub_items: []
-      }
-    ]
+  let_it_be(:user) { create(:user) }
+  let_it_be(:group) { create(:group) }
+
+  before do
+    insert_package_nav(_('Kubernetes'))
+
+    stub_feature_flags(group_iterations: false)
+    stub_config(dependency_proxy: { enabled: false })
+    stub_config(registry: { enabled: false })
+    stub_group_wikis(false)
+    group.add_maintainer(user)
+    sign_in(user)
   end
 
   it_behaves_like 'verified navigation bar' do
     before do
-      group.add_maintainer(user)
-      sign_in(user)
-
       visit group_path(group)
     end
   end
 
-  if Gitlab.ee?
-    context 'when productivity analytics is available' do
-      before do
-        stub_licensed_features(productivity_analytics: true)
+  context 'when container registry is available' do
+    before do
+      stub_config(registry: { enabled: true })
 
-        analytics_nav_item[:nav_sub_items] << _('Productivity Analytics')
+      insert_container_nav
 
-        group.add_maintainer(user)
-        sign_in(user)
-
-        visit group_path(group)
-      end
-
-      it_behaves_like 'verified navigation bar'
+      visit group_path(group)
     end
+
+    it_behaves_like 'verified navigation bar'
+  end
+
+  context 'when dependency proxy is available' do
+    before do
+      stub_config(dependency_proxy: { enabled: true })
+
+      insert_dependency_proxy_nav
+
+      visit group_path(group)
+    end
+
+    it_behaves_like 'verified navigation bar'
   end
 end

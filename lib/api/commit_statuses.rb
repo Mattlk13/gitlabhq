@@ -3,7 +3,9 @@
 require 'mime/types'
 
 module API
-  class CommitStatuses < Grape::API
+  class CommitStatuses < ::API::Base
+    feature_category :continuous_integration
+
     params do
       requires :id, type: String, desc: 'The ID of a project'
     end
@@ -60,7 +62,7 @@ module API
 
         not_found! 'Commit' unless commit
 
-        # Since the CommitStatus is attached to Ci::Pipeline (in the future Pipeline)
+        # Since the CommitStatus is attached to ::Ci::Pipeline (in the future Pipeline)
         # We need to always have the pipeline object
         # To have a valid pipeline object that can be attached to specific MR
         # Other CI service needs to send `ref`
@@ -94,38 +96,29 @@ module API
           protected: user_project.protected_for?(ref)
         )
 
-        optional_attributes =
-          attributes_for_keys(%w[target_url description coverage])
+        updatable_optional_attributes = %w[target_url description coverage]
+        status.assign_attributes(attributes_for_keys(updatable_optional_attributes))
 
-        status.update(optional_attributes) if optional_attributes.any?
-        render_validation_error!(status) if status.invalid?
+        render_validation_error!(status) unless status.valid?
 
-        begin
-          case params[:state]
-          when 'pending'
-            status.enqueue!
-          when 'running'
-            status.enqueue
-            status.run!
-          when 'success'
-            status.success!
-          when 'failed'
-            status.drop!(:api_failure)
-          when 'canceled'
-            status.cancel!
-          else
-            render_api_error!('invalid state', 400)
-          end
-
-          MergeRequest.where(source_project: user_project, source_branch: ref)
-            .update_all(head_pipeline_id: pipeline.id) if pipeline.latest?
-
-          present status, with: Entities::CommitStatus
-        rescue StateMachines::InvalidTransition => e
+        response = ::Ci::Pipelines::AddJobService.new(pipeline).execute!(status) do |job|
+          apply_job_state!(job)
+        rescue ::StateMachines::InvalidTransition => e
           render_api_error!(e.message, 400)
         end
+
+        render_validation_error!(response.payload[:job]) unless response.success?
+
+        if pipeline.latest?
+          MergeRequest
+            .where(source_project: user_project, source_branch: ref)
+            .update_all(head_pipeline_id: pipeline.id)
+        end
+
+        present response.payload[:job], with: Entities::CommitStatus
       end
       # rubocop: enable CodeReuse/ActiveRecord
+
       helpers do
         def commit
           strong_memoize(:commit) do
@@ -138,6 +131,24 @@ module API
           pipelines = pipelines.for_ref(params[:ref]) if params[:ref]
           pipelines = pipelines.for_id(params[:pipeline_id]) if params[:pipeline_id]
           pipelines
+        end
+
+        def apply_job_state!(job)
+          case params[:state]
+          when 'pending'
+            job.enqueue!
+          when 'running'
+            job.enqueue
+            job.run!
+          when 'success'
+            job.success!
+          when 'failed'
+            job.drop!(:api_failure)
+          when 'canceled'
+            job.cancel!
+          else
+            render_api_error!('invalid state', 400)
+          end
         end
       end
     end

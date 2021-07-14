@@ -1,9 +1,10 @@
+import { throttle } from 'lodash';
 import { Range } from 'monaco-editor';
-import { throttle } from 'underscore';
-import DirtyDiffWorker from './diff_worker';
+import { DEFAULT_DEBOUNCE_AND_THROTTLE_MS } from '~/lib/utils/constants';
 import Disposable from '../common/disposable';
+import DirtyDiffWorker from './diff_worker';
 
-export const getDiffChangeType = change => {
+export const getDiffChangeType = (change) => {
   if (change.modified) {
     return 'modified';
   } else if (change.added) {
@@ -15,7 +16,7 @@ export const getDiffChangeType = change => {
   return '';
 };
 
-export const getDecorator = change => ({
+export const getDecorator = (change) => ({
   range: new Range(change.lineNumber, 1, change.endLineNumber, 1),
   options: {
     isWholeLine: true,
@@ -31,7 +32,7 @@ export default class DirtyDiffController {
     this.modelManager = modelManager;
     this.decorationsController = decorationsController;
     this.dirtyDiffWorker = new DirtyDiffWorker();
-    this.throttledComputeDiff = throttle(this.computeDiff, 250);
+    this.throttledComputeDiff = throttle(this.computeDiff, DEFAULT_DEBOUNCE_AND_THROTTLE_MS);
     this.decorate = this.decorate.bind(this);
 
     this.dirtyDiffWorker.addEventListener('message', this.decorate);
@@ -50,10 +51,15 @@ export default class DirtyDiffController {
   }
 
   computeDiff(model) {
+    const originalModel = model.getOriginalModel();
+    const newModel = model.getModel();
+
+    if (originalModel.isDisposed() || newModel.isDisposed()) return;
+
     this.dirtyDiffWorker.postMessage({
       path: model.path,
-      originalContent: model.getOriginalModel().getValue(),
-      newContent: model.getModel().getValue(),
+      originalContent: originalModel.getValue(),
+      newContent: newModel.getValue(),
     });
   }
 
@@ -66,7 +72,7 @@ export default class DirtyDiffController {
   }
 
   decorate({ data }) {
-    const decorations = data.changes.map(change => getDecorator(change));
+    const decorations = data.changes.map((change) => getDecorator(change));
     const model = this.modelManager.getModel(data.path);
     this.decorationsController.addDecorations(model, 'dirtyDiff', decorations);
   }

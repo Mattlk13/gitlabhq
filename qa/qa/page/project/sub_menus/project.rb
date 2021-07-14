@@ -5,20 +5,20 @@ module QA
     module Project
       module SubMenus
         module Project
-          include Common
+          extend QA::Page::PageConcern
 
           def self.included(base)
+            super
+
             base.class_eval do
-              view 'app/views/layouts/nav/sidebar/_project.html.haml' do
-                element :project_link
-              end
+              include QA::Page::Project::SubMenus::Common
             end
           end
 
           def click_project
             retry_on_exception do
               within_sidebar do
-                click_element(:project_link)
+                click_element(:sidebar_menu_link, menu_item: 'Project scope')
               end
             end
           end

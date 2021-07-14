@@ -18,6 +18,9 @@ class Identity < ApplicationRecord
   scope :with_extern_uid, ->(provider, extern_uid) do
     iwhere(extern_uid: normalize_uid(provider, extern_uid)).with_provider(provider)
   end
+  scope :with_any_extern_uid, ->(provider) do
+    where.not(extern_uid: nil).with_provider(provider)
+  end
 
   def ldap?
     Gitlab::Auth::OAuth::Provider.ldap_provider?(provider)
@@ -25,7 +28,7 @@ class Identity < ApplicationRecord
 
   def self.normalize_uid(provider, uid)
     if Gitlab::Auth::OAuth::Provider.ldap_provider?(provider)
-      Gitlab::Auth::LDAP::Person.normalize_dn(uid)
+      Gitlab::Auth::Ldap::Person.normalize_dn(uid)
     else
       uid.to_s
     end
@@ -48,4 +51,4 @@ class Identity < ApplicationRecord
   end
 end
 
-Identity.prepend_if_ee('EE::Identity')
+Identity.prepend_mod_with('Identity')

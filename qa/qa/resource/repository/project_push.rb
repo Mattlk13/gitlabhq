@@ -9,8 +9,11 @@ module QA
         attr_accessor :project_name
         attr_writer :wait_for_push
 
+        attribute :group
+
         attribute :project do
           Project.fabricate! do |resource|
+            resource.group = group if @group
             resource.name = project_name
             resource.description = 'Project with repository'
           end
@@ -20,10 +23,10 @@ module QA
           @file_name = "file-#{SecureRandom.hex(8)}.txt"
           @file_content = '# This is test project'
           @commit_message = "This is a test commit"
-          @branch_name = 'master'
           @new_branch = true
           @project_name = 'project-with-code'
           @wait_for_push = true
+          @group = nil
         end
 
         def repository_http_uri
@@ -35,6 +38,8 @@ module QA
         end
 
         def fabricate!
+          @branch_name ||= project.default_branch
+
           super
           project.wait_for_push @commit_message if @wait_for_push
         end

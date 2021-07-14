@@ -3,7 +3,7 @@
 require 'spec_helper'
 require 'ffaker'
 
-describe Banzai::Filter::CommitTrailersFilter do
+RSpec.describe Banzai::Filter::CommitTrailersFilter do
   include FilterSpecHelper
   include CommitTrailersSpecHelper
 
@@ -139,6 +139,12 @@ describe Banzai::Filter::CommitTrailersFilter do
   end
 
   context "structure" do
+    it 'starts with two newlines to separate with actual commit message' do
+      doc = filter(commit_message_html)
+
+      expect(doc.xpath('pre').text).to start_with("\n\n")
+    end
+
     it 'preserves the commit trailer structure' do
       doc = filter(commit_message_html)
 

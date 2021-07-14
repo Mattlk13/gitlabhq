@@ -2,7 +2,7 @@
 
 require 'spec_helper'
 
-describe 'Private Group access' do
+RSpec.describe 'Private Group access' do
   include AccessMatchers
 
   let(:group)   { create(:group, :private) }
@@ -24,7 +24,12 @@ describe 'Private Group access' do
   describe 'GET /groups/:path' do
     subject { group_path(group) }
 
-    it { is_expected.to be_allowed_for(:admin) }
+    context 'when admin mode is enabled', :enable_admin_mode do
+      it { is_expected.to be_allowed_for(:admin) }
+    end
+    context 'when admin mode is disabled' do
+      it { is_expected.to be_denied_for(:admin) }
+    end
     it { is_expected.to be_allowed_for(:owner).of(group) }
     it { is_expected.to be_allowed_for(:maintainer).of(group) }
     it { is_expected.to be_allowed_for(:developer).of(group) }
@@ -39,7 +44,12 @@ describe 'Private Group access' do
   describe 'GET /groups/:path/-/issues' do
     subject { issues_group_path(group) }
 
-    it { is_expected.to be_allowed_for(:admin) }
+    context 'when admin mode is enabled', :enable_admin_mode do
+      it { is_expected.to be_allowed_for(:admin) }
+    end
+    context 'when admin mode is disabled' do
+      it { is_expected.to be_denied_for(:admin) }
+    end
     it { is_expected.to be_allowed_for(:owner).of(group) }
     it { is_expected.to be_allowed_for(:maintainer).of(group) }
     it { is_expected.to be_allowed_for(:developer).of(group) }
@@ -56,7 +66,12 @@ describe 'Private Group access' do
 
     subject { merge_requests_group_path(group) }
 
-    it { is_expected.to be_allowed_for(:admin) }
+    context 'when admin mode is enabled', :enable_admin_mode do
+      it { is_expected.to be_allowed_for(:admin) }
+    end
+    context 'when admin mode is disabled' do
+      it { is_expected.to be_denied_for(:admin) }
+    end
     it { is_expected.to be_allowed_for(:owner).of(group) }
     it { is_expected.to be_allowed_for(:maintainer).of(group) }
     it { is_expected.to be_allowed_for(:developer).of(group) }
@@ -71,7 +86,12 @@ describe 'Private Group access' do
   describe 'GET /groups/:path/-/group_members' do
     subject { group_group_members_path(group) }
 
-    it { is_expected.to be_allowed_for(:admin) }
+    context 'when admin mode is enabled', :enable_admin_mode do
+      it { is_expected.to be_allowed_for(:admin) }
+    end
+    context 'when admin mode is disabled' do
+      it { is_expected.to be_denied_for(:admin) }
+    end
     it { is_expected.to be_allowed_for(:owner).of(group) }
     it { is_expected.to be_allowed_for(:maintainer).of(group) }
     it { is_expected.to be_allowed_for(:developer).of(group) }
@@ -86,7 +106,12 @@ describe 'Private Group access' do
   describe 'GET /groups/:path/-/edit' do
     subject { edit_group_path(group) }
 
-    it { is_expected.to be_allowed_for(:admin) }
+    context 'when admin mode is enabled', :enable_admin_mode do
+      it { is_expected.to be_allowed_for(:admin) }
+    end
+    context 'when admin mode is disabled' do
+      it { is_expected.to be_denied_for(:admin) }
+    end
     it { is_expected.to be_allowed_for(:owner).of(group) }
     it { is_expected.to be_denied_for(:maintainer).of(group) }
     it { is_expected.to be_denied_for(:developer).of(group) }
@@ -107,7 +132,12 @@ describe 'Private Group access' do
 
     subject { group_path(group) }
 
-    it { is_expected.to be_allowed_for(:admin) }
+    context 'when admin mode is enabled', :enable_admin_mode do
+      it { is_expected.to be_allowed_for(:admin) }
+    end
+    context 'when admin mode is disabled' do
+      it { is_expected.to be_denied_for(:admin) }
+    end
     it { is_expected.to be_allowed_for(:owner).of(group) }
     it { is_expected.to be_allowed_for(:maintainer).of(group) }
     it { is_expected.to be_allowed_for(:developer).of(group) }

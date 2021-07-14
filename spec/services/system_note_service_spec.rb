@@ -2,14 +2,16 @@
 
 require 'spec_helper'
 
-describe SystemNoteService do
+RSpec.describe SystemNoteService do
   include Gitlab::Routing
   include RepoHelpers
   include AssetsHelpers
+  include DesignManagementTestHelpers
 
   let_it_be(:group)    { create(:group) }
   let_it_be(:project)  { create(:project, :repository, group: group) }
   let_it_be(:author)   { create(:user) }
+
   let(:noteable) { create(:issue, project: project) }
   let(:issue)    { noteable }
 
@@ -63,6 +65,18 @@ describe SystemNoteService do
     end
   end
 
+  describe '.change_issuable_reviewers' do
+    let(:reviewers) { [double, double] }
+
+    it 'calls IssuableService' do
+      expect_next_instance_of(::SystemNotes::IssuablesService) do |service|
+        expect(service).to receive(:change_issuable_reviewers).with(reviewers)
+      end
+
+      described_class.change_issuable_reviewers(noteable, project, author, reviewers)
+    end
+  end
+
   describe '.close_after_error_tracking_resolve' do
     it 'calls IssuableService' do
       expect_next_instance_of(::SystemNotes::IssuablesService) do |service|
@@ -73,15 +87,37 @@ describe SystemNoteService do
     end
   end
 
-  describe '.change_milestone' do
-    let(:milestone) { double }
+  describe '.relate_issue' do
+    let(:noteable_ref) { double }
+    let(:noteable) { double }
+
+    before do
+      allow(noteable).to receive(:project).and_return(double)
+    end
 
     it 'calls IssuableService' do
       expect_next_instance_of(::SystemNotes::IssuablesService) do |service|
-        expect(service).to receive(:change_milestone).with(milestone)
+        expect(service).to receive(:relate_issue).with(noteable_ref)
       end
 
-      described_class.change_milestone(noteable, project, author, milestone)
+      described_class.relate_issue(noteable, noteable_ref, double)
+    end
+  end
+
+  describe '.unrelate_issue' do
+    let(:noteable_ref) { double }
+    let(:noteable) { double }
+
+    before do
+      allow(noteable).to receive(:project).and_return(double)
+    end
+
+    it 'calls IssuableService' do
+      expect_next_instance_of(::SystemNotes::IssuablesService) do |service|
+        expect(service).to receive(:unrelate_issue).with(noteable_ref)
+      end
+
+      described_class.unrelate_issue(noteable, noteable_ref, double)
     end
   end
 
@@ -178,15 +214,16 @@ describe SystemNoteService do
 
   describe '.change_branch' do
     it 'calls MergeRequestsService' do
-      old_branch = double
-      new_branch = double
-      branch_type = double
+      old_branch = double('old_branch')
+      new_branch = double('new_branch')
+      branch_type = double('branch_type')
+      event_type = double('event_type')
 
       expect_next_instance_of(::SystemNotes::MergeRequestsService) do |service|
-        expect(service).to receive(:change_branch).with(branch_type, old_branch, new_branch)
+        expect(service).to receive(:change_branch).with(branch_type, event_type, old_branch, new_branch)
       end
 
-      described_class.change_branch(noteable, project, author, branch_type, old_branch, new_branch)
+      described_class.change_branch(noteable, project, author, branch_type, event_type, old_branch, new_branch)
     end
   end
 
@@ -298,6 +335,19 @@ describe SystemNoteService do
     end
   end
 
+  describe '.noteable_cloned' do
+    let(:noteable_ref) { double }
+    let(:direction) { double }
+
+    it 'calls IssuableService' do
+      expect_next_instance_of(::SystemNotes::IssuablesService) do |service|
+        expect(service).to receive(:noteable_cloned).with(noteable_ref, direction)
+      end
+
+      described_class.noteable_cloned(double, double, noteable_ref, double, direction: direction)
+    end
+  end
+
   describe 'Jira integration' do
     include JiraServiceHelper
 
@@ -306,14 +356,15 @@ describe SystemNoteService do
     let(:issue)           { create(:issue, project: project) }
     let(:merge_request)   { create(:merge_request, :simple, target_project: project, source_project: project) }
     let(:jira_issue)      { ExternalIssue.new("JIRA-1", project)}
-    let(:jira_tracker)    { project.jira_service }
+    let(:jira_tracker)    { project.jira_integration }
     let(:commit)          { project.commit }
     let(:comment_url)     { jira_api_comment_url(jira_issue.id) }
     let(:success_message) { "SUCCESS: Successfully posted to http://jira.example.net." }
 
     before do
+      stub_jira_integration_test
       stub_jira_urls(jira_issue.id)
-      jira_service_settings
+      jira_integration_settings
     end
 
     def cross_reference(type, link_exists = false)
@@ -342,13 +393,13 @@ describe SystemNoteService do
     noteable_types.each do |type|
       context "when noteable is a #{type}" do
         it "blocks cross reference when #{type.underscore}_events is false" do
-          jira_tracker.update("#{type}_events" => false)
+          jira_tracker.update!("#{type}_events" => false)
 
           expect(cross_reference(type)).to eq(s_('JiraService|Events for %{noteable_model_name} are disabled.') % { noteable_model_name: type.pluralize.humanize.downcase })
         end
 
         it "creates cross reference when #{type.underscore}_events is true" do
-          jira_tracker.update("#{type}_events" => true)
+          jira_tracker.update!("#{type}_events" => true)
 
           expect(cross_reference(type)).to eq(success_message)
         end
@@ -462,7 +513,8 @@ describe SystemNoteService do
     describe "existing reference" do
       before do
         allow(JIRA::Resource::Remotelink).to receive(:all).and_return([])
-        message = "[#{author.name}|http://localhost/#{author.username}] mentioned this issue in [a commit of #{project.full_path}|http://localhost/#{project.full_path}/-/commit/#{commit.id}]:\n'#{commit.title.chomp}'"
+        message = double('message')
+        allow(message).to receive(:include?) { true }
         allow_next_instance_of(JIRA::Resource::Issue) do |instance|
           allow(instance).to receive(:comments).and_return([OpenStruct.new(body: message)])
         end
@@ -529,25 +581,25 @@ describe SystemNoteService do
     end
   end
 
-  describe '.handle_merge_request_wip' do
+  describe '.handle_merge_request_draft' do
     it 'calls MergeRequestsService' do
       expect_next_instance_of(::SystemNotes::MergeRequestsService) do |service|
-        expect(service).to receive(:handle_merge_request_wip)
+        expect(service).to receive(:handle_merge_request_draft)
       end
 
-      described_class.handle_merge_request_wip(noteable, project, author)
+      described_class.handle_merge_request_draft(noteable, project, author)
     end
   end
 
-  describe '.add_merge_request_wip_from_commit' do
+  describe '.add_merge_request_draft_from_commit' do
     it 'calls MergeRequestsService' do
       commit = double
 
       expect_next_instance_of(::SystemNotes::MergeRequestsService) do |service|
-        expect(service).to receive(:add_merge_request_wip_from_commit).with(commit)
+        expect(service).to receive(:add_merge_request_draft_from_commit).with(commit)
       end
 
-      described_class.add_merge_request_wip_from_commit(noteable, project, author, commit)
+      described_class.add_merge_request_draft_from_commit(noteable, project, author, commit)
     end
   end
 
@@ -623,6 +675,122 @@ describe SystemNoteService do
       end
 
       described_class.discussion_lock(issuable, double)
+    end
+  end
+
+  describe '.auto_resolve_prometheus_alert' do
+    it 'calls IssuableService' do
+      expect_next_instance_of(::SystemNotes::IssuablesService) do |service|
+        expect(service).to receive(:auto_resolve_prometheus_alert)
+      end
+
+      described_class.auto_resolve_prometheus_alert(noteable, project, author)
+    end
+  end
+
+  describe '.design_version_added' do
+    let(:version) { create(:design_version) }
+
+    it 'calls DesignManagementService' do
+      expect_next_instance_of(SystemNotes::DesignManagementService) do |service|
+        expect(service).to receive(:design_version_added).with(version)
+      end
+
+      described_class.design_version_added(version)
+    end
+  end
+
+  describe '.design_discussion_added' do
+    let(:discussion_note) { create(:diff_note_on_design) }
+
+    it 'calls DesignManagementService' do
+      expect_next_instance_of(SystemNotes::DesignManagementService) do |service|
+        expect(service).to receive(:design_discussion_added).with(discussion_note)
+      end
+
+      described_class.design_discussion_added(discussion_note)
+    end
+  end
+
+  describe '.approve_mr' do
+    it 'calls MergeRequestsService' do
+      expect_next_instance_of(::SystemNotes::MergeRequestsService) do |service|
+        expect(service).to receive(:approve_mr)
+      end
+
+      described_class.approve_mr(noteable, author)
+    end
+  end
+
+  describe '.unapprove_mr' do
+    it 'calls MergeRequestsService' do
+      expect_next_instance_of(::SystemNotes::MergeRequestsService) do |service|
+        expect(service).to receive(:unapprove_mr)
+      end
+
+      described_class.unapprove_mr(noteable, author)
+    end
+  end
+
+  describe '.change_alert_status' do
+    let(:alert) { build(:alert_management_alert) }
+
+    it 'calls AlertManagementService' do
+      expect_next_instance_of(SystemNotes::AlertManagementService) do |service|
+        expect(service).to receive(:change_alert_status).with(alert)
+      end
+
+      described_class.change_alert_status(alert, author)
+    end
+  end
+
+  describe '.new_alert_issue' do
+    let(:alert) { build(:alert_management_alert, :with_issue) }
+
+    it 'calls AlertManagementService' do
+      expect_next_instance_of(SystemNotes::AlertManagementService) do |service|
+        expect(service).to receive(:new_alert_issue).with(alert.issue)
+      end
+
+      described_class.new_alert_issue(alert, alert.issue, author)
+    end
+  end
+
+  describe '.create_new_alert' do
+    let(:alert) { build(:alert_management_alert) }
+    let(:monitoring_tool) { 'Prometheus' }
+
+    it 'calls AlertManagementService' do
+      expect_next_instance_of(SystemNotes::AlertManagementService) do |service|
+        expect(service).to receive(:create_new_alert).with(monitoring_tool)
+      end
+
+      described_class.create_new_alert(alert, monitoring_tool)
+    end
+  end
+
+  describe '.change_incident_severity' do
+    let(:incident) { build(:incident) }
+
+    it 'calls IncidentService' do
+      expect_next_instance_of(SystemNotes::IncidentService) do |service|
+        expect(service).to receive(:change_incident_severity)
+      end
+
+      described_class.change_incident_severity(incident, author)
+    end
+  end
+
+  describe '.log_resolving_alert' do
+    let(:alert) { build(:alert_management_alert) }
+    let(:monitoring_tool) { 'Prometheus' }
+
+    it 'calls AlertManagementService' do
+      expect_next_instance_of(SystemNotes::AlertManagementService) do |service|
+        expect(service).to receive(:log_resolving_alert).with(monitoring_tool)
+      end
+
+      described_class.log_resolving_alert(alert, monitoring_tool)
     end
   end
 end

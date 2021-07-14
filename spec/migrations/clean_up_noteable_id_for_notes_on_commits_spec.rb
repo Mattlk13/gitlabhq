@@ -1,9 +1,9 @@
 # frozen_string_literal: true
 
 require 'spec_helper'
-require Rails.root.join('db', 'post_migrate', '20190313092516_clean_up_noteable_id_for_notes_on_commits.rb')
+require_migration!
 
-describe CleanUpNoteableIdForNotesOnCommits, :migration do
+RSpec.describe CleanUpNoteableIdForNotesOnCommits do
   let(:notes) { table(:notes) }
 
   before do
@@ -25,7 +25,7 @@ describe CleanUpNoteableIdForNotesOnCommits, :migration do
   end
 
   def dirty_notes_on_commits
-    notes.where(noteable_type: 'Commit').where('noteable_id IS NOT NULL')
+    notes.where(noteable_type: 'Commit').where.not(noteable_id: nil)
   end
 
   def other_notes

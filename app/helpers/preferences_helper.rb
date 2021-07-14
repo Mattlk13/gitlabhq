@@ -4,23 +4,10 @@
 module PreferencesHelper
   def layout_choices
     [
-        ['Fixed', :fixed],
-        ['Fluid', :fluid]
+      ['Fixed', :fixed],
+      ['Fluid', :fluid]
     ]
   end
-
-  # Maps `dashboard` values to more user-friendly option text
-  DASHBOARD_CHOICES = {
-    projects: _("Your Projects (default)"),
-    stars:    _("Starred Projects"),
-    project_activity: _("Your Projects' Activity"),
-    starred_project_activity: _("Starred Projects' Activity"),
-    groups: _("Your Groups"),
-    todos: _("Your To-Do List"),
-    issues: _("Assigned Issues"),
-    merge_requests: _("Assigned Merge Requests"),
-    operations: _("Operations Dashboard")
-  }.with_indifferent_access.freeze
 
   # Returns an Array usable by a select field for more user-friendly option text
   def dashboard_choices
@@ -31,8 +18,24 @@ module PreferencesHelper
 
     dashboards.map do |key|
       # Use `fetch` so `KeyError` gets raised when a key is missing
-      [DASHBOARD_CHOICES.fetch(key), key]
+      [localized_dashboard_choices.fetch(key), key]
     end
+  end
+
+  # Maps `dashboard` values to more user-friendly option text
+  def localized_dashboard_choices
+    {
+      projects: _("Your Projects (default)"),
+      stars:    _("Starred Projects"),
+      project_activity: _("Your Projects' Activity"),
+      starred_project_activity: _("Starred Projects' Activity"),
+      followed_user_activity: _("Followed Users' Activity"),
+      groups: _("Your Groups"),
+      todos: _("Your To-Do List"),
+      issues: _("Assigned Issues"),
+      merge_requests: _("Assigned merge requests"),
+      operations: _("Operations Dashboard")
+    }.with_indifferent_access.freeze
   end
 
   def project_view_choices
@@ -59,6 +62,14 @@ module PreferencesHelper
     @user_application_theme ||= Gitlab::Themes.for_user(current_user).css_class
   end
 
+  def user_application_theme_css_filename
+    @user_application_theme_css_filename ||= Gitlab::Themes.for_user(current_user).css_filename
+  end
+
+  def user_theme_primary_color
+    Gitlab::Themes.for_user(current_user).primary_color
+  end
+
   def user_color_scheme
     Gitlab::ColorSchemes.for_user(current_user).css_class
   end
@@ -68,16 +79,30 @@ module PreferencesHelper
   end
 
   def language_choices
-    Gitlab::I18n::AVAILABLE_LANGUAGES.map { |value, label| [label, value] }
+    options_for_select(
+      selectable_locales_with_translation_level.sort,
+      current_user.preferred_language
+    )
+  end
+
+  def integration_views
+    [].tap do |views|
+      views << { name: 'gitpod', message: gitpod_enable_description, message_url: gitpod_url_placeholder, help_link: help_page_path('integration/gitpod.md') } if Gitlab::CurrentSettings.gitpod_enabled
+      views << { name: 'sourcegraph', message: sourcegraph_url_message, message_url: Gitlab::CurrentSettings.sourcegraph_url, help_link: help_page_path('user/profile/preferences.md', anchor: 'sourcegraph') } if Gitlab::Sourcegraph.feature_available? && Gitlab::CurrentSettings.sourcegraph_enabled
+    end
   end
 
   private
 
+  def gitpod_url_placeholder
+    Gitlab::CurrentSettings.gitpod_url.presence || 'https://gitpod.io/'
+  end
+
   # Ensure that anyone adding new options updates `DASHBOARD_CHOICES` too
   def validate_dashboard_choices!(user_dashboards)
-    if user_dashboards.size != DASHBOARD_CHOICES.size
+    if user_dashboards.size != localized_dashboard_choices.size
       raise "`User` defines #{user_dashboards.size} dashboard choices," \
-        " but `DASHBOARD_CHOICES` defined #{DASHBOARD_CHOICES.size}."
+        " but `localized_dashboard_choices` defined #{localized_dashboard_choices.size}."
     end
   end
 
@@ -90,6 +115,18 @@ module PreferencesHelper
   def default_first_day_of_week
     first_day_of_week_choices.rassoc(Gitlab::CurrentSettings.first_day_of_week).first
   end
+
+  def selectable_locales_with_translation_level
+    Gitlab::I18n.selectable_locales.map do |code, language|
+      [
+        s_("i18n|%{language} (%{percent_translated}%% translated)") % {
+          language: language,
+          percent_translated: Gitlab::I18n.percentage_translated_for(code)
+        },
+        code
+      ]
+    end
+  end
 end
 
-PreferencesHelper.prepend_if_ee('EE::PreferencesHelper')
+PreferencesHelper.prepend_mod_with('PreferencesHelper')

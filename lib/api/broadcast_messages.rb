@@ -1,8 +1,10 @@
 # frozen_string_literal: true
 
 module API
-  class BroadcastMessages < Grape::API
+  class BroadcastMessages < ::API::Base
     include PaginationParams
+
+    feature_category :navigation
 
     resource :broadcast_messages do
       helpers do
@@ -36,6 +38,7 @@ module API
         optional :font, type: String, desc: 'Foreground color'
         optional :target_path, type: String, desc: 'Target path'
         optional :broadcast_type, type: String, values: BroadcastMessage.broadcast_types.keys, desc: 'Broadcast type. Defaults to banner', default: -> { 'banner' }
+        optional :dismissable, type: Boolean, desc: 'Is dismissable'
       end
       post do
         authenticated_as_admin!
@@ -75,6 +78,7 @@ module API
         optional :font, type: String, desc: 'Foreground color'
         optional :target_path, type: String, desc: 'Target path'
         optional :broadcast_type, type: String, values: BroadcastMessage.broadcast_types.keys, desc: 'Broadcast Type'
+        optional :dismissable, type: Boolean, desc: 'Is dismissable'
       end
       put ':id' do
         authenticated_as_admin!

@@ -2,7 +2,7 @@
 
 require 'spec_helper'
 
-describe 'clusters/clusters/gcp/_form' do
+RSpec.describe 'clusters/clusters/gcp/_form' do
   let(:admin) { create(:admin) }
   let(:environment) { create(:environment) }
   let(:gcp_cluster) { create(:cluster, :provided_by_gcp) }
@@ -21,18 +21,6 @@ describe 'clusters/clusters/gcp/_form' do
       render
 
       expect(rendered).to have_selector("input[id='cluster_provider_gcp_attributes_cloud_run']")
-    end
-  end
-
-  context 'with cloud run feature flag disabled' do
-    before do
-      stub_feature_flags(create_cloud_run_clusters: false)
-    end
-
-    it 'does not have a cloud run checkbox' do
-      render
-
-      expect(rendered).not_to have_selector("input[id='cluster_provider_gcp_attributes_cloud_run']")
     end
   end
 end

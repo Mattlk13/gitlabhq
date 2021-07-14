@@ -1,3 +1,9 @@
+---
+stage: Enablement
+group: Database
+info: To determine the technical writer assigned to the Stage/Group associated with this page, see https://about.gitlab.com/handbook/engineering/ux/technical-writing/#assignments
+---
+
 # Understanding EXPLAIN plans
 
 PostgreSQL allows you to obtain query plans using the `EXPLAIN` command. This
@@ -192,14 +198,39 @@ Here we can see that our filter has to remove 65,677 rows, and that we use
 208,846 buffers. Each buffer in PostgreSQL is 8 KB (8192 bytes), meaning our
 above node uses *1.6 GB of buffers*. That's a lot!
 
+Keep in mind that some statistics are per-loop averages, while others are total values:
+
+| Field name             | Value type       |
+| ---                    | ---              |
+| Actual Total Time      | per-loop average |
+| Actual Rows            | per-loop average |
+| Buffers Shared Hit     | total value      |
+| Buffers Shared Read    | total value      |
+| Buffers Shared Dirtied | total value      |
+| Buffers Shared Written | total value      |
+| I/O Read Time          | total value      |
+| I/O Read Write         | total value      |
+
+For example:
+
+```sql
+ ->  Index Scan using users_pkey on public.users  (cost=0.43..3.44 rows=1 width=1318) (actual time=0.025..0.025 rows=1 loops=888)
+       Index Cond: (users.id = issues.author_id)
+       Buffers: shared hit=3543 read=9
+       I/O Timings: read=17.760 write=0.000
+```
+
+Here we can see that this node used 3552 buffers (3543 + 9), returned 888 rows (`888 * 1`), and the actual duration was 22.2 milliseconds (`888 * 0.025`).
+17.76 milliseconds of the total duration was spent in reading from disk, to retrieve data that was not in the cache.
+
 ## Node types
 
 There are quite a few different types of nodes, so we only cover some of the
 more common ones here.
 
 A full list of all the available nodes and their descriptions can be found in
-the [PostgreSQL source file
-"plannodes.h"](https://gitlab.com/postgres/postgres/blob/master/src/include/nodes/plannodes.h)
+the [PostgreSQL source file `plannodes.h`](https://gitlab.com/postgres/postgres/blob/master/src/include/nodes/plannodes.h).
+pgMustard's [EXPLAIN docs](https://www.pgmustard.com/docs/explain) also offer detailed look into nodes and their fields.
 
 ### Seq Scan
 
@@ -275,7 +306,7 @@ FROM users
 WHERE twitter != '';
 ```
 
-This query simply counts the number of users that have a Twitter profile set.
+This query counts the number of users that have a Twitter profile set.
 Let's run this using `EXPLAIN (ANALYZE, BUFFERS)`:
 
 ```sql
@@ -315,25 +346,30 @@ the `Indexes:` section:
 ```sql
 Indexes:
     "users_pkey" PRIMARY KEY, btree (id)
-    "users_confirmation_token_key" UNIQUE CONSTRAINT, btree (confirmation_token)
-    "users_email_key" UNIQUE CONSTRAINT, btree (email)
-    "users_reset_password_token_key" UNIQUE CONSTRAINT, btree (reset_password_token)
-    "index_on_users_lower_email" btree (lower(email::text))
-    "index_on_users_lower_username" btree (lower(username::text))
+    "index_users_on_confirmation_token" UNIQUE, btree (confirmation_token)
+    "index_users_on_email" UNIQUE, btree (email)
+    "index_users_on_reset_password_token" UNIQUE, btree (reset_password_token)
+    "index_users_on_static_object_token" UNIQUE, btree (static_object_token)
+    "index_users_on_unlock_token" UNIQUE, btree (unlock_token)
     "index_on_users_name_lower" btree (lower(name::text))
+    "index_users_on_accepted_term_id" btree (accepted_term_id)
     "index_users_on_admin" btree (admin)
     "index_users_on_created_at" btree (created_at)
     "index_users_on_email_trigram" gin (email gin_trgm_ops)
     "index_users_on_feed_token" btree (feed_token)
-    "index_users_on_ghost" btree (ghost)
+    "index_users_on_group_view" btree (group_view)
     "index_users_on_incoming_email_token" btree (incoming_email_token)
+    "index_users_on_managing_group_id" btree (managing_group_id)
     "index_users_on_name" btree (name)
     "index_users_on_name_trigram" gin (name gin_trgm_ops)
+    "index_users_on_public_email" btree (public_email) WHERE public_email::text <> ''::text
     "index_users_on_state" btree (state)
-    "index_users_on_state_and_internal_attrs" btree (state) WHERE ghost <> true AND support_bot <> true
-    "index_users_on_support_bot" btree (support_bot)
+    "index_users_on_state_and_user_type" btree (state, user_type)
+    "index_users_on_unconfirmed_email" btree (unconfirmed_email) WHERE unconfirmed_email IS NOT NULL
+    "index_users_on_user_type" btree (user_type)
     "index_users_on_username" btree (username)
     "index_users_on_username_trigram" gin (username gin_trgm_ops)
+    "tmp_idx_on_user_id_where_bio_is_filled" btree (id) WHERE COALESCE(bio, ''::character varying)::text IS DISTINCT FROM ''::text
 ```
 
 Here we can see there is no index on the `twitter` column, which means
@@ -378,7 +414,7 @@ we created the index:
 CREATE INDEX CONCURRENTLY twitter_test ON users (twitter);
 ```
 
-We simply told PostgreSQL to index all possible values of the `twitter` column,
+We told PostgreSQL to index all possible values of the `twitter` column,
 even empty strings. Our query in turn uses `WHERE twitter != ''`. This means
 that the index does improve things, as we don't need to do a sequential scan,
 but we may still encounter empty strings. This means PostgreSQL _has_ to apply a
@@ -423,6 +459,17 @@ result, first check if there are any existing indexes you may be able to reuse.
 If there aren't any, check if you can perhaps slightly change an existing one to
 fit both the existing and new queries. Only add a new index if none of the
 existing indexes can be used in any way.
+
+When comparing execution plans, don't take timing as the only important metric.
+Good timing is the main goal of any optimization, but it can be too volatile to
+be used for comparison (for example, it depends a lot on the state of cache).
+When optimizing a query, we usually need to reduce the amount of data we're
+dealing with. Indexes are the way to work with fewer pages (buffers) to get the
+result, so, during optimization, look at the number of buffers used (read and hit),
+and work on reducing these numbers. Reduced timing will be the consequence of reduced
+buffer numbers. [Database Lab Engine](#database-lab-engine) guarantees that the plan is structurally
+identical to production (and overall number of buffers is the same as on production),
+but difference in cache state and I/O speed may lead to different timings.
 
 ## Queries that can't be optimised
 
@@ -596,7 +643,7 @@ If we look at the plan we also see our costs are very low:
 Index Scan using projects_pkey on projects  (cost=0.43..3.45 rows=1 width=4) (actual time=0.049..0.050 rows=1 loops=145)
 ```
 
-Here our cost is only 3.45, and it only takes us 0.050 milliseconds to do so.
+Here our cost is only 3.45, and it takes us 7.25 milliseconds to do so (0.05 * 145).
 The next index scan is a bit more expensive:
 
 ```sql
@@ -651,14 +698,78 @@ different queries. The only _rule_ is that you _must always measure_ your query
 (preferably using a production-like database) using `EXPLAIN (ANALYZE, BUFFERS)`
 and related tools such as:
 
-- <https://explain.depesz.com/>
-- <http://tatiyants.com/postgres-query-plan-visualization/>
+- [`explain.depesz.com`](https://explain.depesz.com/).
+- [`explain.dalibo.com/`](https://explain.dalibo.com/).
 
 ## Producing query plans
 
 There are a few ways to get the output of a query plan. Of course you
 can directly run the `EXPLAIN` query in the `psql` console, or you can
 follow one of the other options below.
+
+### Database Lab Engine
+
+GitLab team members can use [Database Lab Engine](https://gitlab.com/postgres-ai/database-lab), and the companion
+SQL optimization tool - [Joe Bot](https://gitlab.com/postgres-ai/joe).
+
+Database Lab Engine provides developers with their own clone of the production database, while Joe Bot helps with exploring execution plans.
+
+Joe Bot is available in the [`#database-lab`](https://gitlab.slack.com/archives/CLJMDRD8C) channel on Slack,
+and through its [web interface](https://console.postgres.ai/gitlab/joe-instances).
+
+With Joe Bot you can execute DDL statements (like creating indexes, tables, and columns) and get query plans for `SELECT`, `UPDATE`, and `DELETE` statements.
+
+For example, in order to test new index on a column that is not existing on production yet, you can do the following:
+
+Create the column:
+
+```sql
+exec ALTER TABLE projects ADD COLUMN last_at timestamp without time zone
+```
+
+Create the index:
+
+```sql
+exec CREATE INDEX index_projects_last_activity ON projects (last_activity_at) WHERE last_activity_at IS NOT NULL
+```
+
+Analyze the table to update its statistics:
+
+```sql
+exec ANALYZE projects
+```
+
+Get the query plan:
+
+```sql
+explain SELECT * FROM projects WHERE last_activity_at < CURRENT_DATE
+```
+
+Once done you can rollback your changes:
+
+```sql
+reset
+```
+
+For more information about the available options, run:
+
+```sql
+help
+```
+
+The web interface comes with the following execution plan visualizers included:
+
+- [Depesz](https://explain.depesz.com/)
+- [PEV2](https://github.com/dalibo/pev2)
+- [FlameGraph](https://github.com/mgartner/pg_flame)
+
+#### Tips & Tricks
+
+The database connection is now maintained during your whole session, so you can use `exec set ...` for any session variables (such as `enable_seqscan` or `work_mem`). These settings will be applied to all subsequent commands until you reset them. For example you can disable parallel queries with
+
+```sql
+exec SET max_parallel_workers_per_gather = 0
+```
 
 ### Rails console
 
@@ -681,11 +792,15 @@ Planning time: 0.411 ms
 Execution time: 0.113 ms
 ```
 
-### Chatops
+### ChatOps
 
-[GitLab employees can also use our chatops solution, available in Slack using the
+[GitLab team members can also use our ChatOps solution, available in Slack using the
 `/chatops` slash command](chatops_on_gitlabcom.md).
-You can use chatops to get a query plan by running the following:
+
+NOTE:
+While ChatOps is still available, the recommended way to generate execution plans is to use [Database Lab Engine](#database-lab-engine).
+
+You can use ChatOps to get a query plan by running the following:
 
 ```sql
 /chatops run explain SELECT COUNT(*) FROM projects WHERE visibility_level IN (0, 20)
@@ -705,59 +820,10 @@ For more information about the available options, run:
 /chatops run explain --help
 ```
 
-### `#database-lab`
-
-Another tool GitLab employees can use is a chatbot powered by [Joe](https://gitlab.com/postgres-ai/joe) which uses [Database Lab](https://gitlab.com/postgres-ai/database-lab) to instantly provide developers with their own clone of the production database. Joe is available in the [`#database-lab`](https://gitlab.slack.com/archives/CLJMDRD8C) channel on Slack.
-Unlike chatops, it gives you a way to execute DDL statements (like creating indexes and tables) and get query plan not only for `SELECT` but also `UPDATE` and `DELETE`.
-
-For example, in order to test new index you can do the following:
-
-Create the index:
-
-```sql
-exec CREATE INDEX index_projects_marked_for_deletion ON projects (marked_for_deletion_at) WHERE marked_for_deletion_at IS NOT NULL
-```
-
-Analyze the table to update its statistics:
-
-```sql
-exec ANALYZE projects
-```
-
-Get the query plan:
-
-```sql
-explain SELECT * FROM projects WHERE marked_for_deletion_at < CURRENT_DATE
-```
-
-Once done you can rollback your changes:
-
-```sql
-reset
-```
-
-For more information about the available options, run:
-
-```sql
-help
-```
-
-#### Tips & Tricks
-
-The database connection is now maintained during your whole session, so you can use `exec set ...` for any session variables (such as `enable_seqscan` or `work_mem`). These settings will be applied to all subsequent commands until you reset them.
-
-It is also possible to use transactions. This may be useful when you are working on statements that modify the data, for example INSERT, UPDATE, and DELETE. The `explain` command will perform `EXPLAIN ANALYZE`, which executes the statement. In order to run each `explain` starting from a clean state you can wrap it in a transaction, for example:
-
-```sql
-exec BEGIN
-
-explain UPDATE some_table SET some_column = TRUE
-
-exec ROLLBACK
-```
-
 ## Further reading
 
 A more extensive guide on understanding query plans can be found in
-the [presentation](https://www.dalibo.org/_media/understanding_explain.pdf)
-from [Dalibo.org](https://www.dalibo.org/en/).
+the [presentation](https://public.dalibo.com/exports/conferences/_archives/_2012/201211_explain/understanding_explain.pdf)
+from [Dalibo.org](https://www.dalibo.com/en/).
+
+Depesz's blog also has a good [section](https://www.depesz.com/tag/unexplainable) dedicated to query plans.

@@ -1,10 +1,10 @@
-import * as types from './mutation_types';
-import axios from '~/lib/utils/axios_utils';
-import statusCodes from '~/lib/utils/http_status';
-import { backOff } from '~/lib/utils/common_utils';
 import createFlash from '~/flash';
+import axios from '~/lib/utils/axios_utils';
+import { backOff } from '~/lib/utils/common_utils';
+import statusCodes from '~/lib/utils/http_status';
 import { __ } from '~/locale';
 import { MAX_REQUESTS, CHECKING_INSTALLED, TIMEOUT } from '../constants';
+import * as types from './mutation_types';
 
 export const requestFunctionsLoading = ({ commit }) => commit(types.REQUEST_FUNCTIONS_LOADING);
 export const receiveFunctionsSuccess = ({ commit }, data) =>
@@ -30,7 +30,7 @@ export const receiveMetricsError = ({ commit }, error) =>
 export const fetchFunctions = ({ dispatch }, { functionsPath }) => {
   let retryCount = 0;
 
-  const functionsPartiallyFetched = data => {
+  const functionsPartiallyFetched = (data) => {
     if (data.functions !== null && data.functions.length) {
       dispatch('receiveFunctionsPartial', data);
     }
@@ -41,7 +41,7 @@ export const fetchFunctions = ({ dispatch }, { functionsPath }) => {
   backOff((next, stop) => {
     axios
       .get(functionsPath)
-      .then(response => {
+      .then((response) => {
         if (response.data.knative_installed === CHECKING_INSTALLED) {
           retryCount += 1;
           if (retryCount < MAX_REQUESTS) {
@@ -56,19 +56,23 @@ export const fetchFunctions = ({ dispatch }, { functionsPath }) => {
       })
       .catch(stop);
   })
-    .then(data => {
+    .then((data) => {
       if (data === TIMEOUT) {
         dispatch('receiveFunctionsTimeout');
-        createFlash(__('Loading functions timed out. Please reload the page to try again.'));
+        createFlash({
+          message: __('Loading functions timed out. Please reload the page to try again.'),
+        });
       } else if (data.functions !== null && data.functions.length) {
         dispatch('receiveFunctionsSuccess', data);
       } else {
         dispatch('receiveFunctionsNoDataSuccess', data);
       }
     })
-    .catch(error => {
+    .catch((error) => {
       dispatch('receiveFunctionsError', error);
-      createFlash(error);
+      createFlash({
+        message: error,
+      });
     });
 };
 
@@ -83,7 +87,7 @@ export const fetchMetrics = ({ dispatch }, { metricsPath, hasPrometheus }) => {
   backOff((next, stop) => {
     axios
       .get(metricsPath)
-      .then(response => {
+      .then((response) => {
         if (response.status === statusCodes.NO_CONTENT) {
           retryCount += 1;
           if (retryCount < MAX_REQUESTS) {
@@ -98,15 +102,15 @@ export const fetchMetrics = ({ dispatch }, { metricsPath, hasPrometheus }) => {
       })
       .catch(stop);
   })
-    .then(data => {
+    .then((data) => {
       if (data === null) {
         return;
       }
 
       const updatedMetric = data.metrics;
-      const queries = data.metrics.queries.map(query => ({
+      const queries = data.metrics.queries.map((query) => ({
         ...query,
-        result: query.result.map(result => ({
+        result: query.result.map((result) => ({
           ...result,
           values: result.values.map(([timestamp, value]) => ({
             time: new Date(timestamp * 1000).toISOString(),
@@ -118,11 +122,10 @@ export const fetchMetrics = ({ dispatch }, { metricsPath, hasPrometheus }) => {
       updatedMetric.queries = queries;
       dispatch('receiveMetricsSuccess', updatedMetric);
     })
-    .catch(error => {
+    .catch((error) => {
       dispatch('receiveMetricsError', error);
-      createFlash(error);
+      createFlash({
+        message: error,
+      });
     });
 };
-
-// prevent babel-plugin-rewire from generating an invalid default during karma tests
-export default () => {};

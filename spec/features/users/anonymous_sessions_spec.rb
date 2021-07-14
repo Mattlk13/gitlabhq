@@ -2,7 +2,7 @@
 
 require 'spec_helper'
 
-describe 'Session TTLs', :clean_gitlab_redis_shared_state do
+RSpec.describe 'Session TTLs', :clean_gitlab_redis_shared_state do
   it 'creates a session with a short TTL when login fails' do
     visit new_user_session_path
     # The session key only gets created after a post
@@ -10,7 +10,7 @@ describe 'Session TTLs', :clean_gitlab_redis_shared_state do
     fill_in 'user_password', with: '12345678'
     click_button 'Sign in'
 
-    expect(page).to have_content('Invalid Login or password')
+    expect(page).to have_content('Invalid login or password')
 
     expect_single_session_with_expiration(Settings.gitlab['unauthenticated_session_expire_delay'])
   end

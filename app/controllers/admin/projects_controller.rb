@@ -6,9 +6,17 @@ class Admin::ProjectsController < Admin::ApplicationController
   before_action :project, only: [:show, :transfer, :repository_check, :destroy]
   before_action :group, only: [:show, :transfer]
 
+  feature_category :projects, [:index, :show, :transfer, :destroy]
+  feature_category :source_code_management, [:repository_check]
+
   def index
     params[:sort] ||= 'latest_activity_desc'
     @sort = params[:sort]
+
+    if params[:last_repository_check_failed].present? && params[:archived].nil?
+      params[:archived] = true
+    end
+
     @projects = Admin::ProjectsFinder.new(params: params, current_user: current_user).execute
 
     respond_to do |format|
@@ -49,6 +57,10 @@ class Admin::ProjectsController < Admin::ApplicationController
     namespace = Namespace.find_by(id: params[:new_namespace_id])
     ::Projects::TransferService.new(@project, current_user, params.dup).execute(namespace)
 
+    if @project.errors[:new_namespace].present?
+      flash[:alert] = @project.errors[:new_namespace].first
+    end
+
     @project.reset
     redirect_to admin_project_path(@project)
   end
@@ -77,4 +89,4 @@ class Admin::ProjectsController < Admin::ApplicationController
   end
 end
 
-Admin::ProjectsController.prepend_if_ee('EE::Admin::ProjectsController')
+Admin::ProjectsController.prepend_mod_with('Admin::ProjectsController')

@@ -1,14 +1,14 @@
 <script>
 import { mapGetters, mapActions } from 'vuex';
-import { SYSTEM_NOTE } from '../constants';
 import { __ } from '~/locale';
 import PlaceholderNote from '~/vue_shared/components/notes/placeholder_note.vue';
 import PlaceholderSystemNote from '~/vue_shared/components/notes/placeholder_system_note.vue';
 import SystemNote from '~/vue_shared/components/notes/system_note.vue';
+import { SYSTEM_NOTE } from '../constants';
+import DiscussionNotesRepliesWrapper from './discussion_notes_replies_wrapper.vue';
+import NoteEditedText from './note_edited_text.vue';
 import NoteableNote from './noteable_note.vue';
 import ToggleRepliesWidget from './toggle_replies_widget.vue';
-import NoteEditedText from './note_edited_text.vue';
-import DiscussionNotesRepliesWrapper from './discussion_notes_replies_wrapper.vue';
 
 export default {
   name: 'DiscussionNotes',
@@ -74,7 +74,7 @@ export default {
     },
   },
   methods: {
-    ...mapActions(['toggleDiscussion']),
+    ...mapActions(['toggleDiscussion', 'setSelectedCommentPositionHover']),
     componentName(note) {
       if (note.isPlaceholderNote) {
         if (note.placeholderType === SYSTEM_NOTE) {
@@ -93,33 +93,55 @@ export default {
     componentData(note) {
       return note.isPlaceholderNote ? note.notes[0] : note;
     },
+    handleMouseEnter(discussion) {
+      if (discussion.position) {
+        this.setSelectedCommentPositionHover(discussion.position.line_range);
+      }
+    },
+    handleMouseLeave(discussion) {
+      // Even though position isn't used here we still don't want to unnecessarily call a mutation
+      // The lack of position tells us that highlighting is irrelevant in this context
+      if (discussion.position) {
+        this.setSelectedCommentPositionHover();
+      }
+    },
   },
 };
 </script>
 
 <template>
   <div class="discussion-notes">
-    <ul class="notes">
+    <ul
+      class="notes"
+      @mouseenter="handleMouseEnter(discussion)"
+      @mouseleave="handleMouseLeave(discussion)"
+    >
       <template v-if="shouldGroupReplies">
         <component
           :is="componentName(firstNote)"
           :note="componentData(firstNote)"
           :line="line || diffLine"
+          :discussion-file="discussion.diff_file"
           :commit="commit"
           :help-page-path="helpPagePath"
           :show-reply-button="userCanReply"
+          :discussion-root="true"
+          :discussion-resolve-path="discussion.resolve_path"
           @handleDeleteNote="$emit('deleteNote')"
           @startReplying="$emit('startReplying')"
         >
-          <note-edited-text
-            v-if="discussion.resolved"
-            slot="discussion-resolved-text"
-            :edited-at="discussion.resolved_at"
-            :edited-by="discussion.resolved_by"
-            :action-text="resolvedText"
-            class-name="discussion-headline-light js-discussion-headline discussion-resolved-text"
-          />
-          <slot slot="avatar-badge" name="avatar-badge"></slot>
+          <template #discussion-resolved-text>
+            <note-edited-text
+              v-if="discussion.resolved"
+              :edited-at="discussion.resolved_at"
+              :edited-by="discussion.resolved_by"
+              :action-text="resolvedText"
+              class-name="discussion-headline-light js-discussion-headline discussion-resolved-text"
+            />
+          </template>
+          <template #avatar-badge>
+            <slot name="avatar-badge"></slot>
+          </template>
         </component>
         <discussion-notes-replies-wrapper :is-diff-discussion="discussion.diff_discussion">
           <toggle-replies-widget
@@ -149,11 +171,16 @@ export default {
           v-for="(note, index) in discussion.notes"
           :key="note.id"
           :note="componentData(note)"
+          :discussion-file="discussion.diff_file"
           :help-page-path="helpPagePath"
           :line="diffLine"
+          :discussion-root="index === 0"
+          :discussion-resolve-path="discussion.resolve_path"
           @handleDeleteNote="$emit('deleteNote')"
         >
-          <slot v-if="index === 0" slot="avatar-badge" name="avatar-badge"></slot>
+          <template #avatar-badge>
+            <slot v-if="index === 0" name="avatar-badge"></slot>
+          </template>
         </component>
         <slot :show-replies="isExpanded || !hasReplies" name="footer"></slot>
       </template>

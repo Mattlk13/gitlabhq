@@ -1,14 +1,13 @@
 # frozen_string_literal: true
 
 require 'spec_helper'
-require Rails.root.join('db', 'post_migrate', '20200128210353_cleanup_optimistic_locking_nulls')
+require_migration!('cleanup_optimistic_locking_nulls')
 
-describe CleanupOptimisticLockingNulls, :migration do
-  TABLES = %w(epics merge_requests issues).freeze
-  TABLES.each do |table|
-    let(table.to_sym) { table(table.to_sym) }
-  end
-  let(:tables) { TABLES.map { |t| method(t.to_sym).call } }
+RSpec.describe CleanupOptimisticLockingNulls do
+  let(:epics) { table(:epics) }
+  let(:merge_requests) { table(:merge_requests) }
+  let(:issues) { table(:issues) }
+  let(:tables) { [epics, merge_requests, issues] }
 
   let(:namespaces) { table(:namespaces) }
   let(:projects) { table(:projects) }

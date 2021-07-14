@@ -2,11 +2,13 @@
 
 require 'spec_helper'
 
-describe Mutations::MergeRequests::SetWip do
+RSpec.describe Mutations::MergeRequests::SetWip do
   let(:merge_request) { create(:merge_request) }
   let(:user) { create(:user) }
 
-  subject(:mutation) { described_class.new(object: nil, context: { current_user: user }) }
+  subject(:mutation) { described_class.new(object: nil, context: { current_user: user }, field: nil) }
+
+  specify { expect(described_class).to require_graphql_authorizations(:update_merge_request) }
 
   describe '#resolve' do
     let(:wip) { true }
@@ -14,9 +16,7 @@ describe Mutations::MergeRequests::SetWip do
 
     subject { mutation.resolve(project_path: merge_request.project.full_path, iid: merge_request.iid, wip: wip) }
 
-    it 'raises an error if the resource is not accessible to the user' do
-      expect { subject }.to raise_error(Gitlab::Graphql::Errors::ResourceNotAvailable)
-    end
+    it_behaves_like 'permission level for merge request mutation is correctly verified'
 
     context 'when the user can update the merge request' do
       before do
@@ -41,7 +41,7 @@ describe Mutations::MergeRequests::SetWip do
         let(:wip) { false }
 
         it 'removes `wip` from the title' do
-          merge_request.update(title: "WIP: working on it")
+          merge_request.update!(title: "WIP: working on it")
 
           expect(mutated_merge_request).not_to be_work_in_progress
         end

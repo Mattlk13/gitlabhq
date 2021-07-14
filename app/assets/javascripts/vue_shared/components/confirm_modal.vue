@@ -1,42 +1,59 @@
 <script>
-import { GlModal } from '@gitlab/ui';
+import { GlModal, GlSafeHtmlDirective as SafeHtml } from '@gitlab/ui';
+import { uniqueId } from 'lodash';
 import csrf from '~/lib/utils/csrf';
 
 export default {
   components: {
     GlModal,
   },
+  directives: {
+    SafeHtml,
+  },
   props: {
-    modalAttributes: {
-      type: Object,
-      required: true,
-    },
-    path: {
+    selector: {
       type: String,
       required: true,
     },
-    method: {
-      type: String,
-      required: true,
+    handleSubmit: {
+      type: Function,
+      required: false,
+      default: null,
     },
   },
   data() {
     return {
-      isDismissed: false,
+      modalId: uniqueId('confirm-modal-'),
+      path: '',
+      method: '',
+      modalAttributes: {},
     };
   },
   mounted() {
-    this.openModal();
+    document.querySelectorAll(this.selector).forEach((button) => {
+      button.addEventListener('click', (e) => {
+        e.preventDefault();
+
+        this.path = button.dataset.path;
+        this.method = button.dataset.method;
+        this.modalAttributes = JSON.parse(button.dataset.modalAttributes);
+        this.openModal();
+      });
+    });
   },
   methods: {
     openModal() {
       this.$refs.modal.show();
     },
-    submitModal() {
-      this.$refs.form.requestSubmit();
+    closeModal() {
+      this.$refs.modal.hide();
     },
-    dismiss() {
-      this.isDismissed = true;
+    submitModal() {
+      if (this.handleSubmit) {
+        this.handleSubmit(this.path);
+      } else {
+        this.$refs.form.submit();
+      }
     },
   },
   csrf,
@@ -45,11 +62,11 @@ export default {
 
 <template>
   <gl-modal
-    v-if="!isDismissed"
     ref="modal"
+    :modal-id="modalId"
     v-bind="modalAttributes"
     @primary="submitModal"
-    @canceled="dismiss"
+    @cancel="closeModal"
   >
     <form ref="form" :action="path" method="post">
       <!-- Rails workaround for <form method="delete" />
@@ -57,7 +74,8 @@ export default {
       -->
       <input type="hidden" name="_method" :value="method" />
       <input type="hidden" name="authenticity_token" :value="$options.csrf.token" />
-      <div>{{ modalAttributes.message }}</div>
+      <div v-if="modalAttributes.messageHtml" v-safe-html="modalAttributes.messageHtml"></div>
+      <div v-else>{{ modalAttributes.message }}</div>
     </form>
   </gl-modal>
 </template>

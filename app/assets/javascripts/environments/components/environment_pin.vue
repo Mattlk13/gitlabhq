@@ -3,14 +3,13 @@
  * Renders a prevent auto-stop button.
  * Used in environments table.
  */
-import { GlButton, GlTooltipDirective } from '@gitlab/ui';
-import Icon from '~/vue_shared/components/icon.vue';
+import { GlButton, GlTooltipDirective, GlIcon } from '@gitlab/ui';
 import { __ } from '~/locale';
 import eventHub from '../event_hub';
 
 export default {
   components: {
-    Icon,
+    GlIcon,
     GlButton,
   },
   directives: {
@@ -32,6 +31,6 @@ export default {
 </script>
 <template>
   <gl-button v-gl-tooltip :title="$options.title" :aria-label="$options.title" @click="onPinClick">
-    <icon name="thumbtack" />
+    <gl-icon name="thumbtack" />
   </gl-button>
 </template>

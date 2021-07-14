@@ -2,7 +2,7 @@
 
 require 'spec_helper'
 
-describe Gitlab::Email::Handler::UnsubscribeHandler do
+RSpec.describe Gitlab::Email::Handler::UnsubscribeHandler do
   include_context :email_shared_context
 
   before do
@@ -74,7 +74,7 @@ describe Gitlab::Email::Handler::UnsubscribeHandler do
 
   context 'when the noteable could not be found' do
     before do
-      noteable.destroy
+      noteable.destroy!
     end
 
     it 'raises a NoteableNotFoundError' do

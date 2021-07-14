@@ -2,25 +2,25 @@
 
 require 'spec_helper'
 
-describe Gitlab::Email::Handler::CreateIssueHandler do
+RSpec.describe Gitlab::Email::Handler::CreateIssueHandler do
   include_context :email_shared_context
-  it_behaves_like :reply_processing_shared_examples
-
-  before do
-    stub_incoming_email_setting(enabled: true, address: "incoming+%{key}@appmail.adventuretime.ooo")
-    stub_config_setting(host: 'localhost')
-  end
-
-  let(:email_raw) { email_fixture('emails/valid_new_issue.eml') }
-  let(:namespace) { create(:namespace, path: 'gitlabhq') }
-
-  let!(:project)  { create(:project, :public, namespace: namespace, path: 'gitlabhq') }
   let!(:user) do
     create(
       :user,
       email: 'jake@adventuretime.ooo',
       incoming_email_token: 'auth_token'
     )
+  end
+
+  let!(:project)  { create(:project, :public, namespace: namespace, path: 'gitlabhq') }
+  let(:namespace) { create(:namespace, path: 'gitlabhq') }
+  let(:email_raw) { email_fixture('emails/valid_new_issue.eml') }
+
+  it_behaves_like :reply_processing_shared_examples
+
+  before do
+    stub_incoming_email_setting(enabled: true, address: "incoming+%{key}@appmail.adventuretime.ooo")
+    stub_config_setting(host: 'localhost')
   end
 
   context "when email key" do
@@ -126,6 +126,14 @@ describe Gitlab::Email::Handler::CreateIssueHandler do
 
       it "raises a ProjectNotFound if the user is not a member" do
         expect { receiver.execute }.to raise_error(Gitlab::Email::ProjectNotFound)
+      end
+    end
+
+    context 'when project ID is invalid' do
+      it 'raises a ProjectNotFound' do
+        handler = described_class.new(email_raw, "gitlabhq-gitlabhq-#{Gitlab::Database::MAX_INT_VALUE}-#{user.incoming_email_token}-issue")
+
+        expect { handler.execute }.to raise_error(Gitlab::Email::ProjectNotFound)
       end
     end
   end

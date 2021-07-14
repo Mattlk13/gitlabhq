@@ -1,9 +1,17 @@
+---
+stage: Create
+group: Ecosystem
+info: To determine the technical writer assigned to the Stage/Group associated with this page, see https://about.gitlab.com/handbook/engineering/ux/technical-writing/#assignments
+---
+
 # System hooks API
 
 All methods require administrator authorization.
 
-The URL endpoint of the system hooks can also be configured using the UI in
-the **Admin Area > System Hooks** (`/admin/hooks`).
+You can configure the URL endpoint of the system hooks from the GitLab user interface:
+
+1. On the top bar, select **Menu >** **{admin}** **Admin**.
+1. Select **System Hooks** (`/admin/hooks`).
 
 Read more about [system hooks](../system_hooks/system_hooks.md).
 
@@ -11,14 +19,14 @@ Read more about [system hooks](../system_hooks/system_hooks.md).
 
 Get a list of all system hooks.
 
-```
+```plaintext
 GET /hooks
 ```
 
 Example request:
 
 ```shell
-curl --header "PRIVATE-TOKEN: <your_access_token>" https://gitlab.example.com/api/v4/hooks
+curl --header "PRIVATE-TOKEN: <your_access_token>" "https://gitlab.example.com/api/v4/hooks"
 ```
 
 Example response:
@@ -42,16 +50,16 @@ Example response:
 
 Add a new system hook.
 
-```
+```plaintext
 POST /hooks
 ```
 
 | Attribute | Type | Required | Description |
 | --------- | ---- | -------- | ----------- |
 | `url` | string | yes | The hook URL |
-| `token` | string | no | Secret token to validate received payloads; this will not be returned in the response |
-| `push_events` | boolean |  no | When true, the hook will fire on push events |
-| `tag_push_events` | boolean | no | When true, the hook will fire on new tags being pushed |
+| `token` | string | no | Secret token to validate received payloads; this isn't returned in the response |
+| `push_events` | boolean |  no | When true, the hook fires on push events |
+| `tag_push_events` | boolean | no | When true, the hook fires on new tags being pushed |
 | `merge_requests_events` | boolean | no | Trigger hook on merge requests events |
 | `repository_update_events` | boolean | no | Trigger hook on repository update events |
 | `enable_ssl_verification` | boolean | no | Do SSL verification when triggering the hook |
@@ -81,8 +89,8 @@ Example response:
 
 ## Test system hook
 
-```
-GET /hooks/:id
+```plaintext
+POST /hooks/:id
 ```
 
 | Attribute | Type | Required | Description |
@@ -92,7 +100,7 @@ GET /hooks/:id
 Example request:
 
 ```shell
-curl --header "PRIVATE-TOKEN: <your_access_token>" https://gitlab.example.com/api/v4/hooks/2
+curl --request POST --header "PRIVATE-TOKEN: <your_access_token>" "https://gitlab.example.com/api/v4/hooks/1"
 ```
 
 Example response:
@@ -112,7 +120,7 @@ Example response:
 
 Deletes a system hook.
 
-```
+```plaintext
 DELETE /hooks/:id
 ```
 
@@ -123,5 +131,5 @@ DELETE /hooks/:id
 Example request:
 
 ```shell
-curl --request DELETE --header "PRIVATE-TOKEN: <your_access_token>" https://gitlab.example.com/api/v4/hooks/2
+curl --request DELETE --header "PRIVATE-TOKEN: <your_access_token>" "https://gitlab.example.com/api/v4/hooks/2"
 ```

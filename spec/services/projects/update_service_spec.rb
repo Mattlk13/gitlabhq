@@ -2,7 +2,7 @@
 
 require 'spec_helper'
 
-describe Projects::UpdateService do
+RSpec.describe Projects::UpdateService do
   include ExternalAuthorizationServiceHelpers
   include ProjectForksHelper
 
@@ -12,17 +12,9 @@ describe Projects::UpdateService do
   end
 
   describe '#execute' do
-    let(:gitlab_shell) { Gitlab::Shell.new }
     let(:admin) { create(:admin) }
 
     context 'when changing visibility level' do
-      def expect_to_call_unlink_fork_service
-        service = Projects::UnlinkForkService.new(project, user)
-
-        expect(Projects::UnlinkForkService).to receive(:new).with(project, user).and_return(service)
-        expect(service).to receive(:execute).and_call_original
-      end
-
       context 'when visibility_level changes to INTERNAL' do
         it 'updates the project to internal' do
           expect(TodosDestroyer::ProjectPrivateWorker).not_to receive(:perform_in)
@@ -31,18 +23,6 @@ describe Projects::UpdateService do
 
           expect(result).to eq({ status: :success })
           expect(project).to be_internal
-        end
-
-        context 'and project is PUBLIC' do
-          before do
-            project.update!(visibility_level: Gitlab::VisibilityLevel::PUBLIC)
-          end
-
-          it 'unlinks project from fork network' do
-            expect_to_call_unlink_fork_service
-
-            update_project(project, user, visibility_level: Gitlab::VisibilityLevel::INTERNAL)
-          end
         end
       end
 
@@ -79,30 +59,6 @@ describe Projects::UpdateService do
           expect(result).to eq({ status: :success })
           expect(project).to be_private
         end
-
-        context 'and project is PUBLIC' do
-          before do
-            project.update!(visibility_level: Gitlab::VisibilityLevel::PUBLIC)
-          end
-
-          it 'unlinks project from fork network' do
-            expect_to_call_unlink_fork_service
-
-            update_project(project, user, visibility_level: Gitlab::VisibilityLevel::PRIVATE)
-          end
-        end
-
-        context 'and project is INTERNAL' do
-          before do
-            project.update!(visibility_level: Gitlab::VisibilityLevel::INTERNAL)
-          end
-
-          it 'unlinks project from fork network' do
-            expect_to_call_unlink_fork_service
-
-            update_project(project, user, visibility_level: Gitlab::VisibilityLevel::PRIVATE)
-          end
-        end
       end
 
       context 'when visibility levels are restricted to PUBLIC only' do
@@ -128,11 +84,22 @@ describe Projects::UpdateService do
           end
 
           context 'when updated by an admin' do
-            it 'updates the project to public' do
-              result = update_project(project, admin, visibility_level: Gitlab::VisibilityLevel::PUBLIC)
+            context 'when admin mode is enabled', :enable_admin_mode do
+              it 'updates the project to public' do
+                result = update_project(project, admin, visibility_level: Gitlab::VisibilityLevel::PUBLIC)
 
-              expect(result).to eq({ status: :success })
-              expect(project).to be_public
+                expect(result).to eq({ status: :success })
+                expect(project).to be_public
+              end
+            end
+
+            context 'when admin mode is disabled' do
+              it 'does not update the project to public' do
+                result = update_project(project, admin, visibility_level: Gitlab::VisibilityLevel::PUBLIC)
+
+                expect(result).to eq({ status: :error, message: 'New visibility level not allowed!' })
+                expect(project).to be_private
+              end
             end
           end
         end
@@ -142,20 +109,47 @@ describe Projects::UpdateService do
         let(:group) { create(:group, visibility_level: Gitlab::VisibilityLevel::INTERNAL) }
 
         before do
-          project.update(namespace: group, visibility_level: group.visibility_level)
+          project.update!(namespace: group, visibility_level: group.visibility_level)
         end
 
-        it 'does not update project visibility level' do
+        it 'does not update project visibility level even if admin', :enable_admin_mode do
           result = update_project(project, admin, visibility_level: Gitlab::VisibilityLevel::PUBLIC)
 
           expect(result).to eq({ status: :error, message: 'Visibility level public is not allowed in a internal group.' })
           expect(project.reload).to be_internal
         end
       end
+
+      context 'when updating shared runners' do
+        context 'can enable shared runners' do
+          let(:group) { create(:group, shared_runners_enabled: true) }
+          let(:project) { create(:project, namespace: group, shared_runners_enabled: false) }
+
+          it 'enables shared runners' do
+            result = update_project(project, user, shared_runners_enabled: true)
+
+            expect(result).to eq({ status: :success })
+            expect(project.reload.shared_runners_enabled).to be_truthy
+          end
+        end
+
+        context 'cannot enable shared runners' do
+          let(:group) { create(:group, :shared_runners_disabled) }
+          let(:project) { create(:project, namespace: group, shared_runners_enabled: false) }
+
+          it 'does not enable shared runners' do
+            result = update_project(project, user, shared_runners_enabled: true)
+
+            expect(result).to eq({ status: :error, message: 'Shared runners enabled cannot be enabled because parent group does not allow it' })
+            expect(project.reload.shared_runners_enabled).to be_falsey
+          end
+        end
+      end
     end
 
     describe 'when updating project that has forks' do
       let(:project) { create(:project, :internal) }
+      let(:user) { project.owner }
       let(:forked_project) { fork_project(project) }
 
       context 'and unlink forks feature flag is off' do
@@ -169,7 +163,7 @@ describe Projects::UpdateService do
           expect(project).to be_internal
           expect(forked_project).to be_internal
 
-          expect(update_project(project, admin, opts)).to eq({ status: :success })
+          expect(update_project(project, user, opts)).to eq({ status: :success })
 
           expect(project).to be_private
           expect(forked_project.reload).to be_private
@@ -181,7 +175,7 @@ describe Projects::UpdateService do
           expect(project).to be_internal
           expect(forked_project).to be_internal
 
-          expect(update_project(project, admin, opts)).to eq({ status: :success })
+          expect(update_project(project, user, opts)).to eq({ status: :success })
 
           expect(project).to be_public
           expect(forked_project.reload).to be_internal
@@ -195,7 +189,7 @@ describe Projects::UpdateService do
           expect(project).to be_internal
           expect(forked_project).to be_internal
 
-          expect(update_project(project, admin, opts)).to eq({ status: :success })
+          expect(update_project(project, user, opts)).to eq({ status: :success })
 
           expect(project).to be_private
           expect(forked_project.reload).to be_internal
@@ -231,7 +225,7 @@ describe Projects::UpdateService do
       end
 
       it 'handles empty project feature attributes' do
-        project.project_feature.update(wiki_access_level: ProjectFeature::DISABLED)
+        project.project_feature.update!(wiki_access_level: ProjectFeature::DISABLED)
 
         result = update_project(project, user, { name: 'test1' })
 
@@ -242,7 +236,7 @@ describe Projects::UpdateService do
 
     context 'when enabling a wiki' do
       it 'creates a wiki' do
-        project.project_feature.update(wiki_access_level: ProjectFeature::DISABLED)
+        project.project_feature.update!(wiki_access_level: ProjectFeature::DISABLED)
         TestEnv.rm_storage_dir(project.repository_storage, project.wiki.path)
 
         result = update_project(project, user, project_feature_attributes: { wiki_access_level: ProjectFeature::ENABLED })
@@ -253,9 +247,9 @@ describe Projects::UpdateService do
       end
 
       it 'logs an error and creates a metric when wiki can not be created' do
-        project.project_feature.update(wiki_access_level: ProjectFeature::DISABLED)
+        project.project_feature.update!(wiki_access_level: ProjectFeature::DISABLED)
 
-        expect_any_instance_of(ProjectWiki).to receive(:wiki).and_raise(ProjectWiki::CouldNotCreateWikiError)
+        expect_any_instance_of(ProjectWiki).to receive(:wiki).and_raise(Wiki::CouldNotCreateWikiError)
         expect_any_instance_of(described_class).to receive(:log_error).with("Could not create wiki for #{project.full_name}")
 
         counter = double(:counter)
@@ -273,7 +267,7 @@ describe Projects::UpdateService do
 
         result = update_project(project, user, project_feature_attributes:
                                  { issues_access_level: ProjectFeature::PRIVATE }
-                               )
+        )
 
         expect(result).to eq({ status: :success })
         expect(project.project_feature.issues_access_level).to be(ProjectFeature::PRIVATE)
@@ -303,18 +297,17 @@ describe Projects::UpdateService do
     end
 
     context 'when renaming a project' do
-      let(:repository_storage) { 'default' }
-      let(:repository_storage_path) { Gitlab.config.repositories.storages[repository_storage].legacy_disk_path }
+      let(:fake_repo_path) { File.join(TestEnv.repos_path, user.namespace.full_path, 'existing.git') }
 
       context 'with legacy storage' do
         let(:project) { create(:project, :legacy_storage, :repository, creator: user, namespace: user.namespace) }
 
         before do
-          gitlab_shell.create_repository(repository_storage, "#{user.namespace.full_path}/existing", user.namespace.full_path)
+          TestEnv.create_bare_repository(fake_repo_path)
         end
 
         after do
-          gitlab_shell.remove_repository(repository_storage, "#{user.namespace.full_path}/existing")
+          FileUtils.rm_rf(fake_repo_path)
         end
 
         it 'does not allow renaming when new path matches existing repository on disk' do
@@ -327,20 +320,9 @@ describe Projects::UpdateService do
           expect(project.errors.messages[:base]).to include('There is already a repository with that name on disk')
         end
 
-        it 'renames the project without upgrading it' do
-          result = update_project(project, admin, path: 'new-path')
-
-          expect(result).not_to include(status: :error)
-          expect(project).to be_valid
-          expect(project.errors).to be_empty
-          expect(project.disk_path).to include('new-path')
-          expect(project.reload.hashed_storage?(:repository)).to be_falsey
-        end
-
         context 'when hashed storage is enabled' do
           before do
             stub_application_setting(hashed_storage_enabled: true)
-            stub_feature_flags(skip_hashed_storage_upgrade: false)
           end
 
           it 'migrates project to a hashed storage instead of renaming the repo to another legacy name' do
@@ -350,22 +332,6 @@ describe Projects::UpdateService do
             expect(project).to be_valid
             expect(project.errors).to be_empty
             expect(project.reload.hashed_storage?(:repository)).to be_truthy
-          end
-
-          context 'when skip_hashed_storage_upgrade feature flag is enabled' do
-            before do
-              stub_feature_flags(skip_hashed_storage_upgrade: true)
-            end
-
-            it 'renames the project without upgrading it' do
-              result = update_project(project, admin, path: 'new-path')
-
-              expect(result).not_to include(status: :error)
-              expect(project).to be_valid
-              expect(project.errors).to be_empty
-              expect(project.disk_path).to include('new-path')
-              expect(project.reload.hashed_storage?(:repository)).to be_falsey
-            end
           end
         end
       end
@@ -398,6 +364,24 @@ describe Projects::UpdateService do
       end
     end
 
+    shared_examples 'updating pages configuration' do
+      it 'schedules the `PagesUpdateConfigurationWorker` when pages are deployed' do
+        project.mark_pages_as_deployed
+
+        expect(PagesUpdateConfigurationWorker).to receive(:perform_async).with(project.id)
+
+        subject
+      end
+
+      it "does not schedule a job when pages aren't deployed" do
+        project.mark_pages_as_not_deployed
+
+        expect(PagesUpdateConfigurationWorker).not_to receive(:perform_async).with(project.id)
+
+        subject
+      end
+    end
+
     context 'when updating #pages_https_only', :https_pages_enabled do
       subject(:call_service) do
         update_project(project, admin, pages_https_only: false)
@@ -409,14 +393,7 @@ describe Projects::UpdateService do
           .to(false)
       end
 
-      it 'calls Projects::UpdatePagesConfigurationService' do
-        expect(Projects::UpdatePagesConfigurationService)
-          .to receive(:new)
-          .with(project)
-          .and_call_original
-
-        call_service
-      end
+      it_behaves_like 'updating pages configuration'
     end
 
     context 'when updating #pages_access_level' do
@@ -430,14 +407,7 @@ describe Projects::UpdateService do
           .to(ProjectFeature::ENABLED)
       end
 
-      it 'calls Projects::UpdatePagesConfigurationService' do
-        expect(Projects::UpdatePagesConfigurationService)
-          .to receive(:new)
-          .with(project)
-          .and_call_original
-
-        call_service
-      end
+      it_behaves_like 'updating pages configuration'
     end
 
     context 'when updating #emails_disabled' do
@@ -498,60 +468,148 @@ describe Projects::UpdateService do
       end
     end
 
-    context 'when updating nested attributes for prometheus service' do
-      context 'prometheus service exists' do
-        let(:prometheus_service_attributes) do
-          attributes_for(:prometheus_service,
+    context 'when updating nested attributes for prometheus integration' do
+      context 'prometheus integration exists' do
+        let(:prometheus_integration_attributes) do
+          attributes_for(:prometheus_integration,
                          project: project,
                          properties: { api_url: "http://new.prometheus.com", manual_configuration: "0" }
-          )
+                        )
         end
 
-        let!(:prometheus_service) do
-          create(:prometheus_service,
+        let!(:prometheus_integration) do
+          create(:prometheus_integration,
                  project: project,
                  properties: { api_url: "http://old.prometheus.com", manual_configuration: "0" }
-          )
+                )
         end
 
         it 'updates existing record' do
-          expect { update_project(project, user, prometheus_service_attributes: prometheus_service_attributes) }
-            .to change { prometheus_service.reload.api_url }
+          expect { update_project(project, user, prometheus_integration_attributes: prometheus_integration_attributes) }
+            .to change { prometheus_integration.reload.api_url }
             .from("http://old.prometheus.com")
             .to("http://new.prometheus.com")
         end
       end
 
-      context 'prometheus service does not exist' do
+      context 'prometheus integration does not exist' do
         context 'valid parameters' do
-          let(:prometheus_service_attributes) do
-            attributes_for(:prometheus_service,
+          let(:prometheus_integration_attributes) do
+            attributes_for(:prometheus_integration,
                            project: project,
                            properties: { api_url: "http://example.prometheus.com", manual_configuration: "0" }
-            )
+                          )
           end
 
           it 'creates new record' do
-            expect { update_project(project, user, prometheus_service_attributes: prometheus_service_attributes) }
-              .to change { ::PrometheusService.where(project: project).count }
+            expect { update_project(project, user, prometheus_integration_attributes: prometheus_integration_attributes) }
+              .to change { ::Integrations::Prometheus.where(project: project).count }
               .from(0)
               .to(1)
           end
         end
 
         context 'invalid parameters' do
-          let(:prometheus_service_attributes) do
-            attributes_for(:prometheus_service,
+          let(:prometheus_integration_attributes) do
+            attributes_for(:prometheus_integration,
                            project: project,
                            properties: { api_url: nil, manual_configuration: "1" }
-            )
+                          )
           end
 
           it 'does not create new record' do
-            expect { update_project(project, user, prometheus_service_attributes: prometheus_service_attributes) }
-              .not_to change { ::PrometheusService.where(project: project).count }
+            expect { update_project(project, user, prometheus_integration_attributes: prometheus_integration_attributes) }
+              .not_to change { ::Integrations::Prometheus.where(project: project).count }
           end
         end
+      end
+    end
+
+    describe 'when changing repository_storage' do
+      let(:repository_read_only) { false }
+      let(:project) { create(:project, :repository, repository_read_only: repository_read_only) }
+      let(:opts) { { repository_storage: 'test_second_storage' } }
+
+      before do
+        stub_storage_settings('test_second_storage' => { 'path' => 'tmp/tests/extra_storage' })
+      end
+
+      shared_examples 'the transfer was not scheduled' do
+        it 'does not schedule the transfer' do
+          expect do
+            update_project(project, user, opts)
+          end.not_to change(project.repository_storage_moves, :count)
+        end
+      end
+
+      context 'authenticated as admin' do
+        let(:user) { create(:admin) }
+
+        context 'when admin mode is enabled', :enable_admin_mode do
+          it 'schedules the transfer of the repository to the new storage and locks the project' do
+            update_project(project, admin, opts)
+
+            expect(project).to be_repository_read_only
+            expect(project.repository_storage_moves.last).to have_attributes(
+              state: ::Projects::RepositoryStorageMove.state_machines[:state].states[:scheduled].value,
+              source_storage_name: 'default',
+              destination_storage_name: 'test_second_storage'
+            )
+          end
+        end
+
+        context 'when admin mode is disabled' do
+          it_behaves_like 'the transfer was not scheduled'
+        end
+
+        context 'the repository is read-only' do
+          let(:repository_read_only) { true }
+
+          it_behaves_like 'the transfer was not scheduled'
+        end
+
+        context 'the storage has not changed' do
+          let(:opts) { { repository_storage: 'default' } }
+
+          it_behaves_like 'the transfer was not scheduled'
+        end
+
+        context 'the storage does not exist' do
+          let(:opts) { { repository_storage: 'nonexistent' } }
+
+          it_behaves_like 'the transfer was not scheduled'
+        end
+      end
+
+      context 'authenticated as user' do
+        let(:user) { create(:user) }
+
+        it_behaves_like 'the transfer was not scheduled'
+      end
+    end
+
+    describe 'when updating topics' do
+      let(:project) { create(:project, topic_list: 'topic1, topic2') }
+
+      it 'update using topics' do
+        result = update_project(project, user, { topics: 'topics' })
+
+        expect(result[:status]).to eq(:success)
+        expect(project.topic_list).to eq(%w[topics])
+      end
+
+      it 'update using topic_list' do
+        result = update_project(project, user, { topic_list: 'topic_list' })
+
+        expect(result[:status]).to eq(:success)
+        expect(project.topic_list).to eq(%w[topic_list])
+      end
+
+      it 'update using tag_list (deprecated)' do
+        result = update_project(project, user, { tag_list: 'tag_list' })
+
+        expect(result[:status]).to eq(:success)
+        expect(project.topic_list).to eq(%w[tag_list])
       end
     end
   end

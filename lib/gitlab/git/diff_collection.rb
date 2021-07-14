@@ -7,19 +7,23 @@ module Gitlab
     class DiffCollection
       include Enumerable
 
-      DEFAULT_LIMITS = { max_files: 100, max_lines: 5000 }.freeze
-
       attr_reader :limits
 
       delegate :max_files, :max_lines, :max_bytes, :safe_max_files, :safe_max_lines, :safe_max_bytes, to: :limits
 
+      def self.default_limits(project: nil)
+        { max_files: ::Commit.diff_safe_max_files(project: project), max_lines: ::Commit.diff_safe_max_lines(project: project) }
+      end
+
       def self.limits(options = {})
         limits = {}
-        limits[:max_files] = options.fetch(:max_files, DEFAULT_LIMITS[:max_files])
-        limits[:max_lines] = options.fetch(:max_lines, DEFAULT_LIMITS[:max_lines])
+        defaults = default_limits(project: options[:project])
+        limits[:max_files] = options.fetch(:max_files, defaults[:max_files])
+        limits[:max_lines] = options.fetch(:max_lines, defaults[:max_lines])
         limits[:max_bytes] = limits[:max_files] * 5.kilobytes # Average 5 KB per file
-        limits[:safe_max_files] = [limits[:max_files], DEFAULT_LIMITS[:max_files]].min
-        limits[:safe_max_lines] = [limits[:max_lines], DEFAULT_LIMITS[:max_lines]].min
+
+        limits[:safe_max_files] = [limits[:max_files], defaults[:max_files]].min
+        limits[:safe_max_lines] = [limits[:max_lines], defaults[:max_lines]].min
         limits[:safe_max_bytes] = limits[:safe_max_files] * 5.kilobytes # Average 5 KB per file
         limits[:max_patch_bytes] = Gitlab::Git::Diff.patch_hard_limit_bytes
 
@@ -37,7 +41,7 @@ module Gitlab
         @byte_count = 0
         @overflow = false
         @empty = true
-        @array = Array.new
+        @array = []
       end
 
       def each(&block)
@@ -58,6 +62,12 @@ module Gitlab
         @iterator = nil
       end
 
+      def sort(&block)
+        @array = @array.sort(&block)
+
+        self
+      end
+
       def empty?
         any? # Make sure the iterator has been exercised
         @empty
@@ -66,6 +76,30 @@ module Gitlab
       def overflow?
         populate!
         !!@overflow
+      end
+
+      def overflow_max_lines?
+        !!@overflow_max_lines
+      end
+
+      def overflow_max_bytes?
+        !!@overflow_max_bytes
+      end
+
+      def overflow_max_files?
+        !!@overflow_max_files
+      end
+
+      def collapsed_safe_lines?
+        !!@collapsed_safe_lines
+      end
+
+      def collapsed_safe_files?
+        !!@collapsed_safe_files
+      end
+
+      def collapsed_safe_bytes?
+        !!@collapsed_safe_bytes
       end
 
       def size
@@ -89,10 +123,9 @@ module Gitlab
       end
 
       def decorate!
-        collection = each_with_index do |element, i|
+        each_with_index do |element, i|
           @array[i] = yield(element)
         end
-        collection
       end
 
       alias_method :to_ary, :to_a
@@ -107,14 +140,28 @@ module Gitlab
       end
 
       def over_safe_limits?(files)
-        files >= safe_max_files || @line_count > safe_max_lines || @byte_count >= safe_max_bytes
+        if files >= safe_max_files
+          @collapsed_safe_files = true
+        elsif @line_count > safe_max_lines
+          @collapsed_safe_lines = true
+        elsif @byte_count >= safe_max_bytes
+          @collapsed_safe_bytes = true
+        end
+
+        @collapsed_safe_files || @collapsed_safe_lines || @collapsed_safe_bytes
+      end
+
+      def expand_diff?
+        # Force single-entry diff collections to always present as expanded
+        #
+        @iterator.size == 1 || !@enforce_limits || @expanded
       end
 
       def each_gitaly_patch
         i = @array.length
 
         @iterator.each do |raw|
-          diff = Gitlab::Git::Diff.new(raw, expanded: !@enforce_limits || @expanded)
+          diff = Gitlab::Git::Diff.new(raw, expanded: expand_diff?)
 
           if raw.overflow_marker
             @overflow = true
@@ -134,24 +181,32 @@ module Gitlab
 
           if @enforce_limits && i >= max_files
             @overflow = true
+            @overflow_max_files = true
             break
           end
 
-          expanded = !@enforce_limits || @expanded
+          diff = Gitlab::Git::Diff.new(raw, expanded: expand_diff?)
 
-          diff = Gitlab::Git::Diff.new(raw, expanded: expanded)
-
-          if !expanded && over_safe_limits?(i) && diff.line_count > 0
+          if !expand_diff? && over_safe_limits?(i) && diff.line_count > 0
             diff.collapse!
           end
 
           @line_count += diff.line_count
           @byte_count += diff.diff.bytesize
 
-          if @enforce_limits && (@line_count >= max_lines || @byte_count >= max_bytes)
+          if @enforce_limits && @line_count >= max_lines
             # This last Diff instance pushes us over the lines limit. We stop and
             # discard it.
             @overflow = true
+            @overflow_max_lines = true
+            break
+          end
+
+          if @enforce_limits && @byte_count >= max_bytes
+            # This last Diff instance pushes us over the lines limit. We stop and
+            # discard it.
+            @overflow = true
+            @overflow_max_bytes = true
             break
           end
 

@@ -2,9 +2,7 @@
 
 require 'spec_helper'
 
-describe 'Pipeline Schedules', :js do
-  include PipelineSchedulesHelper
-
+RSpec.describe 'Pipeline Schedules', :js do
   let!(:project) { create(:project, :repository) }
   let!(:pipeline_schedule) { create(:ci_pipeline_schedule, :nightly, project: project ) }
   let!(:pipeline) { create(:ci_pipeline, pipeline_schedule: pipeline_schedule) }
@@ -26,7 +24,7 @@ describe 'Pipeline Schedules', :js do
         it 'displays the required information description' do
           page.within('.pipeline-schedule-table-row') do
             expect(page).to have_content('pipeline schedule')
-            expect(find(".next-run-cell time")['data-original-title'])
+            expect(find(".next-run-cell time")['title'])
               .to include(pipeline_schedule.real_next_run.strftime('%b %-d, %Y'))
             expect(page).to have_link('master')
             expect(page).to have_link("##{pipeline.id}")

@@ -2,11 +2,11 @@
 
 require 'spec_helper'
 
-describe Projects::HashedStorage::RollbackRepositoryService, :clean_gitlab_redis_shared_state do
+RSpec.describe Projects::HashedStorage::RollbackRepositoryService, :clean_gitlab_redis_shared_state do
   include GitHelpers
 
   let(:gitlab_shell) { Gitlab::Shell.new }
-  let(:project) { create(:project, :repository, :wiki_repo, storage_version: ::Project::HASHED_STORAGE_FEATURES[:repository]) }
+  let(:project) { create(:project, :repository, :wiki_repo, :design_repo, storage_version: ::Project::HASHED_STORAGE_FEATURES[:repository]) }
   let(:legacy_storage) { Storage::LegacyProject.new(project) }
   let(:hashed_storage) { Storage::Hashed.new(project) }
 
@@ -28,7 +28,7 @@ describe Projects::HashedStorage::RollbackRepositoryService, :clean_gitlab_redis
       end
 
       it 'fails when a git operation is in progress' do
-        allow(project).to receive(:repo_reference_count) { 1 }
+        allow(project).to receive(:git_transfer_in_progress?) { true }
 
         expect { service.execute }.to raise_error(Projects::HashedStorage::RepositoryInUseError)
       end
@@ -45,11 +45,12 @@ describe Projects::HashedStorage::RollbackRepositoryService, :clean_gitlab_redis
     end
 
     context 'when succeeds' do
-      it 'renames project and wiki repositories' do
+      it 'renames project, wiki and design repositories' do
         service.execute
 
         expect(gitlab_shell.repository_exists?(project.repository_storage, "#{new_disk_path}.git")).to be_truthy
         expect(gitlab_shell.repository_exists?(project.repository_storage, "#{new_disk_path}.wiki.git")).to be_truthy
+        expect(gitlab_shell.repository_exists?(project.repository_storage, "#{new_disk_path}.design.git")).to be_truthy
       end
 
       it 'updates project to be legacy and not read-only' do
@@ -62,6 +63,7 @@ describe Projects::HashedStorage::RollbackRepositoryService, :clean_gitlab_redis
       it 'move operation is called for both repositories' do
         expect_move_repository(old_disk_path, new_disk_path)
         expect_move_repository("#{old_disk_path}.wiki", "#{new_disk_path}.wiki")
+        expect_move_repository("#{old_disk_path}.design", "#{new_disk_path}.design")
 
         service.execute
       end
@@ -72,6 +74,42 @@ describe Projects::HashedStorage::RollbackRepositoryService, :clean_gitlab_redis
         rugged_config = rugged_repo(project.repository).config['gitlab.fullpath']
 
         expect(rugged_config).to eq project.full_path
+      end
+    end
+
+    context 'when exception happens' do
+      it 'handles OpenSSL::Cipher::CipherError' do
+        expect(project).to receive(:ensure_runners_token).and_raise(OpenSSL::Cipher::CipherError)
+
+        expect { service.execute }.not_to raise_exception
+      end
+
+      it 'ensures rollback when OpenSSL::Cipher::CipherError' do
+        expect(project).to receive(:ensure_runners_token).and_raise(OpenSSL::Cipher::CipherError)
+        expect(service).to receive(:rollback_folder_move).and_call_original
+
+        service.execute
+        project.reload
+
+        expect(project.hashed_storage?(:repository)).to be_truthy
+        expect(project.repository_read_only?).to be_falsey
+      end
+
+      it 'handles Gitlab::Git::CommandError' do
+        expect(project).to receive(:write_repository_config).and_raise(Gitlab::Git::CommandError)
+
+        expect { service.execute }.not_to raise_exception
+      end
+
+      it 'ensures rollback when Gitlab::Git::CommandError' do
+        expect(project).to receive(:write_repository_config).and_raise(Gitlab::Git::CommandError)
+        expect(service).to receive(:rollback_folder_move).and_call_original
+
+        service.execute
+        project.reload
+
+        expect(project.hashed_storage?(:repository)).to be_truthy
+        expect(project.repository_read_only?).to be_falsey
       end
     end
 
@@ -86,6 +124,7 @@ describe Projects::HashedStorage::RollbackRepositoryService, :clean_gitlab_redis
 
         expect(gitlab_shell.repository_exists?(project.repository_storage, "#{new_disk_path}.git")).to be_falsey
         expect(gitlab_shell.repository_exists?(project.repository_storage, "#{new_disk_path}.wiki.git")).to be_falsey
+        expect(gitlab_shell.repository_exists?(project.repository_storage, "#{new_disk_path}.design.git")).to be_falsey
         expect(project.repository_read_only?).to be_falsey
       end
 
@@ -97,6 +136,7 @@ describe Projects::HashedStorage::RollbackRepositoryService, :clean_gitlab_redis
         it 'does not try to move nil repository over existing' do
           expect(gitlab_shell).not_to receive(:mv_repository).with(project.repository_storage, old_disk_path, new_disk_path)
           expect_move_repository("#{old_disk_path}.wiki", "#{new_disk_path}.wiki")
+          expect_move_repository("#{old_disk_path}.design", "#{new_disk_path}.design")
 
           service.execute
         end

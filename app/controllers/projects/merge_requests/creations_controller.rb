@@ -6,18 +6,20 @@ class Projects::MergeRequests::CreationsController < Projects::MergeRequests::Ap
   include RendersCommits
 
   skip_before_action :merge_request
-  before_action :whitelist_query_limiting, only: [:create]
   before_action :authorize_create_merge_request_from!
   before_action :apply_diff_view_cookie!, only: [:diffs, :diff_for_path]
   before_action :build_merge_request, except: [:create]
+
+  before_action do
+    push_frontend_feature_flag(:mr_collapsed_approval_rules, @project)
+  end
 
   def new
     define_new_vars
   end
 
   def create
-    @target_branches ||= []
-    @merge_request = ::MergeRequests::CreateService.new(project, current_user, merge_request_params).execute
+    @merge_request = ::MergeRequests::CreateService.new(project: project, current_user: current_user, params: merge_request_params).execute
 
     if @merge_request.valid?
       incr_count_webide_merge_request
@@ -33,13 +35,13 @@ class Projects::MergeRequests::CreationsController < Projects::MergeRequests::Ap
   end
 
   def pipelines
-    @pipelines = @merge_request.all_pipelines
+    @pipelines = Ci::PipelinesForMergeRequestFinder.new(@merge_request, current_user).execute
 
     Gitlab::PollingInterval.set_header(response, interval: 10_000)
 
     render json: {
       pipelines: PipelineSerializer
-      .new(project: @project, current_user: @current_user)
+      .new(project: @project, current_user: current_user)
       .represent(@pipelines)
     }
   end
@@ -91,19 +93,12 @@ class Projects::MergeRequests::CreationsController < Projects::MergeRequests::Ap
 
     # Gitaly N+1 issue: https://gitlab.com/gitlab-org/gitlab-foss/issues/58096
     Gitlab::GitalyClient.allow_n_plus_1_calls do
-      @merge_request = ::MergeRequests::BuildService.new(project, current_user, merge_request_params.merge(diff_options: diff_options)).execute
+      @merge_request = ::MergeRequests::BuildService.new(project: project, current_user: current_user, params: merge_request_params.merge(diff_options: diff_options)).execute
     end
   end
 
   def define_new_vars
     @noteable = @merge_request
-
-    @target_branches = if @merge_request.target_project
-                         @merge_request.target_project.repository.branch_names
-                       else
-                         []
-                       end
-
     @target_project = @merge_request.target_project
     @source_project = @merge_request.source_project
 
@@ -126,20 +121,18 @@ class Projects::MergeRequests::CreationsController < Projects::MergeRequests::Ap
 
   # rubocop: disable CodeReuse/ActiveRecord
   def selected_target_project
-    if @project.id.to_s == params[:target_project_id] || !@project.forked?
-      @project
-    elsif params[:target_project_id].present?
+    return @project unless @project.forked?
+
+    if params[:target_project_id].present?
+      return @project if @project.id.to_s == params[:target_project_id]
+
       MergeRequestTargetProjectFinder.new(current_user: current_user, source_project: @project)
         .find_by(id: params[:target_project_id])
     else
-      @project.forked_from_project
+      @project.default_merge_request_target
     end
   end
   # rubocop: enable CodeReuse/ActiveRecord
-
-  def whitelist_query_limiting
-    Gitlab::QueryLimiting.whitelist('https://gitlab.com/gitlab-org/gitlab-foss/issues/42384')
-  end
 
   def incr_count_webide_merge_request
     return if params[:nav_source] != 'webide'
@@ -147,3 +140,5 @@ class Projects::MergeRequests::CreationsController < Projects::MergeRequests::Ap
     Gitlab::UsageDataCounters::WebIdeCounter.increment_merge_requests_count
   end
 end
+
+Projects::MergeRequests::CreationsController.prepend_mod

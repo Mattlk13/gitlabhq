@@ -2,10 +2,10 @@
 
 require 'spec_helper'
 
-describe Gitlab::UserAccess do
+RSpec.describe Gitlab::UserAccess do
   include ProjectForksHelper
 
-  let(:access) { described_class.new(user, project: project) }
+  let(:access) { described_class.new(user, container: project) }
   let(:project) { create(:project, :repository) }
   let(:user) { create(:user) }
 
@@ -30,14 +30,35 @@ describe Gitlab::UserAccess do
       end
     end
 
+    describe 'push to branch in an internal project' do
+      it 'will not infinitely loop when a project is internal' do
+        project.visibility_level = Gitlab::VisibilityLevel::INTERNAL
+        project.save!
+
+        expect(project).not_to receive(:branch_allows_collaboration?)
+
+        access.can_push_to_branch?('master')
+      end
+    end
+
     describe 'push to empty project' do
       let(:empty_project) { create(:project_empty_repo) }
-      let(:project_access) { described_class.new(user, project: empty_project) }
+      let(:project_access) { described_class.new(user, container: empty_project) }
 
-      it 'returns true for admins' do
-        user.update!(admin: true)
+      context 'when admin mode is enabled', :enable_admin_mode do
+        it 'returns true for admins' do
+          user.update!(admin: true)
 
-        expect(access.can_push_to_branch?('master')).to be_truthy
+          expect(access.can_push_to_branch?('master')).to be_truthy
+        end
+      end
+
+      context 'when admin mode is disabled' do
+        it 'returns false for admins' do
+          user.update!(admin: true)
+
+          expect(access.can_push_to_branch?('master')).to be_falsey
+        end
       end
 
       it 'returns true if user is maintainer' do
@@ -46,32 +67,27 @@ describe Gitlab::UserAccess do
         expect(project_access.can_push_to_branch?('master')).to be_truthy
       end
 
-      it 'returns false if user is developer and project is fully protected' do
-        empty_project.add_developer(user)
-        stub_application_setting(default_branch_protection: Gitlab::Access::PROTECTION_FULL)
+      context 'when the user is a developer' do
+        using RSpec::Parameterized::TableSyntax
 
-        expect(project_access.can_push_to_branch?('master')).to be_falsey
-      end
+        before do
+          empty_project.add_developer(user)
+        end
 
-      it 'returns false if user is developer and it is not allowed to push new commits but can merge into branch' do
-        empty_project.add_developer(user)
-        stub_application_setting(default_branch_protection: Gitlab::Access::PROTECTION_DEV_CAN_MERGE)
+        where(:default_branch_protection_level, :result) do
+          Gitlab::Access::PROTECTION_NONE          | true
+          Gitlab::Access::PROTECTION_DEV_CAN_PUSH  | true
+          Gitlab::Access::PROTECTION_DEV_CAN_MERGE | false
+          Gitlab::Access::PROTECTION_FULL          | false
+        end
 
-        expect(project_access.can_push_to_branch?('master')).to be_falsey
-      end
+        with_them do
+          it do
+            expect(empty_project.namespace).to receive(:default_branch_protection).and_return(default_branch_protection_level).at_least(:once)
 
-      it 'returns true if user is developer and project is unprotected' do
-        empty_project.add_developer(user)
-        stub_application_setting(default_branch_protection: Gitlab::Access::PROTECTION_NONE)
-
-        expect(project_access.can_push_to_branch?('master')).to be_truthy
-      end
-
-      it 'returns true if user is developer and project grants developers permission' do
-        empty_project.add_developer(user)
-        stub_application_setting(default_branch_protection: Gitlab::Access::PROTECTION_DEV_CAN_PUSH)
-
-        expect(project_access.can_push_to_branch?('master')).to be_truthy
+            expect(project_access.can_push_to_branch?('master')).to eq(result)
+          end
+        end
       end
     end
 
@@ -79,10 +95,20 @@ describe Gitlab::UserAccess do
       let(:branch) { create :protected_branch, project: project, name: "test" }
       let(:not_existing_branch) { create :protected_branch, :developers_can_merge, project: project }
 
-      it 'returns true for admins' do
-        user.update!(admin: true)
+      context 'when admin mode is enabled', :enable_admin_mode do
+        it 'returns true for admins' do
+          user.update!(admin: true)
 
-        expect(access.can_push_to_branch?(branch.name)).to be_truthy
+          expect(access.can_push_to_branch?(branch.name)).to be_truthy
+        end
+      end
+
+      context 'when admin mode is disabled' do
+        it 'returns false for admins' do
+          user.update!(admin: true)
+
+          expect(access.can_push_to_branch?(branch.name)).to be_falsey
+        end
       end
 
       it 'returns true if user is a maintainer' do
@@ -188,6 +214,15 @@ describe Gitlab::UserAccess do
         project.add_reporter(user)
 
         expect(access.can_merge_to_branch?(@branch.name)).to be_falsey
+      end
+    end
+
+    context 'when skip_collaboration_check is true' do
+      let(:access) { described_class.new(user, container: project, skip_collaboration_check: true) }
+
+      it 'does not call Project#branch_allows_collaboration?' do
+        expect(project).not_to receive(:branch_allows_collaboration?)
+        expect(access.can_push_to_branch?('master')).to be_falsey
       end
     end
   end
@@ -301,6 +336,26 @@ describe Gitlab::UserAccess do
         project.add_user(user, :reporter)
 
         expect(access.can_delete_branch?(branch.name)).to be_falsey
+      end
+    end
+  end
+
+  describe '#can_push_for_ref?' do
+    let(:ref) { 'test_ref' }
+
+    context 'when user cannot push_code to a project repository (eg. as a guest)' do
+      it 'is false' do
+        project.add_user(user, :guest)
+
+        expect(access.can_push_for_ref?(ref)).to be_falsey
+      end
+    end
+
+    context 'when user can push_code to a project repository (eg. as a developer)' do
+      it 'is true' do
+        project.add_user(user, :developer)
+
+        expect(access.can_push_for_ref?(ref)).to be_truthy
       end
     end
   end

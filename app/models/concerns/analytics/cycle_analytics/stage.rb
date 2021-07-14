@@ -27,6 +27,7 @@ module Analytics
         scope :default_stages, -> { where(custom: false) }
         scope :ordered, -> { order(:relative_position, :id) }
         scope :for_list, -> { includes(:start_event_label, :end_event_label).ordered }
+        scope :by_value_stream, -> (value_stream) { where(value_stream_id: value_stream.id) }
       end
 
       def parent=(_)
@@ -125,7 +126,7 @@ module Analytics
       def label_available_for_group?(label_id)
         LabelsFinder.new(nil, { group_id: group.id, include_ancestor_groups: true, only_group_labels: true })
           .execute(skip_authorization: true)
-          .by_ids(label_id)
+          .id_in(label_id)
           .exists?
       end
     end

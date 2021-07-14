@@ -1,3 +1,9 @@
+---
+stage: none
+group: unassigned
+info: To determine the technical writer assigned to the Stage/Group associated with this page, see https://about.gitlab.com/handbook/engineering/ux/technical-writing/#assignments
+---
+
 # Components
 
 ## Graphs
@@ -12,8 +18,8 @@ We chose D3 as our library going forward because of the following features:
 D3 is very popular across many projects outside of GitLab:
 
 - [The New York Times](https://archive.nytimes.com/www.nytimes.com/interactive/2012/02/13/us/politics/2013-budget-proposal-graphic.html)
-- [plot.ly](https://plot.ly/)
-- [Droptask](https://www.ayoa.com/previously-droptask/)
+- [plot.ly](https://plotly.com/)
+- [Ayoa](https://www.ayoa.com/previously-droptask/)
 
 Within GitLab, D3 has been used for the following notable features
 

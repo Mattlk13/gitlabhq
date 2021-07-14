@@ -7,7 +7,7 @@ module Gitlab
 
     RequestDeadlineExceeded = Class.new(StandardError)
 
-    attr_accessor :client_ip, :start_thread_cpu_time, :request_start_time
+    attr_accessor :client_ip, :start_thread_cpu_time, :request_start_time, :thread_memory_allocations
 
     class << self
       def instance
@@ -24,17 +24,22 @@ module Gitlab
     end
 
     def ensure_deadline_not_exceeded!
+      return unless enabled?
       return unless request_deadline
       return if Gitlab::Metrics::System.real_time < request_deadline
 
       raise RequestDeadlineExceeded,
-            "Request takes longer than #{max_request_duration_seconds}"
+            "Request takes longer than #{max_request_duration_seconds} seconds"
     end
 
     private
 
     def max_request_duration_seconds
       Settings.gitlab.max_request_duration_seconds
+    end
+
+    def enabled?
+      !Rails.env.test?
     end
   end
 end

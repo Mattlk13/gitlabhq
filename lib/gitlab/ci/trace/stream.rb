@@ -8,7 +8,7 @@ module Gitlab
         BUFFER_SIZE = 4096
         LIMIT_SIZE = 500.kilobytes
 
-        attr_reader :stream
+        attr_reader :stream, :metrics
 
         delegate :close, :tell, :seek, :size, :url, :truncate, to: :stream, allow_nil: true
 
@@ -16,9 +16,10 @@ module Gitlab
 
         alias_method :present?, :valid?
 
-        def initialize
+        def initialize(metrics = Trace::Metrics.new)
           @stream = yield
           @stream&.binmode
+          @metrics = metrics
         end
 
         def valid?
@@ -42,6 +43,9 @@ module Gitlab
 
         def append(data, offset)
           data = data.force_encoding(Encoding::BINARY)
+
+          metrics.increment_trace_operation(operation: :streamed)
+          metrics.increment_trace_bytes(data.bytesize)
 
           stream.seek(offset, IO::SEEK_SET)
           stream.write(data)
@@ -89,7 +93,7 @@ module Gitlab
           end
 
           nil
-        rescue
+        rescue StandardError
           # if bad regex or something goes wrong we dont want to interrupt transition
           # so we just silently ignore error for now
         end

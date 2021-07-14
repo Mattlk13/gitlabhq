@@ -57,9 +57,7 @@ export default {
       if (this.hasZone) {
         this.isLoading = true;
 
-        this.fetchMachineTypes()
-          .then(this.fetchSuccessHandler)
-          .catch(this.fetchFailureHandler);
+        this.fetchMachineTypes().then(this.fetchSuccessHandler).catch(this.fetchFailureHandler);
       }
     },
   },
@@ -97,7 +95,7 @@ export default {
             </li>
           </ul>
         </div>
-        <div class="dropdown-loading"><gl-loading-icon /></div>
+        <div class="dropdown-loading"><gl-loading-icon size="sm" /></div>
       </div>
     </div>
     <span

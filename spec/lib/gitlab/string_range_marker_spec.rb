@@ -2,13 +2,13 @@
 
 require 'spec_helper'
 
-describe Gitlab::StringRangeMarker do
+RSpec.describe Gitlab::StringRangeMarker do
   describe '#mark' do
     def mark_diff(rich = nil)
       raw = 'abc <def>'
       inline_diffs = [2..5]
 
-      described_class.new(raw, rich).mark(inline_diffs) do |text, left:, right:|
+      described_class.new(raw, rich).mark(inline_diffs) do |text, left:, right:, mode:|
         "LEFT#{text}RIGHT".html_safe
       end
     end

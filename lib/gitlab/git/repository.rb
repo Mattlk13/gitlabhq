@@ -19,15 +19,15 @@ module Gitlab
       GITLAB_PROJECTS_TIMEOUT = Gitlab.config.gitlab_shell.git_timeout
       EMPTY_REPOSITORY_CHECKSUM = '0000000000000000000000000000000000000000'
 
-      NoRepository = Class.new(StandardError)
-      InvalidRepository = Class.new(StandardError)
-      InvalidBlobName = Class.new(StandardError)
-      InvalidRef = Class.new(StandardError)
-      GitError = Class.new(StandardError)
-      DeleteBranchError = Class.new(StandardError)
-      TagExistsError = Class.new(StandardError)
-      ChecksumError = Class.new(StandardError)
-      class CreateTreeError < StandardError
+      NoRepository = Class.new(::Gitlab::Git::BaseError)
+      InvalidRepository = Class.new(::Gitlab::Git::BaseError)
+      InvalidBlobName = Class.new(::Gitlab::Git::BaseError)
+      InvalidRef = Class.new(::Gitlab::Git::BaseError)
+      GitError = Class.new(::Gitlab::Git::BaseError)
+      DeleteBranchError = Class.new(::Gitlab::Git::BaseError)
+      TagExistsError = Class.new(::Gitlab::Git::BaseError)
+      ChecksumError = Class.new(::Gitlab::Git::BaseError)
+      class CreateTreeError < ::Gitlab::Git::BaseError
         attr_reader :error_code
 
         def initialize(error_code)
@@ -44,7 +44,7 @@ module Gitlab
       # Relative path of repo
       attr_reader :relative_path
 
-      attr_reader :storage, :gl_repository, :relative_path, :gl_project_path
+      attr_reader :storage, :gl_repository, :gl_project_path
 
       # This remote name has to be stable for all types of repositories that
       # can join an object pool. If it's structure ever changes, a migration
@@ -89,9 +89,9 @@ module Gitlab
       def root_ref
         gitaly_ref_client.default_branch_name
       rescue GRPC::NotFound => e
-        raise NoRepository.new(e.message)
+        raise NoRepository, e.message
       rescue GRPC::Unknown => e
-        raise Gitlab::Git::CommandError.new(e.message)
+        raise Gitlab::Git::CommandError, e.message
       end
 
       def exists?
@@ -127,9 +127,9 @@ module Gitlab
         end
       end
 
-      def local_branches(sort_by: nil)
+      def local_branches(sort_by: nil, pagination_params: nil)
         wrapped_gitaly_errors do
-          gitaly_ref_client.local_branches(sort_by: sort_by)
+          gitaly_ref_client.local_branches(sort_by: sort_by, pagination_params: pagination_params)
         end
       end
 
@@ -149,6 +149,12 @@ module Gitlab
       def remove
         wrapped_gitaly_errors do
           gitaly_repository_client.remove
+        end
+      end
+
+      def replicate(source_repository)
+        wrapped_gitaly_errors do
+          gitaly_repository_client.replicate(source_repository)
         end
       end
 
@@ -291,9 +297,14 @@ module Gitlab
           end
 
         file_name = "#{name}.#{extension}"
-        File.join(storage_path, self.gl_repository, sha, file_name)
+        File.join(storage_path, self.gl_repository, sha, archive_version_path, file_name)
       end
       private :archive_file_path
+
+      def archive_version_path
+        '@v2'
+      end
+      private :archive_version_path
 
       # Return repo size in megabytes
       def size
@@ -335,7 +346,7 @@ module Gitlab
 
         limit = options[:limit]
         if limit == 0 || !limit.is_a?(Integer)
-          raise ArgumentError.new("invalid Repository#log limit: #{limit.inspect}")
+          raise ArgumentError, "invalid Repository#log limit: #{limit.inspect}"
         end
 
         wrapped_gitaly_errors do
@@ -356,6 +367,20 @@ module Gitlab
           wrapped_gitaly_errors do
             gitaly_ref_client.list_new_blobs(newrev, REV_LIST_COMMIT_LIMIT, dynamic_timeout: dynamic_timeout)
           end
+        end
+      end
+
+      # List blobs reachable via a set of revisions. Supports the
+      # pseudo-revisions `--not` and `--all`. Uses the minimum of
+      # GitalyClient.medium_timeout and dynamic timeout if the dynamic
+      # timeout is set, otherwise it'll always use the medium timeout.
+      def blobs(revisions, dynamic_timeout: nil)
+        revisions = revisions.reject { |rev| rev.blank? || rev == ::Gitlab::Git::BLANK_SHA }
+
+        return [] if revisions.blank?
+
+        wrapped_gitaly_errors do
+          gitaly_blob_client.list_blobs(revisions, limit: REV_LIST_COMMIT_LIMIT, dynamic_timeout: dynamic_timeout)
         end
       end
 
@@ -401,7 +426,7 @@ module Gitlab
             end
           end
       rescue ArgumentError => e
-        raise Gitlab::Git::Repository::GitError.new(e)
+        raise Gitlab::Git::Repository::GitError, e
       end
 
       # Returns the SHA of the most recent common ancestor of +from+ and +to+
@@ -452,6 +477,18 @@ module Gitlab
         Gitlab::Git::DiffStatsCollection.new(stats)
       rescue CommandError, TypeError
         empty_diff_stats
+      end
+
+      def find_changed_paths(commits)
+        processed_commits = commits.reject { |ref| ref.blank? || Gitlab::Git.blank_ref?(ref) }
+
+        return [] if processed_commits.empty?
+
+        wrapped_gitaly_errors do
+          gitaly_commit_client.find_changed_paths(processed_commits)
+        end
+      rescue CommandError, TypeError, NoRepository
+        []
       end
 
       # Returns a RefName for a given SHA
@@ -574,9 +611,9 @@ module Gitlab
         tags.find { |tag| tag.name == name }
       end
 
-      def merge_to_ref(user, source_sha, branch, target_ref, message, first_parent_ref)
+      def merge_to_ref(user, **kwargs)
         wrapped_gitaly_errors do
-          gitaly_operation_client.user_merge_to_ref(user, source_sha, branch, target_ref, message, first_parent_ref)
+          gitaly_operation_client.user_merge_to_ref(user, **kwargs)
         end
       end
 
@@ -592,33 +629,35 @@ module Gitlab
         end
       end
 
-      def revert(user:, commit:, branch_name:, message:, start_branch_name:, start_repository:)
+      def revert(user:, commit:, branch_name:, message:, start_branch_name:, start_repository:, dry_run: false)
         args = {
           user: user,
           commit: commit,
           branch_name: branch_name,
           message: message,
           start_branch_name: start_branch_name,
-          start_repository: start_repository
+          start_repository: start_repository,
+          dry_run: dry_run
         }
 
         wrapped_gitaly_errors do
-          gitaly_operation_client.user_revert(args)
+          gitaly_operation_client.user_revert(**args)
         end
       end
 
-      def cherry_pick(user:, commit:, branch_name:, message:, start_branch_name:, start_repository:)
+      def cherry_pick(user:, commit:, branch_name:, message:, start_branch_name:, start_repository:, dry_run: false)
         args = {
           user: user,
           commit: commit,
           branch_name: branch_name,
           message: message,
           start_branch_name: start_branch_name,
-          start_repository: start_repository
+          start_repository: start_repository,
+          dry_run: dry_run
         }
 
         wrapped_gitaly_errors do
-          gitaly_operation_client.user_cherry_pick(args)
+          gitaly_operation_client.user_cherry_pick(**args)
         end
       end
 
@@ -632,7 +671,7 @@ module Gitlab
         }
 
         wrapped_gitaly_errors do
-          gitaly_operation_client.user_update_submodule(args)
+          gitaly_operation_client.user_update_submodule(**args)
         end
       end
 
@@ -673,11 +712,11 @@ module Gitlab
         end
       end
 
-      def find_remote_root_ref(remote_name)
-        return unless remote_name.present?
+      def find_remote_root_ref(remote_name, remote_url, authorization = nil)
+        return unless remote_name.present? && remote_url.present?
 
         wrapped_gitaly_errors do
-          gitaly_remote_client.find_remote_root_ref(remote_name)
+          gitaly_remote_client.find_remote_root_ref(remote_name, remote_url, authorization)
         end
       end
 
@@ -767,29 +806,37 @@ module Gitlab
         !has_visible_content?
       end
 
-      def fetch_repository_as_mirror(repository)
-        wrapped_gitaly_errors do
-          gitaly_remote_client.fetch_internal_remote(repository)
-        end
-      end
-
       # Fetch remote for repository
       #
       # remote - remote name
+      # url - URL of the remote to fetch. `remote` is not used in this case.
+      # refmap - if url is given, determines which references should get fetched where
       # ssh_auth - SSH known_hosts data and a private key to use for public-key authentication
       # forced - should we use --force flag?
       # no_tags - should we use --no-tags flag?
       # prune - should we use --prune flag?
-      def fetch_remote(remote, ssh_auth: nil, forced: false, no_tags: false, prune: true)
+      # check_tags_changed - should we ask gitaly to calculate whether any tags changed?
+      def fetch_remote(remote, url: nil, refmap: nil, ssh_auth: nil, forced: false, no_tags: false, prune: true, check_tags_changed: false)
         wrapped_gitaly_errors do
           gitaly_repository_client.fetch_remote(
             remote,
+            url: url,
+            refmap: refmap,
             ssh_auth: ssh_auth,
             forced: forced,
             no_tags: no_tags,
             prune: prune,
+            check_tags_changed: check_tags_changed,
             timeout: GITLAB_PROJECTS_TIMEOUT
           )
+        end
+      end
+
+      def import_repository(url)
+        raise ArgumentError, "don't use disk paths with import_repository: #{url.inspect}" if url.start_with?('.', '/')
+
+        wrapped_gitaly_errors do
+          gitaly_repository_client.import_repository(url)
         end
       end
 
@@ -805,7 +852,7 @@ module Gitlab
       def fsck
         msg, status = gitaly_repository_client.fsck
 
-        raise GitError.new("Could not fsck repository: #{msg}") unless status.zero?
+        raise GitError, "Could not fsck repository: #{msg}" unless status == 0
       end
 
       def create_from_bundle(bundle_path)
@@ -842,10 +889,9 @@ module Gitlab
         end
       end
 
-      def squash(user, squash_id, branch:, start_sha:, end_sha:, author:, message:)
+      def squash(user, squash_id, start_sha:, end_sha:, author:, message:)
         wrapped_gitaly_errors do
-          gitaly_operation_client.user_squash(user, squash_id, branch,
-              start_sha, end_sha, author, message)
+          gitaly_operation_client.user_squash(user, squash_id, start_sha, end_sha, author, message)
         end
       end
 
@@ -937,12 +983,16 @@ module Gitlab
         Gitlab::GitalyClient::ConflictsService.new(self, our_commit_oid, their_commit_oid)
       end
 
+      def praefect_info_client
+        @praefect_info_client ||= Gitlab::GitalyClient::PraefectInfoService.new(self)
+      end
+
       def clean_stale_repository_files
         wrapped_gitaly_errors do
           gitaly_repository_client.cleanup if exists?
         end
       rescue Gitlab::Git::CommandError => e # Don't fail if we can't cleanup
-        Rails.logger.error("Unable to clean repository on storage #{storage} with relative path #{relative_path}: #{e.message}") # rubocop:disable Gitlab/RailsLogger
+        Gitlab::AppLogger.error("Unable to clean repository on storage #{storage} with relative path #{relative_path}: #{e.message}")
         Gitlab::Metrics.counter(
           :failed_repository_cleanup_total,
           'Number of failed repository cleanup events'
@@ -983,6 +1033,10 @@ module Gitlab
         gitaly_repository_client.search_files_by_name(ref, safe_query)
       end
 
+      def search_files_by_regexp(filter, ref = 'HEAD')
+        gitaly_repository_client.search_files_by_regexp(ref, filter)
+      end
+
       def find_commits_by_message(query, ref, path, limit, offset)
         wrapped_gitaly_errors do
           gitaly_commit_client
@@ -991,15 +1045,21 @@ module Gitlab
         end
       end
 
-      def list_last_commits_for_tree(sha, path, offset: 0, limit: 25)
+      def list_last_commits_for_tree(sha, path, offset: 0, limit: 25, literal_pathspec: false)
         wrapped_gitaly_errors do
-          gitaly_commit_client.list_last_commits_for_tree(sha, path, offset: offset, limit: limit)
+          gitaly_commit_client.list_last_commits_for_tree(sha, path, offset: offset, limit: limit, literal_pathspec: literal_pathspec)
         end
       end
 
-      def last_commit_for_path(sha, path)
+      def list_commits_by_ref_name(refs)
         wrapped_gitaly_errors do
-          gitaly_commit_client.last_commit_for_path(sha, path)
+          gitaly_commit_client.list_commits_by_ref_name(refs)
+        end
+      end
+
+      def last_commit_for_path(sha, path, literal_pathspec: false)
+        wrapped_gitaly_errors do
+          gitaly_commit_client.last_commit_for_path(sha, path, literal_pathspec: literal_pathspec)
         end
       end
 
@@ -1010,6 +1070,12 @@ module Gitlab
         gitaly_repository_client.calculate_checksum
       rescue GRPC::NotFound
         raise NoRepository # Guard against data races.
+      end
+
+      def replicas
+        wrapped_gitaly_errors do
+          praefect_info_client.replicas
+        end
       end
 
       private

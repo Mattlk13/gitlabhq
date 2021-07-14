@@ -76,35 +76,39 @@ module Gitlab
         def trace_added_line(position)
           b_path = position.new_path
           b_line = position.new_line
+          diff_file = diff_file(position)
+          b_mode = diff_file&.b_mode
 
-          bd_diff = bd_diffs.diff_file_with_old_path(b_path)
+          bd_diff = bd_diffs.diff_file_with_old_path(b_path, b_mode)
 
           d_path = bd_diff&.new_path || b_path
+          d_mode = bd_diff&.b_mode || b_mode
           d_line = LineMapper.new(bd_diff).old_to_new(b_line)
 
           if d_line
-            cd_diff = cd_diffs.diff_file_with_new_path(d_path)
+            cd_diff = cd_diffs.diff_file_with_new_path(d_path, d_mode)
 
             c_path = cd_diff&.old_path || d_path
+            c_mode = cd_diff&.a_mode || d_mode
             c_line = LineMapper.new(cd_diff).new_to_old(d_line)
 
             if c_line
               # If the line is still in D but also in C, it has turned from an
               # added line into an unchanged one.
-              new_position = new_position(cd_diff, c_line, d_line)
+              new_position = new_position(cd_diff, c_line, d_line, position.line_range)
               if valid_position?(new_position)
                 # If the line is still in the MR, we don't treat this as outdated.
                 { position: new_position, outdated: false }
               else
                 # If the line is no longer in the MR, we unfortunately cannot show
                 # the current state on the CD diff, so we treat it as outdated.
-                ac_diff = ac_diffs.diff_file_with_new_path(c_path)
+                ac_diff = ac_diffs.diff_file_with_new_path(c_path, c_mode)
 
                 { position: new_position(ac_diff, nil, c_line), outdated: true }
               end
             else
               # If the line is still in D and not in C, it is still added.
-              { position: new_position(cd_diff, nil, d_line), outdated: false }
+              { position: new_position(cd_diff, nil, d_line, position.line_range), outdated: false }
             end
           else
             # If the line is no longer in D, it has been removed from the MR.
@@ -115,27 +119,31 @@ module Gitlab
         def trace_removed_line(position)
           a_path = position.old_path
           a_line = position.old_line
+          diff_file = diff_file(position)
+          a_mode = diff_file&.a_mode
 
-          ac_diff = ac_diffs.diff_file_with_old_path(a_path)
+          ac_diff = ac_diffs.diff_file_with_old_path(a_path, a_mode)
 
           c_path = ac_diff&.new_path || a_path
+          c_mode = ac_diff&.b_mode || a_mode
           c_line = LineMapper.new(ac_diff).old_to_new(a_line)
 
           if c_line
-            cd_diff = cd_diffs.diff_file_with_old_path(c_path)
+            cd_diff = cd_diffs.diff_file_with_old_path(c_path, c_mode)
 
             d_path = cd_diff&.new_path || c_path
+            d_mode = cd_diff&.b_mode || c_mode
             d_line = LineMapper.new(cd_diff).old_to_new(c_line)
 
             if d_line
               # If the line is still in C but also in D, it has turned from a
               # removed line into an unchanged one.
-              bd_diff = bd_diffs.diff_file_with_new_path(d_path)
+              bd_diff = bd_diffs.diff_file_with_new_path(d_path, d_mode)
 
               { position: new_position(bd_diff, nil, d_line), outdated: true }
             else
               # If the line is still in C and not in D, it is still removed.
-              { position: new_position(cd_diff, c_line, nil), outdated: false }
+              { position: new_position(cd_diff, c_line, nil, position.line_range), outdated: false }
             end
           else
             # If the line is no longer in C, it has been removed outside of the MR.
@@ -148,21 +156,25 @@ module Gitlab
           a_line = position.old_line
           b_path = position.new_path
           b_line = position.new_line
+          diff_file = diff_file(position)
+          a_mode = diff_file&.a_mode
+          b_mode = diff_file&.b_mode
 
-          ac_diff = ac_diffs.diff_file_with_old_path(a_path)
+          ac_diff = ac_diffs.diff_file_with_old_path(a_path, a_mode)
 
           c_path = ac_diff&.new_path || a_path
+          c_mode = ac_diff&.b_mode || a_mode
           c_line = LineMapper.new(ac_diff).old_to_new(a_line)
 
-          bd_diff = bd_diffs.diff_file_with_old_path(b_path)
+          bd_diff = bd_diffs.diff_file_with_old_path(b_path, b_mode)
 
           d_line = LineMapper.new(bd_diff).old_to_new(b_line)
 
-          cd_diff = cd_diffs.diff_file_with_old_path(c_path)
+          cd_diff = cd_diffs.diff_file_with_old_path(c_path, c_mode)
 
           if c_line && d_line
             # If the line is still in C and D, it is still unchanged.
-            new_position = new_position(cd_diff, c_line, d_line)
+            new_position = new_position(cd_diff, c_line, d_line, position.line_range)
             if valid_position?(new_position)
               # If the line is still in the MR, we don't treat this as outdated.
               { position: new_position, outdated: false }
@@ -176,7 +188,7 @@ module Gitlab
             # If the line is still in D but no longer in C, it has turned from
             # an unchanged line into an added one.
             # We don't treat this as outdated since the line is still in the MR.
-            { position: new_position(cd_diff, nil, d_line), outdated: false }
+            { position: new_position(cd_diff, nil, d_line, position.line_range), outdated: false }
           else # !d_line && (c_line || !c_line)
             # If the line is no longer in D, it has turned from an unchanged line
             # into a removed one.
@@ -184,12 +196,15 @@ module Gitlab
           end
         end
 
-        def new_position(diff_file, old_line, new_line)
-          Position.new(
+        def new_position(diff_file, old_line, new_line, line_range = nil)
+          params = {
             diff_file: diff_file,
             old_line: old_line,
-            new_line: new_line
-          )
+            new_line: new_line,
+            line_range: line_range
+          }.compact
+
+          Position.new(**params)
         end
 
         def valid_position?(position)

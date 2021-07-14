@@ -32,7 +32,7 @@ module Gitlab
         end
 
         attr_reader :offset, :sections, :segments, :current_segment,
-                    :section_header, :section_duration
+                    :section_header, :section_duration, :section_options
 
         def initialize(offset:, style:, sections: [])
           @offset = offset
@@ -68,12 +68,22 @@ module Gitlab
           @sections << section
         end
 
+        def set_section_options(options)
+          @section_options = options
+        end
+
         def set_as_section_header
           @section_header = true
         end
 
-        def set_section_duration(duration)
-          @section_duration = Time.at(duration.to_i).strftime('%M:%S')
+        def set_section_duration(duration_in_seconds)
+          duration = ActiveSupport::Duration.build(duration_in_seconds.to_i)
+          hours = duration.in_hours.floor
+          hours = hours > 0 ? "%02d" % hours : nil
+          minutes = "%02d" % duration.parts[:minutes].to_i
+          seconds = "%02d" % duration.parts[:seconds].to_i
+
+          @section_duration = [hours, minutes, seconds].compact.join(':')
         end
 
         def flush_current_segment!
@@ -90,6 +100,7 @@ module Gitlab
             result[:section] = sections.last if sections.any?
             result[:section_header] = true if @section_header
             result[:section_duration] = @section_duration if @section_duration
+            result[:section_options] = @section_options if @section_options
           end
         end
       end

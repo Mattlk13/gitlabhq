@@ -3,30 +3,19 @@
 class ReleasePolicy < BasePolicy
   delegate { @subject.project }
 
-  rule { allowed_to_read_evidence & external_authorization_service_disabled }.policy do
-    enable :read_release_evidence
+  condition(:protected_tag) do
+    access = ::Gitlab::UserAccess.new(@user, container: @subject.project)
+
+    !access.can_create_tag?(@subject.tag)
   end
 
-  ##
-  # evidence.summary includes the following entities:
-  # - Release
-  # - git-tag (Repository)
-  # - Project
-  # - Milestones
-  # - Issues
-  condition(:allowed_to_read_evidence) do
-    can?(:read_release) &&
-      can?(:download_code) &&
-      can?(:read_project) &&
-      can?(:read_milestone) &&
-      can?(:read_issue)
+  condition(:respect_protected_tag) do
+    ::Feature.enabled?(:evalute_protected_tag_for_release_permissions, @subject.project, default_enabled: :yaml)
   end
 
-  ##
-  # Currently, we don't support release evidence for the GitLab instances
-  # that enables external authorization services.
-  # See https://gitlab.com/gitlab-org/gitlab/issues/121930.
-  condition(:external_authorization_service_disabled) do
-    !Gitlab::ExternalAuthorization::Config.enabled?
+  rule { respect_protected_tag & protected_tag }.policy do
+    prevent :create_release
+    prevent :update_release
+    prevent :destroy_release
   end
 end

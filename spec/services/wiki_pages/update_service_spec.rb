@@ -2,66 +2,27 @@
 
 require 'spec_helper'
 
-describe WikiPages::UpdateService do
-  let(:project) { create(:project) }
-  let(:user) { create(:user) }
-  let(:page) { create(:wiki_page) }
-
-  let(:opts) do
-    {
-      content: 'New content for wiki page',
-      format: 'markdown',
-      message: 'New wiki message',
-      title: 'New Title'
-    }
-  end
-
-  let(:bad_opts) do
-    { title: '' }
-  end
-
-  subject(:service) { described_class.new(project, user, opts) }
-
-  before do
-    project.add_developer(user)
-  end
+RSpec.describe WikiPages::UpdateService do
+  it_behaves_like 'WikiPages::UpdateService#execute', :project
 
   describe '#execute' do
-    it 'updates the wiki page' do
-      updated_page = service.execute(page)
+    let_it_be(:project) { create(:project) }
 
-      expect(updated_page).to be_valid
-      expect(updated_page.message).to eq(opts[:message])
-      expect(updated_page.content).to eq(opts[:content])
-      expect(updated_page.format).to eq(opts[:format].to_sym)
-      expect(updated_page.title).to eq(opts[:title])
-    end
+    let(:page) { create(:wiki_page, project: project) }
 
-    it 'executes webhooks' do
-      expect(service).to receive(:execute_hooks).once
-        .with(instance_of(WikiPage), 'update')
+    subject(:service) { described_class.new(container: project) }
 
-      service.execute(page)
-    end
+    context 'when wiki create fails due to git error' do
+      let(:wiki_git_error) { 'Could not update wiki page' }
 
-    it 'counts edit events' do
-      counter = Gitlab::UsageDataCounters::WikiPageCounter
+      it 'catches the thrown error and returns a ServiceResponse error' do
+        allow_next_instance_of(WikiPage) do |instance|
+          allow(instance).to receive(:update).and_raise(Gitlab::Git::CommandError.new(wiki_git_error))
+        end
 
-      expect { service.execute page }.to change { counter.read(:update) }.by 1
-    end
-
-    context 'when the options are bad' do
-      subject(:service) { described_class.new(project, user, bad_opts) }
-
-      it 'does not count an edit event' do
-        counter = Gitlab::UsageDataCounters::WikiPageCounter
-
-        expect { service.execute page }.not_to change { counter.read(:update) }
-      end
-
-      it 'reports the error' do
-        expect(service.execute page).to be_invalid
-          .and have_attributes(errors: be_present)
+        result = service.execute(page)
+        expect(result).to be_error
+        expect(result.message).to eq(wiki_git_error)
       end
     end
   end

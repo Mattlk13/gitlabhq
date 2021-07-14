@@ -9,6 +9,7 @@ module Projects
       attr_reader :project
 
       self.reactive_cache_key = ->(finder) { finder.cache_key }
+      self.reactive_cache_work_type = :external_dependency
       self.reactive_cache_worker_finder = ->(_id, *args) { from_cache(*args) }
 
       MAX_CLUSTERS = 10
@@ -48,7 +49,7 @@ module Projects
 
       def has_prometheus?(environment_scope)
         finders_for_scope(environment_scope).any? do |finder|
-          finder.cluster.application_prometheus_available?
+          finder.cluster.integration_prometheus_available?
         end
       end
 

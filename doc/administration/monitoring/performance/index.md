@@ -1,27 +1,23 @@
-# GitLab Performance Monitoring
+---
+stage: Monitor
+group: Monitor
+info: To determine the technical writer assigned to the Stage/Group associated with this page, see https://about.gitlab.com/handbook/engineering/ux/technical-writing/#assignments
+---
 
-CAUTION: **InfluxDB is deprecated in favor of Prometheus:**
-InfluxDB support is scheduled to be removed in GitLab 13.0.
-You are advised to use [Prometheus](../prometheus/index.md) instead.
+# GitLab Performance Monitoring **(FREE SELF)**
 
 GitLab comes with its own application performance measuring system as of GitLab
-8.4, simply called "GitLab Performance Monitoring". GitLab Performance Monitoring is available in both the
+8.4, called "GitLab Performance Monitoring". GitLab Performance Monitoring is available in both the
 Community and Enterprise editions.
 
 Apart from this introduction, you are advised to read through the following
-documents in order to understand and properly configure GitLab Performance Monitoring:
+documents to understand and properly configure GitLab Performance Monitoring:
 
 - [GitLab Configuration](gitlab_configuration.md)
-- [InfluxDB Install/Configuration](influxdb_configuration.md)
-- [InfluxDB Schema](influxdb_schema.md)
+- [Prometheus documentation](../prometheus/index.md)
 - [Grafana Install/Configuration](grafana_configuration.md)
 - [Performance bar](performance_bar.md)
 - [Request profiling](request_profiling.md)
-
-NOTE: **Note:**
-Omnibus GitLab 8.16 includes Prometheus as an additional tool to collect
-metrics. It will eventually replace InfluxDB when their metrics collection is
-on par. Read more in the [Prometheus documentation](../prometheus/index.md).
 
 ## Introduction to GitLab Performance Monitoring
 
@@ -35,11 +31,6 @@ including (but not limited to):
 - System statistics such as the process' memory usage and open file descriptors.
 - Ruby garbage collection statistics.
 
-Metrics data is written to [InfluxDB](https://www.influxdata.com/products/influxdb-overview/)
-over [UDP][influxdb-udp]. Stored data can be visualized using [Grafana](https://grafana.com) or any other application that
-supports reading data from InfluxDB. Alternatively data can be queried using the
-InfluxDB CLI.
-
 ## Metric Types
 
 Two types of metrics are collected:
@@ -51,7 +42,7 @@ Two types of metrics are collected:
 
 Transaction metrics are metrics that can be associated with a single
 transaction. This includes statistics such as the transaction duration, timings
-of any executed SQL queries, time spent rendering HAML views, etc. These metrics
+of any executed SQL queries, time spent rendering HAML views, and so on. These metrics
 are collected for every Rack request and Sidekiq job processed.
 
 ### Sampled Metrics
@@ -68,7 +59,15 @@ parts:
 The actual interval can be anywhere between a half of the defined interval and a
 half above the interval. For example, for a user defined interval of 15 seconds
 the actual interval can be anywhere between 7.5 and 22.5. The interval is
-re-generated for every sampling run instead of being generated once and re-used
+re-generated for every sampling run instead of being generated one time and reused
 for the duration of the process' lifetime.
 
-[influxdb-udp]: https://docs.influxdata.com/influxdb/v0.9/write_protocols/udp/
+User defined intervals can be specified by means of environment variables.
+The following environment variables are recognized:
+
+- `RUBY_SAMPLER_INTERVAL_SECONDS`
+- `DATABASE_SAMPLER_INTERVAL_SECONDS`
+- `ACTION_CABLE_SAMPLER_INTERVAL_SECONDS`
+- `PUMA_SAMPLER_INTERVAL_SECONDS`
+- `THREADS_SAMPLER_INTERVAL_SECONDS`
+- `GLOBAL_SEARCH_SAMPLER_INTERVAL_SECONDS`

@@ -1,9 +1,10 @@
-import { file } from 'jest/ide/helpers';
-import FileRow from '~/vue_shared/components/file_row.vue';
-import FileHeader from '~/vue_shared/components/file_row_header.vue';
 import { shallowMount } from '@vue/test-utils';
 import { nextTick } from 'vue';
+import { file } from 'jest/ide/helpers';
 import { escapeFileUrl } from '~/lib/utils/url_utility';
+import FileIcon from '~/vue_shared/components/file_icon.vue';
+import FileRow from '~/vue_shared/components/file_row.vue';
+import FileHeader from '~/vue_shared/components/file_row_header.vue';
 
 describe('File row component', () => {
   let wrapper;
@@ -31,6 +32,35 @@ describe('File row component', () => {
     const name = wrapper.find('.file-row-name');
 
     expect(name.text().trim()).toEqual(fileName);
+  });
+
+  it('renders the full path as title', () => {
+    const filePath = 'path/to/file/with a very long folder name/';
+    const fileName = 'foo.txt';
+
+    createComponent({
+      file: {
+        name: fileName,
+        isHeader: false,
+        tree: [
+          {
+            parentPath: filePath,
+          },
+        ],
+      },
+      level: 1,
+    });
+
+    expect(wrapper.element.title.trim()).toEqual('path/to/file/with a very long folder name/');
+  });
+
+  it('does not render a title attribute if no tree present', () => {
+    createComponent({
+      file: file('f1.txt'),
+      level: 0,
+    });
+
+    expect(wrapper.element.title.trim()).toEqual('');
   });
 
   it('emits toggleTreeOpen on click', () => {
@@ -62,9 +92,7 @@ describe('File row component', () => {
     jest.spyOn(wrapper.vm, 'scrollIntoView');
 
     wrapper.setProps({
-      file: Object.assign({}, wrapper.props('file'), {
-        active: true,
-      }),
+      file: { ...wrapper.props('file'), active: true },
     });
 
     return nextTick().then(() => {
@@ -91,14 +119,12 @@ describe('File row component', () => {
       level: 0,
     });
 
-    expect(wrapper.contains(FileHeader)).toBe(true);
+    expect(wrapper.find(FileHeader).exists()).toBe(true);
   });
 
   it('matches the current route against encoded file URL', () => {
     const fileName = 'with space';
-    const rowFile = Object.assign({}, file(fileName), {
-      url: `/${fileName}`,
-    });
+    const rowFile = { ...file(fileName), url: `/${fileName}` };
     const routerPath = `/project/${escapeFileUrl(fileName)}`;
     createComponent(
       {
@@ -113,5 +139,31 @@ describe('File row component', () => {
     );
 
     expect(wrapper.vm.hasUrlAtCurrentRoute()).toBe(true);
+  });
+
+  it('render with the correct file classes prop', () => {
+    createComponent({
+      file: {
+        ...file(),
+      },
+      level: 0,
+      fileClasses: 'font-weight-bold',
+    });
+
+    expect(wrapper.find('.file-row-name').classes()).toContain('font-weight-bold');
+  });
+
+  it('renders submodule icon', () => {
+    const submodule = true;
+
+    createComponent({
+      file: {
+        ...file(),
+        submodule,
+      },
+      level: 0,
+    });
+
+    expect(wrapper.find(FileIcon).props('submodule')).toBe(submodule);
   });
 });

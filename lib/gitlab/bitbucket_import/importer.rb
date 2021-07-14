@@ -3,8 +3,6 @@
 module Gitlab
   module BitbucketImport
     class Importer
-      include Gitlab::ShellAdapter
-
       LABELS = [{ title: 'bug', color: '#FF0000' },
                 { title: 'enhancement', color: '#428BCA' },
                 { title: 'proposal', color: '#69D100' },
@@ -26,6 +24,7 @@ module Gitlab
         import_issues
         import_pull_requests
         handle_errors
+        metrics.track_finished_import
 
         true
       end
@@ -43,7 +42,7 @@ module Gitlab
 
       def store_pull_request_error(pull_request, ex)
         backtrace = Gitlab::BacktraceCleaner.clean_backtrace(ex.backtrace)
-        error = { type: :pull_request, iid: pull_request.iid, errors: ex.message, trace: backtrace, raw_response: pull_request.raw }
+        error = { type: :pull_request, iid: pull_request.iid, errors: ex.message, trace: backtrace, raw_response: pull_request.raw&.to_json }
 
         Gitlab::ErrorTracking.log_exception(ex, error)
 
@@ -64,10 +63,7 @@ module Gitlab
 
         return users[username] if users.key?(username)
 
-        users[username] = User.select(:id)
-                              .joins(:identities)
-                              .find_by("identities.extern_uid = ? AND identities.provider = 'bitbucket'", username)
-                              .try(:id)
+        users[username] = User.by_provider_and_extern_uid(:bitbucket, username).select(:id).first&.id
       end
       # rubocop: enable CodeReuse/ActiveRecord
 
@@ -80,42 +76,48 @@ module Gitlab
 
         wiki = WikiFormatter.new(project)
 
-        gitlab_shell.import_wiki_repository(project, wiki)
+        project.wiki.repository.import_repository(wiki.import_url)
       rescue StandardError => e
         errors << { type: :wiki, errors: e.message }
       end
 
-      # rubocop: disable CodeReuse/ActiveRecord
       def import_issues
         return unless repo.issues_enabled?
 
         create_labels
 
         client.issues(repo).each do |issue|
-          description = ''
-          description += @formatter.author_line(issue.author) unless find_user_id(issue.author)
-          description += issue.description
-
-          label_name = issue.kind
-          milestone = issue.milestone ? project.milestones.find_or_create_by(title: issue.milestone) : nil
-
-          gitlab_issue = project.issues.create!(
-            iid: issue.iid,
-            title: issue.title,
-            description: description,
-            state_id: Issue.available_states[issue.state],
-            author_id: gitlab_user_id(project, issue.author),
-            milestone: milestone,
-            created_at: issue.created_at,
-            updated_at: issue.updated_at
-          )
-
-          gitlab_issue.labels << @labels[label_name]
-
-          import_issue_comments(issue, gitlab_issue) if gitlab_issue.persisted?
-        rescue StandardError => e
-          errors << { type: :issue, iid: issue.iid, errors: e.message }
+          import_issue(issue)
         end
+      end
+
+      # rubocop: disable CodeReuse/ActiveRecord
+      def import_issue(issue)
+        description = ''
+        description += @formatter.author_line(issue.author) unless find_user_id(issue.author)
+        description += issue.description
+
+        label_name = issue.kind
+        milestone = issue.milestone ? project.milestones.find_or_create_by(title: issue.milestone) : nil
+
+        gitlab_issue = project.issues.create!(
+          iid: issue.iid,
+          title: issue.title,
+          description: description,
+          state_id: Issue.available_states[issue.state],
+          author_id: gitlab_user_id(project, issue.author),
+          milestone: milestone,
+          created_at: issue.created_at,
+          updated_at: issue.updated_at
+        )
+
+        metrics.issues_counter.increment
+
+        gitlab_issue.labels << @labels[label_name]
+
+        import_issue_comments(issue, gitlab_issue) if gitlab_issue.persisted?
+      rescue StandardError => e
+        errors << { type: :issue, iid: issue.iid, errors: e.message }
       end
       # rubocop: enable CodeReuse/ActiveRecord
 
@@ -161,35 +163,41 @@ module Gitlab
         pull_requests = client.pull_requests(repo)
 
         pull_requests.each do |pull_request|
-          description = ''
-          description += @formatter.author_line(pull_request.author) unless find_user_id(pull_request.author)
-          description += pull_request.description
-
-          source_branch_sha = pull_request.source_branch_sha
-          target_branch_sha = pull_request.target_branch_sha
-          source_branch_sha = project.repository.commit(source_branch_sha)&.sha || source_branch_sha
-          target_branch_sha = project.repository.commit(target_branch_sha)&.sha || target_branch_sha
-
-          merge_request = project.merge_requests.create!(
-            iid: pull_request.iid,
-            title: pull_request.title,
-            description: description,
-            source_project: project,
-            source_branch: pull_request.source_branch_name,
-            source_branch_sha: source_branch_sha,
-            target_project: project,
-            target_branch: pull_request.target_branch_name,
-            target_branch_sha: target_branch_sha,
-            state: pull_request.state,
-            author_id: gitlab_user_id(project, pull_request.author),
-            created_at: pull_request.created_at,
-            updated_at: pull_request.updated_at
-          )
-
-          import_pull_request_comments(pull_request, merge_request) if merge_request.persisted?
-        rescue StandardError => e
-          store_pull_request_error(pull_request, e)
+          import_pull_request(pull_request)
         end
+      end
+
+      def import_pull_request(pull_request)
+        description = ''
+        description += @formatter.author_line(pull_request.author) unless find_user_id(pull_request.author)
+        description += pull_request.description
+
+        source_branch_sha = pull_request.source_branch_sha
+        target_branch_sha = pull_request.target_branch_sha
+        source_branch_sha = project.repository.commit(source_branch_sha)&.sha || source_branch_sha
+        target_branch_sha = project.repository.commit(target_branch_sha)&.sha || target_branch_sha
+
+        merge_request = project.merge_requests.create!(
+          iid: pull_request.iid,
+          title: pull_request.title,
+          description: description,
+          source_project: project,
+          source_branch: pull_request.source_branch_name,
+          source_branch_sha: source_branch_sha,
+          target_project: project,
+          target_branch: pull_request.target_branch_name,
+          target_branch_sha: target_branch_sha,
+          state: pull_request.state,
+          author_id: gitlab_user_id(project, pull_request.author),
+          created_at: pull_request.created_at,
+          updated_at: pull_request.updated_at
+        )
+
+        metrics.merge_requests_counter.increment
+
+        import_pull_request_comments(pull_request, merge_request) if merge_request.persisted?
+      rescue StandardError => e
+        store_pull_request_error(pull_request, e)
       end
 
       def import_pull_request_comments(pull_request, merge_request)
@@ -279,6 +287,10 @@ module Gitlab
           project_id: project.id,
           project_path: project.full_path
         }
+      end
+
+      def metrics
+        @metrics ||= Gitlab::Import::Metrics.new(:bitbucket_importer, @project)
       end
     end
   end

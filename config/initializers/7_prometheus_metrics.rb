@@ -1,4 +1,4 @@
-require 'prometheus/client'
+# frozen_string_literal: true
 
 # Keep separate directories for separate processes
 def prometheus_default_multiproc_dir
@@ -6,8 +6,6 @@ def prometheus_default_multiproc_dir
 
   if Gitlab::Runtime.sidekiq?
     Rails.root.join('tmp/prometheus_multiproc_dir/sidekiq')
-  elsif Gitlab::Runtime.unicorn?
-    Rails.root.join('tmp/prometheus_multiproc_dir/unicorn')
   elsif Gitlab::Runtime.puma?
     Rails.root.join('tmp/prometheus_multiproc_dir/puma')
   else
@@ -15,19 +13,19 @@ def prometheus_default_multiproc_dir
   end
 end
 
-Prometheus::Client.configure do |config|
-  config.logger = Rails.logger # rubocop:disable Gitlab/RailsLogger
+::Prometheus::Client.configure do |config|
+  config.logger = Gitlab::AppLogger
 
   config.initial_mmap_file_size = 4 * 1024
 
   config.multiprocess_files_dir = ENV['prometheus_multiproc_dir'] || prometheus_default_multiproc_dir
 
-  config.pid_provider = Prometheus::PidProvider.method(:worker_id)
+  config.pid_provider = ::Prometheus::PidProvider.method(:worker_id)
 end
 
 Gitlab::Application.configure do |config|
   # 0 should be Sentry to catch errors in this middleware
-  config.middleware.insert(1, Gitlab::Metrics::RequestsRackMiddleware)
+  config.middleware.insert_after(Labkit::Middleware::Rack, Gitlab::Metrics::RequestsRackMiddleware)
 end
 
 Sidekiq.configure_server do |config|
@@ -39,25 +37,46 @@ Sidekiq.configure_server do |config|
 end
 
 if !Rails.env.test? && Gitlab::Metrics.prometheus_metrics_enabled?
-  Gitlab::Cluster::LifecycleEvents.on_worker_start do
-    defined?(::Prometheus::Client.reinitialize_on_pid_change) && Prometheus::Client.reinitialize_on_pid_change
+  # When running Puma in a Single mode, `on_master_start` and `on_worker_start` are the same.
+  # Thus, we order these events to run `reinitialize_on_pid_change` with `force: true` first.
+  Gitlab::Cluster::LifecycleEvents.on_master_start do
+    # Ensure that stale Prometheus metrics don't accumulate over time
+    ::Prometheus::CleanupMultiprocDirService.new.execute
 
-    Gitlab::Metrics::Samplers::RubySampler.initialize_instance(Settings.monitoring.ruby_sampler_interval).start
+    ::Prometheus::Client.reinitialize_on_pid_change(force: true)
+
+    if Gitlab::Runtime.puma?
+      Gitlab::Metrics::Samplers::PumaSampler.instance.start
+    end
+
+    Gitlab::Metrics.gauge(:deployments, 'GitLab Version', {}, :max).set({ version: Gitlab::VERSION, revision: Gitlab.revision }, 1)
+
+    unless Gitlab::Runtime.sidekiq?
+      Gitlab::Metrics::RequestsRackMiddleware.initialize_metrics
+    end
+
+    Gitlab::Ci::Parsers.instrument!
   rescue IOError => e
     Gitlab::ErrorTracking.track_exception(e)
     Gitlab::Metrics.error_detected!
   end
 
-  Gitlab::Cluster::LifecycleEvents.on_master_start do
-    ::Prometheus::Client.reinitialize_on_pid_change(force: true)
+  Gitlab::Cluster::LifecycleEvents.on_worker_start do
+    defined?(::Prometheus::Client.reinitialize_on_pid_change) && ::Prometheus::Client.reinitialize_on_pid_change
 
-    if Gitlab::Runtime.unicorn?
-      Gitlab::Metrics::Samplers::UnicornSampler.instance(Settings.monitoring.unicorn_sampler_interval).start
-    elsif Gitlab::Runtime.puma?
-      Gitlab::Metrics::Samplers::PumaSampler.instance(Settings.monitoring.puma_sampler_interval).start
+    Gitlab::Metrics::Samplers::RubySampler.initialize_instance.start
+    Gitlab::Metrics::Samplers::DatabaseSampler.initialize_instance.start
+    Gitlab::Metrics::Samplers::ThreadsSampler.initialize_instance.start
+
+    if Gitlab::Runtime.action_cable?
+      Gitlab::Metrics::Samplers::ActionCableSampler.instance.start
     end
 
-    Gitlab::Metrics::RequestsRackMiddleware.initialize_http_request_duration_seconds
+    if Gitlab.ee? && Gitlab::Runtime.sidekiq?
+      Gitlab::Metrics::Samplers::GlobalSearchSampler.instance.start
+    end
+
+    Gitlab::Ci::Parsers.instrument!
   rescue IOError => e
     Gitlab::ErrorTracking.track_exception(e)
     Gitlab::Metrics.error_detected!

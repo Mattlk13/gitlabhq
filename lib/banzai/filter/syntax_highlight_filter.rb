@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require 'rouge/plugins/common_mark'
+require "asciidoctor/extensions/asciidoctor_kroki/extension"
 
 # Generated HTML is transformed back to GFM by app/assets/javascripts/behaviors/markdown/nodes/code_block.js
 module Banzai
@@ -13,8 +14,11 @@ module Banzai
       PARAMS_DELIMITER = ':'
       LANG_PARAMS_ATTR = 'data-lang-params'
 
+      CSS   = 'pre:not([data-math-style]):not([data-mermaid-style]):not([data-kroki-style]) > code'
+      XPATH = Gitlab::Utils::Nokogiri.css_to_xpath(CSS).freeze
+
       def call
-        doc.search('pre:not([data-math-style]) > code').each do |node|
+        doc.xpath(XPATH).each do |node|
           highlight_node(node)
         end
 
@@ -36,8 +40,8 @@ module Banzai
 
         begin
           code = Rouge::Formatters::HTMLGitlab.format(lex(lexer, node.text), tag: language)
-          css_classes << " #{language}" if language
-        rescue
+          css_classes << " language-#{language}" if language
+        rescue StandardError
           # Gracefully handle syntax highlighter bugs/errors to ensure users can
           # still access an issue/comment/etc. First, retry with the plain text
           # filter. If that fails, then just skip this entirely, but that would
@@ -86,7 +90,7 @@ module Banzai
       end
 
       def use_rouge?(language)
-        %w(math mermaid plantuml suggestion).exclude?(language)
+        (%w(math suggestion) + ::AsciidoctorExtensions::Kroki::SUPPORTED_DIAGRAM_NAMES).exclude?(language)
       end
     end
   end

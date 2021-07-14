@@ -1,17 +1,17 @@
 <script>
-/* eslint-disable @gitlab/vue-i18n/no-bare-strings */
-import _ from 'underscore';
-import { GlTooltipDirective } from '@gitlab/ui';
-import { __, sprintf } from '~/locale';
+/* eslint-disable @gitlab/vue-require-i18n-strings */
+import { GlTooltipDirective, GlIcon, GlLink } from '@gitlab/ui';
+import { isEmpty } from 'lodash';
 import { convertObjectPropsToCamelCase } from '~/lib/utils/common_utils';
-import timeagoMixin from '~/vue_shared/mixins/timeago';
-import UserAvatarLink from '~/vue_shared/components/user_avatar/user_avatar_link.vue';
+import { __, s__, sprintf } from '~/locale';
+import CiIcon from '~/vue_shared/components/ci_icon.vue';
 import CommitComponent from '~/vue_shared/components/commit.vue';
-import Icon from '~/vue_shared/components/icon.vue';
 import TooltipOnTruncate from '~/vue_shared/components/tooltip_on_truncate.vue';
-import environmentItemMixin from 'ee_else_ce/environments/mixins/environment_item_mixin';
+import UserAvatarLink from '~/vue_shared/components/user_avatar/user_avatar_link.vue';
+import timeagoMixin from '~/vue_shared/mixins/timeago';
 import eventHub from '../event_hub';
 import ActionsComponent from './environment_actions.vue';
+import DeleteComponent from './environment_delete.vue';
 import ExternalUrlComponent from './environment_external_url.vue';
 import MonitoringButtonComponent from './environment_monitoring.vue';
 import PinComponent from './environment_pin.vue';
@@ -30,19 +30,22 @@ export default {
     ActionsComponent,
     CommitComponent,
     ExternalUrlComponent,
-    Icon,
+    GlIcon,
+    GlLink,
     MonitoringButtonComponent,
     PinComponent,
+    DeleteComponent,
     RollbackComponent,
     StopComponent,
     TerminalButtonComponent,
     TooltipOnTruncate,
     UserAvatarLink,
+    CiIcon,
   },
   directives: {
     GlTooltip: GlTooltipDirective,
   },
-  mixins: [environmentItemMixin, timeagoMixin],
+  mixins: [timeagoMixin],
 
   props: {
     canReadEnvironment: {
@@ -56,12 +59,6 @@ export default {
       required: true,
     },
 
-    shouldShowAutoStopDate: {
-      type: Boolean,
-      required: false,
-      default: false,
-    },
-
     tableData: {
       type: Object,
       required: true,
@@ -69,6 +66,9 @@ export default {
   },
 
   computed: {
+    deployIconName() {
+      return this.model.isDeployBoardVisible ? 'chevron-down' : 'chevron-right';
+    },
     /**
      * Verifies if `last_deployment` key exists in the current Environment.
      * This key is required to render most of the html - this method works has
@@ -77,10 +77,28 @@ export default {
      * @returns {Boolean}
      */
     hasLastDeploymentKey() {
-      if (this.model && this.model.last_deployment && !_.isEmpty(this.model.last_deployment)) {
+      if (this.model && this.model.last_deployment && !isEmpty(this.model.last_deployment)) {
         return true;
       }
       return false;
+    },
+
+    /**
+     * @returns {Object|Undefined} The `upcoming_deployment` object if it exists.
+     * Otherwise, `undefined`.
+     */
+    upcomingDeployment() {
+      return this.model?.upcoming_deployment;
+    },
+
+    /**
+     * @returns {String} Text that will be shown in the tooltip when
+     * the user hovers over the upcoming deployment's status icon.
+     */
+    upcomingDeploymentTooltipText() {
+      return sprintf(s__('Environments|Deployment %{status}'), {
+        status: this.upcomingDeployment.deployable.status.text,
+      });
     },
 
     /**
@@ -110,6 +128,15 @@ export default {
      */
     canStopEnvironment() {
       return this.model && this.model.can_stop;
+    },
+
+    /**
+     * Returns whether the environment can be deleted.
+     *
+     * @returns {Boolean}
+     */
+    canDeleteEnvironment() {
+      return Boolean(this.model && this.model.can_delete && this.model.delete_path);
     },
 
     /**
@@ -199,10 +226,14 @@ export default {
         { deep: true },
       );
       const combinedActions = (manualActions || []).concat(scheduledActions || []);
-      return combinedActions.map(action => ({
+      return combinedActions.map((action) => ({
         ...action,
         name: action.name,
       }));
+    },
+
+    shouldRenderDeployBoard() {
+      return this.model.hasDeployBoard;
     },
 
     /**
@@ -222,6 +253,18 @@ export default {
         });
       }
       return '';
+    },
+
+    /**
+     * Same as `userImageAltDescription`, but for the
+     * upcoming deployment's user
+     *
+     * @returns {String}
+     */
+    upcomingDeploymentUserImageAltDescription() {
+      return sprintf(__("%{username}'s avatar"), {
+        username: this.upcomingDeployment.user.username,
+      });
     },
 
     /**
@@ -342,7 +385,7 @@ export default {
     isLastDeployment() {
       // name: 'last?' is a false positive: https://gitlab.com/gitlab-org/frontend/eslint-plugin-i18n/issues/26#possible-false-positives
       // Vue i18n ESLint rules issue: https://gitlab.com/gitlab-org/gitlab-foss/issues/63560
-      // eslint-disable-next-line @gitlab/i18n/no-non-i18n-strings
+      // eslint-disable-next-line @gitlab/require-i18n-strings
       return this.model && this.model.last_deployment && this.model.last_deployment['last?'];
     },
 
@@ -372,6 +415,15 @@ export default {
     },
 
     /**
+     * Same as `deploymentInternalId`, but for the upcoming deployment
+     *
+     * @returns {String}
+     */
+    upcomingDeploymentInternalId() {
+      return `#${this.upcomingDeployment.iid}`;
+    },
+
+    /**
      * Verifies if the user object is present under last_deployment object.
      *
      * @returns {Boolean}
@@ -379,8 +431,8 @@ export default {
     deploymentHasUser() {
       return (
         this.model &&
-        !_.isEmpty(this.model.last_deployment) &&
-        !_.isEmpty(this.model.last_deployment.user)
+        !isEmpty(this.model.last_deployment) &&
+        !isEmpty(this.model.last_deployment.user)
       );
     },
 
@@ -393,8 +445,8 @@ export default {
     deploymentUser() {
       if (
         this.model &&
-        !_.isEmpty(this.model.last_deployment) &&
-        !_.isEmpty(this.model.last_deployment.user)
+        !isEmpty(this.model.last_deployment) &&
+        !isEmpty(this.model.last_deployment.user)
       ) {
         return this.model.last_deployment.user;
       }
@@ -420,8 +472,8 @@ export default {
     shouldRenderBuildName() {
       return (
         !this.isFolder &&
-        !_.isEmpty(this.model.last_deployment) &&
-        !_.isEmpty(this.model.last_deployment.deployable)
+        !isEmpty(this.model.last_deployment) &&
+        !isEmpty(this.model.last_deployment.deployable)
       );
     },
 
@@ -462,7 +514,7 @@ export default {
     shouldRenderDeploymentID() {
       return (
         !this.isFolder &&
-        !_.isEmpty(this.model.last_deployment) &&
+        !isEmpty(this.model.last_deployment) &&
         this.model.last_deployment.iid !== undefined
       );
     },
@@ -485,6 +537,7 @@ export default {
         this.externalURL ||
         this.monitoringUrl ||
         this.canStopEnvironment ||
+        this.canDeleteEnvironment ||
         this.canRetry
       );
     },
@@ -492,11 +545,37 @@ export default {
     folderIconName() {
       return this.model.isOpen ? 'chevron-down' : 'chevron-right';
     },
+
+    upcomingDeploymentCellClasses() {
+      return [
+        this.tableData.upcoming.spacing,
+        { 'gl-display-none gl-md-display-block': !this.upcomingDeployment },
+      ];
+    },
+    tableNameSpacingClass() {
+      return this.isFolder ? 'section-100' : this.tableData.name.spacing;
+    },
   },
 
   methods: {
+    toggleDeployBoard() {
+      eventHub.$emit('toggleDeployBoard', this.model);
+    },
     onClickFolder() {
       eventHub.$emit('toggleFolder', this.model);
+    },
+
+    /**
+     * Returns the field title that will be shown in the field's row
+     * in the mobile view.
+     *
+     * @returns `field.mobileTitle` if present;
+     * if not, falls back to `field.title`.
+     */
+    getMobileViewTitleForField(fieldName) {
+      const field = this.tableData[fieldName];
+
+      return field.mobileTitle || field.title;
     },
   },
 };
@@ -512,15 +591,16 @@ export default {
   >
     <div
       class="table-section section-wrap text-truncate"
-      :class="tableData.name.spacing"
+      :class="tableNameSpacingClass"
       role="gridcell"
+      data-testid="environment-name-cell"
     >
       <div v-if="!isFolder" class="table-mobile-header" role="rowheader">
-        {{ tableData.name.title }}
+        {{ getMobileViewTitleForField('name') }}
       </div>
 
       <span v-if="shouldRenderDeployBoard" class="deploy-board-icon" @click="toggleDeployBoard">
-        <icon :name="deployIconName" />
+        <gl-icon :name="deployIconName" />
       </span>
 
       <span
@@ -545,9 +625,9 @@ export default {
         role="button"
         @click="onClickFolder"
       >
-        <icon :name="folderIconName" class="folder-icon" />
+        <gl-icon :name="folderIconName" class="folder-icon" />
 
-        <icon name="folder" class="folder-icon" />
+        <gl-icon name="folder" class="folder-icon" />
 
         <span> {{ model.folderName }} </span>
 
@@ -556,9 +636,11 @@ export default {
     </div>
 
     <div
-      class="table-section deployment-column d-none d-sm-none d-md-block"
+      v-if="!isFolder"
+      class="table-section deployment-column d-none d-md-block"
       :class="tableData.deploy.spacing"
       role="gridcell"
+      data-testid="enviornment-deployment-id-cell"
     >
       <span v-if="shouldRenderDeploymentID" class="text-break-word">
         {{ deploymentInternalId }}
@@ -581,9 +663,11 @@ export default {
     </div>
 
     <div
-      class="table-section d-none d-sm-none d-md-block"
+      v-if="!isFolder"
+      class="table-section d-none d-md-block"
       :class="tableData.build.spacing"
       role="gridcell"
+      data-testid="environment-build-cell"
     >
       <a v-if="shouldRenderBuildName" :href="buildPath" class="build-link cgray">
         <tooltip-on-truncate
@@ -599,7 +683,9 @@ export default {
     </div>
 
     <div v-if="!isFolder" class="table-section" :class="tableData.commit.spacing" role="gridcell">
-      <div role="rowheader" class="table-mobile-header">{{ tableData.commit.title }}</div>
+      <div role="rowheader" class="table-mobile-header">
+        {{ getMobileViewTitleForField('commit') }}
+      </div>
       <div v-if="hasLastDeploymentKey" class="js-commit-component table-mobile-content">
         <commit-component
           :tag="commitTag"
@@ -613,7 +699,9 @@ export default {
     </div>
 
     <div v-if="!isFolder" class="table-section" :class="tableData.date.spacing" role="gridcell">
-      <div role="rowheader" class="table-mobile-header">{{ tableData.date.title }}</div>
+      <div role="rowheader" class="table-mobile-header">
+        {{ getMobileViewTitleForField('date') }}
+      </div>
       <span
         v-if="canShowDeploymentDate"
         v-gl-tooltip
@@ -627,12 +715,50 @@ export default {
     </div>
 
     <div
-      v-if="!isFolder && shouldShowAutoStopDate"
+      v-if="!isFolder"
       class="table-section"
-      :class="tableData.autoStop.spacing"
+      :class="upcomingDeploymentCellClasses"
       role="gridcell"
+      data-testid="upcoming-deployment"
     >
-      <div role="rowheader" class="table-mobile-header">{{ tableData.autoStop.title }}</div>
+      <div role="rowheader" class="table-mobile-header">
+        {{ getMobileViewTitleForField('upcoming') }}
+      </div>
+      <div
+        v-if="upcomingDeployment"
+        class="gl-w-full gl-display-flex gl-flex-direction-row gl-md-flex-direction-column! gl-justify-content-end"
+        data-testid="upcoming-deployment-content"
+      >
+        <div class="gl-display-flex gl-align-items-center">
+          <span class="gl-mr-2">{{ upcomingDeploymentInternalId }}</span>
+          <gl-link
+            v-if="upcomingDeployment.deployable"
+            v-gl-tooltip
+            :href="upcomingDeployment.deployable.build_path"
+            :title="upcomingDeploymentTooltipText"
+            data-testid="upcoming-deployment-status-link"
+          >
+            <ci-icon class="gl-mr-2" :status="upcomingDeployment.deployable.status" />
+          </gl-link>
+        </div>
+        <div class="gl-display-flex">
+          <span v-if="upcomingDeployment.user" class="text-break-word">
+            by
+            <user-avatar-link
+              :link-href="upcomingDeployment.user.web_url"
+              :img-src="upcomingDeployment.user.avatar_url"
+              :img-alt="upcomingDeploymentUserImageAltDescription"
+              :tooltip-text="upcomingDeployment.user.username"
+            />
+          </span>
+        </div>
+      </div>
+    </div>
+
+    <div v-if="!isFolder" class="table-section" :class="tableData.autoStop.spacing" role="gridcell">
+      <div role="rowheader" class="table-mobile-header">
+        {{ getMobileViewTitleForField('autoStop') }}
+      </div>
       <span
         v-if="canShowAutoStopDate"
         v-gl-tooltip
@@ -650,10 +776,7 @@ export default {
       role="gridcell"
     >
       <div class="btn-group table-action-buttons" role="group">
-        <pin-component
-          v-if="canShowAutoStopDate && shouldShowAutoStopDate"
-          :auto-stop-url="autoStopUrl"
-        />
+        <pin-component v-if="canShowAutoStopDate" :auto-stop-url="autoStopUrl" />
 
         <external-url-component
           v-if="externalURL && canReadEnvironment"
@@ -680,6 +803,8 @@ export default {
         />
 
         <stop-component v-if="canStopEnvironment" :environment="model" />
+
+        <delete-component v-if="canDeleteEnvironment" :environment="model" />
       </div>
     </div>
   </div>

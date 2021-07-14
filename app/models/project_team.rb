@@ -25,9 +25,6 @@ class ProjectTeam
     add_user(user, :maintainer, current_user: current_user)
   end
 
-  # @deprecated
-  alias_method :add_master, :add_maintainer
-
   def add_role(user, role, current_user: nil)
     public_send(:"add_#{role}", user, current_user: current_user) # rubocop:disable GitlabSecurity/PublicSend
   end
@@ -45,7 +42,7 @@ class ProjectTeam
   end
 
   def add_users(users, access_level, current_user: nil, expires_at: nil)
-    ProjectMember.add_users(
+    Members::Projects::CreatorService.add_users( # rubocop:todo CodeReuse/ServiceClass
       project,
       users,
       access_level,
@@ -55,13 +52,12 @@ class ProjectTeam
   end
 
   def add_user(user, access_level, current_user: nil, expires_at: nil)
-    ProjectMember.add_user(
-      project,
-      user,
-      access_level,
-      current_user: current_user,
-      expires_at: expires_at
-    )
+    Members::Projects::CreatorService.new(project, # rubocop:todo CodeReuse/ServiceClass
+                                          user,
+                                          access_level,
+                                          current_user: current_user,
+                                          expires_at: expires_at)
+                                     .execute
   end
 
   # Remove all users from project team
@@ -98,9 +94,6 @@ class ProjectTeam
     @maintainers ||= fetch_members(Gitlab::Access::MAINTAINER)
   end
 
-  # @deprecated
-  alias_method :masters, :maintainers
-
   def owners
     @owners ||=
       if group
@@ -136,7 +129,7 @@ class ProjectTeam
     end
 
     true
-  rescue
+  rescue StandardError
     false
   end
 
@@ -155,9 +148,6 @@ class ProjectTeam
   def maintainer?(user)
     max_member_access(user.id) == Gitlab::Access::MAINTAINER
   end
-
-  # @deprecated
-  alias_method :master?, :maintainer?
 
   # Checks if `user` is authorized for this project, with at least the
   # `min_access_level` (if given).
@@ -183,8 +173,46 @@ class ProjectTeam
     end
   end
 
+  def write_member_access_for_user_id(user_id, project_access_level)
+    merge_value_to_request_store(User, user_id, project.id, project_access_level)
+  end
+
   def max_member_access(user_id)
     max_member_access_for_user_ids([user_id])[user_id]
+  end
+
+  def contribution_check_for_user_ids(user_ids)
+    user_ids = user_ids.uniq
+    key = "contribution_check_for_users:#{project.id}"
+
+    Gitlab::SafeRequestStore[key] ||= {}
+    contributors = Gitlab::SafeRequestStore[key] || {}
+
+    user_ids -= contributors.keys
+
+    return contributors if user_ids.empty?
+
+    resource_contributors = project.merge_requests
+                                   .merged
+                                   .where(author_id: user_ids, target_branch: project.default_branch.to_s)
+                                   .pluck(:author_id)
+                                   .product([true]).to_h
+
+    contributors.merge!(resource_contributors)
+
+    missing_resource_ids = user_ids - resource_contributors.keys
+
+    missing_resource_ids.each do |resource_id|
+      contributors[resource_id] = false
+    end
+
+    contributors
+  end
+
+  def contributor?(user_id)
+    return false if max_member_access(user_id) >= Gitlab::Access::GUEST
+
+    contribution_check_for_user_ids([user_id])[user_id]
   end
 
   private
@@ -205,4 +233,4 @@ class ProjectTeam
   end
 end
 
-ProjectTeam.prepend_if_ee('EE::ProjectTeam')
+ProjectTeam.prepend_mod_with('ProjectTeam')

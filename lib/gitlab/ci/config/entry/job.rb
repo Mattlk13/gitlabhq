@@ -11,11 +11,10 @@ module Gitlab
           include ::Gitlab::Ci::Config::Entry::Processable
 
           ALLOWED_WHEN = %w[on_success on_failure always manual delayed].freeze
-          ALLOWED_KEYS = %i[tags script type image services
-                            allow_failure type when start_in artifacts cache
-                            dependencies before_script needs after_script variables
+          ALLOWED_KEYS = %i[tags script type image services start_in artifacts
+                            cache dependencies before_script after_script
                             environment coverage retry parallel interruptible timeout
-                            resource_group release].freeze
+                            release dast_configuration secrets].freeze
 
           REQUIRED_BY_NEEDS = %i[stage].freeze
 
@@ -23,25 +22,15 @@ module Gitlab
             validates :config, allowed_keys: ALLOWED_KEYS + PROCESSABLE_ALLOWED_KEYS
             validates :config, required_keys: REQUIRED_BY_NEEDS, if: :has_needs?
             validates :script, presence: true
-            validates :config,
-              disallowed_keys: {
-                in: %i[release],
-                message: 'release features are not enabled'
-              },
-              unless: -> { Feature.enabled?(:ci_release_generation, default_enabled: false) }
 
             with_options allow_nil: true do
-              validates :allow_failure, boolean: true
-              validates :parallel, numericality: { only_integer: true,
-                                                   greater_than_or_equal_to: 2,
-                                                   less_than_or_equal_to: 50 }
               validates :when, inclusion: {
                 in: ALLOWED_WHEN,
                 message: "should be one of: #{ALLOWED_WHEN.join(', ')}"
               }
 
               validates :dependencies, array_of_strings: true
-              validates :resource_group, type: String
+              validates :allow_failure, hash_or_boolean: true
             end
 
             validates :start_in, duration: { limit: '1 week' }, if: :delayed?
@@ -75,7 +64,7 @@ module Gitlab
             description: 'Commands that will be executed when finishing job.',
             inherit: true
 
-          entry :cache, Entry::Cache,
+          entry :cache, Entry::Caches,
             description: 'Cache definition for this job.',
             inherit: true
 
@@ -112,10 +101,6 @@ module Gitlab
             metadata: { allowed_needs: %i[job cross_dependency] },
             inherit: false
 
-          entry :variables, Entry::Variables,
-            description: 'Environment variables available for this job.',
-            inherit: false
-
           entry :environment, Entry::Environment,
             description: 'Environment configuration for this job.',
             inherit: false
@@ -128,14 +113,18 @@ module Gitlab
             description: 'This job will produce a release.',
             inherit: false
 
-          helpers :before_script, :script, :type, :after_script,
-                  :cache, :image, :services, :variables,
-                  :artifacts, :environment, :coverage, :retry,
-                  :needs, :interruptible, :release, :tags
+          entry :parallel, Entry::Product::Parallel,
+            description: 'Parallel configuration for this job.',
+            inherit: false
 
-          attributes :script, :tags, :allow_failure, :when, :dependencies,
+          entry :allow_failure, ::Gitlab::Ci::Config::Entry::AllowFailure,
+            description: 'Indicates whether this job is allowed to fail or not.',
+            inherit: false
+
+          attributes :script, :tags, :when, :dependencies,
                      :needs, :retry, :parallel, :start_in,
-                     :interruptible, :timeout, :resource_group, :release
+                     :interruptible, :timeout,
+                     :release, :allow_failure
 
           def self.matching?(name, config)
             !name.to_s.start_with?('.') &&
@@ -156,16 +145,8 @@ module Gitlab
             end
           end
 
-          def manual_action?
-            self.when == 'manual'
-          end
-
           def delayed?
             self.when == 'delayed'
-          end
-
-          def ignored?
-            allow_failure.nil? ? manual_action? : allow_failure
           end
 
           def value
@@ -179,25 +160,44 @@ module Gitlab
               when: self.when,
               start_in: self.start_in,
               dependencies: dependencies,
-              variables: variables_defined? ? variables_value : {},
               environment: environment_defined? ? environment_value : nil,
               environment_name: environment_defined? ? environment_value[:name] : nil,
               coverage: coverage_defined? ? coverage_value : nil,
               retry: retry_defined? ? retry_value : nil,
-              parallel: has_parallel? ? parallel.to_i : nil,
+              parallel: has_parallel? ? parallel_value : nil,
               interruptible: interruptible_defined? ? interruptible_value : nil,
               timeout: has_timeout? ? ChronicDuration.parse(timeout.to_s) : nil,
               artifacts: artifacts_value,
               release: release_value,
               after_script: after_script_value,
               ignore: ignored?,
+              allow_failure_criteria: allow_failure_criteria,
               needs: needs_defined? ? needs_value : nil,
-              resource_group: resource_group,
               scheduling_type: needs_defined? ? :dag : :stage
             ).compact
+          end
+
+          def ignored?
+            allow_failure_defined? ? static_allow_failure : manual_action?
+          end
+
+          private
+
+          def allow_failure_criteria
+            if allow_failure_defined? && allow_failure_value.is_a?(Hash)
+              allow_failure_value
+            end
+          end
+
+          def static_allow_failure
+            return false if allow_failure_value.is_a?(Hash)
+
+            allow_failure_value
           end
         end
       end
     end
   end
 end
+
+::Gitlab::Ci::Config::Entry::Job.prepend_mod_with('Gitlab::Ci::Config::Entry::Job')

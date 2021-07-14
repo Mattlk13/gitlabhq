@@ -2,16 +2,17 @@
 
 require 'spec_helper'
 
-describe Gitlab::GithubImport::ImportNoteWorker do
+RSpec.describe Gitlab::GithubImport::ImportNoteWorker do
   let(:worker) { described_class.new }
 
   describe '#import' do
     it 'imports a note' do
-      project = double(:project, full_path: 'foo/bar')
+      project = double(:project, full_path: 'foo/bar', id: 1)
       client = double(:client)
       importer = double(:importer)
       hash = {
         'noteable_id' => 42,
+        'github_id' => 42,
         'noteable_type' => 'issues',
         'user' => { 'id' => 4, 'login' => 'alice' },
         'note' => 'Hello world',
@@ -31,7 +32,7 @@ describe Gitlab::GithubImport::ImportNoteWorker do
       expect(importer)
         .to receive(:execute)
 
-      expect(worker.counter)
+      expect(Gitlab::GithubImport::ObjectCounter)
         .to receive(:increment)
         .and_call_original
 

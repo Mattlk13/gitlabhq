@@ -18,8 +18,8 @@ module Issuable
         new_entity.update(update_attributes)
 
         copy_resource_label_events
-        copy_resource_weight_events
         copy_resource_milestone_events
+        copy_resource_state_events
       end
 
       private
@@ -47,8 +47,6 @@ module Issuable
       end
 
       def copy_resource_label_events
-        entity_key = new_entity.class.name.underscore.foreign_key
-
         copy_events(ResourceLabelEvent.table_name, original_entity.resource_label_events) do |event|
           event.attributes
             .except('id', 'reference', 'reference_html')
@@ -56,31 +54,43 @@ module Issuable
         end
       end
 
-      def copy_resource_weight_events
-        return unless original_entity.respond_to?(:resource_weight_events)
+      def copy_resource_milestone_events
+        return unless milestone_events_supported?
 
-        copy_events(ResourceWeightEvent.table_name, original_entity.resource_weight_events) do |event|
-          event.attributes
-            .except('id', 'reference', 'reference_html')
-            .merge('issue_id' => new_entity.id)
+        copy_events(ResourceMilestoneEvent.table_name, original_entity.resource_milestone_events) do |event|
+          if event.remove?
+            event_attributes_with_milestone(event, nil)
+          else
+            matching_destination_milestone = matching_milestone(event.milestone_title)
+
+            event_attributes_with_milestone(event, matching_destination_milestone) if matching_destination_milestone.present?
+          end
         end
       end
 
-      def copy_resource_milestone_events
-        entity_key = new_entity.class.name.underscore.foreign_key
+      def copy_resource_state_events
+        return unless state_events_supported?
 
-        copy_events(ResourceMilestoneEvent.table_name, original_entity.resource_milestone_events) do |event|
-          matching_destination_milestone = matching_milestone(event.milestone.title)
-
-          if matching_destination_milestone.present?
-            event.attributes
-              .except('id', 'reference', 'reference_html')
-              .merge(entity_key => new_entity.id,
-                     'milestone_id' => matching_destination_milestone.id,
-                     'action' => ResourceMilestoneEvent.actions[event.action],
-                     'state' => ResourceMilestoneEvent.states[event.state])
-          end
+        copy_events(ResourceStateEvent.table_name, original_entity.resource_state_events) do |event|
+          event.attributes
+            .except(*blocked_state_event_attributes)
+            .merge(entity_key => new_entity.id,
+                   'state' => ResourceStateEvent.states[event.state])
         end
+      end
+
+      # Overriden on EE::Issuable::Clone::AttributesRewriter
+      def blocked_state_event_attributes
+        ['id']
+      end
+
+      def event_attributes_with_milestone(event, milestone)
+        event.attributes
+          .except('id')
+          .merge(entity_key => new_entity.id,
+                 'milestone_id' => milestone&.id,
+                 'action' => ResourceMilestoneEvent.actions[event.action],
+                 'state' => ResourceMilestoneEvent.states[event.state])
       end
 
       def copy_events(table_name, events_to_copy)
@@ -89,13 +99,28 @@ module Issuable
             yield(event)
           end.compact
 
-          Gitlab::Database.bulk_insert(table_name, events)
+          Gitlab::Database.bulk_insert(table_name, events) # rubocop:disable Gitlab/BulkInsert
         end
       end
 
       def entity_key
-        new_entity.class.name.parameterize('_').foreign_key
+        new_entity.class.name.underscore.foreign_key
+      end
+
+      def milestone_events_supported?
+        both_respond_to?(:resource_milestone_events)
+      end
+
+      def state_events_supported?
+        both_respond_to?(:resource_state_events)
+      end
+
+      def both_respond_to?(method)
+        original_entity.respond_to?(method) &&
+          new_entity.respond_to?(method)
       end
     end
   end
 end
+
+Issuable::Clone::AttributesRewriter.prepend_mod_with('Issuable::Clone::AttributesRewriter')

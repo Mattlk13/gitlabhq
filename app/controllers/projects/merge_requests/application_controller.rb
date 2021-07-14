@@ -5,6 +5,8 @@ class Projects::MergeRequests::ApplicationController < Projects::ApplicationCont
   before_action :merge_request
   before_action :authorize_read_merge_request!
 
+  feature_category :code_review
+
   private
 
   def merge_request
@@ -18,7 +20,7 @@ class Projects::MergeRequests::ApplicationController < Projects::ApplicationCont
   end
 
   def preloadable_mr_relations
-    [:metrics, :assignees, { author: :status }]
+    [:metrics, { assignees: :status }, { author: :status }]
   end
 
   def merge_request_params
@@ -35,6 +37,7 @@ class Projects::MergeRequests::ApplicationController < Projects::ApplicationCont
       :source_branch,
       :source_project_id,
       :state_event,
+      :wip_event,
       :squash,
       :target_branch,
       :target_project_id,
@@ -43,17 +46,15 @@ class Projects::MergeRequests::ApplicationController < Projects::ApplicationCont
       :discussion_locked,
       label_ids: [],
       assignee_ids: [],
+      reviewer_ids: [],
       update_task: [:index, :checked, :line_number, :line_source]
     ]
   end
 
   def set_pipeline_variables
-    @pipelines =
-      if can?(current_user, :read_pipeline, @merge_request.source_project)
-        @merge_request.all_pipelines
-      else
-        Ci::Pipeline.none
-      end
+    @pipelines = Ci::PipelinesForMergeRequestFinder
+      .new(@merge_request, current_user)
+      .execute
   end
 
   def close_merge_request_if_no_source_project
@@ -64,4 +65,4 @@ class Projects::MergeRequests::ApplicationController < Projects::ApplicationCont
   end
 end
 
-Projects::MergeRequests::ApplicationController.prepend_if_ee('EE::Projects::MergeRequests::ApplicationController')
+Projects::MergeRequests::ApplicationController.prepend_mod_with('Projects::MergeRequests::ApplicationController')

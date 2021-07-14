@@ -10,6 +10,7 @@ module QuickActions
     include Gitlab::QuickActions::MergeRequestActions
     include Gitlab::QuickActions::CommitActions
     include Gitlab::QuickActions::CommonActions
+    include Gitlab::QuickActions::RelateActions
 
     attr_reader :quick_action_target
 
@@ -163,6 +164,7 @@ module QuickActions
         next unless definition
 
         definition.execute(self, arg)
+        usage_ping_tracking(name, arg)
       end
     end
 
@@ -177,7 +179,15 @@ module QuickActions
       ext.references(type)
     end
     # rubocop: enable CodeReuse/ActiveRecord
+
+    def usage_ping_tracking(quick_action_name, arg)
+      Gitlab::UsageDataCounters::QuickActionActivityUniqueCounter.track_unique_action(
+        quick_action_name,
+        args: arg&.strip,
+        user: current_user
+      )
+    end
   end
 end
 
-QuickActions::InterpretService.prepend_if_ee('EE::QuickActions::InterpretService')
+QuickActions::InterpretService.prepend_mod_with('QuickActions::InterpretService')

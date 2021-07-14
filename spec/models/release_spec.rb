@@ -3,24 +3,24 @@
 require 'spec_helper'
 
 RSpec.describe Release do
-  let(:user)    { create(:user) }
-  let(:project) { create(:project, :public, :repository) }
+  let_it_be(:user)    { create(:user) }
+  let_it_be(:project) { create(:project, :public, :repository) }
+
   let(:release) { create(:release, project: project, author: user) }
 
   it { expect(release).to be_valid }
 
   describe 'associations' do
-    it { is_expected.to belong_to(:project) }
+    it { is_expected.to belong_to(:project).touch(true) }
     it { is_expected.to belong_to(:author).class_name('User') }
     it { is_expected.to have_many(:links).class_name('Releases::Link') }
     it { is_expected.to have_many(:milestones) }
     it { is_expected.to have_many(:milestone_releases) }
-    it { is_expected.to have_one(:evidence) }
+    it { is_expected.to have_many(:evidences).class_name('Releases::Evidence') }
   end
 
   describe 'validation' do
     it { is_expected.to validate_presence_of(:project) }
-    it { is_expected.to validate_presence_of(:description) }
     it { is_expected.to validate_presence_of(:tag) }
 
     context 'when a release exists in the database without a name' do
@@ -35,6 +35,18 @@ RSpec.describe Release do
         expect(existing_release_without_name).to be_valid
         expect(existing_release_without_name.description).to eq("change")
         expect(existing_release_without_name.name).not_to be_nil
+      end
+    end
+
+    context 'when description of a release is longer than the limit' do
+      let(:description) { 'a' * (Gitlab::Database::MAX_TEXT_SIZE_LIMIT + 1) }
+      let(:release) { build(:release, project: project, description: description) }
+
+      it 'creates a validation error' do
+        release.validate
+
+        expect(release.errors.full_messages)
+          .to include("Description is too long (maximum is #{Gitlab::Database::MAX_TEXT_SIZE_LIMIT} characters)")
       end
     end
 
@@ -54,7 +66,7 @@ RSpec.describe Release do
   end
 
   describe '#assets_count' do
-    subject { release.assets_count }
+    subject { Release.find(release.id).assets_count }
 
     it 'returns the number of sources' do
       is_expected.to eq(Gitlab::Workhorse::ARCHIVE_FORMATS.count)
@@ -68,8 +80,79 @@ RSpec.describe Release do
       end
 
       it "excludes sources count when asked" do
-        assets_count = release.assets_count(except: [:sources])
+        assets_count = Release.find(release.id).assets_count(except: [:sources])
         expect(assets_count).to eq(1)
+      end
+    end
+  end
+
+  describe '.create' do
+    it "fills released_at using created_at if it's not set" do
+      release = described_class.create(project: project, author: user)
+
+      expect(release.released_at).to eq(release.created_at)
+    end
+
+    it "does not change released_at if it's set explicitly" do
+      released_at = Time.zone.parse('2018-10-20T18:00:00Z')
+
+      release = described_class.create(project: project, author: user, released_at: released_at)
+
+      expect(release.released_at).to eq(released_at)
+    end
+  end
+
+  describe '#update' do
+    subject { release.update(params) }
+
+    context 'when links do not exist' do
+      context 'when params are specified for creation' do
+        let(:params) do
+          { links_attributes: [{ name: 'test', url: 'https://www.google.com/' }] }
+        end
+
+        it 'creates a link successfuly' do
+          is_expected.to eq(true)
+
+          expect(release.links.count).to eq(1)
+          expect(release.links.first.name).to eq('test')
+          expect(release.links.first.url).to eq('https://www.google.com/')
+        end
+      end
+    end
+
+    context 'when a link exists' do
+      let!(:link1) { create(:release_link, release: release, name: 'test1', url: 'https://www.google1.com/') }
+      let!(:link2) { create(:release_link, release: release, name: 'test2', url: 'https://www.google2.com/') }
+
+      before do
+        release.reload
+      end
+
+      context 'when params are specified for update' do
+        let(:params) do
+          { links_attributes: [{ id: link1.id, name: 'new' }] }
+        end
+
+        it 'updates the link successfully' do
+          is_expected.to eq(true)
+
+          expect(release.links.count).to eq(2)
+          expect(release.links.first.name).to eq('new')
+        end
+      end
+
+      context 'when params are specified for deletion' do
+        let(:params) do
+          { links_attributes: [{ id: link1.id, _destroy: true }] }
+        end
+
+        it 'removes the link successfuly' do
+          is_expected.to eq(true)
+
+          expect(release.links.count).to eq(1)
+          expect(release.links.first.name).to eq(link2.name)
+        end
       end
     end
   end
@@ -95,39 +178,11 @@ RSpec.describe Release do
   describe 'evidence' do
     let(:release_with_evidence) { create(:release, :with_evidence, project: project) }
 
-    describe '#create_evidence!' do
-      context 'when a release is created' do
-        it 'creates one Evidence object too' do
-          expect { release_with_evidence }.to change(Evidence, :count).by(1)
-        end
-      end
-    end
-
     context 'when a release is deleted' do
       it 'also deletes the associated evidence' do
         release_with_evidence
 
-        expect { release_with_evidence.destroy }.to change(Evidence, :count).by(-1)
-      end
-    end
-  end
-
-  describe '#notify_new_release' do
-    context 'when a release is created' do
-      it 'instantiates NewReleaseWorker to send notifications' do
-        expect(NewReleaseWorker).to receive(:perform_async)
-
-        create(:release)
-      end
-    end
-
-    context 'when a release is updated' do
-      let!(:release) { create(:release) }
-
-      it 'does not send any new notification' do
-        expect(NewReleaseWorker).not_to receive(:perform_async)
-
-        release.update!(description: 'new description')
+        expect { release_with_evidence.destroy }.to change(Releases::Evidence, :count).by(-1)
       end
     end
   end
@@ -144,41 +199,11 @@ RSpec.describe Release do
     end
   end
 
-  describe '#evidence_sha' do
-    subject { release.evidence_sha }
-
-    context 'when a release was created before evidence collection existed' do
-      let!(:release) { create(:release) }
-
-      it { is_expected.to be_nil }
-    end
-
-    context 'when a release was created with evidence collection' do
-      let!(:release) { create(:release, :with_evidence) }
-
-      it { is_expected.to eq(release.evidence.summary_sha) }
-    end
-  end
-
-  describe '#evidence_summary' do
-    subject { release.evidence_summary }
-
-    context 'when a release was created before evidence collection existed' do
-      let!(:release) { create(:release) }
-
-      it { is_expected.to eq({}) }
-    end
-
-    context 'when a release was created with evidence collection' do
-      let!(:release) { create(:release, :with_evidence) }
-
-      it { is_expected.to eq(release.evidence.summary) }
-    end
-  end
-
   describe '#milestone_titles' do
-    let(:release) { create(:release, :with_milestones) }
+    let_it_be(:milestone_1) { create(:milestone, project: project, title: 'Milestone 1') }
+    let_it_be(:milestone_2) { create(:milestone, project: project, title: 'Milestone 2') }
+    let_it_be(:release) { create(:release, project: project, milestones: [milestone_1, milestone_2]) }
 
-    it { expect(release.milestone_titles).to eq(release.milestones.map {|m| m.title }.sort.join(", "))}
+    it { expect(release.milestone_titles).to eq("#{milestone_1.title}, #{milestone_2.title}")}
   end
 end

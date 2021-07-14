@@ -3,7 +3,7 @@
 require 'pathname'
 
 module QA
-  context 'Configure' do
+  RSpec.describe 'Configure' do
     let(:project) do
       Resource::Project.fabricate_via_api! do |project|
         project.name = Runtime::Env.auto_devops_project_name || 'autodevops-project'
@@ -15,7 +15,7 @@ module QA
       disable_optional_jobs(project)
     end
 
-    describe 'Auto DevOps support', :orchestrated, :kubernetes do
+    describe 'Auto DevOps support', :orchestrated, :kubernetes, quarantine: { issue: 'https://gitlab.com/gitlab-org/gitlab/-/issues/251090', type: :stale } do
       context 'when rbac is enabled' do
         let(:cluster) { Service::KubernetesCluster.new.create! }
 
@@ -23,7 +23,7 @@ module QA
           cluster&.remove!
         end
 
-        it 'runs auto devops' do
+        it 'runs auto devops', testcase: 'https://gitlab.com/gitlab-org/quality/testcases/-/issues/1715' do
           Flow::Login.sign_in
 
           # Set an application secret CI variable (prefixed with K8S_SECRET_)
@@ -35,10 +35,9 @@ module QA
           end
 
           # Connect K8s cluster
-          Resource::KubernetesCluster.fabricate! do |k8s_cluster|
+          Resource::KubernetesCluster::ProjectCluster.fabricate! do |k8s_cluster|
             k8s_cluster.project = project
             k8s_cluster.cluster = cluster
-            k8s_cluster.install_helm_tiller = true
             k8s_cluster.install_ingress = true
             k8s_cluster.install_prometheus = true
             k8s_cluster.install_runner = true
@@ -53,8 +52,7 @@ module QA
             push.commit_message = 'Create Auto DevOps compatible rack application'
           end
 
-          Page::Project::Menu.perform(&:click_ci_cd_pipelines)
-          Page::Project::Pipeline::Index.perform(&:click_on_latest_pipeline)
+          Flow::Pipeline.visit_latest_pipeline
 
           Page::Project::Pipeline::Show.perform do |pipeline|
             pipeline.click_job('build')
@@ -83,11 +81,11 @@ module QA
             job.click_element(:pipeline_path)
           end
 
-          Page::Project::Menu.perform(&:go_to_operations_environments)
-          Page::Project::Operations::Environments::Index.perform do |index|
+          Page::Project::Menu.perform(&:go_to_deployments_environments)
+          Page::Project::Deployments::Environments::Index.perform do |index|
             index.click_environment_link('production')
           end
-          Page::Project::Operations::Environments::Show.perform do |show|
+          Page::Project::Deployments::Environments::Show.perform do |show|
             show.view_deployment do
               expect(page).to have_content('Hello World!')
               expect(page).to have_content('you_can_see_this_variable')
@@ -117,9 +115,8 @@ module QA
         end
       end
 
-      it 'runs an AutoDevOps pipeline' do
-        Page::Project::Menu.perform(&:click_ci_cd_pipelines)
-        Page::Project::Pipeline::Index.perform(&:click_on_latest_pipeline)
+      it 'runs an AutoDevOps pipeline', testcase: 'https://gitlab.com/gitlab-org/quality/testcases/-/issues/1847' do
+        Flow::Pipeline.visit_latest_pipeline
 
         Page::Project::Pipeline::Show.perform do |pipeline|
           expect(pipeline).to have_tag('Auto DevOps')

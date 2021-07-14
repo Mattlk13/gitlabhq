@@ -1,6 +1,13 @@
-# Group milestones API
+---
+stage: Plan
+group: Project Management
+info: To determine the technical writer assigned to the Stage/Group associated with this page, see https://about.gitlab.com/handbook/engineering/ux/technical-writing/#assignments
+---
 
-> [Introduced][ce-12819] in GitLab 9.5.
+# Group milestones API **(FREE)**
+
+Use the group [milestones](../user/project/milestones/index.md) using the REST API.
+There's a separate [project milestones API](milestones.md) page.
 
 ## List group milestones
 
@@ -18,16 +25,17 @@ GET /groups/:id/milestones?search=version
 
 Parameters:
 
-| Attribute | Type   | Required | Description |
-| --------- | ------ | -------- | ----------- |
-| `id`      | integer/string | yes | The ID or [URL-encoded path of the group](README.md#namespaced-path-encoding) owned by the authenticated user |
-| `iids[]`  | integer array | optional | Return only the milestones having the given `iid` |
-| `state`   | string | optional | Return only `active` or `closed` milestones |
-| `title`   | string | optional | Return only the milestones having the given `title` |
-| `search`  | string | optional | Return only milestones with a title or description matching the provided string |
+| Attribute                   | Type   | Required | Description |
+| ---------                   | ------ | -------- | ----------- |
+| `id`                        | integer/string | yes | The ID or [URL-encoded path of the group](index.md#namespaced-path-encoding) owned by the authenticated user |
+| `iids[]`                    | integer array | no | Return only the milestones having the given `iid` (Note: ignored if `include_parent_milestones` is set as `true`) |
+| `state`                     | string | no | Return only `active` or `closed` milestones |
+| `title`                     | string | no | Return only the milestones having the given `title` |
+| `search`                    | string | no | Return only milestones with a title or description matching the provided string |
+| `include_parent_milestones` | boolean | optional | Include milestones from parent group and its ancestors. Introduced in [GitLab 13.4](https://gitlab.com/gitlab-org/gitlab/-/issues/196066) |
 
 ```shell
-curl --header "PRIVATE-TOKEN: <your_access_token>" https://gitlab.example.com/api/v4/groups/5/milestones
+curl --header "PRIVATE-TOKEN: <your_access_token>" "https://gitlab.example.com/api/v4/groups/5/milestones"
 ```
 
 Example Response:
@@ -44,7 +52,9 @@ Example Response:
     "start_date": "2013-11-10",
     "state": "active",
     "updated_at": "2013-10-02T09:24:18Z",
-    "created_at": "2013-10-02T09:24:18Z"
+    "created_at": "2013-10-02T09:24:18Z",
+    "expired": false,
+    "web_url": "https://gitlab.com/groups/gitlab-org/-/milestones/42"
   }
 ]
 ```
@@ -59,8 +69,10 @@ GET /groups/:id/milestones/:milestone_id
 
 Parameters:
 
-- `id` (required) - The ID or [URL-encoded path of the group](README.md#namespaced-path-encoding) owned by the authenticated user
-- `milestone_id` (required) - The ID of the group milestone
+| Attribute | Type   | Required | Description |
+| --------- | ------ | -------- | ----------- |
+| `id` | integer/string | yes | The ID or [URL-encoded path of the group](index.md#namespaced-path-encoding) owned by the authenticated user |
+| `milestone_id` | integer | yes | The ID of the group milestone |
 
 ## Create new milestone
 
@@ -72,11 +84,13 @@ POST /groups/:id/milestones
 
 Parameters:
 
-- `id` (required) - The ID or [URL-encoded path of the group](README.md#namespaced-path-encoding) owned by the authenticated user
-- `title` (required) - The title of a milestone
-- `description` (optional) - The description of the milestone
-- `due_date` (optional) - The due date of the milestone
-- `start_date` (optional) - The start date of the milestone
+| Attribute | Type   | Required | Description |
+| --------- | ------ | -------- | ----------- |
+| `id` | integer/string | yes | The ID or [URL-encoded path of the group](index.md#namespaced-path-encoding) owned by the authenticated user |
+| `title` | string | yes | The title of a milestone |
+| `description` | string | no | The description of the milestone |
+| `due_date` | date | no | The due date of the milestone, in YYYY-MM-DD format (ISO 8601) |
+| `start_date` | date | no | The start date of the milestone, in YYYY-MM-DD format (ISO 8601) |
 
 ## Edit milestone
 
@@ -88,17 +102,19 @@ PUT /groups/:id/milestones/:milestone_id
 
 Parameters:
 
-- `id` (required) - The ID or [URL-encoded path of the group](README.md#namespaced-path-encoding) owned by the authenticated user
-- `milestone_id` (required) - The ID of a group milestone
-- `title` (optional) - The title of a milestone
-- `description` (optional) - The description of a milestone
-- `due_date` (optional) - The due date of the milestone
-- `start_date` (optional) - The start date of the milestone
-- `state_event` (optional) - The state event of the milestone (close|activate)
+| Attribute | Type   | Required | Description |
+| --------- | ------ | -------- | ----------- |
+| `id` | integer/string | yes | The ID or [URL-encoded path of the group](index.md#namespaced-path-encoding) owned by the authenticated user |
+| `milestone_id` | integer | yes | The ID of a group milestone |
+| `title` | string | no | The title of a milestone |
+| `description` | string | no | The description of a milestone |
+| `due_date` | date | no | The due date of the milestone, in YYYY-MM-DD format (ISO 8601) |
+| `start_date` | date | no | The start date of the milestone, in YYYY-MM-DD format (ISO 8601) |
+| `state_event` | string | no | The state event of the milestone _(`close` or `activate`)_ |
 
 ## Delete group milestone
 
-Only for users with Developer access to the group.
+Only for users with the Developer role in the group.
 
 ```plaintext
 DELETE /groups/:id/milestones/:milestone_id
@@ -106,8 +122,10 @@ DELETE /groups/:id/milestones/:milestone_id
 
 Parameters:
 
-- `id` (required) - The ID or [URL-encoded path of the group](README.md#namespaced-path-encoding) owned by the authenticated user
-- `milestone_id` (required) - The ID of the group's milestone
+| Attribute | Type   | Required | Description |
+| --------- | ------ | -------- | ----------- |
+| `id` | integer/string | yes | The ID or [URL-encoded path of the group](index.md#namespaced-path-encoding) owned by the authenticated user |
+| `milestone_id` | integer | yes | The ID of the group's milestone |
 
 ## Get all issues assigned to a single milestone
 
@@ -119,8 +137,15 @@ GET /groups/:id/milestones/:milestone_id/issues
 
 Parameters:
 
-- `id` (required) - The ID or [URL-encoded path of the group](README.md#namespaced-path-encoding) owned by the authenticated user
-- `milestone_id` (required) - The ID of a group milestone
+| Attribute | Type   | Required | Description |
+| --------- | ------ | -------- | ----------- |
+| `id` | integer/string | yes | The ID or [URL-encoded path of the group](index.md#namespaced-path-encoding) owned by the authenticated user |
+| `milestone_id` | integer | yes | The ID of a group milestone |
+
+Currently, this API endpoint doesn't return issues from any subgroups.
+If you want to get all the milestones' issues, you can instead use the
+[List issues API](issues.md#list-issues) and filter for a
+particular milestone (for example, `GET /issues?milestone=1.0.0&state=opened`).
 
 ## Get all merge requests assigned to a single milestone
 
@@ -132,14 +157,15 @@ GET /groups/:id/milestones/:milestone_id/merge_requests
 
 Parameters:
 
-- `id` (required) - The ID or [URL-encoded path of the group](README.md#namespaced-path-encoding) owned by the authenticated user
-- `milestone_id` (required) - The ID of a group milestone
+| Attribute | Type   | Required | Description |
+| --------- | ------ | -------- | ----------- |
+| `id` | integer/string | yes | The ID or [URL-encoded path of the group](index.md#namespaced-path-encoding) owned by the authenticated user |
+| `milestone_id` | integer | yes | The ID of a group milestone |
 
-[ce-12819]: https://gitlab.com/gitlab-org/gitlab-foss/-/merge_requests/12819
+## Get all burndown chart events for a single milestone **(PREMIUM)**
 
-## Get all burndown chart events for a single milestone **(STARTER)**
-
-> [Introduced](https://gitlab.com/gitlab-org/gitlab/issues/4737) in GitLab 12.1
+> - [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/4737) in GitLab 12.1
+> - Moved to GitLab Premium in 13.9.
 
 Get all burndown chart events for a single milestone.
 
@@ -149,5 +175,7 @@ GET /groups/:id/milestones/:milestone_id/burndown_events
 
 Parameters:
 
-- `id` (required) - The ID or [URL-encoded path of the group](README.md#namespaced-path-encoding) owned by the authenticated user
-- `milestone_id` (required) - The ID of a group milestone
+| Attribute | Type   | Required | Description |
+| --------- | ------ | -------- | ----------- |
+| `id` | integer/string | yes | The ID or [URL-encoded path of the group](index.md#namespaced-path-encoding) owned by the authenticated user |
+| `milestone_id` | integer | yes | The ID of a group milestone |

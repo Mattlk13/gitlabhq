@@ -2,10 +2,14 @@
 
 require 'spec_helper'
 
-describe Gitlab::Ci::Config::Entry::Processable do
+RSpec.describe Gitlab::Ci::Config::Entry::Processable do
   let(:node_class) do
     Class.new(::Gitlab::Config::Entry::Node) do
       include Gitlab::Ci::Config::Entry::Processable
+
+      entry :tags, ::Gitlab::Config::Entry::ArrayOfStrings,
+        description: 'Set the default tags.',
+        inherit: true
 
       def self.name
         'job'
@@ -66,6 +70,15 @@ describe Gitlab::Ci::Config::Entry::Processable do
         it 'returns error about wrong value type' do
           expect(entry).not_to be_valid
           expect(entry.errors).to include "job extends should be an array of strings or a string"
+        end
+      end
+
+      context 'when resource_group key is not a string' do
+        let(:config) { { resource_group: 123 } }
+
+        it 'returns error about wrong value type' do
+          expect(entry).not_to be_valid
+          expect(entry.errors).to include "job resource group should be a string"
         end
       end
 
@@ -189,14 +202,17 @@ describe Gitlab::Ci::Config::Entry::Processable do
   end
 
   describe '#compose!' do
-    let(:specified) do
-      double('specified', 'specified?' => true, value: 'specified')
-    end
-
     let(:unspecified) { double('unspecified', 'specified?' => false) }
     let(:default) { double('default', '[]' => unspecified) }
     let(:workflow) { double('workflow', 'has_rules?' => false) }
-    let(:deps) { double('deps', 'default' => default, '[]' => unspecified, 'workflow' => workflow) }
+    let(:variables) { }
+
+    let(:deps) do
+      double('deps',
+        default_entry: default,
+        workflow_entry: workflow,
+        variables_value: variables)
+    end
 
     context 'with workflow rules' do
       using RSpec::Parameterized::TableSyntax
@@ -223,7 +239,19 @@ describe Gitlab::Ci::Config::Entry::Processable do
       end
     end
 
+    shared_examples 'has no warnings' do
+      it 'does not raise the warning' do
+        expect(entry.warnings).to be_empty
+      end
+    end
+
     context 'when workflow rules is used' do
+      let(:workflow) { double('workflow', 'has_rules?' => true) }
+
+      before do
+        entry.compose!(deps)
+      end
+
       context 'when rules are used' do
         let(:config) { { script: 'ls', cache: { key: 'test' }, rules: [] } }
 
@@ -232,11 +260,218 @@ describe Gitlab::Ci::Config::Entry::Processable do
         end
       end
 
-      context 'when rules are not used' do
+      context 'when rules are not used and only is defined' do
         let(:config) { { script: 'ls', cache: { key: 'test' }, only: [] } }
 
-        it 'does not define only' do
-          expect(entry).not_to be_only_defined
+        it 'keeps only entry' do
+          expect(entry).to be_only_defined
+        end
+      end
+    end
+
+    context 'when workflow rules is not used' do
+      let(:workflow) { double('workflow', 'has_rules?' => false) }
+
+      before do
+        entry.compose!(deps)
+      end
+
+      context 'when rules are valid' do
+        let(:config) do
+          {
+            script: 'ls',
+            rules: [
+              { if: '$CI_COMMIT_BRANCH', when: 'on_success' },
+              last_rule
+            ]
+          }
+        end
+
+        context 'when last rule contains only `when`' do
+          let(:last_rule) { { when: when_value } }
+
+          context 'and its value is not `never`' do
+            let(:when_value) { 'on_success' }
+
+            it 'raises a warning' do
+              expect(entry.warnings).to contain_exactly(/may allow multiple pipelines/)
+            end
+          end
+
+          context 'and its value is `never`' do
+            let(:when_value) { 'never' }
+
+            it_behaves_like 'has no warnings'
+          end
+        end
+
+        context 'when last rule does not contain only `when`' do
+          let(:last_rule) { { if: '$CI_MERGE_REQUEST_ID', when: 'always' } }
+
+          it_behaves_like 'has no warnings'
+        end
+      end
+
+      context 'when rules are invalid' do
+        let(:config) { { script: 'ls', rules: { when: 'always' } } }
+
+        it_behaves_like 'has no warnings'
+      end
+    end
+
+    context 'when workflow rules is used' do
+      let(:workflow) { double('workflow', 'has_rules?' => true) }
+
+      before do
+        entry.compose!(deps)
+      end
+
+      context 'when last rule contains only `when' do
+        let(:config) do
+          {
+            script: 'ls',
+            rules: [
+              { if: '$CI_COMMIT_BRANCH', when: 'on_success' },
+              { when: 'always' }
+            ]
+          }
+        end
+
+        it_behaves_like 'has no warnings'
+      end
+    end
+
+    context 'with resource group' do
+      using RSpec::Parameterized::TableSyntax
+
+      where(:resource_group, :result) do
+        'iOS'                         | 'iOS'
+        'review/$CI_COMMIT_REF_NAME'  | 'review/$CI_COMMIT_REF_NAME'
+        nil                           | nil
+      end
+
+      with_them do
+        let(:config) { { script: 'ls', resource_group: resource_group }.compact }
+
+        it do
+          entry.compose!(deps)
+
+          expect(entry.resource_group).to eq(result)
+        end
+      end
+    end
+
+    context 'with inheritance' do
+      context 'of variables' do
+        let(:config) do
+          { variables: { A: 'job', B: 'job' } }
+        end
+
+        before do
+          entry.compose!(deps)
+        end
+
+        context 'with only job variables' do
+          it 'does return defined variables' do
+            expect(entry.value).to include(
+              variables: { 'A' => 'job', 'B' => 'job' },
+              job_variables: { 'A' => 'job', 'B' => 'job' },
+              root_variables_inheritance: true
+            )
+          end
+        end
+
+        context 'when root yaml variables are used' do
+          let(:variables) do
+            Gitlab::Ci::Config::Entry::Variables.new(
+              { A: 'root', C: 'root', D: 'root' }
+            ).value
+          end
+
+          it 'does return job and root variables' do
+            expect(entry.value).to include(
+              variables: { 'A' => 'job', 'B' => 'job', 'C' => 'root', 'D' => 'root' },
+              job_variables: { 'A' => 'job', 'B' => 'job' },
+              root_variables_inheritance: true
+            )
+          end
+
+          context 'when inherit of defaults is disabled' do
+            let(:config) do
+              {
+                variables: { A: 'job', B: 'job' },
+                inherit: { variables: false }
+              }
+            end
+
+            it 'does return job and root variables' do
+              expect(entry.value).to include(
+                variables: { 'A' => 'job', 'B' => 'job' },
+                job_variables: { 'A' => 'job', 'B' => 'job' },
+                root_variables_inheritance: false
+              )
+            end
+          end
+
+          context 'when inherit of only specific variable is enabled' do
+            let(:config) do
+              {
+                variables: { A: 'job', B: 'job' },
+                inherit: { variables: ['D'] }
+              }
+            end
+
+            it 'does return job and root variables' do
+              expect(entry.value).to include(
+                variables: { 'A' => 'job', 'B' => 'job', 'D' => 'root' },
+                job_variables: { 'A' => 'job', 'B' => 'job' },
+                root_variables_inheritance: ['D']
+              )
+            end
+          end
+        end
+      end
+
+      context 'of default:tags' do
+        using RSpec::Parameterized::TableSyntax
+
+        where(:name, :default_tags, :tags, :inherit_default, :result) do
+          "only local tags"       | nil     | %w[a b] | nil       | %w[a b]
+          "only local tags"       | nil     | %w[a b] | true      | %w[a b]
+          "only local tags"       | nil     | %w[a b] | false     | %w[a b]
+          "global and local tags" | %w[b c] | %w[a b] | nil       | %w[a b]
+          "global and local tags" | %w[b c] | %w[a b] | true      | %w[a b]
+          "global and local tags" | %w[b c] | %w[a b] | false     | %w[a b]
+          "only global tags"      | %w[b c] | nil     | nil       | %w[b c]
+          "only global tags"      | %w[b c] | nil     | true      | %w[b c]
+          "only global tags"      | %w[b c] | nil     | false     | nil
+          "only global tags"      | %w[b c] | nil     | %w[image] | nil
+          "only global tags"      | %w[b c] | nil     | %w[tags]  | %w[b c]
+        end
+
+        with_them do
+          let(:config) do
+            { tags: tags,
+              inherit: { default: inherit_default } }
+          end
+
+          let(:default_specified_tags) do
+            double('tags',
+              'specified?' => true,
+              'valid?' => true,
+              'value' => default_tags,
+              'errors' => [])
+          end
+
+          before do
+            allow(default).to receive('[]').with(:tags).and_return(default_specified_tags)
+
+            entry.compose!(deps)
+
+            expect(entry).to be_valid
+          end
+
+          it { expect(entry.tags_value).to eq(result) }
         end
       end
     end
@@ -254,10 +489,14 @@ describe Gitlab::Ci::Config::Entry::Processable do
         end
 
         it 'returns correct value' do
-          expect(entry.value)
-            .to eq(name: :rspec,
-                   stage: 'test',
-                   only: { refs: %w[branches tags] })
+          expect(entry.value).to eq(
+            name: :rspec,
+            stage: 'test',
+            only: { refs: %w[branches tags] },
+            variables: {},
+            job_variables: {},
+            root_variables_inheritance: true
+          )
         end
       end
     end

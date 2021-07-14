@@ -40,8 +40,14 @@ module Gitlab
       # the commits are missing.
       def create_source_branch
         @project.repository.create_branch(@merge_request.source_branch, @diff_head_sha)
-      rescue => err
-        Rails.logger.warn("Import/Export warning: Failed to create source branch #{@merge_request.source_branch} => #{@diff_head_sha} for MR #{@merge_request.iid}: #{err}") # rubocop:disable Gitlab/RailsLogger
+      rescue StandardError => err
+        Gitlab::Import::Logger.warn(
+          message: 'Import warning: Failed to create source branch',
+          source_branch: @merge_request.source_branch,
+          diff_head_sha: @diff_head_sha,
+          merge_request_iid: @merge_request.iid,
+          error: err.message
+        )
       end
 
       def create_target_branch

@@ -2,9 +2,9 @@
 
 require 'spec_helper'
 
-describe Projects::ProtectDefaultBranchService do
+RSpec.describe Projects::ProtectDefaultBranchService do
   let(:service) { described_class.new(project) }
-  let(:project) { instance_spy(Project) }
+  let(:project) { create(:project) }
 
   describe '#execute' do
     before do
@@ -99,6 +99,53 @@ describe Projects::ProtectDefaultBranchService do
           .not_to have_received(:create_protected_branch)
       end
     end
+
+    context 'when protected branch does not exist' do
+      before do
+        allow(service)
+          .to receive(:protected_branch_exists?)
+                .and_return(false)
+        allow(service)
+          .to receive(:protect_branch?)
+                .and_return(true)
+      end
+
+      it 'changes the HEAD of the project' do
+        service.protect_default_branch
+
+        expect(project)
+          .to have_received(:change_head)
+      end
+
+      it 'protects the default branch' do
+        service.protect_default_branch
+
+        expect(service)
+          .to have_received(:create_protected_branch)
+      end
+    end
+
+    context 'when protected branch already exists' do
+      before do
+        allow(service)
+          .to receive(:protected_branch_exists?)
+                .and_return(true)
+      end
+
+      it 'changes the HEAD of the project' do
+        service.protect_default_branch
+
+        expect(project)
+          .to have_received(:change_head)
+      end
+
+      it 'does not protect the default branch' do
+        service.protect_default_branch
+
+        expect(service)
+          .not_to have_received(:create_protected_branch)
+      end
+    end
   end
 
   describe '#create_protected_branch' do
@@ -147,7 +194,7 @@ describe Projects::ProtectDefaultBranchService do
   describe '#protect_branch?' do
     context 'when default branch protection is disabled' do
       it 'returns false' do
-        allow(Gitlab::CurrentSettings)
+        allow(project.namespace)
           .to receive(:default_branch_protection)
           .and_return(Gitlab::Access::PROTECTION_NONE)
 
@@ -157,7 +204,7 @@ describe Projects::ProtectDefaultBranchService do
 
     context 'when default branch protection is enabled' do
       before do
-        allow(Gitlab::CurrentSettings)
+        allow(project.namespace)
           .to receive(:default_branch_protection)
           .and_return(Gitlab::Access::PROTECTION_DEV_CAN_MERGE)
 
@@ -199,7 +246,7 @@ describe Projects::ProtectDefaultBranchService do
   describe '#push_access_level' do
     context 'when developers can push' do
       it 'returns the DEVELOPER access level' do
-        allow(Gitlab::CurrentSettings)
+        allow(project.namespace)
           .to receive(:default_branch_protection)
           .and_return(Gitlab::Access::PROTECTION_DEV_CAN_PUSH)
 
@@ -209,7 +256,7 @@ describe Projects::ProtectDefaultBranchService do
 
     context 'when developers can not push' do
       it 'returns the MAINTAINER access level' do
-        allow(Gitlab::CurrentSettings)
+        allow(project.namespace)
           .to receive(:default_branch_protection)
           .and_return(Gitlab::Access::PROTECTION_DEV_CAN_MERGE)
 
@@ -221,7 +268,7 @@ describe Projects::ProtectDefaultBranchService do
   describe '#merge_access_level' do
     context 'when developers can merge' do
       it 'returns the DEVELOPER access level' do
-        allow(Gitlab::CurrentSettings)
+        allow(project.namespace)
           .to receive(:default_branch_protection)
           .and_return(Gitlab::Access::PROTECTION_DEV_CAN_MERGE)
 
@@ -231,7 +278,7 @@ describe Projects::ProtectDefaultBranchService do
 
     context 'when developers can not merge' do
       it 'returns the MAINTAINER access level' do
-        allow(Gitlab::CurrentSettings)
+        allow(project.namespace)
           .to receive(:default_branch_protection)
           .and_return(Gitlab::Access::PROTECTION_DEV_CAN_PUSH)
 

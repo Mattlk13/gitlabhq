@@ -2,7 +2,7 @@
 
 require 'spec_helper'
 
-describe Releases::UpdateService do
+RSpec.describe Releases::UpdateService do
   let(:project) { create(:project, :repository) }
   let(:user) { create(:user) }
   let(:new_name) { 'A new name' }
@@ -32,6 +32,27 @@ describe Releases::UpdateService do
       expect(result[:release].description).to eq(new_description)
     end
 
+    it 'executes hooks' do
+      expect(service.release).to receive(:execute_hooks).with('update')
+
+      service.execute
+    end
+
+    context 'when tag is protected and user does not have access to it' do
+      let!(:protected_tag) { create(:protected_tag, :no_one_can_create, name: '*', project: project) }
+
+      it 'track the error event' do
+        stub_feature_flags(evalute_protected_tag_for_release_permissions: false)
+
+        expect(Gitlab::ErrorTracking).to receive(:log_exception).with(
+          kind_of(described_class::ReleaseProtectedTagAccessError),
+          project_id: project.id,
+          user_id: user.id)
+
+        service.execute
+      end
+    end
+
     context 'when the tag does not exists' do
       let(:tag_name) { 'foobar' }
 
@@ -40,12 +61,6 @@ describe Releases::UpdateService do
 
     context 'when the release does not exist' do
       let!(:release) { }
-
-      it_behaves_like 'a failed update'
-    end
-
-    context 'with an invalid update' do
-      let(:new_description) { '' }
 
       it_behaves_like 'a failed update'
     end

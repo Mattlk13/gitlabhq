@@ -1,11 +1,12 @@
 import $ from 'jquery';
-import ZenMode from '../../zen_mode';
-import DueDateSelectors from '../../due_date_select';
+import initDatePicker from '~/behaviors/date_picker';
 import GLForm from '../../gl_form';
+import ZenMode from '../../zen_mode';
 
 export default (initGFM = true) => {
   new ZenMode(); // eslint-disable-line no-new
-  new DueDateSelectors(); // eslint-disable-line no-new
+  initDatePicker();
+
   // eslint-disable-next-line no-new
   new GLForm($('.milestone-form'), {
     emojis: true,
@@ -16,5 +17,6 @@ export default (initGFM = true) => {
     milestones: initGFM,
     labels: initGFM,
     snippets: initGFM,
+    vulnerabilities: initGFM,
   });
 };

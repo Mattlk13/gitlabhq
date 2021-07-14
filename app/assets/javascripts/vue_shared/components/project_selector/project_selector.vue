@@ -1,6 +1,7 @@
 <script>
-import _ from 'underscore';
 import { GlLoadingIcon, GlSearchBoxByType, GlInfiniteScroll } from '@gitlab/ui';
+import { debounce } from 'lodash';
+import { __, n__, sprintf } from '~/locale';
 import ProjectListItem from './project_list_item.vue';
 
 const SEARCH_INPUT_TIMEOUT_MS = 500;
@@ -24,23 +25,19 @@ export default {
     },
     showNoResultsMessage: {
       type: Boolean,
-      required: false,
-      default: false,
+      required: true,
     },
     showMinimumSearchQueryMessage: {
       type: Boolean,
-      required: false,
-      default: false,
+      required: true,
     },
     showLoadingIndicator: {
       type: Boolean,
-      required: false,
-      default: false,
+      required: true,
     },
     showSearchErrorMessage: {
       type: Boolean,
-      required: false,
-      default: false,
+      required: true,
     },
     totalResults: {
       type: Number,
@@ -51,7 +48,25 @@ export default {
   data() {
     return {
       searchQuery: '',
+      hasSearched: false,
     };
+  },
+  computed: {
+    legendText() {
+      if (!this.hasSearched) {
+        return '';
+      }
+      const count = this.projectSearchResults.length;
+      const total = this.totalResults;
+
+      if (total > 0) {
+        return sprintf(__('Showing %{count} of %{total} projects'), { count, total });
+      }
+
+      return sprintf(n__('Showing %{count} project', 'Showing %{count} projects', count), {
+        count,
+      });
+    },
   },
   methods: {
     projectClicked(project) {
@@ -61,9 +76,12 @@ export default {
       this.$emit('bottomReached');
     },
     isSelected(project) {
-      return Boolean(_.find(this.selectedProjects, { id: project.id }));
+      return this.selectedProjects.some(({ id }) => project.id === id);
     },
-    onInput: _.debounce(function debouncedOnInput() {
+    onInput: debounce(function debouncedOnInput() {
+      if (!this.hasSearched) {
+        this.hasSearched = true;
+      }
       this.$emit('searched', this.searchQuery);
     }, SEARCH_INPUT_TIMEOUT_MS),
   },
@@ -77,27 +95,35 @@ export default {
       type="search"
       class="mb-3"
       autofocus
+      data-qa-selector="project_search_field"
       @input="onInput"
     />
     <div class="d-flex flex-column">
-      <gl-loading-icon v-if="showLoadingIndicator" :size="1" class="py-2 px-4" />
+      <gl-loading-icon v-if="showLoadingIndicator" size="sm" class="py-2 px-4" />
       <gl-infinite-scroll
         :max-list-height="402"
         :fetched-items="projectSearchResults.length"
         :total-items="totalResults"
         @bottomReached="bottomReached"
       >
-        <div v-if="!showLoadingIndicator" slot="items" class="d-flex flex-column">
-          <project-list-item
-            v-for="project in projectSearchResults"
-            :key="project.id"
-            :selected="isSelected(project)"
-            :project="project"
-            :matcher="searchQuery"
-            class="js-project-list-item"
-            @click="projectClicked(project)"
-          />
-        </div>
+        <template v-if="!showLoadingIndicator" #items>
+          <div class="gl-display-flex gl-flex-direction-column gl-p-3">
+            <project-list-item
+              v-for="project in projectSearchResults"
+              :key="project.id"
+              :selected="isSelected(project)"
+              :project="project"
+              :matcher="searchQuery"
+              class="js-project-list-item"
+              data-qa-selector="project_list_item"
+              @click="projectClicked(project)"
+            />
+          </div>
+        </template>
+
+        <template #default>
+          <span data-testid="legend-text">{{ legendText }}</span>
+        </template>
       </gl-infinite-scroll>
       <div v-if="showNoResultsMessage" class="text-muted ml-2 js-no-results-message">
         {{ __('Sorry, no projects matched your search') }}

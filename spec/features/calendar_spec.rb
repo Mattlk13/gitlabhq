@@ -2,7 +2,7 @@
 
 require 'spec_helper'
 
-describe 'Contributions Calendar', :js do
+RSpec.describe 'Contributions Calendar', :js do
   include MobileHelpers
 
   let(:user) { create(:user) }
@@ -15,10 +15,9 @@ describe 'Contributions Calendar', :js do
   issue_title = 'Bug in old browser'
   issue_params = { title: issue_title }
 
-  def get_cell_color_selector(contributions)
-    activity_colors = ["#ededed", "rgb(172, 213, 242)", "rgb(127, 168, 201)", "rgb(82, 123, 160)", "rgb(37, 78, 119)"]
+  def get_cell_level_selector(contributions)
     # We currently don't actually test the cases with contributions >= 20
-    activity_colors_index =
+    activity_level_index =
       if contributions > 0 && contributions < 10
         1
       elsif contributions >= 10 && contributions < 20
@@ -31,18 +30,18 @@ describe 'Contributions Calendar', :js do
         0
       end
 
-    ".user-contrib-cell[fill='#{activity_colors[activity_colors_index]}']"
+    ".user-contrib-cell:not(.contrib-legend)[data-level='#{activity_level_index}']"
   end
 
   def get_cell_date_selector(contributions, date)
     contribution_text =
-      if contributions.zero?
+      if contributions == 0
         'No contributions'
       else
         "#{contributions} #{'contribution'.pluralize(contributions)}"
       end
 
-    "#{get_cell_color_selector(contributions)}[data-original-title='#{contribution_text}<br />#{date}']"
+    "#{get_cell_level_selector(contributions)}[title='#{contribution_text}<br /><span class=\"gl-text-gray-300\">#{date}</span>']"
   end
 
   def push_code_contribution
@@ -59,12 +58,12 @@ describe 'Contributions Calendar', :js do
   def note_comment_contribution
     note_comment_params = {
       project: contributed_project,
-      action: Event::COMMENTED,
+      action: :commented,
       target: issue_note,
       author_id: user.id
     }
 
-    Event.create(note_comment_params)
+    Event.create!(note_comment_params)
   end
 
   def selected_day_activities(visible: true)
@@ -113,8 +112,8 @@ describe 'Contributions Calendar', :js do
       describe 'deselect calendar day' do
         before do
           cells[0].click
-          page.find('.js-overview-tab a').click
           wait_for_requests
+          cells[0].click
         end
 
         it 'hides calendar day activities' do
@@ -137,7 +136,7 @@ describe 'Contributions Calendar', :js do
       include_context 'visit user page'
 
       it 'displays calendar activity square for 1 contribution', :sidekiq_might_not_need_inline do
-        expect(find('#js-overview')).to have_selector(get_cell_color_selector(contribution_count), count: 1)
+        expect(find('#js-overview')).to have_selector(get_cell_level_selector(contribution_count), count: 1)
 
         today = Date.today.strftime(date_format)
         expect(find('#js-overview')).to have_selector(get_cell_date_selector(contribution_count, today), count: 1)
@@ -146,7 +145,7 @@ describe 'Contributions Calendar', :js do
 
     describe '1 issue creation calendar activity' do
       before do
-        Issues::CreateService.new(contributed_project, user, issue_params).execute
+        Issues::CreateService.new(project: contributed_project, current_user: user, params: issue_params, spam_params: nil).execute
       end
 
       it_behaves_like 'a day with activity', contribution_count: 1
@@ -180,14 +179,14 @@ describe 'Contributions Calendar', :js do
       before do
         push_code_contribution
 
-        Timecop.freeze(Date.yesterday) do
-          Issues::CreateService.new(contributed_project, user, issue_params).execute
+        travel_to(Date.yesterday) do
+          Issues::CreateService.new(project: contributed_project, current_user: user, params: issue_params, spam_params: nil).execute
         end
       end
       include_context 'visit user page'
 
       it 'displays calendar activity squares for both days', :sidekiq_might_not_need_inline do
-        expect(find('#js-overview')).to have_selector(get_cell_color_selector(1), count: 2)
+        expect(find('#js-overview')).to have_selector(get_cell_level_selector(1), count: 2)
       end
 
       it 'displays calendar activity square for yesterday', :sidekiq_might_not_need_inline do

@@ -10,6 +10,16 @@ module Gitlab
             query.joins(:metrics)
           end
           # rubocop: enable CodeReuse/ActiveRecord
+
+          # rubocop: disable CodeReuse/ActiveRecord
+          def apply_negated_query_customization(query)
+            super.joins(:metrics)
+          end
+          # rubocop: enable CodeReuse/ActiveRecord
+
+          def column_list
+            [timestamp_projection]
+          end
         end
       end
     end

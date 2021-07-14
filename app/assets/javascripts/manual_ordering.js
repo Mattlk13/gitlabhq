@@ -1,11 +1,11 @@
 import Sortable from 'sortablejs';
-import { s__ } from '~/locale';
-import createFlash from '~/flash';
 import {
   getBoardSortableDefaultOptions,
   sortableStart,
 } from '~/boards/mixins/sortable_default_options';
+import createFlash from '~/flash';
 import axios from '~/lib/utils/axios_utils';
+import { s__ } from '~/locale';
 
 const updateIssue = (url, issueList, { move_before_id, move_after_id }) =>
   axios
@@ -15,7 +15,9 @@ const updateIssue = (url, issueList, { move_before_id, move_after_id }) =>
       group_full_path: issueList.dataset.groupFullPath,
     })
     .catch(() => {
-      createFlash(s__("ManualOrdering|Couldn't save the order of the issues"));
+      createFlash({
+        message: s__("ManualOrdering|Couldn't save the order of the issues"),
+      });
     });
 
 const initManualOrdering = (draggableSelector = 'li.issue') => {
@@ -39,7 +41,7 @@ const initManualOrdering = (draggableSelector = 'li.issue') => {
       onStart: () => {
         sortableStart();
       },
-      onUpdate: event => {
+      onUpdate: (event) => {
         const el = event.item;
 
         const url = el.getAttribute('url') || el.dataset.url;

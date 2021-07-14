@@ -15,16 +15,6 @@ module TagsHelper
     project_tags_path(@project, @id, options)
   end
 
-  def tag_list(project)
-    html = []
-
-    project.tag_list.each do |tag|
-      html << link_to(tag, tag_path(tag))
-    end
-
-    html.join.html_safe
-  end
-
   def protected_tag?(project, tag)
     ProtectedTag.protected?(project, tag.name)
   end
@@ -37,5 +27,14 @@ module TagsHelper
     }
 
     text.html_safe
+  end
+
+  def delete_tag_modal_attributes(tag_name)
+    {
+      title: s_('TagsPage|Delete tag'),
+      message: s_('TagsPage|Deleting the %{tag_name} tag cannot be undone. Are you sure?') % { tag_name: tag_name },
+      okVariant: 'danger',
+      okTitle: s_('TagsPage|Delete tag')
+    }.to_json
   end
 end

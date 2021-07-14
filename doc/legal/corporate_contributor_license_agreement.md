@@ -1,3 +1,9 @@
+---
+stage: none
+group: unassigned
+info: To determine the technical writer assigned to the Stage/Group associated with this page, see https://about.gitlab.com/handbook/engineering/ux/technical-writing/#assignments
+---
+
 # Corporate contributor license agreement
 
 You accept and agree to the following terms and conditions for Your present and future Contributions submitted to GitLab B.V.. Except for the license granted herein to GitLab B.V. and recipients of software distributed by GitLab B.V., You reserve all right, title, and interest in and to Your Contributions.
@@ -21,7 +27,7 @@ You accept and agree to the following terms and conditions for Your present and 
 - **Contributions:**
 
   You represent that each of Your Contributions is Your original creation.
-  
+
   Should You wish to submit work that is not Your original creation, You may submit it to GitLab B.V. separately from any Contribution, identifying the complete details of its source and of any license or other restriction (including, but not limited to, related patents, trademarks, and license agreements) of which you are personally aware, and conspicuously marking the work as "Submitted on behalf of a third-party: (named here)".
 
   You are not expected to provide support for Your Contributions, except to the extent You desire to provide support. You may provide support for free, for a fee, or not at all. Unless required by applicable law or agreed to in writing, You provide Your Contributions on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied, including, without limitation, any warranties or conditions of TITLE, NON-INFRINGEMENT, MERCHANTABILITY, or FITNESS FOR A PARTICULAR PURPOSE.

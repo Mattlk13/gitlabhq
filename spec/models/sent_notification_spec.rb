@@ -2,7 +2,7 @@
 
 require 'spec_helper'
 
-describe SentNotification do
+RSpec.describe SentNotification do
   let_it_be(:user) { create(:user) }
   let_it_be(:project) { create(:project) }
 
@@ -72,8 +72,8 @@ describe SentNotification do
 
       it_behaves_like 'a successful sent notification'
 
-      it 'does not set in_reply_to_discussion_id' do
-        expect(subject.in_reply_to_discussion_id).to be_nil
+      it 'sets in_reply_to_discussion_id' do
+        expect(subject.in_reply_to_discussion_id).to eq(note.discussion_id)
       end
     end
   end
@@ -212,10 +212,10 @@ describe SentNotification do
 
       subject { described_class.record_note(note, note.author.id) }
 
-      it 'creates a comment on the issue' do
+      it 'converts the comment to a discussion on the issue' do
         new_note = subject.create_reply('Test')
         expect(new_note.in_reply_to?(note)).to be_truthy
-        expect(new_note.discussion_id).not_to eq(note.discussion_id)
+        expect(new_note.discussion_id).to eq(note.discussion_id)
       end
     end
 
@@ -247,10 +247,10 @@ describe SentNotification do
 
       subject { described_class.record_note(note, note.author.id) }
 
-      it 'creates a comment on the merge request' do
+      it 'converts the comment to a discussion on the merge request' do
         new_note = subject.create_reply('Test')
         expect(new_note.in_reply_to?(note)).to be_truthy
-        expect(new_note.discussion_id).not_to eq(note.discussion_id)
+        expect(new_note.discussion_id).to eq(note.discussion_id)
       end
     end
 
@@ -324,6 +324,28 @@ describe SentNotification do
         expect(new_note.in_reply_to?(note)).to be_truthy
         expect(new_note.discussion_id).to eq(note.discussion_id)
       end
+    end
+  end
+
+  describe "#position=" do
+    subject { build(:sent_notification, noteable: create(:issue)) }
+
+    it "doesn't accept non-hash JSON passed as a string" do
+      subject.position = "true"
+
+      expect(subject.attributes_before_type_cast["position"]).to be(nil)
+    end
+
+    it "does accept a position hash as a string" do
+      subject.position = '{ "base_sha": "test" }'
+
+      expect(subject.position.base_sha).to eq("test")
+    end
+
+    it "does accept a hash" do
+      subject.position = { "base_sha" => "test" }
+
+      expect(subject.position.base_sha).to eq("test")
     end
   end
 end

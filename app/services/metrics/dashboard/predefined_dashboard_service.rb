@@ -10,8 +10,9 @@ module Metrics
       DASHBOARD_NAME = nil
 
       SEQUENCE = [
-        STAGES::EndpointInserter,
-        STAGES::Sorter
+        STAGES::MetricEndpointInserter,
+        STAGES::VariableEndpointInserter,
+        STAGES::PanelIdsInserter
       ].freeze
 
       class << self
@@ -22,12 +23,25 @@ module Metrics
         def matching_dashboard?(filepath)
           filepath == self::DASHBOARD_PATH
         end
+
+        def out_of_the_box_dashboard?
+          true
+        end
+      end
+
+      # Returns an un-processed dashboard from the cache.
+      def raw_dashboard
+        Gitlab::Metrics::Dashboard::Cache.fetch(cache_key) { get_raw_dashboard }
       end
 
       private
 
+      def dashboard_version
+        raise NotImplementedError
+      end
+
       def cache_key
-        "metrics_dashboard_#{dashboard_path}"
+        "metrics_dashboard_#{dashboard_path}_#{dashboard_version}"
       end
 
       def dashboard_path
@@ -38,7 +52,7 @@ module Metrics
       def get_raw_dashboard
         yml = File.read(Rails.root.join(dashboard_path))
 
-        YAML.safe_load(yml)
+        load_yaml(yml)
       end
 
       def sequence

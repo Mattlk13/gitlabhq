@@ -7,25 +7,28 @@
 # result of this the workload of this worker should be kept to a bare minimum.
 # Consider using an extra worker if you need to add any extra (and potentially
 # slow) processing of commits.
-class ProcessCommitWorker # rubocop:disable Scalability/IdempotentWorker
+class ProcessCommitWorker
   include ApplicationWorker
 
+  sidekiq_options retry: 3
+
   feature_category :source_code_management
-  latency_sensitive_worker!
+  urgency :high
   weight 3
+  idempotent!
+  loggable_arguments 2, 3
 
   # project_id - The ID of the project this commit belongs to.
   # user_id - The ID of the user that pushed the commit.
   # commit_hash - Hash containing commit details to use for constructing a
   #               Commit object without having to use the Git repository.
   # default - The data was pushed to the default branch.
-  # rubocop: disable CodeReuse/ActiveRecord
   def perform(project_id, user_id, commit_hash, default = false)
-    project = Project.find_by(id: project_id)
+    project = Project.id_in(project_id).first
 
     return unless project
 
-    user = User.find_by(id: user_id)
+    user = User.id_in(user_id).first
 
     return unless user
 
@@ -35,12 +38,11 @@ class ProcessCommitWorker # rubocop:disable Scalability/IdempotentWorker
     process_commit_message(project, commit, user, author, default)
     update_issue_metrics(commit, author)
   end
-  # rubocop: enable CodeReuse/ActiveRecord
 
   def process_commit_message(project, commit, user, author, default = false)
     # Ignore closing references from GitLab-generated commit messages.
     find_closing_issues = default && !commit.merged_merge_request?(user)
-    closed_issues = find_closing_issues ? commit.closes_issues(user) : []
+    closed_issues = find_closing_issues ? issues_to_close(project, commit, user) : []
 
     close_issues(project, user, author, commit, closed_issues) if closed_issues.any?
     commit.create_cross_references!(author, closed_issues)
@@ -51,9 +53,15 @@ class ProcessCommitWorker # rubocop:disable Scalability/IdempotentWorker
     # therefore we use IssueCollection here and skip the authorization check in
     # Issues::CloseService#execute.
     IssueCollection.new(issues).updatable_by_user(user).each do |issue|
-      Issues::CloseService.new(project, author)
+      Issues::CloseService.new(project: project, current_user: author)
         .close_issue(issue, closed_via: commit)
     end
+  end
+
+  def issues_to_close(project, commit, user)
+    Gitlab::ClosingIssueExtractor
+      .new(project, user)
+      .closed_by_message(commit.safe_message)
   end
 
   def update_issue_metrics(commit, author)
@@ -74,7 +82,7 @@ class ProcessCommitWorker # rubocop:disable Scalability/IdempotentWorker
     # manually parse these values.
     hash.each do |key, value|
       if key.to_s.end_with?(date_suffix) && value.is_a?(String)
-        hash[key] = Time.parse(value)
+        hash[key] = Time.zone.parse(value)
       end
     end
 

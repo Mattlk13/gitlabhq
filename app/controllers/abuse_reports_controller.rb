@@ -3,6 +3,8 @@
 class AbuseReportsController < ApplicationController
   before_action :set_user, only: [:new]
 
+  feature_category :users
+
   def new
     @abuse_report = AbuseReport.new
     @abuse_report.user_id = @user.id
@@ -17,7 +19,7 @@ class AbuseReportsController < ApplicationController
       @abuse_report.notify
 
       message = _("Thank you for your report. A GitLab administrator will look into it shortly.")
-      redirect_to @abuse_report.user, notice: message
+      redirect_to root_path, notice: message
     else
       render :new
     end

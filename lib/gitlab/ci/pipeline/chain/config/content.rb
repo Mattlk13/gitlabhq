@@ -9,6 +9,7 @@ module Gitlab
             include Chain::Helpers
 
             SOURCES = [
+              Gitlab::Ci::Pipeline::Chain::Config::Content::Parameter,
               Gitlab::Ci::Pipeline::Chain::Config::Content::Bridge,
               Gitlab::Ci::Pipeline::Chain::Config::Content::Repository,
               Gitlab::Ci::Pipeline::Chain::Config::Content::ExternalProject,
@@ -16,15 +17,9 @@ module Gitlab
               Gitlab::Ci::Pipeline::Chain::Config::Content::AutoDevops
             ].freeze
 
-            LEGACY_SOURCES = [
-              Gitlab::Ci::Pipeline::Chain::Config::Content::Bridge,
-              Gitlab::Ci::Pipeline::Chain::Config::Content::LegacyRepository,
-              Gitlab::Ci::Pipeline::Chain::Config::Content::LegacyAutoDevops
-            ].freeze
-
             def perform!
               if config = find_config
-                @pipeline.build_pipeline_config(content: config.content) if ci_root_config_content_enabled?
+                @pipeline.build_pipeline_config(content: config.content)
                 @command.config_content = config.content
                 @pipeline.config_source = config.source
               else
@@ -48,11 +43,7 @@ module Gitlab
             end
 
             def sources
-              ci_root_config_content_enabled? ? SOURCES : LEGACY_SOURCES
-            end
-
-            def ci_root_config_content_enabled?
-              Feature.enabled?(:ci_root_config_content, @command.project, default_enabled: true)
+              SOURCES
             end
           end
         end
@@ -60,3 +51,5 @@ module Gitlab
     end
   end
 end
+
+Gitlab::Ci::Pipeline::Chain::Config::Content.prepend_mod_with('Gitlab::Ci::Pipeline::Chain::Config::Content')

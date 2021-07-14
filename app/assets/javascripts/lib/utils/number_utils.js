@@ -1,5 +1,5 @@
-import { BYTES_IN_KIB } from './constants';
 import { sprintf, __ } from '~/locale';
+import { BYTES_IN_KIB } from './constants';
 
 /**
  * Function that allows a number with an X amount of decimals
@@ -72,11 +72,13 @@ export function bytesToGiB(number) {
  * @returns {String}
  */
 export function numberToHumanSize(size) {
-  if (size < BYTES_IN_KIB) {
+  const abs = Math.abs(size);
+
+  if (abs < BYTES_IN_KIB) {
     return sprintf(__('%{size} bytes'), { size });
-  } else if (size < BYTES_IN_KIB * BYTES_IN_KIB) {
+  } else if (abs < BYTES_IN_KIB ** 2) {
     return sprintf(__('%{size} KiB'), { size: bytesToKiB(size).toFixed(2) });
-  } else if (size < BYTES_IN_KIB * BYTES_IN_KIB * BYTES_IN_KIB) {
+  } else if (abs < BYTES_IN_KIB ** 3) {
     return sprintf(__('%{size} MiB'), { size: bytesToMiB(size).toFixed(2) });
   }
   return sprintf(__('%{size} GiB'), { size: bytesToGiB(size).toFixed(2) });
@@ -112,7 +114,7 @@ export const isOdd = (number = 0) => number % 2;
  * @param {Array} arr An array of numbers
  * @returns {Number} The median of the given array
  */
-export const median = arr => {
+export const median = (arr) => {
   const middle = Math.floor(arr.length / 2);
   const sorted = arr.sort((a, b) => a - b);
   return arr.length % 2 !== 0 ? sorted[middle] : (sorted[middle - 1] + sorted[middle]) / 2;
@@ -150,3 +152,34 @@ export const formattedChangeInPercent = (firstY, lastY, { nonFiniteResult = '-' 
 
   return `${change >= 0 ? '+' : ''}${change}%`;
 };
+
+/**
+ * Checks whether a value is numerical in nature by converting it using parseInt
+ *
+ * Example outcomes:
+ *   - isNumeric(100) = true
+ *   - isNumeric('100') = true
+ *   - isNumeric(1.0) = true
+ *   - isNumeric('1.0') = true
+ *   - isNumeric('abc100') = false
+ *   - isNumeric('abc') = false
+ *   - isNumeric(true) = false
+ *   - isNumeric(undefined) = false
+ *   - isNumeric(null) = false
+ *
+ * @param value
+ * @returns {boolean}
+ */
+export const isNumeric = (value) => {
+  return !Number.isNaN(parseInt(value, 10));
+};
+
+const numberRegex = /^[0-9]+$/;
+
+/**
+ * Checks whether the value is a positive number or 0, or a string with equivalent value
+ *
+ * @param value
+ * @return {boolean}
+ */
+export const isPositiveInteger = (value) => numberRegex.test(value);

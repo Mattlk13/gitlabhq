@@ -1,20 +1,31 @@
+import { GlBreakpointInstance as bp } from '@gitlab/ui/dist/utils';
 import $ from 'jquery';
 import Cookies from 'js-cookie';
-import { GlBreakpointInstance as bp } from '@gitlab/ui/dist/utils';
+import { loadCSSFile } from './lib/utils/css_utils';
 import UsersSelect from './users_select';
 
 export default class IssuableContext {
   constructor(currentUser) {
     this.userSelect = new UsersSelect(currentUser);
+    this.reviewersSelect = new UsersSelect(currentUser, '.js-reviewer-search');
 
-    import(/* webpackChunkName: 'select2' */ 'select2/select2')
-      .then(() => {
-        $('select.select2').select2({
-          width: 'resolve',
-          dropdownAutoWidth: true,
-        });
-      })
-      .catch(() => {});
+    const $select2 = $('select.select2');
+
+    if ($select2.length) {
+      import(/* webpackChunkName: 'select2' */ 'select2/select2')
+        .then(() => {
+          // eslint-disable-next-line promise/no-nesting
+          loadCSSFile(gon.select2_css_path)
+            .then(() => {
+              $select2.select2({
+                width: 'resolve',
+                dropdownAutoWidth: true,
+              });
+            })
+            .catch(() => {});
+        })
+        .catch(() => {});
+    }
 
     $('.issuable-sidebar .inline-update').on('change', 'select', function onClickSelect() {
       return $(this).submit();
@@ -24,7 +35,7 @@ export default class IssuableContext {
     });
     $(document)
       .off('click', '.issuable-sidebar .dropdown-content a')
-      .on('click', '.issuable-sidebar .dropdown-content a', e => e.preventDefault());
+      .on('click', '.issuable-sidebar .dropdown-content a', (e) => e.preventDefault());
 
     $(document)
       .off('click', '.edit-link')

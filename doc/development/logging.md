@@ -1,4 +1,10 @@
-# GitLab Developers Guide to Logging
+---
+stage: Monitor
+group: Monitor
+info: To determine the technical writer assigned to the Stage/Group associated with this page, see https://about.gitlab.com/handbook/engineering/ux/technical-writing/#assignments
+---
+
+# GitLab Developers Guide to Logging **(FREE)**
 
 [GitLab Logs](../administration/logs.md) play a critical role for both
 administrators and GitLab team members to diagnose problems in the field.
@@ -6,7 +12,7 @@ administrators and GitLab team members to diagnose problems in the field.
 ## Don't use `Rails.logger`
 
 Currently `Rails.logger` calls all get saved into `production.log`, which contains
-a mix of Rails' logs and other calls developers have inserted in the code base.
+a mix of Rails' logs and other calls developers have inserted in the codebase.
 For example:
 
 ```plaintext
@@ -29,14 +35,14 @@ Completed 200 OK in 166ms (Views: 117.4ms | ActiveRecord: 27.2ms)
 
 These logs suffer from a number of problems:
 
-1. They often lack timestamps or other contextual information (e.g. project ID, user)
+1. They often lack timestamps or other contextual information (for example, project ID or user)
 1. They may span multiple lines, which make them hard to find via Elasticsearch.
 1. They lack a common structure, which make them hard to parse by log
    forwarders, such as Logstash or Fluentd. This also makes them hard to
    search.
 
-Note that currently on GitLab.com, any messages in `production.log` will
-NOT get indexed by Elasticsearch due to the sheer volume and noise. They
+Note that currently on GitLab.com, any messages in `production.log` aren't
+indexed by Elasticsearch due to the sheer volume and noise. They
 do end up in Google Stackdriver, but it is still harder to search for
 logs there. See the [GitLab.com logging
 documentation](https://gitlab.com/gitlab-com/runbooks/blob/master/logging/doc/README.md)
@@ -67,7 +73,7 @@ importer progresses. Here's what to do:
    make it easy for people to search pertinent logs in one place. For
    example, `geo.log` contains all logs pertaining to GitLab Geo.
    To create a new file:
-   1. Choose a filename (e.g. `importer_json.log`).
+   1. Choose a filename (for example, `importer_json.log`).
    1. Create a new subclass of `Gitlab::JsonLogger`:
 
       ```ruby
@@ -93,7 +99,7 @@ importer progresses. Here's what to do:
       ```
 
       Note that it's useful to memoize this because creating a new logger
-      each time you log will open a file, adding unnecessary overhead.
+      each time you log opens a file, adding unnecessary overhead.
 
 1. Now insert log messages into your code. When adding logs,
    make sure to include all the context as key-value pairs:
@@ -112,30 +118,83 @@ importer progresses. Here's what to do:
    all messages might have `current_user_id` and `project_id` to make it easier
    to search for activities by user for a given time.
 
-1. Do NOT mix and match types. Elasticsearch won't be able to index your
-   logs properly if you [mix integer and string
-   types](https://www.elastic.co/guide/en/elasticsearch/guide/current/mapping.html#_avoiding_type_gotchas):
+#### Implicit schema for JSON logging
 
-   ```ruby
-   # BAD
-   logger.info(message: "Import error", error: 1)
-   logger.info(message: "Import error", error: "I/O failure")
-   ```
+When using something like Elasticsearch to index structured logs, there is a
+schema for the types of each log field (even if that schema is implicit /
+inferred). It's important to be consistent with the types of your field values,
+otherwise this might break the ability to search/filter on these fields, or even
+cause whole log events to be dropped. While much of this section is phrased in
+an Elasticsearch-specific way, the concepts should translate to many systems you
+might use to index structured logs. GitLab.com uses Elasticsearch to index log
+data.
 
-   ```ruby
-   # GOOD
-   logger.info(message: "Import error", error_code: 1, error: "I/O failure")
-   ```
+Unless a field type is explicitly mapped, Elasticsearch infers the type from
+the first instance of that field value it sees. Subsequent instances of that
+field value with different types either fail to be indexed, or in some
+cases (scalar/object conflict), the whole log line is dropped.
+
+GitLab.com's logging Elasticsearch sets
+[`ignore_malformed`](https://www.elastic.co/guide/en/elasticsearch/reference/current/ignore-malformed.html),
+which allows documents to be indexed even when there are simpler sorts of
+mapping conflict (for example, number / string), although indexing on the affected fields
+breaks.
+
+Examples:
+
+```ruby
+# GOOD
+logger.info(message: "Import error", error_code: 1, error: "I/O failure")
+
+# BAD
+logger.info(message: "Import error", error: 1)
+logger.info(message: "Import error", error: "I/O failure")
+
+# WORST
+logger.info(message: "Import error", error: "I/O failure")
+logger.info(message: "Import error", error: { message: "I/O failure" })
+```
+
+List elements must be the same type:
+
+```ruby
+# GOOD
+logger.info(a_list: ["foo", "1", "true"])
+
+# BAD
+logger.info(a_list: ["foo", 1, true])
+```
+
+Resources:
+
+- [Elasticsearch mapping - avoiding type gotchas](https://www.elastic.co/guide/en/elasticsearch/guide/current/mapping.html#_avoiding_type_gotchas)
+- [Elasticsearch mapping types]( https://www.elastic.co/guide/en/elasticsearch/reference/current/mapping-types.html)
+
+#### Logging durations
+
+Similar to timezones, choosing the right time unit to log can impose avoidable overhead. So, whenever
+challenged to choose between seconds, milliseconds or any other unit, lean towards _seconds_ as float
+(with microseconds precision, i.e. `Gitlab::InstrumentationHelper::DURATION_PRECISION`).
+
+In order to make it easier to track timings in the logs, make sure the log key has `_s` as
+suffix and `duration` within its name (for example, `view_duration_s`).
 
 ## Multi-destination Logging
 
-GitLab is transitioning from unstructured/plaintext logs to structured/JSON logs. During this transition period some logs will be recorded in multiple formats through multi-destination logging.
+GitLab is transitioning from unstructured/plaintext logs to structured/JSON logs. During this transition period some logs are recorded in multiple formats through multi-destination logging.
 
 ### How to use multi-destination logging
 
-Create a new logger class, inheriting from `MultiDestinationLogger` and add an array of loggers to a `LOGGERS` constant. The loggers should be classes that descend from `Gitlab::Logger`. e.g. the user defined loggers in the following examples, could be inheriting from `Gitlab::Logger` and `Gitlab::JsonLogger`, respectively.
+Create a new logger class, inheriting from `MultiDestinationLogger` and add an
+array of loggers to a `LOGGERS` constant. The loggers should be classes that
+descend from `Gitlab::Logger`. For example, the user-defined loggers in the
+following examples could be inheriting from `Gitlab::Logger` and
+`Gitlab::JsonLogger`, respectively.
 
-You must specify one of the loggers as the `primary_logger`. The `primary_logger` will be used when information about this multi-destination logger is displayed in the app, e.g. using the `Gitlab::Logger.read_latest` method.
+You must specify one of the loggers as the `primary_logger`. The
+`primary_logger` is used when information about this multi-destination logger is
+displayed in the application (for example, using the `Gitlab::Logger.read_latest`
+method).
 
 The following example sets one of the defined `LOGGERS` as a `primary_logger`.
 
@@ -155,19 +214,19 @@ module Gitlab
 end
 ```
 
-You can now call the usual logging methods on this multi-logger, e.g.
+You can now call the usual logging methods on this multi-logger. For example:
 
 ```ruby
 FancyMultiLogger.info(message: "Information")
 ```
 
-This message will be logged by each logger registered in `FancyMultiLogger.loggers`.
+This message is logged by each logger registered in `FancyMultiLogger.loggers`.
 
 ### Passing a string or hash for logging
 
 When passing a string or hash to a `MultiDestinationLogger`, the log lines could be formatted differently, depending on the kinds of `LOGGERS` set.
 
-e.g. let's partially define the loggers from the previous example:
+For example, let's partially define the loggers from the previous example:
 
 ```ruby
 module Gitlab
@@ -215,11 +274,13 @@ I, [2020-01-13T19:01:17.091Z #11056]  INFO -- : {"message"=>"Message", "project_
 lifecycle, which can then be added to the web request
 or Sidekiq logs.
 
+The API, Rails and Sidekiq logs contain fields starting with `meta.` with this context information.
+
 Entry points can be seen at:
 
-- [`ApplicationController`](https://gitlab.com/gitlab-org/gitlab/blob/master/app/controllers/application_controller.rb)
-- [External API](https://gitlab.com/gitlab-org/gitlab/blob/master/lib/api/api.rb)
-- [Internal API](https://gitlab.com/gitlab-org/gitlab/blob/master/lib/api/internal/base.rb)
+- [`ApplicationController`](https://gitlab.com/gitlab-org/gitlab/-/blob/master/app/controllers/application_controller.rb)
+- [External API](https://gitlab.com/gitlab-org/gitlab/-/blob/master/lib/api/api.rb)
+- [Internal API](https://gitlab.com/gitlab-org/gitlab/-/blob/master/lib/api/internal/base.rb)
 
 #### Adding attributes
 
@@ -230,14 +291,35 @@ method or variable shouldn't be evaluated right away)
 - Change `Gitlab::ApplicationContext` to accept these new values
 - Make sure the new attributes are accepted at [`Labkit::Context`](https://gitlab.com/gitlab-org/labkit-ruby/blob/master/lib/labkit/context.rb)
 
-See our [HOWTO: Use Sidekiq metadata logs](https://www.youtube.com/watch?v=_wDllvO_IY0) for further knowledge on
+See our <i class="fa fa-youtube-play youtube" aria-hidden="true"></i> [HOWTO: Use Sidekiq metadata logs](https://www.youtube.com/watch?v=_wDllvO_IY0) for further knowledge on
 creating visualizations in Kibana.
 
-**Note:**
 The fields of the context are currently only logged for Sidekiq jobs triggered
 through web requests. See the
-[follow-up work](https://gitlab.com/gitlab-com/gl-infra/scalability/issues/68)
+[follow-up work](https://gitlab.com/gitlab-com/gl-infra/scalability/-/issues/68)
 for more information.
+
+### Logging context metadata (through workers)
+
+Additional metadata can be attached to a worker through the use of the [`ApplicationWorker#log_extra_metadata_on_done`](https://gitlab.com/gitlab-org/gitlab/-/blob/16ecc33341a3f6b6bebdf78d863c5bce76b040d3/app/workers/concerns/application_worker.rb#L31-34)
+method. Using this method adds metadata that is later logged to Kibana with the done job payload.
+
+```ruby
+class MyExampleWorker
+  include ApplicationWorker
+
+  def perform(*args)
+    # Worker performs work
+    # ...
+
+    # The contents of value will appear in Kibana under `json.extra.my_example_worker.my_key`
+    log_extra_metadata_on_done(:my_key, value)
+  end
+end
+```
+
+Please see [this example](https://gitlab.com/gitlab-org/gitlab/-/blob/16ecc33341a3f6b6bebdf78d863c5bce76b040d3/app/workers/ci/pipeline_artifacts/expire_artifacts_worker.rb#L20-21)
+which logs a count of how many artifacts are destroyed per run of the `ExpireArtifactsWorker`.
 
 ## Exception Handling
 
@@ -251,7 +333,7 @@ It should be noted that manual logging of exceptions is not allowed, as:
 1. Very often manually logged exception needs to be tracked to Sentry as well,
 1. Manually logged exceptions does not use `correlation_id`, which makes hard
    to pin them to request, user and context in which this exception was raised,
-1. It is very likely that manually logged exceptions will end-up across
+1. Manually logged exceptions often end up across
    multiple files, which increases burden scraping all logging files.
 
 To avoid duplicating and having consistent behavior the `Gitlab::ErrorTracking`
@@ -303,16 +385,16 @@ end
 
 ## Additional steps with new log files
 
-1. Consider log retention settings. By default, Omnibus will rotate any
+1. Consider log retention settings. By default, Omnibus rotates any
    logs in `/var/log/gitlab/gitlab-rails/*.log` every hour and [keep at
    most 30 compressed files](https://docs.gitlab.com/omnibus/settings/logs.html#logrotate).
    On GitLab.com, that setting is only 6 compressed files. These settings should suffice
    for most users, but you may need to tweak them in [Omnibus GitLab](https://gitlab.com/gitlab-org/omnibus-gitlab).
 
 1. If you add a new file, submit an issue to the [production
-   tracker](https://gitlab.com/gitlab-com/gl-infra/production/issues) or
-   a merge request to the [gitlab_fluentd](https://gitlab.com/gitlab-cookbooks/gitlab_fluentd)
+   tracker](https://gitlab.com/gitlab-com/gl-infra/production/-/issues) or
+   a merge request to the [`gitlab_fluentd`](https://gitlab.com/gitlab-cookbooks/gitlab_fluentd)
    project. See [this example](https://gitlab.com/gitlab-cookbooks/gitlab_fluentd/-/merge_requests/51/diffs).
 
 1. Be sure to update the [GitLab CE/EE documentation](../administration/logs.md) and the [GitLab.com
-   runbooks](https://gitlab.com/gitlab-com/runbooks/blob/master/howto/logging.md).
+   runbooks](https://gitlab.com/gitlab-com/runbooks/blob/master/docs/logging/README.md).

@@ -2,7 +2,7 @@
 
 require 'spec_helper'
 
-describe WorkerContext do
+RSpec.describe WorkerContext do
   let(:worker) do
     Class.new do
       def self.name
@@ -103,7 +103,7 @@ describe WorkerContext do
   describe '#with_context' do
     it 'allows modifying context when the job is running' do
       worker.new.with_context(user: build_stubbed(:user, username: 'jane-doe')) do
-        expect(Labkit::Context.current.to_h).to include('meta.user' => 'jane-doe')
+        expect(Gitlab::ApplicationContext.current).to include('meta.user' => 'jane-doe')
       end
     end
 

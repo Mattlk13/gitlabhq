@@ -1,13 +1,15 @@
-import Vuex from 'vuex';
+import { GlButton } from '@gitlab/ui';
 import { shallowMount, createLocalVue } from '@vue/test-utils';
-import notesModule from '~/notes/stores/modules';
+import Vuex from 'vuex';
 import DiscussionCounter from '~/notes/components/discussion_counter.vue';
-import { noteableDataMock, discussionMock, notesDataMock, userDataMock } from '../mock_data';
+import notesModule from '~/notes/stores/modules';
 import * as types from '~/notes/stores/mutation_types';
+import { noteableDataMock, discussionMock, notesDataMock, userDataMock } from '../mock_data';
 
 describe('DiscussionCounter component', () => {
   let store;
   let wrapper;
+  let setExpandDiscussionsFn;
   const localVue = createLocalVue();
 
   localVue.use(Vuex);
@@ -15,6 +17,7 @@ describe('DiscussionCounter component', () => {
   beforeEach(() => {
     window.mrTabs = {};
     const { state, getters, mutations, actions } = notesModule();
+    setExpandDiscussionsFn = jest.fn().mockImplementation(actions.setExpandDiscussions);
 
     store = new Vuex.Store({
       state: {
@@ -23,7 +26,10 @@ describe('DiscussionCounter component', () => {
       },
       getters,
       mutations,
-      actions,
+      actions: {
+        ...actions,
+        setExpandDiscussions: setExpandDiscussionsFn,
+      },
     });
     store.dispatch('setNoteableData', {
       ...noteableDataMock,
@@ -75,17 +81,64 @@ describe('DiscussionCounter component', () => {
     });
 
     it.each`
-      title              | resolved | hasNextBtn | isActive | icon                     | groupLength
-      ${'hasNextButton'} | ${false} | ${true}    | ${false} | ${'check-circle'}        | ${2}
-      ${'allResolved'}   | ${true}  | ${false}   | ${true}  | ${'check-circle-filled'} | ${0}
-    `('renders correctly if $title', ({ resolved, hasNextBtn, isActive, icon, groupLength }) => {
+      title                | resolved | isActive | groupLength
+      ${'not allResolved'} | ${false} | ${false} | ${3}
+      ${'allResolved'}     | ${true}  | ${true}  | ${1}
+    `('renders correctly if $title', ({ resolved, isActive, groupLength }) => {
       updateStore({ resolvable: true, resolved });
       wrapper = shallowMount(DiscussionCounter, { store, localVue });
 
-      expect(wrapper.find(`.has-next-btn`).exists()).toBe(hasNextBtn);
       expect(wrapper.find(`.is-active`).exists()).toBe(isActive);
-      expect(wrapper.find({ name: icon }).exists()).toBe(true);
-      expect(wrapper.findAll('[role="group"').length).toBe(groupLength);
+      expect(wrapper.findAll(GlButton)).toHaveLength(groupLength);
+    });
+  });
+
+  describe('toggle all threads button', () => {
+    let toggleAllButton;
+    const updateStoreWithExpanded = (expanded) => {
+      const discussion = { ...discussionMock, expanded };
+      store.commit(types.SET_INITIAL_DISCUSSIONS, [discussion]);
+      store.dispatch('updateResolvableDiscussionsCounts');
+      wrapper = shallowMount(DiscussionCounter, { store, localVue });
+      toggleAllButton = wrapper.find('.toggle-all-discussions-btn');
+    };
+
+    afterEach(() => wrapper.destroy());
+
+    it('calls button handler when clicked', () => {
+      updateStoreWithExpanded(true);
+
+      toggleAllButton.vm.$emit('click');
+
+      expect(setExpandDiscussionsFn).toHaveBeenCalledTimes(1);
+    });
+
+    it('collapses all discussions if expanded', () => {
+      updateStoreWithExpanded(true);
+
+      expect(wrapper.vm.allExpanded).toBe(true);
+      expect(toggleAllButton.props('icon')).toBe('angle-up');
+
+      toggleAllButton.vm.$emit('click');
+
+      return wrapper.vm.$nextTick().then(() => {
+        expect(wrapper.vm.allExpanded).toBe(false);
+        expect(toggleAllButton.props('icon')).toBe('angle-down');
+      });
+    });
+
+    it('expands all discussions if collapsed', () => {
+      updateStoreWithExpanded(false);
+
+      expect(wrapper.vm.allExpanded).toBe(false);
+      expect(toggleAllButton.props('icon')).toBe('angle-down');
+
+      toggleAllButton.vm.$emit('click');
+
+      return wrapper.vm.$nextTick().then(() => {
+        expect(wrapper.vm.allExpanded).toBe(true);
+        expect(toggleAllButton.props('icon')).toBe('angle-up');
+      });
     });
   });
 });

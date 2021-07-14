@@ -2,7 +2,7 @@
 
 require 'spec_helper'
 
-describe 'Merge request > User merges when pipeline succeeds', :js do
+RSpec.describe 'Merge request > User merges when pipeline succeeds', :js do
   let(:project) { create(:project, :public, :repository) }
   let(:user) { project.creator }
   let(:merge_request) do
@@ -11,6 +11,7 @@ describe 'Merge request > User merges when pipeline succeeds', :js do
                                       title: 'Bug NS-04',
                                       merge_params: { force_remove_source_branch: '1' })
   end
+
   let(:pipeline) do
     create(:ci_pipeline, project: project,
                          sha: merge_request.diff_head_sha,
@@ -46,7 +47,7 @@ describe 'Merge request > User merges when pipeline succeeds', :js do
         it_behaves_like 'Merge when pipeline succeeds activator'
       end
 
-      context 'when enabled after pipeline status changed' do
+      context 'when enabled after pipeline status changed', quarantine: 'https://gitlab.com/gitlab-org/gitlab/-/issues/258667' do
         before do
           pipeline.run!
 
@@ -63,7 +64,11 @@ describe 'Merge request > User merges when pipeline succeeds', :js do
       context 'when enabled after it was previously canceled' do
         before do
           click_button "Merge when pipeline succeeds"
-          click_link "Cancel automatic merge"
+          click_link "Cancel"
+
+          wait_for_requests
+
+          expect(page).to have_content 'Merge when pipeline succeeds'
         end
 
         it_behaves_like 'Merge when pipeline succeeds activator'
@@ -82,23 +87,10 @@ describe 'Merge request > User merges when pipeline succeeds', :js do
         before do
           merge_request.merge_params['force_remove_source_branch'] = '0'
           merge_request.save!
-          click_link "Cancel automatic merge"
+          click_link "Cancel"
         end
 
         it_behaves_like 'Merge when pipeline succeeds activator'
-      end
-    end
-
-    describe 'enabling Merge when pipeline succeeds via dropdown' do
-      it 'activates the Merge when pipeline succeeds feature' do
-        wait_for_requests
-
-        find('.js-merge-moment').click
-        click_link 'Merge when pipeline succeeds'
-
-        expect(page).to have_content "Set by #{user.name} to be merged automatically when the pipeline succeeds"
-        expect(page).to have_content "The source branch will not be deleted"
-        expect(page).to have_link "Cancel automatic merge"
       end
     end
   end
@@ -111,6 +103,7 @@ describe 'Merge request > User merges when pipeline succeeds', :js do
         merge_user: user,
         title: 'MepMep')
     end
+
     let!(:build) do
       create(:ci_build, pipeline: pipeline)
     end
@@ -121,7 +114,7 @@ describe 'Merge request > User merges when pipeline succeeds', :js do
     end
 
     it 'allows to cancel the automatic merge' do
-      click_link "Cancel automatic merge"
+      click_link "Cancel"
 
       expect(page).to have_button "Merge when pipeline succeeds"
 
@@ -150,9 +143,9 @@ describe 'Merge request > User merges when pipeline succeeds', :js do
 
     context 'view merge request with MWPS enabled but automatically merge fails' do
       before do
-        merge_request.update(
+        merge_request.update!(
           merge_user: merge_request.author,
-          merge_error: 'Something went wrong.'
+          merge_error: 'Something went wrong'
         )
         refresh
       end
@@ -162,14 +155,14 @@ describe 'Merge request > User merges when pipeline succeeds', :js do
         wait_for_requests
 
         page.within('.mr-section-container') do
-          expect(page).to have_content('Merge failed: Something went wrong. Please try again.')
+          expect(page).to have_content('Something went wrong. Try again.')
         end
       end
     end
 
     context 'view merge request with MWPS enabled but automatically merge fails' do
       before do
-        merge_request.update(
+        merge_request.update!(
           merge_user: merge_request.author,
           merge_error: 'Something went wrong.'
         )
@@ -181,7 +174,7 @@ describe 'Merge request > User merges when pipeline succeeds', :js do
         wait_for_requests
 
         page.within('.mr-section-container') do
-          expect(page).to have_content('Merge failed: Something went wrong. Please try again.')
+          expect(page).to have_content('Something went wrong. Try again.')
         end
       end
     end

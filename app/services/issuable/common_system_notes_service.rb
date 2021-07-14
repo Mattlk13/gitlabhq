@@ -1,10 +1,10 @@
 # frozen_string_literal: true
 
 module Issuable
-  class CommonSystemNotesService < ::BaseService
+  class CommonSystemNotesService < ::BaseProjectService
     attr_reader :issuable
 
-    def execute(issuable, old_labels: [], is_update: true)
+    def execute(issuable, old_labels: [], old_milestone: nil, is_update: true)
       @issuable = issuable
 
       # We disable touch so that created system notes do not update
@@ -22,16 +22,12 @@ module Issuable
         end
 
         create_due_date_note if issuable.previous_changes.include?('due_date')
-        create_milestone_note if has_milestone_changes?
+        create_milestone_change_event(old_milestone) if issuable.previous_changes.include?('milestone_id')
         create_labels_note(old_labels) if old_labels && issuable.labels != old_labels
       end
     end
 
     private
-
-    def has_milestone_changes?
-      issuable.previous_changes.include?('milestone_id')
-    end
 
     def handle_time_tracking_note
       if issuable.previous_changes.include?('time_estimate')
@@ -55,11 +51,11 @@ module Issuable
       end
     end
 
-    def create_wip_note(old_title)
+    def create_draft_note(old_title)
       return unless issuable.is_a?(MergeRequest)
 
       if MergeRequest.work_in_progress?(old_title) != issuable.work_in_progress?
-        SystemNoteService.handle_merge_request_wip(issuable, issuable.project, current_user)
+        SystemNoteService.handle_merge_request_draft(issuable, issuable.project, current_user)
       end
     end
 
@@ -73,7 +69,7 @@ module Issuable
     end
 
     def create_title_change_note(old_title)
-      create_wip_note(old_title)
+      create_draft_note(old_title)
 
       if issuable.wipless_title_changed(old_title)
         SystemNoteService.change_title(issuable, issuable.project, current_user, old_title)
@@ -98,17 +94,9 @@ module Issuable
       SystemNoteService.change_time_spent(issuable, issuable.project, issuable.time_spent_user)
     end
 
-    def create_milestone_note
-      if milestone_changes_tracking_enabled?
-        # Creates a synthetic note
-        ResourceEvents::ChangeMilestoneService.new(issuable, current_user).execute
-      else
-        SystemNoteService.change_milestone(issuable, issuable.project, current_user, issuable.milestone)
-      end
-    end
-
-    def milestone_changes_tracking_enabled?
-      ::Feature.enabled?(:track_resource_milestone_change_events, issuable.project)
+    def create_milestone_change_event(old_milestone)
+      ResourceEvents::ChangeMilestoneService.new(issuable, current_user, old_milestone: old_milestone)
+        .execute
     end
 
     def create_due_date_note
@@ -121,4 +109,4 @@ module Issuable
   end
 end
 
-Issuable::CommonSystemNotesService.prepend_if_ee('EE::Issuable::CommonSystemNotesService')
+Issuable::CommonSystemNotesService.prepend_mod_with('Issuable::CommonSystemNotesService')

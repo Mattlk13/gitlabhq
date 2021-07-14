@@ -2,7 +2,33 @@
 
 require 'spec_helper'
 
-describe 'devise/sessions/new' do
+RSpec.describe 'devise/sessions/new' do
+  describe 'marketing text' do
+    subject { render(template: 'devise/sessions/new', layout: 'layouts/devise') }
+
+    before do
+      stub_devise
+      disable_captcha
+      allow(Gitlab).to receive(:dev_env_or_com?).and_return(true)
+    end
+
+    it 'when flash is anything it renders marketing text' do
+      flash[:notice] = "You can't do that"
+
+      subject
+
+      expect(rendered).to have_content('A complete DevOps platform')
+    end
+
+    it 'when flash notice is devise confirmed message it hides marketing text' do
+      flash[:notice] = t(:confirmed, scope: [:devise, :confirmations])
+
+      subject
+
+      expect(rendered).not_to have_content('A complete DevOps platform')
+    end
+  end
+
   describe 'ldap' do
     include LdapHelpers
 
@@ -54,14 +80,14 @@ describe 'devise/sessions/new' do
 
   def enable_ldap
     stub_ldap_setting(enabled: true)
-    assign(:ldap_servers, [server])
+    allow(view).to receive(:ldap_servers).and_return([server])
     allow(view).to receive(:form_based_providers).and_return([:ldapmain])
     allow(view).to receive(:omniauth_callback_path).with(:user, 'ldapmain').and_return('/ldapmain')
   end
 
   def disable_ldap_sign_in
     allow(view).to receive(:ldap_sign_in_enabled?).and_return(false)
-    assign(:ldap_servers, [])
+    allow(view).to receive(:ldap_servers).and_return([])
   end
 
   def disable_captcha

@@ -2,7 +2,7 @@
 
 require 'spec_helper'
 
-describe 'Edit Project Settings' do
+RSpec.describe 'Edit Project Settings' do
   let(:member) { create(:user) }
   let!(:project) { create(:project, :public, :repository) }
   let!(:issue) { create(:issue, project: project) }
@@ -14,7 +14,7 @@ describe 'Edit Project Settings' do
       sign_in(member)
     end
 
-    tools = { builds: "pipelines", issues: "issues", wiki: "wiki", snippets: "snippets", merge_requests: "merge_requests" }
+    tools = { builds: "pipelines", issues: "issues", wiki: "wiki", snippets: "snippets", merge_requests: "merge_requests", analytics: "analytics" }
 
     tools.each do |tool_name, shortcut_name|
       describe "feature #{tool_name}" do
@@ -43,7 +43,7 @@ describe 'Edit Project Settings' do
     context 'When external issue tracker is enabled and issues enabled on project settings' do
       it 'does not hide issues tab and hides labels tab' do
         allow_next_instance_of(Project) do |instance|
-          allow(instance).to receive(:external_issue_tracker).and_return(JiraService.new)
+          allow(instance).to receive(:external_issue_tracker).and_return(Integrations::Jira.new)
         end
 
         visit project_path(project)
@@ -54,17 +54,19 @@ describe 'Edit Project Settings' do
     end
 
     context 'When external issue tracker is enabled and issues disabled on project settings' do
-      it 'hides issues tab and show labels tab' do
+      before do
         project.issues_enabled = false
         project.save!
         allow_next_instance_of(Project) do |instance|
-          allow(instance).to receive(:external_issue_tracker).and_return(JiraService.new)
+          allow(instance).to receive(:external_issue_tracker).and_return(Integrations::Jira.new)
         end
+      end
 
+      it 'hides issues tab' do
         visit project_path(project)
 
         expect(page).not_to have_selector('.shortcuts-issues')
-        expect(page).to have_selector('.shortcuts-labels')
+        expect(page).not_to have_selector('.shortcuts-labels')
       end
     end
 
@@ -94,7 +96,7 @@ describe 'Edit Project Settings' do
       {
         builds: project_job_path(project, job),
         issues: project_issues_path(project),
-        wiki: project_wiki_path(project, :home),
+        wiki: wiki_path(project.wiki),
         snippets: project_snippets_path(project),
         merge_requests: project_merge_requests_path(project)
       }
@@ -134,7 +136,7 @@ describe 'Edit Project Settings' do
       it 'renders 200 if user is member of group' do
         group = create(:group)
         project.group = group
-        project.save
+        project.save!
 
         group.add_owner(member)
 
@@ -150,6 +152,7 @@ describe 'Edit Project Settings' do
       before do
         non_member.update_attribute(:admin, true)
         sign_in(non_member)
+        gitlab_enable_admin_mode_sign_in(non_member)
       end
 
       it 'renders 404 if feature is disabled' do
@@ -186,7 +189,7 @@ describe 'Edit Project Settings' do
         click_button "Save changes"
       end
 
-      expect(find(".sharing-permissions")).to have_selector(".project-feature-toggle.is-disabled", count: 3)
+      expect(find(".sharing-permissions")).to have_selector(".gl-toggle.is-disabled", minimum: 4)
     end
 
     it "shows empty features project homepage" do
@@ -201,7 +204,7 @@ describe 'Edit Project Settings' do
 
       visit project_path(project)
 
-      expect(page).to have_content "Customize your workflow!"
+      expect(page).to have_content "joined project"
     end
 
     it "hides project activity tabs" do
@@ -281,10 +284,10 @@ describe 'Edit Project Settings' do
   end
 
   def toggle_feature_off(feature_name)
-    find(".project-feature-controls[data-for=\"#{feature_name}\"] .project-feature-toggle.is-checked").click
+    find(".project-feature-controls[data-for=\"#{feature_name}\"] .gl-toggle.is-checked").click
   end
 
   def toggle_feature_on(feature_name)
-    find(".project-feature-controls[data-for=\"#{feature_name}\"] .project-feature-toggle:not(.is-checked)").click
+    find(".project-feature-controls[data-for=\"#{feature_name}\"] .gl-toggle:not(.is-checked)").click
   end
 end

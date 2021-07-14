@@ -53,7 +53,7 @@ module Ci
       end
 
       def update_processables!(ids)
-        created_processables = pipeline.processables.for_ids(ids)
+        created_processables = pipeline.processables.id_in(ids)
           .with_project_preload
           .created
           .latest
@@ -77,10 +77,10 @@ module Ci
 
       def update_processable!(processable)
         status = processable_status(processable)
-        return unless HasStatus::COMPLETED_STATUSES.include?(status)
+        return unless Ci::HasStatus::COMPLETED_STATUSES.include?(status)
 
         # transition status if possible
-        Gitlab::OptimisticLocking.retry_lock(processable) do |subject|
+        Gitlab::OptimisticLocking.retry_lock(processable, name: 'atomic_processing_update_processable') do |subject|
           Ci::ProcessBuildService.new(project, subject.user)
             .execute(subject, status)
 
@@ -93,9 +93,9 @@ module Ci
       end
 
       def processable_status(processable)
-        if Feature.enabled?(:ci_dag_support, project, default_enabled: true) && processable.scheduling_type_dag?
+        if processable.scheduling_type_dag?
           # Processable uses DAG, get status of all dependent needs
-          @collection.status_for_names(processable.aggregated_needs_names.to_a)
+          @collection.status_for_names(processable.aggregated_needs_names.to_a, dag: true)
         else
           # Processable uses Stages, get status of prior stage
           @collection.status_for_prior_stage_position(processable.stage_idx.to_i)

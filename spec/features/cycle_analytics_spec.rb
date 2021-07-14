@@ -2,10 +2,11 @@
 
 require 'spec_helper'
 
-describe 'Value Stream Analytics', :js do
-  let(:user) { create(:user) }
-  let(:guest) { create(:user) }
-  let(:project) { create(:project, :repository) }
+RSpec.describe 'Value Stream Analytics', :js do
+  let_it_be(:user) { create(:user) }
+  let_it_be(:guest) { create(:user) }
+  let_it_be(:project) { create(:project, :repository) }
+
   let(:issue) { create(:issue, project: project, created_at: 2.days.ago) }
   let(:milestone) { create(:milestone, project: project) }
   let(:mr) { create_merge_request_closing_issue(user, project, issue, commit_message: "References #{issue.to_reference}") }
@@ -13,27 +14,26 @@ describe 'Value Stream Analytics', :js do
 
   context 'as an allowed user' do
     context 'when project is new' do
-      before do
+      before(:all) do
         project.add_maintainer(user)
+      end
 
+      before do
         sign_in(user)
 
         visit project_cycle_analytics_path(project)
         wait_for_requests
       end
 
-      it 'shows introductory message' do
-        expect(page).to have_content('Introducing Value Stream Analytics')
-      end
-
       it 'shows pipeline summary' do
         expect(new_issues_counter).to have_content('-')
         expect(commits_counter).to have_content('-')
         expect(deploys_counter).to have_content('-')
+        expect(deployment_frequency_counter).to have_content('-')
       end
 
       it 'shows active stage with empty message' do
-        expect(page).to have_selector('.stage-nav-item.active', text: 'Issue')
+        expect(page).to have_selector('.gl-path-active-item-indigo', text: 'Issue')
         expect(page).to have_content("We don't have enough data to show this stage.")
       end
     end
@@ -45,6 +45,16 @@ describe 'Value Stream Analytics', :js do
         @build = create_cycle(user, project, issue, mr, milestone, pipeline)
         deploy_master(user, project)
 
+        issue.metrics.update!(first_mentioned_in_commit_at: issue.metrics.first_associated_with_milestone_at + 1.day)
+        merge_request = issue.merge_requests_closing_issues.first.merge_request
+        merge_request.update!(created_at: issue.metrics.first_associated_with_milestone_at + 1.day)
+        merge_request.metrics.update!(
+          latest_build_started_at: 4.hours.ago,
+          latest_build_finished_at: 3.hours.ago,
+          merged_at: merge_request.created_at + 1.hour,
+          first_deployed_to_production_at: merge_request.created_at + 2.hours
+        )
+
         sign_in(user)
         visit project_cycle_analytics_path(project)
       end
@@ -53,6 +63,7 @@ describe 'Value Stream Analytics', :js do
         expect(new_issues_counter).to have_content('1')
         expect(commits_counter).to have_content('2')
         expect(deploys_counter).to have_content('1')
+        expect(deployment_frequency_counter).to have_content('0')
       end
 
       it 'shows data on each stage', :sidekiq_might_not_need_inline do
@@ -72,9 +83,6 @@ describe 'Value Stream Analytics', :js do
 
         click_stage('Staging')
         expect_build_to_be_present
-
-        click_stage('Total')
-        expect_issue_to_be_present
       end
 
       context "when I change the time period observed" do
@@ -134,7 +142,15 @@ describe 'Value Stream Analytics', :js do
   end
 
   def deploys_counter
-    find(:xpath, "//p[contains(text(),'Deploy')]/preceding-sibling::h3")
+    find(:xpath, "//p[contains(text(),'Deploy')]/preceding-sibling::h3", match: :first)
+  end
+
+  def deployment_frequency_counter_selector
+    "//p[contains(text(),'Deployment Frequency')]/preceding-sibling::h3"
+  end
+
+  def deployment_frequency_counter
+    find(:xpath, deployment_frequency_counter_selector)
   end
 
   def expect_issue_to_be_present
@@ -156,7 +172,7 @@ describe 'Value Stream Analytics', :js do
   end
 
   def click_stage(stage_name)
-    find('.stage-nav li', text: stage_name).click
+    find('.gl-path-nav-list-item', text: stage_name).click
     wait_for_requests
   end
 end

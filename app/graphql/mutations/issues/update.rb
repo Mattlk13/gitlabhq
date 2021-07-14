@@ -5,39 +5,42 @@ module Mutations
     class Update < Base
       graphql_name 'UpdateIssue'
 
-      argument :title,
-                GraphQL::STRING_TYPE,
-                required: false,
-                description: copy_field_description(Types::IssueType, :title)
+      include CommonMutationArguments
 
-      argument :description,
-                GraphQL::STRING_TYPE,
-                required: false,
-                description: copy_field_description(Types::IssueType, :description)
+      argument :title, GraphQL::STRING_TYPE,
+               required: false,
+               description: copy_field_description(Types::IssueType, :title)
 
-      argument :due_date,
-               Types::TimeType,
-               required: true,
-               description: copy_field_description(Types::IssueType, :due_date)
+      argument :milestone_id, GraphQL::ID_TYPE, # rubocop: disable Graphql/IDType
+               required: false,
+               description: 'The ID of the milestone to assign to the issue. On update milestone will be removed if set to null.'
 
-      argument :confidential,
-               GraphQL::BOOLEAN_TYPE,
-               required: true,
-               description: copy_field_description(Types::IssueType, :confidential)
+      argument :add_label_ids, [GraphQL::ID_TYPE],
+               required: false,
+               description: 'The IDs of labels to be added to the issue.'
+
+      argument :remove_label_ids, [GraphQL::ID_TYPE],
+               required: false,
+               description: 'The IDs of labels to be removed from the issue.'
+
+      argument :state_event, Types::IssueStateEventEnum,
+               description: 'Close or reopen an issue.',
+               required: false
 
       def resolve(project_path:, iid:, **args)
         issue = authorized_find!(project_path: project_path, iid: iid)
         project = issue.project
 
-        ::Issues::UpdateService.new(project, current_user, args).execute(issue)
+        spam_params = ::Spam::SpamParams.new_from_request(request: context[:request])
+        ::Issues::UpdateService.new(project: project, current_user: current_user, params: args, spam_params: spam_params).execute(issue)
 
         {
           issue: issue,
-          errors: issue.errors.full_messages
+          errors: errors_on_object(issue)
         }
       end
     end
   end
 end
 
-Mutations::Issues::Update.prepend_if_ee('::EE::Mutations::Issues::Update')
+Mutations::Issues::Update.prepend_mod_with('Mutations::Issues::Update')

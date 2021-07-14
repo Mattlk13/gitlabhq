@@ -2,7 +2,7 @@
 
 require 'spec_helper'
 
-describe 'Sourcegraph Content Security Policy' do
+RSpec.describe 'Sourcegraph Content Security Policy' do
   let_it_be(:user) { create(:user) }
   let_it_be(:project) { create(:project, :repository, namespace: user.namespace) }
 
@@ -12,7 +12,7 @@ describe 'Sourcegraph Content Security Policy' do
     end
   end
 
-  it_behaves_like 'setting CSP connect-src' do
+  it_behaves_like 'setting CSP', 'connect-src' do
     let_it_be(:whitelisted_url) { 'https://sourcegraph.test' }
     let_it_be(:extended_controller_class) { Projects::BlobController }
 

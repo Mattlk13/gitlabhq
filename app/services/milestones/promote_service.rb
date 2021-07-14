@@ -76,7 +76,7 @@ module Milestones
 
     # rubocop: disable CodeReuse/ActiveRecord
     def destroy_old_milestones(milestone)
-      Milestone.where(id: milestone_ids_for_merge(milestone)).destroy_all # rubocop: disable DestroyAll
+      Milestone.where(id: milestone_ids_for_merge(milestone)).destroy_all # rubocop: disable Cop/DestroyAll
     end
     # rubocop: enable CodeReuse/ActiveRecord
 
@@ -90,4 +90,4 @@ module Milestones
   end
 end
 
-Milestones::PromoteService.prepend_if_ee('EE::Milestones::PromoteService')
+Milestones::PromoteService.prepend_mod_with('Milestones::PromoteService')

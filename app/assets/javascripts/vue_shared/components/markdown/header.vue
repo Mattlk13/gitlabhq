@@ -1,13 +1,16 @@
 <script>
+import { GlPopover, GlButton, GlTooltipDirective, GlIcon } from '@gitlab/ui';
 import $ from 'jquery';
-import { GlPopover, GlButton, GlTooltipDirective } from '@gitlab/ui';
+import { keysFor, BOLD_TEXT, ITALIC_TEXT, LINK_TEXT } from '~/behaviors/shortcuts/keybindings';
+import { getSelectedFragment } from '~/lib/utils/common_utils';
+import { s__ } from '~/locale';
+import { CopyAsGFM } from '../../../behaviors/markdown/copy_as_gfm';
 import ToolbarButton from './toolbar_button.vue';
-import Icon from '../icon.vue';
 
 export default {
   components: {
     ToolbarButton,
-    Icon,
+    GlIcon,
     GlPopover,
     GlButton,
   },
@@ -34,19 +37,43 @@ export default {
       required: false,
       default: false,
     },
+    suggestionStartIndex: {
+      type: Number,
+      required: false,
+      default: 0,
+    },
+  },
+  data() {
+    return {
+      tag: '> ',
+    };
   },
   computed: {
     mdTable() {
       return [
         // False positive i18n lint: https://gitlab.com/gitlab-org/frontend/eslint-plugin-i18n/issues/26
-        '| header | header |', // eslint-disable-line @gitlab/i18n/no-non-i18n-strings
+        '| header | header |', // eslint-disable-line @gitlab/require-i18n-strings
         '| ------ | ------ |',
-        '| cell | cell |', // eslint-disable-line @gitlab/i18n/no-non-i18n-strings
-        '| cell | cell |', // eslint-disable-line @gitlab/i18n/no-non-i18n-strings
+        '| cell | cell |', // eslint-disable-line @gitlab/require-i18n-strings
+        '| cell | cell |', // eslint-disable-line @gitlab/require-i18n-strings
       ].join('\n');
     },
     mdSuggestion() {
-      return ['```suggestion:-0+0', `{text}`, '```'].join('\n');
+      return [['```', `suggestion:-${this.suggestionStartIndex}+0`].join(''), `{text}`, '```'].join(
+        '\n',
+      );
+    },
+    mdCollapsibleSection() {
+      return ['<details><summary>Click to expand</summary>', `{text}`, '</details>'].join('\n');
+    },
+    isMac() {
+      // Accessing properties using ?. to allow tests to use
+      // this component without setting up window.gl.client.
+      // In production, window.gl.client should always be present.
+      return Boolean(window.gl?.client?.isMac);
+    },
+    modifierKey() {
+      return this.isMac ? '⌘' : s__('KeyboardKey|Ctrl+');
     },
   },
   mounted() {
@@ -81,6 +108,29 @@ export default {
     handleSuggestDismissed() {
       this.$emit('handleSuggestDismissed');
     },
+    handleQuote() {
+      const documentFragment = getSelectedFragment();
+
+      if (!documentFragment || !documentFragment.textContent) {
+        this.tag = '> ';
+        return;
+      }
+      this.tag = '';
+
+      const transformed = CopyAsGFM.transformGFMSelection(documentFragment);
+      const area = this.$el.parentNode.querySelector('textarea');
+
+      CopyAsGFM.nodeToGFM(transformed)
+        .then((gfm) => {
+          CopyAsGFM.insertPastedText(area, documentFragment.textContent, CopyAsGFM.quoted(gfm));
+        })
+        .catch(() => {});
+    },
+  },
+  shortcuts: {
+    bold: keysFor(BOLD_TEXT),
+    italic: keysFor(ITALIC_TEXT),
+    link: keysFor(LINK_TEXT),
   },
 };
 </script>
@@ -89,14 +139,13 @@ export default {
   <div class="md-header">
     <ul class="nav-links clearfix">
       <li :class="{ active: !previewMarkdown }" class="md-header-tab">
-        <button class="js-write-link" tabindex="-1" type="button" @click="writeMarkdownTab($event)">
+        <button class="js-write-link" type="button" @click="writeMarkdownTab($event)">
           {{ __('Write') }}
         </button>
       </li>
       <li :class="{ active: previewMarkdown }" class="md-header-tab">
         <button
           class="js-preview-link js-md-preview-button"
-          tabindex="-1"
           type="button"
           @click="previewMarkdownTab($event)"
         >
@@ -105,13 +154,28 @@ export default {
       </li>
       <li :class="{ active: !previewMarkdown }" class="md-header-toolbar">
         <div class="d-inline-block">
-          <toolbar-button tag="**" :button-title="__('Add bold text')" icon="bold" />
-          <toolbar-button tag="*" :button-title="__('Add italic text')" icon="italic" />
+          <toolbar-button
+            tag="**"
+            :button-title="
+              sprintf(s__('MarkdownEditor|Add bold text (%{modifierKey}B)'), { modifierKey })
+            "
+            :shortcuts="$options.shortcuts.bold"
+            icon="bold"
+          />
+          <toolbar-button
+            tag="_"
+            :button-title="
+              sprintf(s__('MarkdownEditor|Add italic text (%{modifierKey}I)'), { modifierKey })
+            "
+            :shortcuts="$options.shortcuts.italic"
+            icon="italic"
+          />
           <toolbar-button
             :prepend="true"
-            tag="> "
+            :tag="tag"
             :button-title="__('Insert a quote')"
             icon="quote"
+            @click="handleQuote"
           />
         </div>
         <div class="d-inline-block ml-md-2 ml-0">
@@ -124,6 +188,7 @@ export default {
               :cursor-offset="4"
               :tag-content="lineContent"
               icon="doc-code"
+              data-qa-selector="suggestion_button"
               class="js-suggestion-btn"
               @click="handleSuggestDismissed"
             />
@@ -142,7 +207,12 @@ export default {
                   )
                 }}
               </p>
-              <gl-button variant="primary" size="sm" @click="handleSuggestDismissed">
+              <gl-button
+                variant="info"
+                category="primary"
+                size="sm"
+                @click="handleSuggestDismissed"
+              >
                 {{ __('Got it') }}
               </gl-button>
             </gl-popover>
@@ -151,14 +221,17 @@ export default {
           <toolbar-button
             tag="[{text}](url)"
             tag-select="url"
-            :button-title="__('Add a link')"
+            :button-title="
+              sprintf(s__('MarkdownEditor|Add a link (%{modifierKey}K)'), { modifierKey })
+            "
+            :shortcuts="$options.shortcuts.link"
             icon="link"
           />
         </div>
         <div class="d-inline-block ml-md-2 ml-0">
           <toolbar-button
             :prepend="true"
-            tag="* "
+            tag="- "
             :button-title="__('Add a bullet list')"
             icon="list-bulleted"
           />
@@ -170,9 +243,16 @@ export default {
           />
           <toolbar-button
             :prepend="true"
-            tag="* [ ] "
+            tag="- [ ] "
             :button-title="__('Add a task list')"
             icon="list-task"
+          />
+          <toolbar-button
+            :tag="mdCollapsibleSection"
+            :prepend="true"
+            tag-select="Click to expand"
+            :button-title="__('Add a collapsible section')"
+            icon="details-block"
           />
           <toolbar-button
             :tag="mdTable"
@@ -191,7 +271,7 @@ export default {
             :title="__('Go full screen')"
             type="button"
           >
-            <icon name="screen-full" />
+            <gl-icon name="maximize" />
           </button>
         </div>
       </li>

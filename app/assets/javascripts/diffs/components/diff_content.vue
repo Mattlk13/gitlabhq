@@ -1,26 +1,27 @@
 <script>
-import { mapActions, mapGetters, mapState } from 'vuex';
 import { GlLoadingIcon } from '@gitlab/ui';
-import diffLineNoteFormMixin from 'ee_else_ce/notes/mixins/diff_line_note_form';
-import draftCommentsMixin from 'ee_else_ce/diffs/mixins/draft_comments';
+import { mapActions, mapGetters, mapState } from 'vuex';
+import { mapParallel } from 'ee_else_ce/diffs/components/diff_row_utils';
+import DiffFileDrafts from '~/batch_comments/components/diff_file_drafts.vue';
+import draftCommentsMixin from '~/diffs/mixins/draft_comments';
+import { diffViewerModes } from '~/ide/constants';
+import diffLineNoteFormMixin from '~/notes/mixins/diff_line_note_form';
 import DiffViewer from '~/vue_shared/components/diff_viewer/diff_viewer.vue';
-import NotDiffableViewer from '~/vue_shared/components/diff_viewer/viewers/not_diffable.vue';
 import NoPreviewViewer from '~/vue_shared/components/diff_viewer/viewers/no_preview.vue';
-import InlineDiffView from './inline_diff_view.vue';
-import ParallelDiffView from './parallel_diff_view.vue';
-import userAvatarLink from '../../vue_shared/components/user_avatar/user_avatar_link.vue';
+import NotDiffableViewer from '~/vue_shared/components/diff_viewer/viewers/not_diffable.vue';
 import NoteForm from '../../notes/components/note_form.vue';
-import ImageDiffOverlay from './image_diff_overlay.vue';
-import DiffDiscussions from './diff_discussions.vue';
+import eventHub from '../../notes/event_hub';
+import userAvatarLink from '../../vue_shared/components/user_avatar/user_avatar_link.vue';
 import { IMAGE_DIFF_POSITION_TYPE } from '../constants';
 import { getDiffMode } from '../store/utils';
-import { diffViewerModes } from '~/ide/constants';
+import DiffDiscussions from './diff_discussions.vue';
+import DiffView from './diff_view.vue';
+import ImageDiffOverlay from './image_diff_overlay.vue';
 
 export default {
   components: {
     GlLoadingIcon,
-    InlineDiffView,
-    ParallelDiffView,
+    DiffView,
     DiffViewer,
     NoteForm,
     DiffDiscussions,
@@ -28,7 +29,7 @@ export default {
     NotDiffableViewer,
     NoPreviewViewer,
     userAvatarLink,
-    DiffFileDrafts: () => import('ee_component/batch_comments/components/diff_file_drafts.vue'),
+    DiffFileDrafts,
   },
   mixins: [diffLineNoteFormMixin, draftCommentsMixin],
   props: {
@@ -43,11 +44,13 @@ export default {
     },
   },
   computed: {
-    ...mapState({
-      projectPath: state => state.diffs.projectPath,
-    }),
-    ...mapGetters('diffs', ['isInlineView', 'isParallelView']),
-    ...mapGetters('diffs', ['getCommentFormForDiffFile']),
+    ...mapState('diffs', ['projectPath']),
+    ...mapGetters('diffs', [
+      'isInlineView',
+      'getCommentFormForDiffFile',
+      'diffLines',
+      'fileLineCodequality',
+    ]),
     ...mapGetters(['getNoteableData', 'noteableType', 'getUserData']),
     diffMode() {
       return getDiffMode(this.diffFile);
@@ -76,6 +79,15 @@ export default {
     author() {
       return this.getUserData;
     },
+    mappedLines() {
+      // TODO: Do this data generation when we recieve a response to save a computed property being created
+      return this.diffLines(this.diffFile).map(mapParallel(this)) || [];
+    },
+  },
+  updated() {
+    this.$nextTick(() => {
+      eventHub.$emit('showBlobInteractionZones', this.diffFile.new_path);
+    });
   },
   methods: {
     ...mapActions('diffs', ['saveDiffDiscussion', 'closeDiffFileCommentForm']),
@@ -102,17 +114,11 @@ export default {
   <div class="diff-content">
     <div class="diff-viewer">
       <template v-if="isTextFile">
-        <inline-diff-view
-          v-if="isInlineView"
+        <diff-view
           :diff-file="diffFile"
-          :diff-lines="diffFile.highlighted_diff_lines || []"
+          :diff-lines="mappedLines"
           :help-page-path="helpPagePath"
-        />
-        <parallel-diff-view
-          v-else-if="isParallelView"
-          :diff-file="diffFile"
-          :diff-lines="diffFile.parallel_diff_lines || []"
-          :help-page-path="helpPagePath"
+          :inline="isInlineView"
         />
         <gl-loading-icon v-if="diffFile.renderingLines" size="md" class="mt-3" />
       </template>
@@ -120,6 +126,7 @@ export default {
       <no-preview-viewer v-else-if="noPreview" />
       <diff-viewer
         v-else
+        :diff-file="diffFile"
         :diff-mode="diffMode"
         :diff-viewer-mode="diffViewerMode"
         :new-path="diffFile.new_path"
@@ -133,12 +140,16 @@ export default {
         :a-mode="diffFile.a_mode"
         :b-mode="diffFile.b_mode"
       >
-        <image-diff-overlay
-          slot="image-overlay"
-          :discussions="imageDiscussions"
-          :file-hash="diffFileHash"
-          :can-comment="getNoteableData.current_user.can_create_note"
-        />
+        <template #image-overlay="{ renderedWidth, renderedHeight }">
+          <image-diff-overlay
+            v-if="renderedWidth"
+            :rendered-width="renderedWidth"
+            :rendered-height="renderedHeight"
+            :discussions="imageDiscussions"
+            :file-hash="diffFileHash"
+            :can-comment="getNoteableData.current_user.can_create_note && !diffFile.brokenSymlink"
+          />
+        </template>
         <div v-if="showNotesContainer" class="note-container">
           <user-avatar-link
             v-if="diffFileCommentForm && author"

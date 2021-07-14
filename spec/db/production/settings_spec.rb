@@ -3,7 +3,7 @@
 require 'spec_helper'
 require 'rainbow/ext/string'
 
-describe 'seed production settings' do
+RSpec.describe 'seed production settings' do
   let(:settings_file) { Rails.root.join('db/fixtures/production/010_settings.rb') }
   let(:settings) { Gitlab::CurrentSettings.current_application_settings }
 
@@ -31,7 +31,7 @@ describe 'seed production settings' do
         stub_env('GITLAB_PROMETHEUS_METRICS_ENABLED', 'true')
       end
 
-      it 'prometheus_metrics_enabled is set to true ' do
+      it 'prometheus_metrics_enabled is set to true' do
         load(settings_file)
 
         expect(settings.prometheus_metrics_enabled).to eq(true)
@@ -60,6 +60,13 @@ describe 'seed production settings' do
 
         expect(settings.prometheus_metrics_enabled).to eq(true)
       end
+    end
+  end
+
+  context 'CI JWT signing key' do
+    it 'writes valid RSA key to the database' do
+      expect { load(settings_file) }.to change { settings.reload.ci_jwt_signing_key }.from(nil)
+      expect { OpenSSL::PKey::RSA.new(settings.ci_jwt_signing_key) }.not_to raise_error
     end
   end
 end

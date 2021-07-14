@@ -2,25 +2,6 @@
 
 require 'rspec/core/sandbox'
 
-# We need a reporter for internal tests that's different from the reporter for
-# external tests otherwise the results will be mixed up. We don't care about
-# most reporting, but we do want to know if a test fails
-class RaiseOnFailuresReporter < RSpec::Core::NullReporter
-  def self.example_failed(example)
-    raise example.exception
-  end
-end
-
-# We use an example group wrapper to prevent the state of internal tests
-# expanding into the global state
-# See: https://github.com/rspec/rspec-core/issues/2603
-def describe_successfully(*args, &describe_body)
-  example_group    = RSpec.describe(*args, &describe_body)
-  ran_successfully = example_group.run RaiseOnFailuresReporter
-  expect(ran_successfully).to eq true
-  example_group
-end
-
 RSpec.configure do |c|
   c.around do |ex|
     RSpec::Core::Sandbox.sandboxed do |config|
@@ -31,20 +12,15 @@ RSpec.configure do |c|
 
       config.color_mode = :off
 
-      # Load airborne again to avoid "undefined method `match_expected_default?'" errors
-      # that happen because a hook calls a method added via a custom RSpec setting
-      # that is removed when the RSpec configuration is sandboxed.
-      # If this needs to be changed (e.g., to load other libraries as well), see
-      # this discussion for alternative solutions:
-      # https://gitlab.com/gitlab-org/gitlab-foss/merge_requests/25223#note_143392053
-      load 'airborne.rb'
-
       ex.run
     end
   end
 end
 
-describe QA::Specs::Helpers::Quarantine do
+RSpec.describe QA::Specs::Helpers::Quarantine do
+  include Helpers::StubENV
+  include QA::Specs::Helpers::RSpec
+
   describe '.skip_or_run_quarantined_contexts' do
     context 'with no tag focused' do
       before do
@@ -132,7 +108,7 @@ describe QA::Specs::Helpers::Quarantine do
     end
   end
 
-  describe '.skip_or_run_quarantined_tests' do
+  describe '.skip_or_run_quarantined_tests_or_contexts' do
     context 'with no tag focused' do
       before do
         described_class.configure_rspec
@@ -154,6 +130,60 @@ describe QA::Specs::Helpers::Quarantine do
         end
 
         expect(group.examples.first.execution_result.status).to eq(:passed)
+      end
+
+      context 'with environment set' do
+        before do
+          QA::Runtime::Scenario.define(:gitlab_address, 'https://staging.gitlab.com')
+          described_class.configure_rspec
+        end
+
+        context 'no pipeline specified' do
+          it 'is skipped when set on contexts or descriptions' do
+            group = describe_successfully 'Quarantined in staging', quarantine: { only: { subdomain: :staging } } do
+              it('runs in staging') {}
+            end
+
+            expect(group.examples.first.execution_result.status).to eq(:pending)
+            expect(group.examples.first.execution_result.pending_message)
+              .to eq('In quarantine')
+          end
+
+          it 'is skipped only in staging' do
+            group = describe_successfully do
+              it('skipped in staging', quarantine: { only: { subdomain: :staging } }) {}
+              it('runs in staging', quarantine: { only: :production }) {}
+              it('skipped in staging also', quarantine: { only: { subdomain: %i[release staging] } }) {}
+              it('runs in any env') {}
+            end
+
+            expect(group.examples[0].execution_result.status).to eq(:pending)
+            expect(group.examples[1].execution_result.status).to eq(:passed)
+            expect(group.examples[2].execution_result.status).to eq(:pending)
+            expect(group.examples[3].execution_result.status).to eq(:passed)
+          end
+        end
+
+        context 'multiple pipelines specified' do
+          shared_examples 'skipped in project' do |project|
+            before do
+              stub_env('CI_PROJECT_NAME', project)
+              described_class.configure_rspec
+            end
+
+            it "is skipped in #{project}" do
+              group = describe_successfully do
+                it('does not run in specified projects', quarantine: { only: { pipeline: [:staging, :canary, :production] } }) {}
+              end
+
+              expect(group.examples[0].execution_result.status).to eq(:pending)
+            end
+          end
+
+          it_behaves_like 'skipped in project', 'STAGING'
+          it_behaves_like 'skipped in project', 'CANARY'
+          it_behaves_like 'skipped in project', 'PRODUCTION'
+        end
       end
 
       context 'quarantine message' do

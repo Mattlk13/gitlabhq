@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 require 'spec_helper'
 
-describe SortingHelper do
+RSpec.describe SortingHelper do
   include ApplicationHelper
   include IconsHelper
   include ExploreHelper
@@ -59,6 +59,7 @@ describe SortingHelper do
       sort_value_latest_activity  => sort_title_latest_activity,
       sort_value_recently_created => sort_title_created_date,
       sort_value_name             => sort_title_name,
+      sort_value_name_desc        => sort_title_name_desc,
       sort_value_stars_desc       => sort_title_stars
     }
   end

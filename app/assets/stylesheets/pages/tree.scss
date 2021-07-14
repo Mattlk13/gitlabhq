@@ -1,10 +1,17 @@
+.project-last-commit {
+  min-height: 4.75rem;
+}
+
 .tree-holder {
   .nav-block {
     margin: 16px 0;
 
-    .btn .fa,
     .btn svg {
       color: $gl-text-color-secondary;
+    }
+
+    .tree-ref-holder {
+      margin-right: 15px;
     }
 
     @include media-breakpoint-up(sm) {
@@ -19,13 +26,12 @@
 
         .control {
           float: left;
-          margin-left: 10px;
+          margin-left: 8px;
         }
       }
 
       .tree-ref-holder {
         float: left;
-        margin-right: 15px;
       }
 
       .tree-ref-target-holder {
@@ -41,13 +47,14 @@
   }
 
   @include media-breakpoint-down(xs) {
+    .tree-ref-container {
+      justify-content: space-between;
+    }
+
     .repo-breadcrumb {
-      margin-top: 10px;
       position: relative;
 
       .dropdown-menu {
-        min-width: 100%;
-        width: 100%;
         left: inherit;
         right: 0;
       }
@@ -62,14 +69,14 @@
     .tree-controls {
       margin-bottom: 10px;
 
-      .btn,
+      .btn:not(.dropdown-toggle-split),
       .dropdown,
       .btn-group {
         width: 100%;
       }
 
       .btn {
-        margin: 10px 0 0;
+        margin-top: 10px;
       }
     }
   }
@@ -95,13 +102,14 @@
 
   .tree-table {
     margin-bottom: 0;
+    table-layout: fixed;
 
     tr {
       border-bottom: 1px solid $white-normal;
       border-top: 1px solid $white-normal;
 
       &:last-of-type {
-        border-bottom-color: $white-light;
+        border-bottom-color: $white;
       }
 
       td,
@@ -110,7 +118,7 @@
       }
 
       th {
-        border-top-color: $gray-light;
+        border: 0;
       }
 
       td {
@@ -120,6 +128,7 @@
       &:hover:not(.tree-truncated-warning) {
         td {
           background-color: $blue-50;
+          background-clip: padding-box;
           border-top: 1px solid $blue-200;
           border-bottom: 1px solid $blue-200;
           cursor: pointer;
@@ -129,8 +138,8 @@
       &.selected {
         td {
           background: $white-normal;
-          border-top: 1px solid $border-gray-dark;
-          border-bottom: 1px solid $border-gray-dark;
+          border-top: 1px solid $border-white-normal;
+          border-bottom: 1px solid $border-white-normal;
         }
       }
     }
@@ -172,7 +181,7 @@
 
   .tree-truncated-warning {
     color: $orange-600;
-    background-color: $orange-100;
+    background-color: $orange-50;
   }
 
   .tree-time-ago {

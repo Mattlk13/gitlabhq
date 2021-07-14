@@ -2,7 +2,7 @@
 
 require 'spec_helper'
 
-describe EnforcesAdminAuthentication, :do_not_mock_admin_mode do
+RSpec.describe EnforcesAdminAuthentication do
   include AdminModeHelper
 
   let(:user) { create(:user) }
@@ -19,7 +19,7 @@ describe EnforcesAdminAuthentication, :do_not_mock_admin_mode do
     end
   end
 
-  context 'feature flag :user_mode_in_session is enabled' do
+  context 'application setting :admin_mode is enabled' do
     describe 'authenticate_admin!' do
       context 'as an admin' do
         let(:user) { create(:admin) }
@@ -61,9 +61,9 @@ describe EnforcesAdminAuthentication, :do_not_mock_admin_mode do
     end
   end
 
-  context 'feature flag :user_mode_in_session is disabled' do
+  context 'application setting :admin_mode is disabled' do
     before do
-      stub_feature_flags(user_mode_in_session: false)
+      stub_application_setting(admin_mode: false)
     end
 
     describe 'authenticate_admin!' do

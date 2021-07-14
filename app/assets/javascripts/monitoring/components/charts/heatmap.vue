@@ -1,7 +1,7 @@
 <script>
 import { GlResizeObserverDirective } from '@gitlab/ui';
 import { GlHeatmap } from '@gitlab/ui/dist/charts';
-import dateformat from 'dateformat';
+import { formatDate, timezones, formats } from '../../format_date';
 import { graphDataValidatorForValues } from '../../utils';
 
 export default {
@@ -17,6 +17,11 @@ export default {
       required: true,
       validator: graphDataValidatorForValues.bind(null, false),
     },
+    timezone: {
+      type: String,
+      required: false,
+      default: timezones.LOCAL,
+    },
   },
   data() {
     return {
@@ -31,19 +36,22 @@ export default {
       );
     },
     xAxisName() {
-      return this.graphData.x_label || '';
+      return this.graphData.xLabel || '';
     },
     yAxisName() {
       return this.graphData.y_label || '';
     },
     xAxisLabels() {
-      return this.metrics.result.map(res => Object.values(res.metric)[0]);
+      return this.metrics.result.map((res) => Object.values(res.metric)[0]);
     },
     yAxisLabels() {
-      return this.result.values.map(val => {
+      return this.result.values.map((val) => {
         const [yLabel] = val;
 
-        return dateformat(new Date(yLabel), 'HH:MM:ss');
+        return formatDate(new Date(yLabel), {
+          format: formats.shortTime,
+          timezone: this.timezone,
+        });
       });
     },
     result() {
@@ -63,7 +71,7 @@ export default {
 };
 </script>
 <template>
-  <div v-gl-resize-observer-directive="onResize" class="col-12 col-lg-6">
+  <div v-gl-resize-observer-directive="onResize">
     <gl-heatmap
       ref="heatmapChart"
       v-bind="$attrs"

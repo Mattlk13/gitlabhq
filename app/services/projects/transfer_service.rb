@@ -37,7 +37,7 @@ module Projects
 
     private
 
-    attr_reader :old_path, :new_path, :new_namespace
+    attr_reader :old_path, :new_path, :new_namespace, :old_namespace
 
     # rubocop: disable CodeReuse/ActiveRecord
     def transfer(project)
@@ -47,23 +47,34 @@ module Projects
       @old_namespace = project.namespace
 
       if Project.where(namespace_id: @new_namespace.try(:id)).where('path = ? or name = ?', project.path, project.name).exists?
-        raise TransferError.new(s_("TransferProject|Project with same name or path in target namespace already exists"))
+        raise TransferError, s_("TransferProject|Project with same name or path in target namespace already exists")
       end
 
       if project.has_container_registry_tags?
         # We currently don't support renaming repository if it contains tags in container registry
-        raise TransferError.new(s_('TransferProject|Project cannot be transferred, because tags are present in its container registry'))
+        raise TransferError, s_('TransferProject|Project cannot be transferred, because tags are present in its container registry')
       end
 
-      attempt_transfer_transaction
+      if project.has_packages?(:npm) && !new_namespace_has_same_root?(project)
+        raise TransferError, s_("TransferProject|Root namespace can't be updated if project has NPM packages")
+      end
+
+      proceed_to_transfer
     end
     # rubocop: enable CodeReuse/ActiveRecord
 
-    def attempt_transfer_transaction
+    def new_namespace_has_same_root?(project)
+      new_namespace.root_ancestor == project.namespace.root_ancestor
+    end
+
+    def proceed_to_transfer
       Project.transaction do
         project.expire_caches_before_rename(@old_path)
 
+        # Apply changes to the project
         update_namespace_and_visibility(@new_namespace)
+        update_shared_runners_settings
+        project.save!
 
         # Notifications
         project.send_move_instructions(@old_path)
@@ -71,17 +82,12 @@ module Projects
         # Directories on disk
         move_project_folders(project)
 
-        # Move missing group labels to project
-        Labels::TransferService.new(current_user, @old_group, project).execute
-
-        # Move missing group milestones
-        Milestones::TransferService.new(current_user, @old_group, project).execute
+        transfer_missing_group_resources(@old_group)
 
         # Move uploads
         move_project_uploads(project)
 
-        # Move pages
-        Gitlab::PagesTransfer.new.move_project(project.path, @old_namespace.full_path, @new_namespace.full_path)
+        update_integrations
 
         project.old_path_with_namespace = @old_path
 
@@ -89,11 +95,24 @@ module Projects
 
         execute_system_hooks
       end
+
+      post_update_hooks(project)
     rescue Exception # rubocop:disable Lint/RescueException
       rollback_side_effects
       raise
     ensure
       refresh_permissions
+    end
+
+    # Overridden in EE
+    def post_update_hooks(project)
+      move_pages(project)
+    end
+
+    def transfer_missing_group_resources(group)
+      Labels::TransferService.new(current_user, group, project).execute
+
+      Milestones::TransferService.new(current_user, group, project).execute
     end
 
     def allowed_transfer?(current_user, project)
@@ -107,7 +126,6 @@ module Projects
       # Apply new namespace id and visibility level
       project.namespace = to_namespace
       project.visibility_level = to_namespace.visibility_level unless project.visibility_level_allowed_by_group?
-      project.save!
     end
 
     def update_repository_configuration(full_path)
@@ -121,7 +139,19 @@ module Projects
       user_ids = @old_namespace.user_ids_for_project_authorizations |
         @new_namespace.user_ids_for_project_authorizations
 
-      UserProjectAccessChangedService.new(user_ids).execute
+      if Feature.enabled?(:specialized_worker_for_project_transfer_auth_recalculation)
+        AuthorizedProjectUpdate::ProjectRecalculateWorker.perform_async(project.id)
+
+        # Until we compare the inconsistency rates of the new specialized worker and
+        # the old approach, we still run AuthorizedProjectsWorker
+        # but with some delay and lower urgency as a safety net.
+        UserProjectAccessChangedService.new(user_ids).execute(
+          blocking: false,
+          priority: UserProjectAccessChangedService::LOW_PRIORITY
+        )
+      else
+        UserProjectAccessChangedService.new(user_ids).execute
+      end
     end
 
     def rollback_side_effects
@@ -135,7 +165,8 @@ module Projects
       return if project.hashed_storage?(:repository)
 
       move_repo_folder(@new_path, @old_path)
-      move_repo_folder("#{@new_path}.wiki", "#{@old_path}.wiki")
+      move_repo_folder(new_wiki_repo_path, old_wiki_repo_path)
+      move_repo_folder(new_design_repo_path, old_design_repo_path)
     end
 
     def move_repo_folder(from_name, to_name)
@@ -151,14 +182,15 @@ module Projects
 
       # Move main repository
       unless move_repo_folder(@old_path, @new_path)
-        raise TransferError.new(s_("TransferProject|Cannot move project"))
+        raise TransferError, s_("TransferProject|Cannot move project")
       end
 
       # Disk path is changed; we need to ensure we reload it
       project.reload_repository!
 
-      # Move wiki repo also if present
-      move_repo_folder("#{@old_path}.wiki", "#{@new_path}.wiki")
+      # Move wiki and design repos also if present
+      move_repo_folder(old_wiki_repo_path, new_wiki_repo_path)
+      move_repo_folder(old_design_repo_path, new_design_repo_path)
     end
 
     def move_project_uploads(project)
@@ -170,7 +202,43 @@ module Projects
         @new_namespace.full_path
       )
     end
+
+    def move_pages(project)
+      return unless project.pages_deployed?
+
+      transfer = Gitlab::PagesTransfer.new.async
+      transfer.move_project(project.path, @old_namespace.full_path, @new_namespace.full_path)
+    end
+
+    def old_wiki_repo_path
+      "#{old_path}#{::Gitlab::GlRepository::WIKI.path_suffix}"
+    end
+
+    def new_wiki_repo_path
+      "#{new_path}#{::Gitlab::GlRepository::WIKI.path_suffix}"
+    end
+
+    def old_design_repo_path
+      "#{old_path}#{::Gitlab::GlRepository::DESIGN.path_suffix}"
+    end
+
+    def new_design_repo_path
+      "#{new_path}#{::Gitlab::GlRepository::DESIGN.path_suffix}"
+    end
+
+    def update_shared_runners_settings
+      # If a project is being transferred to another group it means it can already
+      # have shared runners enabled but we need to check whether the new group allows that.
+      if project.group && project.group.shared_runners_setting == 'disabled_and_unoverridable'
+        project.shared_runners_enabled = false
+      end
+    end
+
+    def update_integrations
+      project.integrations.inherit.delete_all
+      Integration.create_from_active_default_integrations(project, :project_id)
+    end
   end
 end
 
-Projects::TransferService.prepend_if_ee('EE::Projects::TransferService')
+Projects::TransferService.prepend_mod_with('Projects::TransferService')

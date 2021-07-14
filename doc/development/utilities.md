@@ -1,14 +1,20 @@
+---
+stage: none
+group: unassigned
+info: To determine the technical writer assigned to the Stage/Group associated with this page, see https://about.gitlab.com/handbook/engineering/ux/technical-writing/#assignments
+---
+
 # GitLab utilities
 
 We have developed a number of utilities to help ease development:
 
 ## `MergeHash`
 
-Refer to: <https://gitlab.com/gitlab-org/gitlab/blob/master/lib/gitlab/utils/merge_hash.rb>:
+Refer to [`merge_hash.rb`](https://gitlab.com/gitlab-org/gitlab/-/blob/master/lib/gitlab/utils/merge_hash.rb):
 
 - Deep merges an array of hashes:
 
-  ``` ruby
+  ```ruby
   Gitlab::Utils::MergeHash.merge(
     [{ hello: ["world"] },
      { hello: "Everyone" },
@@ -19,7 +25,7 @@ Refer to: <https://gitlab.com/gitlab-org/gitlab/blob/master/lib/gitlab/utils/mer
 
   Gives:
 
-  ``` ruby
+  ```ruby
   [
     {
       hello:
@@ -35,7 +41,7 @@ Refer to: <https://gitlab.com/gitlab-org/gitlab/blob/master/lib/gitlab/utils/mer
 
 - Extracts all keys and values from a hash into an array:
 
-  ``` ruby
+  ```ruby
   Gitlab::Utils::MergeHash.crush(
     { hello: "world", this: { crushes: ["an entire", "hash"] } }
   )
@@ -43,13 +49,13 @@ Refer to: <https://gitlab.com/gitlab-org/gitlab/blob/master/lib/gitlab/utils/mer
 
   Gives:
 
-  ``` ruby
+  ```ruby
   [:hello, "world", :this, :crushes, "an entire", "hash"]
   ```
 
 ## `Override`
 
-Refer to <https://gitlab.com/gitlab-org/gitlab/blob/master/lib/gitlab/utils/override.rb>:
+Refer to [`override.rb`](https://gitlab.com/gitlab-org/gitlab/-/blob/master/lib/gitlab/utils/override.rb):
 
 - This utility can help you check if one method would override
   another or not. It is the same concept as Java's `@Override` annotation
@@ -63,7 +69,7 @@ Refer to <https://gitlab.com/gitlab-org/gitlab/blob/master/lib/gitlab/utils/over
 
     Here's a simple example:
 
-    ``` ruby
+    ```ruby
     class Base
       def execute
       end
@@ -80,7 +86,7 @@ Refer to <https://gitlab.com/gitlab-org/gitlab/blob/master/lib/gitlab/utils/over
 
     This also works on modules:
 
-    ``` ruby
+    ```ruby
     module Extension
       extend ::Gitlab::Utils::Override
 
@@ -94,7 +100,7 @@ Refer to <https://gitlab.com/gitlab-org/gitlab/blob/master/lib/gitlab/utils/over
     end
     ```
 
-    Note that the check will only happen when either:
+    Note that the check only happens when either:
 
     - The overriding method is defined in a class, or:
     - The overriding method is defined in a module, and it's prepended to
@@ -103,9 +109,50 @@ Refer to <https://gitlab.com/gitlab-org/gitlab/blob/master/lib/gitlab/utils/over
     Because only a class or prepended module can actually override a method.
     Including or extending a module into another cannot override anything.
 
+### Interactions with `ActiveSupport::Concern`, `prepend`, and `class_methods`
+
+When you use `ActiveSupport::Concern` that includes class methods, you do not
+get expected results because `ActiveSupport::Concern` doesn't work like a
+regular Ruby module.
+
+Since we already have `Prependable` as a patch for `ActiveSupport::Concern`
+to enable `prepend`, it has consequences with how it would interact with
+`override` and `class_methods`. As a workaround, `extend` `ClassMethods`
+into the defining `Prependable` module.
+
+This allows us to use `override` to verify `class_methods` used in the
+context mentioned above. This workaround only applies when we run the
+verification, not when running the application itself.
+
+Here are example code blocks that demonstrate the effect of this workaround:
+following codes:
+
+```ruby
+module Base
+  extend ActiveSupport::Concern
+
+  class_methods do
+    def f
+    end
+  end
+end
+
+module Derived
+  include Base
+end
+
+# Without the workaround
+Base.f    # => NoMethodError
+Derived.f # => nil
+
+# With the workaround
+Base.f    # => nil
+Derived.f # => nil
+```
+
 ## `StrongMemoize`
 
-Refer to <https://gitlab.com/gitlab-org/gitlab/blob/master/lib/gitlab/utils/strong_memoize.rb>:
+Refer to [`strong_memoize.rb`](https://gitlab.com/gitlab-org/gitlab/-/blob/master/lib/gitlab/utils/strong_memoize.rb):
 
 - Memoize the value even if it is `nil` or `false`.
 
@@ -117,7 +164,7 @@ Refer to <https://gitlab.com/gitlab-org/gitlab/blob/master/lib/gitlab/utils/stro
 
   Instead of writing patterns like this:
 
-  ``` ruby
+  ```ruby
   class Find
     def result
       return @result if defined?(@result)
@@ -129,7 +176,7 @@ Refer to <https://gitlab.com/gitlab-org/gitlab/blob/master/lib/gitlab/utils/stro
 
   You could write it like:
 
-  ``` ruby
+  ```ruby
   class Find
     include Gitlab::Utils::StrongMemoize
 
@@ -143,7 +190,7 @@ Refer to <https://gitlab.com/gitlab-org/gitlab/blob/master/lib/gitlab/utils/stro
 
 - Clear memoization
 
-  ``` ruby
+  ```ruby
   class Find
     include Gitlab::Utils::StrongMemoize
   end
@@ -153,7 +200,7 @@ Refer to <https://gitlab.com/gitlab-org/gitlab/blob/master/lib/gitlab/utils/stro
 
 ## `RequestCache`
 
-Refer to <https://gitlab.com/gitlab-org/gitlab/blob/master/lib/gitlab/cache/request_cache.rb>.
+Refer to [`request_cache.rb`](https://gitlab.com/gitlab-org/gitlab/-/blob/master/lib/gitlab/cache/request_cache.rb).
 
 This module provides a simple way to cache values in RequestStore,
 and the cache key would be based on the class name, method name,
@@ -162,7 +209,7 @@ method level values, and optional method arguments.
 
 A simple example that only uses the instance level customised values is:
 
-``` ruby
+```ruby
 class UserAccess
   extend Gitlab::Cache::RequestCache
 
@@ -183,7 +230,7 @@ instance variable so the cache logic would be the same.
 
 We can also set different strategies for different methods:
 
-``` ruby
+```ruby
 class Commit
   extend Gitlab::Cache::RequestCache
 

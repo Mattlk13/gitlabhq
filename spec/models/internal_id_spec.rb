@@ -2,12 +2,13 @@
 
 require 'spec_helper'
 
-describe InternalId do
+RSpec.describe InternalId do
   let(:project) { create(:project) }
   let(:usage) { :issues }
   let(:issue) { build(:issue, project: project) }
+  let(:id_subject) { issue }
   let(:scope) { { project: project } }
-  let(:init) { ->(s) { s.project.issues.size } }
+  let(:init) { ->(issue, scope) { issue&.project&.issues&.size || Issue.where(**scope).count } }
 
   it_behaves_like 'having unique enum values'
 
@@ -39,7 +40,7 @@ describe InternalId do
   end
 
   describe '.generate_next' do
-    subject { described_class.generate_next(issue, scope, usage, init) }
+    subject { described_class.generate_next(id_subject, scope, usage, init) }
 
     context 'in the absence of a record' do
       it 'creates a record if not yet present' do
@@ -89,30 +90,31 @@ describe InternalId do
       expect(normalized).to eq((0..seq.size - 1).to_a)
     end
 
-    context 'with an insufficient schema version' do
-      before do
-        described_class.reset_column_information
-        # Project factory will also call the current_version
-        expect(ActiveRecord::Migrator).to receive(:current_version).at_least(:once).and_return(InternalId::REQUIRED_SCHEMA_VERSION - 1)
+    context 'there are no instances to pass in' do
+      let(:id_subject) { Issue }
+
+      it 'accepts classes instead' do
+        expect(subject).to eq(1)
       end
+    end
 
-      let(:init) { double('block') }
+    context 'when executed outside of transaction' do
+      it 'increments counter with in_transaction: "false"' do
+        allow(ActiveRecord::Base.connection).to receive(:transaction_open?) { false }
 
-      it 'calculates next internal ids on the fly' do
-        val = rand(1..100)
+        expect(InternalId::InternalIdGenerator.internal_id_transactions_total).to receive(:increment)
+          .with(operation: :generate, usage: 'issues', in_transaction: 'false').and_call_original
 
-        expect(init).to receive(:call).with(issue).and_return(val)
-        expect(subject).to eq(val + 1)
+        subject
       end
+    end
 
-      it 'always attempts to generate internal IDs in production mode' do
-        stub_rails_env('production')
+    context 'when executed within transaction' do
+      it 'increments counter with in_transaction: "true"' do
+        expect(InternalId::InternalIdGenerator.internal_id_transactions_total).to receive(:increment)
+          .with(operation: :generate, usage: 'issues', in_transaction: 'true').and_call_original
 
-        val = rand(1..100)
-        generator = double(generate: val)
-        expect(InternalId::InternalIdGenerator).to receive(:new).and_return(generator)
-
-        expect(subject).to eq(val)
+        InternalId.transaction { subject }
       end
     end
   end
@@ -153,17 +155,27 @@ describe InternalId do
       end
     end
 
-    context 'with an insufficient schema version' do
+    context 'when executed outside of transaction' do
       let(:value) { 2 }
 
-      before do
-        described_class.reset_column_information
-        # Project factory will also call the current_version
-        expect(ActiveRecord::Migrator).to receive(:current_version).at_least(:once).and_return(InternalId::REQUIRED_SCHEMA_VERSION - 1)
-      end
+      it 'increments counter with in_transaction: "false"' do
+        allow(ActiveRecord::Base.connection).to receive(:transaction_open?) { false }
 
-      it 'does not reset any of the iids' do
-        expect(subject).to be_falsey
+        expect(InternalId::InternalIdGenerator.internal_id_transactions_total).to receive(:increment)
+          .with(operation: :reset, usage: 'issues', in_transaction: 'false').and_call_original
+
+        subject
+      end
+    end
+
+    context 'when executed within transaction' do
+      let(:value) { 2 }
+
+      it 'increments counter with in_transaction: "true"' do
+        expect(InternalId::InternalIdGenerator.internal_id_transactions_total).to receive(:increment)
+          .with(operation: :reset, usage: 'issues', in_transaction: 'true').and_call_original
+
+        InternalId.transaction { subject }
       end
     end
   end
@@ -171,7 +183,7 @@ describe InternalId do
   describe '.track_greatest' do
     let(:value) { 9001 }
 
-    subject { described_class.track_greatest(issue, scope, usage, value, init) }
+    subject { described_class.track_greatest(id_subject, scope, usage, value, init) }
 
     context 'in the absence of a record' do
       it 'creates a record if not yet present' do
@@ -205,6 +217,34 @@ describe InternalId do
         described_class.create!(**scope, usage: usage, last_value: 10_001)
 
         expect(subject).to eq 10_001
+      end
+    end
+
+    context 'there are no instances to pass in' do
+      let(:id_subject) { Issue }
+
+      it 'accepts classes instead' do
+        expect(subject).to eq(value)
+      end
+    end
+
+    context 'when executed outside of transaction' do
+      it 'increments counter with in_transaction: "false"' do
+        allow(ActiveRecord::Base.connection).to receive(:transaction_open?) { false }
+
+        expect(InternalId::InternalIdGenerator.internal_id_transactions_total).to receive(:increment)
+          .with(operation: :track_greatest, usage: 'issues', in_transaction: 'false').and_call_original
+
+        subject
+      end
+    end
+
+    context 'when executed within transaction' do
+      it 'increments counter with in_transaction: "true"' do
+        expect(InternalId::InternalIdGenerator.internal_id_transactions_total).to receive(:increment)
+          .with(operation: :track_greatest, usage: 'issues', in_transaction: 'true').and_call_original
+
+        InternalId.transaction { subject }
       end
     end
   end

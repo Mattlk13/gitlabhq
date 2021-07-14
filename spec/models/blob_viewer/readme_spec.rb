@@ -2,7 +2,7 @@
 
 require 'spec_helper'
 
-describe BlobViewer::Readme do
+RSpec.describe BlobViewer::Readme do
   include FakeBlobHelpers
 
   let(:project) { create(:project, :repository, :wiki_repo) }
@@ -40,7 +40,7 @@ describe BlobViewer::Readme do
 
       context 'when the wiki is not empty' do
         before do
-          create(:wiki_page, wiki: project.wiki, attrs: { title: 'home', content: 'Home page' })
+          create(:wiki_page, wiki: project.wiki, title: 'home', content: 'Home page')
         end
 
         it 'returns nil' do

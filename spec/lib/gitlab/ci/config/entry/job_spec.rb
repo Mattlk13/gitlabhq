@@ -2,10 +2,11 @@
 
 require 'spec_helper'
 
-describe Gitlab::Ci::Config::Entry::Job do
+RSpec.describe Gitlab::Ci::Config::Entry::Job do
   let(:entry) { described_class.new(config, name: :rspec) }
 
   it_behaves_like 'with inheritable CI config' do
+    let(:config) { { script: 'echo' } }
     let(:inheritable_key) { 'default' }
     let(:inheritable_class) { Gitlab::Ci::Config::Entry::Default }
 
@@ -14,6 +15,10 @@ describe Gitlab::Ci::Config::Entry::Job do
     # as they do not have sense in context of Job
     let(:ignored_inheritable_columns) do
       %i[]
+    end
+
+    before do
+      allow(entry).to receive_message_chain(:inherit_entry, :default_entry, :inherit?).and_return(true)
     end
   end
 
@@ -24,10 +29,11 @@ describe Gitlab::Ci::Config::Entry::Job do
       let(:result) do
         %i[before_script script stage type after_script cache
            image services only except rules needs variables artifacts
-           environment coverage retry interruptible timeout release tags]
+           environment coverage retry interruptible timeout release tags
+           inherit parallel]
       end
 
-      it { is_expected.to match_array result }
+      it { is_expected.to include(*result) }
     end
   end
 
@@ -66,6 +72,27 @@ describe Gitlab::Ci::Config::Entry::Job do
       end
 
       it { is_expected.to be_falsey }
+    end
+
+    context 'when using the default job without script' do
+      let(:name) { :default }
+      let(:config) do
+        { before_script: "cd ${PROJ_DIR} " }
+      end
+
+      it { is_expected.to be_falsey }
+    end
+
+    context 'when using the default job with script' do
+      let(:name) { :default }
+      let(:config) do
+        {
+          before_script: "cd ${PROJ_DIR} ",
+          script: "ls"
+        }
+      end
+
+      it { is_expected.to be_truthy }
     end
   end
 
@@ -196,56 +223,47 @@ describe Gitlab::Ci::Config::Entry::Job do
 
       context 'when parallel value is not correct' do
         context 'when it is not a numeric value' do
-          let(:config) { { parallel: true } }
+          let(:config) { { script: 'echo', parallel: true } }
 
           it 'returns error about invalid type' do
             expect(entry).not_to be_valid
-            expect(entry.errors).to include 'job parallel is not a number'
+            expect(entry.errors).to include 'parallel should be an integer or a hash'
           end
         end
 
         context 'when it is lower than two' do
-          let(:config) { { parallel: 1 } }
+          let(:config) { { script: 'echo', parallel: 1 } }
 
           it 'returns error about value too low' do
             expect(entry).not_to be_valid
             expect(entry.errors)
-              .to include 'job parallel must be greater than or equal to 2'
+              .to include 'parallel config must be greater than or equal to 2'
           end
         end
 
-        context 'when it is bigger than 50' do
-          let(:config) { { parallel: 51 } }
+        context 'when it is an empty hash' do
+          let(:config) { { script: 'echo', parallel: {} } }
 
-          it 'returns error about value too high' do
+          it 'returns error about missing matrix' do
             expect(entry).not_to be_valid
             expect(entry.errors)
-              .to include 'job parallel must be less than or equal to 50'
+              .to include 'parallel config missing required keys: matrix'
           end
         end
+      end
 
-        context 'when it is not an integer' do
-          let(:config) { { parallel: 1.5 } }
-
-          it 'returns error about wrong value' do
-            expect(entry).not_to be_valid
-            expect(entry.errors).to include 'job parallel must be an integer'
-          end
+      context 'when it uses both "when:" and "rules:"' do
+        let(:config) do
+          {
+            script: 'echo',
+            when: 'on_failure',
+            rules: [{ if: '$VARIABLE', when: 'on_success' }]
+          }
         end
 
-        context 'when it uses both "when:" and "rules:"' do
-          let(:config) do
-            {
-              script: 'echo',
-              when: 'on_failure',
-              rules: [{ if: '$VARIABLE', when: 'on_success' }]
-            }
-          end
-
-          it 'returns an error about when: being combined with rules' do
-            expect(entry).not_to be_valid
-            expect(entry.errors).to include 'job config key may not be used with `rules`: when'
-          end
+        it 'returns an error about when: being combined with rules' do
+          expect(entry).not_to be_valid
+          expect(entry.errors).to include 'job config key may not be used with `rules`: when'
         end
       end
 
@@ -500,7 +518,13 @@ describe Gitlab::Ci::Config::Entry::Job do
     let(:unspecified) { double('unspecified', 'specified?' => false) }
     let(:default) { double('default', '[]' => unspecified) }
     let(:workflow) { double('workflow', 'has_rules?' => false) }
-    let(:deps) { double('deps', 'default' => default, '[]' => unspecified, 'workflow' => workflow) }
+
+    let(:deps) do
+      double('deps',
+        'default_entry' => default,
+        'workflow_entry' => workflow,
+        'variables_value' => nil)
+    end
 
     context 'when job config overrides default config' do
       before do
@@ -513,7 +537,7 @@ describe Gitlab::Ci::Config::Entry::Job do
 
       it 'overrides default config' do
         expect(entry[:image].value).to eq(name: 'some_image')
-        expect(entry[:cache].value).to eq(key: 'test', policy: 'pull-push')
+        expect(entry[:cache].value).to eq([key: 'test', policy: 'pull-push', when: 'on_success'])
       end
     end
 
@@ -528,7 +552,7 @@ describe Gitlab::Ci::Config::Entry::Job do
 
       it 'uses config from default entry' do
         expect(entry[:image].value).to eq 'specified'
-        expect(entry[:cache].value).to eq(key: 'test', policy: 'pull-push')
+        expect(entry[:cache].value).to eq([key: 'test', policy: 'pull-push', when: 'on_success'])
       end
     end
 
@@ -603,6 +627,8 @@ describe Gitlab::Ci::Config::Entry::Job do
                    after_script: %w[cleanup],
                    only: { refs: %w[branches tags] },
                    variables: {},
+                   job_variables: {},
+                   root_variables_inheritance: true,
                    scheduling_type: :stage)
         end
       end
@@ -646,6 +672,10 @@ describe Gitlab::Ci::Config::Entry::Job do
   end
 
   describe '#ignored?' do
+    before do
+      entry.compose!
+    end
+
     context 'when job is a manual action' do
       context 'when it is not specified if job is allowed to fail' do
         let(:config) do
@@ -676,6 +706,16 @@ describe Gitlab::Ci::Config::Entry::Job do
           expect(entry).not_to be_ignored
         end
       end
+
+      context 'when job is dynamically allowed to fail' do
+        let(:config) do
+          { script: 'deploy', when: 'manual', allow_failure: { exit_codes: 42 } }
+        end
+
+        it 'is not an ignored job' do
+          expect(entry).not_to be_ignored
+        end
+      end
     end
 
     context 'when job is not a manual action' do
@@ -685,6 +725,10 @@ describe Gitlab::Ci::Config::Entry::Job do
         it 'is not an ignored job' do
           expect(entry).not_to be_ignored
         end
+
+        it 'does not return allow_failure' do
+          expect(entry.value.key?(:allow_failure_criteria)).to be_falsey
+        end
       end
 
       context 'when job is allowed to fail' do
@@ -693,6 +737,10 @@ describe Gitlab::Ci::Config::Entry::Job do
         it 'is an ignored job' do
           expect(entry).to be_ignored
         end
+
+        it 'does not return allow_failure_criteria' do
+          expect(entry.value.key?(:allow_failure_criteria)).to be_falsey
+        end
       end
 
       context 'when job is not allowed to fail' do
@@ -700,6 +748,22 @@ describe Gitlab::Ci::Config::Entry::Job do
 
         it 'is not an ignored job' do
           expect(entry).not_to be_ignored
+        end
+
+        it 'does not return allow_failure_criteria' do
+          expect(entry.value.key?(:allow_failure_criteria)).to be_falsey
+        end
+      end
+
+      context 'when job is dynamically allowed to fail' do
+        let(:config) { { script: 'deploy', allow_failure: { exit_codes: 42 } } }
+
+        it 'is not an ignored job' do
+          expect(entry).not_to be_ignored
+        end
+
+        it 'returns allow_failure_criteria' do
+          expect(entry.value[:allow_failure_criteria]).to match(exit_codes: [42])
         end
       end
     end

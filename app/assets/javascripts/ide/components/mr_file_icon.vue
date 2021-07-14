@@ -1,23 +1,22 @@
 <script>
-import icon from '~/vue_shared/components/icon.vue';
-import tooltip from '~/vue_shared/directives/tooltip';
+import { GlIcon, GlTooltipDirective } from '@gitlab/ui';
 
 export default {
   components: {
-    icon,
+    GlIcon,
   },
   directives: {
-    tooltip,
+    GlTooltip: GlTooltipDirective,
   },
 };
 </script>
 
 <template>
-  <icon
-    v-tooltip
+  <gl-icon
+    v-gl-tooltip
     :title="__('Part of merge request changes')"
     :size="12"
     name="git-merge"
-    class="append-right-8"
+    class="gl-mr-3"
   />
 </template>

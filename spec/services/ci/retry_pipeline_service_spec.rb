@@ -2,7 +2,7 @@
 
 require 'spec_helper'
 
-describe Ci::RetryPipelineService, '#execute' do
+RSpec.describe Ci::RetryPipelineService, '#execute' do
   include ProjectForksHelper
 
   let(:user) { create(:user) }
@@ -64,6 +64,18 @@ describe Ci::RetryPipelineService, '#execute' do
         expect(build('spinach 1')).to be_created
         expect(pipeline.reload).to be_running
       end
+
+      it 'changes ownership of subsequent builds' do
+        expect(build('rspec 2').user).not_to eq(user)
+        expect(build('rspec 3').user).not_to eq(user)
+        expect(build('spinach 1').user).not_to eq(user)
+
+        service.execute(pipeline)
+
+        expect(build('rspec 2').user).to eq(user)
+        expect(build('rspec 3').user).to eq(user)
+        expect(build('spinach 1').user).to eq(user)
+      end
     end
 
     context 'when there is failed build present which was run on failure' do
@@ -87,7 +99,7 @@ describe Ci::RetryPipelineService, '#execute' do
       it 'creates a new job for report job in this case' do
         service.execute(pipeline)
 
-        expect(statuses.where(name: 'report 1').first).to be_retried
+        expect(statuses.find_by(name: 'report 1', status: 'failed')).to be_retried
       end
     end
 
@@ -160,6 +172,16 @@ describe Ci::RetryPipelineService, '#execute' do
             expect(build('staging')).to be_manual
             expect(build('rspec 2')).to be_created
             expect(pipeline.reload).to be_running
+          end
+
+          it 'changes ownership of subsequent builds' do
+            expect(build('staging').user).not_to eq(user)
+            expect(build('rspec 2').user).not_to eq(user)
+
+            service.execute(pipeline)
+
+            expect(build('staging').user).to eq(user)
+            expect(build('rspec 2').user).to eq(user)
           end
         end
       end
@@ -250,7 +272,7 @@ describe Ci::RetryPipelineService, '#execute' do
     end
 
     it 'closes all todos about failed jobs for pipeline' do
-      expect(MergeRequests::AddTodoWhenBuildFailsService)
+      expect(::MergeRequests::AddTodoWhenBuildFailsService)
         .to receive_message_chain(:new, :close_all)
 
       service.execute(pipeline)
@@ -260,6 +282,39 @@ describe Ci::RetryPipelineService, '#execute' do
       expect_any_instance_of(Ci::ProcessPipelineService).to receive(:execute)
 
       service.execute(pipeline)
+    end
+
+    context 'when pipeline has processables with nil scheduling_type' do
+      let!(:build1) { create_build('build1', :success, 0) }
+      let!(:build2) { create_build('build2', :failed, 0) }
+      let!(:build3) { create_build('build3', :failed, 1) }
+      let!(:build3_needs_build1) { create(:ci_build_need, build: build3, name: build1.name) }
+
+      before do
+        statuses.update_all(scheduling_type: nil)
+      end
+
+      it 'populates scheduling_type of processables' do
+        service.execute(pipeline)
+
+        expect(build1.reload.scheduling_type).to eq('stage')
+        expect(build2.reload.scheduling_type).to eq('stage')
+        expect(build3.reload.scheduling_type).to eq('dag')
+      end
+    end
+
+    context 'when the pipeline is a downstream pipeline and the bridge is depended' do
+      let!(:bridge) { create(:ci_bridge, :strategy_depend, status: 'success') }
+
+      before do
+        create(:ci_sources_pipeline, pipeline: pipeline, source_job: bridge)
+      end
+
+      it 'marks source bridge as pending' do
+        service.execute(pipeline)
+
+        expect(bridge.reload).to be_pending
+      end
     end
   end
 
@@ -345,7 +400,7 @@ describe Ci::RetryPipelineService, '#execute' do
                       stage: "stage_#{stage_num}",
                       stage_idx: stage_num,
                       pipeline: pipeline, **opts) do |build|
-      pipeline.update_legacy_status
+      ::Ci::ProcessPipelineService.new(pipeline).execute
     end
   end
 end

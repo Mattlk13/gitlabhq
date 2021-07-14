@@ -1,13 +1,13 @@
-import Vuex from 'vuex';
 import { GlLoadingIcon } from '@gitlab/ui';
-import AxiosMockAdapter from 'axios-mock-adapter';
 import { createLocalVue, shallowMount } from '@vue/test-utils';
+import AxiosMockAdapter from 'axios-mock-adapter';
+import Vuex from 'vuex';
 import { TEST_HOST } from 'helpers/test_constants';
 import axios from '~/lib/utils/axios_utils';
-import functionsComponent from '~/serverless/components/functions.vue';
-import { createStore } from '~/serverless/store';
 import EmptyState from '~/serverless/components/empty_state.vue';
 import EnvironmentRow from '~/serverless/components/environment_row.vue';
+import functionsComponent from '~/serverless/components/functions.vue';
+import { createStore } from '~/serverless/store';
 import { mockServerlessFunctions } from '../mock_data';
 
 describe('functionsComponent', () => {
@@ -25,55 +25,31 @@ describe('functionsComponent', () => {
     localVue = createLocalVue();
     localVue.use(Vuex);
 
-    store = createStore();
+    store = createStore({});
   });
 
   afterEach(() => {
-    component.vm.$destroy();
+    component.destroy();
     axiosMock.restore();
   });
 
   it('should render empty state when Knative is not installed', () => {
     store.dispatch('receiveFunctionsSuccess', { knative_installed: false });
-    component = shallowMount(functionsComponent, {
-      localVue,
-      store,
-      propsData: {
-        clustersPath: '',
-        helpPath: '',
-        statusPath: '',
-      },
-    });
+    component = shallowMount(functionsComponent, { localVue, store });
 
     expect(component.find(EmptyState).exists()).toBe(true);
   });
 
   it('should render a loading component', () => {
     store.dispatch('requestFunctionsLoading');
-    component = shallowMount(functionsComponent, {
-      localVue,
-      store,
-      propsData: {
-        clustersPath: '',
-        helpPath: '',
-        statusPath: '',
-      },
-    });
+    component = shallowMount(functionsComponent, { localVue, store });
 
     expect(component.find(GlLoadingIcon).exists()).toBe(true);
   });
 
   it('should render empty state when there is no function data', () => {
     store.dispatch('receiveFunctionsNoDataSuccess', { knative_installed: true });
-    component = shallowMount(functionsComponent, {
-      localVue,
-      store,
-      propsData: {
-        clustersPath: '',
-        helpPath: '',
-        statusPath: '',
-      },
-    });
+    component = shallowMount(functionsComponent, { localVue, store });
 
     expect(
       component.vm.$el
@@ -91,30 +67,17 @@ describe('functionsComponent', () => {
       ...mockServerlessFunctions,
       knative_installed: 'checking',
     });
-    component = shallowMount(functionsComponent, {
-      localVue,
-      store,
-      propsData: {
-        clustersPath: '',
-        helpPath: '',
-        statusPath: '',
-      },
-    });
+
+    component = shallowMount(functionsComponent, { localVue, store });
 
     expect(component.find('.js-functions-wrapper').exists()).toBe(true);
     expect(component.find('.js-functions-loader').exists()).toBe(true);
   });
 
   it('should render the functions list', () => {
-    component = shallowMount(functionsComponent, {
-      localVue,
-      store,
-      propsData: {
-        clustersPath: 'clustersPath',
-        helpPath: 'helpPath',
-        statusPath,
-      },
-    });
+    store = createStore({ clustersPath: 'clustersPath', helpPath: 'helpPath', statusPath });
+
+    component = shallowMount(functionsComponent, { localVue, store });
 
     component.vm.$store.dispatch('receiveFunctionsSuccess', mockServerlessFunctions);
 

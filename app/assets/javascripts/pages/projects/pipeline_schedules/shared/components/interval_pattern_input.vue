@@ -1,7 +1,40 @@
 <script>
+import {
+  GlFormRadio,
+  GlFormRadioGroup,
+  GlIcon,
+  GlLink,
+  GlSprintf,
+  GlTooltipDirective,
+} from '@gitlab/ui';
+import { getWeekdayNames } from '~/lib/utils/datetime_utility';
+import { __, s__, sprintf } from '~/locale';
+import glFeatureFlagMixin from '~/vue_shared/mixins/gl_feature_flags_mixin';
+
+const KEY_EVERY_DAY = 'everyDay';
+const KEY_EVERY_WEEK = 'everyWeek';
+const KEY_EVERY_MONTH = 'everyMonth';
+const KEY_CUSTOM = 'custom';
+
 export default {
+  components: {
+    GlFormRadio,
+    GlFormRadioGroup,
+    GlIcon,
+    GlLink,
+    GlSprintf,
+  },
+  directives: {
+    GlTooltip: GlTooltipDirective,
+  },
+  mixins: [glFeatureFlagMixin()],
   props: {
     initialCronInterval: {
+      type: String,
+      required: false,
+      default: '',
+    },
+    dailyLimit: {
       type: String,
       required: false,
       default: '',
@@ -9,25 +42,72 @@ export default {
   },
   data() {
     return {
+      isEditingCustom: false,
+      randomHour: this.generateRandomHour(),
+      randomWeekDayIndex: this.generateRandomWeekDayIndex(),
+      randomDay: this.generateRandomDay(),
       inputNameAttribute: 'schedule[cron]',
+      radioValue: this.initialCronInterval ? KEY_CUSTOM : KEY_EVERY_DAY,
       cronInterval: this.initialCronInterval,
-      cronIntervalPresets: {
-        everyDay: '0 4 * * *',
-        everyWeek: '0 4 * * 0',
-        everyMonth: '0 4 1 * *',
-      },
       cronSyntaxUrl: 'https://en.wikipedia.org/wiki/Cron',
-      customInputEnabled: false,
     };
   },
   computed: {
-    intervalIsPreset() {
-      return Object.values(this.cronIntervalPresets).includes(this.cronInterval);
+    cronIntervalPresets() {
+      return {
+        [KEY_EVERY_DAY]: `0 ${this.randomHour} * * *`,
+        [KEY_EVERY_WEEK]: `0 ${this.randomHour} * * ${this.randomWeekDayIndex}`,
+        [KEY_EVERY_MONTH]: `0 ${this.randomHour} ${this.randomDay} * *`,
+      };
     },
-    // The text input is editable when there's a custom interval, or when it's
-    // a preset interval and the user clicks the 'custom' radio button
-    isEditable() {
-      return Boolean(this.customInputEnabled || !this.intervalIsPreset);
+    formattedTime() {
+      if (this.randomHour > 12) {
+        return `${this.randomHour - 12}:00pm`;
+      } else if (this.randomHour === 12) {
+        return `12:00pm`;
+      }
+      return `${this.randomHour}:00am`;
+    },
+    radioOptions() {
+      return [
+        {
+          value: KEY_EVERY_DAY,
+          text: sprintf(s__(`Every day (at %{time})`), { time: this.formattedTime }),
+        },
+        {
+          value: KEY_EVERY_WEEK,
+          text: sprintf(s__('Every week (%{weekday} at %{time})'), {
+            weekday: this.weekday,
+            time: this.formattedTime,
+          }),
+        },
+        {
+          value: KEY_EVERY_MONTH,
+          text: sprintf(s__('Every month (Day %{day} at %{time})'), {
+            day: this.randomDay,
+            time: this.formattedTime,
+          }),
+        },
+        {
+          value: KEY_CUSTOM,
+          text: s__('PipelineScheduleIntervalPattern|Custom (%{linkStart}Cron syntax%{linkEnd})'),
+          link: this.cronSyntaxUrl,
+        },
+      ];
+    },
+    weekday() {
+      return getWeekdayNames()[this.randomWeekDayIndex];
+    },
+    parsedDailyLimit() {
+      return this.dailyLimit ? (24 * 60) / this.dailyLimit : null;
+    },
+    scheduleDailyLimitMsg() {
+      return sprintf(
+        __(
+          'Scheduled pipelines cannot run more frequently than once per %{limit} minutes. A pipeline configured to run more frequently only starts after %{limit} minutes have elapsed since the last time it ran.',
+        ),
+        { limit: this.parsedDailyLimit },
+      );
     },
   },
   watch: {
@@ -38,103 +118,73 @@ export default {
         gl.pipelineScheduleFieldErrors.updateFormValidityState();
       });
     },
-  },
-  created() {
-    if (this.intervalIsPreset) {
-      this.enableCustomInput = false;
-    }
+    radioValue: {
+      immediate: true,
+      handler(val) {
+        if (val !== KEY_CUSTOM) {
+          this.cronInterval = this.cronIntervalPresets[val];
+        }
+      },
+    },
   },
   methods: {
-    toggleCustomInput(shouldEnable) {
-      this.customInputEnabled = shouldEnable;
-
-      if (shouldEnable) {
-        // We need to change the value so other radios don't remain selected
-        // because the model (cronInterval) hasn't changed. The server trims it.
-        this.cronInterval = `${this.cronInterval} `;
-      }
+    onCustomInput() {
+      this.radioValue = KEY_CUSTOM;
+    },
+    generateRandomHour() {
+      return Math.floor(Math.random() * 23);
+    },
+    generateRandomWeekDayIndex() {
+      return Math.floor(Math.random() * 6);
+    },
+    generateRandomDay() {
+      return Math.floor(Math.random() * 28);
+    },
+    showDailyLimitMessage({ value }) {
+      return (
+        value === KEY_CUSTOM && this.glFeatures.ciDailyLimitForPipelineSchedules && this.dailyLimit
+      );
     },
   },
 };
 </script>
 
 <template>
-  <div class="interval-pattern-form-group">
-    <div class="cron-preset-radio-input">
-      <input
-        id="custom"
-        :name="inputNameAttribute"
-        :value="cronInterval"
-        :checked="isEditable"
-        class="label-bold"
-        type="radio"
-        @click="toggleCustomInput(true)"
-      />
+  <div>
+    <gl-form-radio-group v-model="radioValue" :name="inputNameAttribute">
+      <gl-form-radio
+        v-for="option in radioOptions"
+        :key="option.value"
+        :value="option.value"
+        :data-testid="option.value"
+      >
+        <gl-sprintf v-if="option.link" :message="option.text">
+          <template #link="{ content }">
+            <gl-link :href="option.link" target="_blank" class="gl-font-sm">
+              {{ content }}
+            </gl-link>
+          </template>
+        </gl-sprintf>
 
-      <label for="custom"> {{ s__('PipelineSheduleIntervalPattern|Custom') }} </label>
+        <template v-else>{{ option.text }}</template>
 
-      <span class="cron-syntax-link-wrap">
-        (<a :href="cronSyntaxUrl" target="_blank"> {{ __('Cron syntax') }} </a>)
-      </span>
-    </div>
-
-    <div class="cron-preset-radio-input">
-      <input
-        id="every-day"
-        v-model="cronInterval"
-        :name="inputNameAttribute"
-        :value="cronIntervalPresets.everyDay"
-        class="label-bold"
-        type="radio"
-        @click="toggleCustomInput(false)"
-      />
-
-      <label class="label-bold" for="every-day"> {{ __('Every day (at 4:00am)') }} </label>
-    </div>
-
-    <div class="cron-preset-radio-input">
-      <input
-        id="every-week"
-        v-model="cronInterval"
-        :name="inputNameAttribute"
-        :value="cronIntervalPresets.everyWeek"
-        class="label-bold"
-        type="radio"
-        @click="toggleCustomInput(false)"
-      />
-
-      <label class="label-bold" for="every-week">
-        {{ __('Every week (Sundays at 4:00am)') }}
-      </label>
-    </div>
-
-    <div class="cron-preset-radio-input">
-      <input
-        id="every-month"
-        v-model="cronInterval"
-        :name="inputNameAttribute"
-        :value="cronIntervalPresets.everyMonth"
-        class="label-bold"
-        type="radio"
-        @click="toggleCustomInput(false)"
-      />
-
-      <label class="label-bold" for="every-month">
-        {{ __('Every month (on the 1st at 4:00am)') }}
-      </label>
-    </div>
-
-    <div class="cron-interval-input-wrapper">
-      <input
-        id="schedule_cron"
-        v-model="cronInterval"
-        :placeholder="__('Define a custom pattern with cron syntax')"
-        :name="inputNameAttribute"
-        :disabled="!isEditable"
-        class="form-control inline cron-interval-input"
-        type="text"
-        required="true"
-      />
-    </div>
+        <gl-icon
+          v-if="showDailyLimitMessage(option)"
+          v-gl-tooltip.hover
+          name="question"
+          :title="scheduleDailyLimitMsg"
+        />
+      </gl-form-radio>
+    </gl-form-radio-group>
+    <input
+      id="schedule_cron"
+      v-model="cronInterval"
+      :placeholder="__('Define a custom pattern with cron syntax')"
+      :name="inputNameAttribute"
+      class="form-control inline cron-interval-input gl-form-input"
+      type="text"
+      required="true"
+      @input="onCustomInput"
+    />
   </div>
 </template>

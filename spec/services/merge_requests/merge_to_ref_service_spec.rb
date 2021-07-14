@@ -2,7 +2,7 @@
 
 require 'spec_helper'
 
-describe MergeRequests::MergeToRefService do
+RSpec.describe MergeRequests::MergeToRefService do
   shared_examples_for 'MergeService for target ref' do
     it 'target_ref has the same state of target branch' do
       repo = merge_request.target_project.repository
@@ -68,12 +68,13 @@ describe MergeRequests::MergeToRefService do
   end
 
   let_it_be(:user) { create(:user) }
+
   let(:merge_request) { create(:merge_request, :simple) }
   let(:project) { merge_request.project }
 
   describe '#execute' do
     let(:service) do
-      described_class.new(project, user, **params)
+      described_class.new(project: project, current_user: user, params: params)
     end
 
     let(:params) { { commit_message: 'Awesome message', should_remove_source_branch: true, sha: merge_request.diff_head_sha } }
@@ -91,6 +92,17 @@ describe MergeRequests::MergeToRefService do
 
     it_behaves_like 'successfully evaluates pre-condition checks'
 
+    it 'returns an error when Gitlab::Git::CommandError is raised during merge' do
+      allow(project.repository).to receive(:merge_to_ref) do
+        raise Gitlab::Git::CommandError, 'Failed to create merge commit'
+      end
+
+      result = service.execute(merge_request)
+
+      expect(result[:status]).to eq(:error)
+      expect(result[:message]).to eq('Failed to create merge commit')
+    end
+
     context 'commit history comparison with regular MergeService' do
       before do
         # The merge service needs an authorized user while merge-to-ref
@@ -99,11 +111,11 @@ describe MergeRequests::MergeToRefService do
       end
 
       let(:merge_ref_service) do
-        described_class.new(project, user, {})
+        described_class.new(project: project, current_user: user)
       end
 
       let(:merge_service) do
-        MergeRequests::MergeService.new(project, user, { sha: merge_request.diff_head_sha })
+        MergeRequests::MergeService.new(project: project, current_user: user, params: { sha: merge_request.diff_head_sha })
       end
 
       context 'when merge commit' do
@@ -215,6 +227,7 @@ describe MergeRequests::MergeToRefService do
 
     describe 'cascading merge refs' do
       let_it_be(:project) { create(:project, :repository) }
+
       let(:params) { { commit_message: 'Cascading merge', first_parent_ref: first_parent_ref, target_ref: target_ref, sha: merge_request.diff_head_sha } }
 
       context 'when first merge happens' do
@@ -239,6 +252,18 @@ describe MergeRequests::MergeToRefService do
             let(:target_ref) { 'refs/merge-requests/2/train' }
           end
         end
+      end
+    end
+
+    context 'allow conflicts to be merged in diff' do
+      let(:params) { { allow_conflicts: true } }
+
+      it 'calls merge_to_ref with allow_conflicts param' do
+        expect(project.repository).to receive(:merge_to_ref) do |user, **kwargs|
+          expect(kwargs[:allow_conflicts]).to eq(true)
+        end.and_call_original
+
+        service.execute(merge_request)
       end
     end
   end

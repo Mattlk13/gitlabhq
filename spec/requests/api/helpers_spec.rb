@@ -4,12 +4,13 @@ require 'spec_helper'
 require 'raven/transports/dummy'
 require_relative '../../../config/initializers/sentry'
 
-describe API::Helpers do
+RSpec.describe API::Helpers do
   include API::APIGuard::HelperMethods
   include described_class
   include TermsHelper
 
-  let(:user) { create(:user) }
+  let_it_be(:user, reload: true) { create(:user) }
+
   let(:admin) { create(:admin) }
   let(:key) { create(:key, user: user) }
 
@@ -24,6 +25,7 @@ describe API::Helpers do
       'CONTENT_TYPE' => 'text/plain;charset=utf-8'
     }
   end
+
   let(:header) { }
   let(:request) { Grape::Request.new(env)}
   let(:params) { request.params }
@@ -38,7 +40,7 @@ describe API::Helpers do
   end
 
   def error!(message, status, header)
-    raise Exception.new("#{status} - #{message}")
+    raise StandardError, "#{status} - #{message}"
   end
 
   def set_param(key, value)
@@ -84,6 +86,27 @@ describe API::Helpers do
           end
 
           it { is_expected.to eq(user) }
+
+          context 'when user should have 2fa enabled' do
+            before do
+              allow(user).to receive(:require_two_factor_authentication_from_group?).and_return(true)
+              allow_next_instance_of(Gitlab::Auth::TwoFactorAuthVerifier) do |verifier|
+                allow(verifier).to receive(:two_factor_grace_period_expired?).and_return(true)
+              end
+            end
+
+            context 'when 2fa is not enabled' do
+              it { is_expected.to be_nil }
+            end
+
+            context 'when 2fa is enabled' do
+              before do
+                allow(user).to receive(:two_factor_enabled?).and_return(true)
+              end
+
+              it { is_expected.to eq(user) }
+            end
+          end
         end
 
         context "PUT request" do
@@ -221,6 +244,67 @@ describe API::Helpers do
         end
       end
     end
+
+    describe "when authenticating using a job token" do
+      let_it_be(:job, reload: true) do
+        create(:ci_build, user: user, status: :running)
+      end
+
+      let(:route_authentication_setting) { {} }
+
+      before do
+        allow_any_instance_of(self.class).to receive(:route_authentication_setting)
+          .and_return(route_authentication_setting)
+      end
+
+      context 'when route is allowed to be authenticated' do
+        let(:route_authentication_setting) { { job_token_allowed: true } }
+
+        it "returns a 401 response for an invalid token" do
+          env[Gitlab::Auth::AuthFinders::JOB_TOKEN_HEADER] = 'invalid token'
+
+          expect { current_user }.to raise_error /401/
+        end
+
+        it "returns a 401 response for a job that's not running" do
+          job.update!(status: :success)
+          env[Gitlab::Auth::AuthFinders::JOB_TOKEN_HEADER] = job.token
+
+          expect { current_user }.to raise_error /401/
+        end
+
+        it "returns a 403 response for a user without access" do
+          env[Gitlab::Auth::AuthFinders::JOB_TOKEN_HEADER] = job.token
+          allow_any_instance_of(Gitlab::UserAccess).to receive(:allowed?).and_return(false)
+
+          expect { current_user }.to raise_error /403/
+        end
+
+        it 'returns a 403 response for a user who is blocked' do
+          user.block!
+          env[Gitlab::Auth::AuthFinders::JOB_TOKEN_HEADER] = job.token
+
+          expect { current_user }.to raise_error /403/
+        end
+
+        it "sets current_user" do
+          env[Gitlab::Auth::AuthFinders::JOB_TOKEN_HEADER] = job.token
+
+          expect(current_user).to eq(user)
+        end
+      end
+
+      context 'when route is not allowed to be authenticated' do
+        let(:route_authentication_setting) { { job_token_allowed: false } }
+
+        it "sets current_user to nil" do
+          env[Gitlab::Auth::AuthFinders::JOB_TOKEN_HEADER] = job.token
+          allow_any_instance_of(Gitlab::UserAccess).to receive(:allowed?).and_return(true)
+
+          expect(current_user).to be_nil
+        end
+      end
+    end
   end
 
   describe '.handle_api_exception' do
@@ -231,14 +315,13 @@ describe API::Helpers do
 
       expect(Gitlab::ErrorTracking).to receive(:sentry_dsn).and_return(Gitlab.config.sentry.dsn)
       Gitlab::ErrorTracking.configure
-      Raven.client.configuration.encoding = 'json'
     end
 
     it 'does not report a MethodNotAllowed exception to Sentry' do
       exception = Grape::Exceptions::MethodNotAllowed.new({ 'X-GitLab-Test' => '1' })
       allow(exception).to receive(:backtrace).and_return(caller)
 
-      expect(Raven).not_to receive(:capture_exception).with(exception)
+      expect(Gitlab::ErrorTracking).not_to receive(:track_exception).with(exception)
 
       handle_api_exception(exception)
     end
@@ -247,8 +330,7 @@ describe API::Helpers do
       exception = RuntimeError.new('test error')
       allow(exception).to receive(:backtrace).and_return(caller)
 
-      expect(Raven).to receive(:capture_exception).with(exception, tags:
-        a_hash_including(correlation_id: 'new-correlation-id'), extra: {})
+      expect(Gitlab::ErrorTracking).to receive(:track_exception).with(exception)
 
       Labkit::Correlation::CorrelationId.use_id('new-correlation-id') do
         handle_api_exception(exception)
@@ -272,20 +354,6 @@ describe API::Helpers do
         expect(response).to have_gitlab_http_status(:internal_server_error)
         expect(json_response['message']).not_to include("undefined local variable or method `request'")
         expect(json_response['message']).to start_with("\nRuntimeError (Runtime Error!):")
-      end
-    end
-
-    context 'extra information' do
-      # Sentry events are an array of the form [auth_header, data, options]
-      let(:event_data) { Raven.client.transport.events.first[1] }
-
-      it 'sends the params, excluding confidential values' do
-        expect(ProjectsFinder).to receive(:new).and_raise('Runtime Error!')
-
-        get api('/projects', user), params: { password: 'dont_send_this', other_param: 'send_this' }
-
-        expect(event_data).to include('other_param=send_this')
-        expect(event_data).to include('password=********')
       end
     end
   end
@@ -328,6 +396,8 @@ describe API::Helpers do
 
       it 'returns a 401 response' do
         expect { authenticate! }.to raise_error /401/
+
+        expect(env[described_class::API_RESPONSE_STATUS_CODE]).to eq(401)
       end
     end
 
@@ -340,6 +410,8 @@ describe API::Helpers do
 
       it 'does not raise an error' do
         expect { authenticate! }.not_to raise_error
+
+        expect(env[described_class::API_RESPONSE_STATUS_CODE]).to be_nil
       end
     end
   end

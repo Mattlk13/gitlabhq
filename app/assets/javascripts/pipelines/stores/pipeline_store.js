@@ -15,7 +15,7 @@ export default class PipelineStore {
    * @param {Object} pipeline
    */
   storePipeline(pipeline = {}) {
-    const pipelineCopy = Object.assign({}, pipeline);
+    const pipelineCopy = { ...pipeline };
 
     if (pipelineCopy.triggered_by) {
       pipelineCopy.triggered_by = [pipelineCopy.triggered_by];
@@ -29,11 +29,11 @@ export default class PipelineStore {
     }
 
     if (pipelineCopy.triggered && pipelineCopy.triggered.length) {
-      pipelineCopy.triggered.forEach(el => {
+      pipelineCopy.triggered.forEach((el) => {
         const oldPipeline =
           this.state.pipeline &&
           this.state.pipeline.triggered &&
-          this.state.pipeline.triggered.find(element => element.id === el.id);
+          this.state.pipeline.triggered.find((element) => element.id === el.id);
 
         this.parseTriggeredPipelines(oldPipeline, el);
       });
@@ -54,16 +54,24 @@ export default class PipelineStore {
    */
   parseTriggeredByPipelines(oldPipeline = {}, newPipeline) {
     // keep old value in case it's opened because we're polling
-
     Vue.set(newPipeline, 'isExpanded', oldPipeline.isExpanded || false);
     // add isLoading property
     Vue.set(newPipeline, 'isLoading', false);
 
+    // Because there can only ever be one `triggered_by` for any given pipeline,
+    // the API returns an object for the value instead of an Array. However,
+    // it's easier to deal with an array in the FE so we convert it.
     if (newPipeline.triggered_by) {
       if (!Array.isArray(newPipeline.triggered_by)) {
         Object.assign(newPipeline, { triggered_by: [newPipeline.triggered_by] });
       }
-      this.parseTriggeredByPipelines(oldPipeline, newPipeline.triggered_by[0]);
+
+      if (newPipeline.triggered_by?.length > 0) {
+        newPipeline.triggered_by.forEach((el) => {
+          const oldTriggeredBy = oldPipeline.triggered_by?.find((element) => element.id === el.id);
+          this.parseTriggeredPipelines(oldTriggeredBy, el);
+        });
+      }
     }
   }
 
@@ -80,9 +88,9 @@ export default class PipelineStore {
     Vue.set(newPipeline, 'isLoading', false);
 
     if (newPipeline.triggered && newPipeline.triggered.length > 0) {
-      newPipeline.triggered.forEach(el => {
+      newPipeline.triggered.forEach((el) => {
         const oldTriggered =
-          oldPipeline.triggered && oldPipeline.triggered.find(element => element.id === el.id);
+          oldPipeline.triggered && oldPipeline.triggered.find((element) => element.id === el.id);
         this.parseTriggeredPipelines(oldTriggered, el);
       });
     }
@@ -94,7 +102,7 @@ export default class PipelineStore {
    * @param {Object} pipeline
    */
   resetTriggeredByPipeline(parentPipeline, pipeline) {
-    parentPipeline.triggered_by.forEach(el => this.closePipeline(el));
+    parentPipeline.triggered_by.forEach((el) => this.closePipeline(el));
 
     if (pipeline.triggered_by && pipeline.triggered_by) {
       this.resetTriggeredByPipeline(pipeline, pipeline.triggered_by);
@@ -121,7 +129,7 @@ export default class PipelineStore {
     this.closePipeline(pipeline);
 
     if (pipeline.triggered_by && pipeline.triggered_by.length) {
-      pipeline.triggered_by.forEach(triggeredBy => this.closeTriggeredByPipeline(triggeredBy));
+      pipeline.triggered_by.forEach((triggeredBy) => this.closeTriggeredByPipeline(triggeredBy));
     }
   }
 
@@ -131,10 +139,10 @@ export default class PipelineStore {
    * @param {Object} pipeline
    */
   resetTriggeredPipelines(parentPipeline, pipeline) {
-    parentPipeline.triggered.forEach(el => this.closePipeline(el));
+    parentPipeline.triggered.forEach((el) => this.closePipeline(el));
 
     if (pipeline.triggered && pipeline.triggered.length) {
-      pipeline.triggered.forEach(el => this.resetTriggeredPipelines(pipeline, el));
+      pipeline.triggered.forEach((el) => this.resetTriggeredPipelines(pipeline, el));
     }
   }
 
@@ -157,7 +165,7 @@ export default class PipelineStore {
     this.closePipeline(pipeline);
 
     if (pipeline.triggered && pipeline.triggered.length) {
-      pipeline.triggered.forEach(triggered => this.closeTriggeredPipeline(triggered));
+      pipeline.triggered.forEach((triggered) => this.closeTriggeredPipeline(triggered));
     }
   }
 
@@ -190,6 +198,9 @@ export default class PipelineStore {
   }
 
   removeExpandedPipelineToRequestData(id) {
-    this.state.expandedPipelines.splice(this.state.expandedPipelines.findIndex(el => el === id), 1);
+    this.state.expandedPipelines.splice(
+      this.state.expandedPipelines.findIndex((el) => el === id),
+      1,
+    );
   }
 }

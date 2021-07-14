@@ -6,6 +6,8 @@ class Key < ApplicationRecord
   include AfterCommitQueue
   include Sortable
   include Sha256Attribute
+  include Expirable
+  include FromUnion
 
   sha256_attribute :fingerprint_sha256
 
@@ -30,10 +32,10 @@ class Key < ApplicationRecord
 
   delegate :name, :email, to: :user, prefix: true
 
-  after_commit :add_to_shell, on: :create
+  after_commit :add_to_authorized_keys, on: :create
   after_create :post_create_hook
   after_create :refresh_user_cache
-  after_commit :remove_from_shell, on: :destroy
+  after_commit :remove_from_authorized_keys, on: :destroy
   after_destroy :post_destroy_hook
   after_destroy :refresh_user_cache
 
@@ -42,6 +44,10 @@ class Key < ApplicationRecord
   scope :preload_users, -> { preload(:user) }
   scope :for_user, -> (user) { where(user: user) }
   scope :order_last_used_at_desc, -> { reorder(::Gitlab::Database.nulls_last_order('last_used_at', 'DESC')) }
+
+  # Date is set specifically in this scope to improve query time.
+  scope :expired_and_not_notified, -> { where(["date(expires_at AT TIME ZONE 'UTC') BETWEEN '2000-01-01' AND CURRENT_DATE AND expiry_notification_delivered_at IS NULL"]) }
+  scope :expiring_soon_and_not_notified, -> { where(["date(expires_at AT TIME ZONE 'UTC') > CURRENT_DATE AND date(expires_at AT TIME ZONE 'UTC') < ? AND before_expiry_notification_delivered_at IS NULL", DAYS_TO_EXPIRE.days.from_now.to_date]) }
 
   def self.regular_keys
     where(type: ['Key', nil])
@@ -79,12 +85,10 @@ class Key < ApplicationRecord
   end
   # rubocop: enable CodeReuse/ServiceClass
 
-  def add_to_shell
-    GitlabShellWorker.perform_async(
-      :add_key,
-      shell_id,
-      key
-    )
+  def add_to_authorized_keys
+    return unless Gitlab::CurrentSettings.authorized_keys_enabled?
+
+    AuthorizedKeysWorker.perform_async(:add_key, shell_id, key)
   end
 
   # rubocop: disable CodeReuse/ServiceClass
@@ -93,11 +97,10 @@ class Key < ApplicationRecord
   end
   # rubocop: enable CodeReuse/ServiceClass
 
-  def remove_from_shell
-    GitlabShellWorker.perform_async(
-      :remove_key,
-      shell_id
-    )
+  def remove_from_authorized_keys
+    return unless Gitlab::CurrentSettings.authorized_keys_enabled?
+
+    AuthorizedKeysWorker.perform_async(:remove_key, shell_id)
   end
 
   # rubocop: disable CodeReuse/ServiceClass
@@ -147,4 +150,4 @@ class Key < ApplicationRecord
   end
 end
 
-Key.prepend_if_ee('EE::Key')
+Key.prepend_mod_with('Key')

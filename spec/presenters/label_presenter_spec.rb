@@ -2,11 +2,12 @@
 
 require 'spec_helper'
 
-describe LabelPresenter do
+RSpec.describe LabelPresenter do
   include Gitlab::Routing.url_helpers
 
   let_it_be(:group) { create(:group) }
   let_it_be(:project) { create(:project, group: group) }
+
   let(:label) { build_stubbed(:label, project: project).present(issuable_subject: project) }
   let(:group_label) { build_stubbed(:group_label, group: group).present(issuable_subject: project) }
 
@@ -89,6 +90,20 @@ describe LabelPresenter do
       subject { label.subject_name }
 
       it { is_expected.to eq(label.project.name) }
+    end
+  end
+
+  describe '#subject_full_name' do
+    context 'with group label' do
+      subject { group_label.subject_full_name }
+
+      it { is_expected.to eq(group_label.group.full_name) }
+    end
+
+    context 'with project label' do
+      subject { label.subject_full_name }
+
+      it { is_expected.to eq(label.project.full_name) }
     end
   end
 end

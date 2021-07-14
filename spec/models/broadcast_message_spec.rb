@@ -2,7 +2,7 @@
 
 require 'spec_helper'
 
-describe BroadcastMessage do
+RSpec.describe BroadcastMessage do
   subject { build(:broadcast_message) }
 
   it { is_expected.to be_valid }
@@ -65,6 +65,17 @@ describe BroadcastMessage do
       end
     end
 
+    it 'expires the value if a broadcast message has ended', :request_store do
+      message = create(:broadcast_message, broadcast_type: broadcast_type, ends_at: Time.current.utc + 1.day)
+
+      expect(subject.call).to match_array([message])
+      expect(described_class.cache).to receive(:expire).and_call_original
+
+      Timecop.travel(1.week) do
+        2.times { expect(subject.call).to be_empty }
+      end
+    end
+
     it 'does not create new records' do
       create(:broadcast_message, broadcast_type: broadcast_type)
 
@@ -76,8 +87,8 @@ describe BroadcastMessage do
 
       future = create(
         :broadcast_message,
-        starts_at: Time.now + 10.minutes,
-        ends_at: Time.now + 20.minutes,
+        starts_at: Time.current + 10.minutes,
+        ends_at: Time.current + 20.minutes,
         broadcast_type: broadcast_type
       )
 
@@ -109,6 +120,12 @@ describe BroadcastMessage do
       expect(subject.call('/users/name/issues').length).to eq(1)
     end
 
+    it 'returns message if provided a path without a preceding slash' do
+      create(:broadcast_message, target_path: "/users/*/issues", broadcast_type: broadcast_type)
+
+      expect(subject.call('users/name/issues').length).to eq(1)
+    end
+
     it 'returns the message for empty target path' do
       create(:broadcast_message, target_path: "", broadcast_type: broadcast_type)
 
@@ -131,6 +148,30 @@ describe BroadcastMessage do
       create(:broadcast_message, target_path: "/users/*/issues", broadcast_type: broadcast_type)
 
       expect(subject.call('/group/groupname/issues').length).to eq(0)
+    end
+
+    it 'does not return message if target path has no wild card at the end' do
+      create(:broadcast_message, target_path: "*/issues", broadcast_type: broadcast_type)
+
+      expect(subject.call('/group/issues/test').length).to eq(0)
+    end
+
+    it 'does not return message if target path has wild card at the end' do
+      create(:broadcast_message, target_path: "/issues/*", broadcast_type: broadcast_type)
+
+      expect(subject.call('/group/issues/test').length).to eq(0)
+    end
+
+    it 'does return message if target path has wild card at the beginning and the end' do
+      create(:broadcast_message, target_path: "*/issues/*", broadcast_type: broadcast_type)
+
+      expect(subject.call('/group/issues/test').length).to eq(1)
+    end
+
+    it "does not return message if the target path is set but no current path is provided" do
+      create(:broadcast_message, target_path: "*/issues/*", broadcast_type: broadcast_type)
+
+      expect(subject.call.length).to eq(0)
     end
   end
 

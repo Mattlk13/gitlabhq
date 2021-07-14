@@ -2,7 +2,7 @@
 
 require 'spec_helper'
 
-describe Gitlab::OmniauthInitializer do
+RSpec.describe Gitlab::OmniauthInitializer do
   let(:devise_config) { class_double(Devise) }
 
   subject { described_class.new(devise_config) }
@@ -86,32 +86,20 @@ describe Gitlab::OmniauthInitializer do
       subject.execute([cas3_config])
     end
 
-    it 'converts client_auth_method to a Symbol for openid_connect' do
-      openid_connect_config = {
-        'name' => 'openid_connect',
-        'args' => { name: 'openid_connect', client_auth_method: 'basic' }
+    it 'configures defaults for google_oauth2' do
+      google_config = {
+        'name' => 'google_oauth2',
+        "args" => { "access_type" => "offline", "approval_prompt" => '' }
       }
 
       expect(devise_config).to receive(:omniauth).with(
-        :openid_connect,
-        { name: 'openid_connect', client_auth_method: :basic }
+        :google_oauth2,
+        access_type: "offline",
+        approval_prompt: "",
+        client_options: { connection_opts: { request: { timeout: Gitlab::OmniauthInitializer::OAUTH2_TIMEOUT_SECONDS } } }
       )
 
-      subject.execute([openid_connect_config])
-    end
-
-    it 'converts client_auth_method to a Symbol for strategy_class OpenIDConnect' do
-      openid_connect_config = {
-        'name' => 'openid_connect',
-        'args' => { strategy_class: OmniAuth::Strategies::OpenIDConnect, client_auth_method: 'jwt_bearer' }
-      }
-
-      expect(devise_config).to receive(:omniauth).with(
-        :openid_connect,
-        { strategy_class: OmniAuth::Strategies::OpenIDConnect, client_auth_method: :jwt_bearer }
-      )
-
-      subject.execute([openid_connect_config])
+      subject.execute([google_config])
     end
   end
 end

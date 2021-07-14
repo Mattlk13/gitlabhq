@@ -2,7 +2,7 @@
 
 require 'spec_helper'
 
-describe API::ProjectHooks, 'ProjectHooks' do
+RSpec.describe API::ProjectHooks, 'ProjectHooks' do
   let(:user) { create(:user) }
   let(:user3) { create(:user) }
   let!(:project) { create(:project, creator_id: user.id, namespace: user.namespace) }
@@ -40,6 +40,8 @@ describe API::ProjectHooks, 'ProjectHooks' do
         expect(json_response.first['job_events']).to eq(true)
         expect(json_response.first['pipeline_events']).to eq(true)
         expect(json_response.first['wiki_page_events']).to eq(true)
+        expect(json_response.first['deployment_events']).to eq(true)
+        expect(json_response.first['releases_events']).to eq(true)
         expect(json_response.first['enable_ssl_verification']).to eq(true)
         expect(json_response.first['push_events_branch_filter']).to eq('master')
       end
@@ -71,11 +73,13 @@ describe API::ProjectHooks, 'ProjectHooks' do
         expect(json_response['job_events']).to eq(hook.job_events)
         expect(json_response['pipeline_events']).to eq(hook.pipeline_events)
         expect(json_response['wiki_page_events']).to eq(hook.wiki_page_events)
+        expect(json_response['releases_events']).to eq(hook.releases_events)
+        expect(json_response['deployment_events']).to eq(true)
         expect(json_response['enable_ssl_verification']).to eq(hook.enable_ssl_verification)
       end
 
       it "returns a 404 error if hook id is not available" do
-        get api("/projects/#{project.id}/hooks/1234", user)
+        get api("/projects/#{project.id}/hooks/#{non_existing_record_id}", user)
 
         expect(response).to have_gitlab_http_status(:not_found)
       end
@@ -92,8 +96,11 @@ describe API::ProjectHooks, 'ProjectHooks' do
   describe "POST /projects/:id/hooks" do
     it "adds hook to project" do
       expect do
-        post api("/projects/#{project.id}/hooks", user),
-          params: { url: "http://example.com", issues_events: true, confidential_issues_events: true, wiki_page_events: true, job_events: true, push_events_branch_filter: 'some-feature-branch' }
+        post(api("/projects/#{project.id}/hooks", user),
+             params: { url: "http://example.com", issues_events: true,
+                       confidential_issues_events: true, wiki_page_events: true,
+                       job_events: true, deployment_events: true, releases_events: true,
+                       push_events_branch_filter: 'some-feature-branch' })
       end.to change {project.hooks.count}.by(1)
 
       expect(response).to have_gitlab_http_status(:created)
@@ -108,6 +115,8 @@ describe API::ProjectHooks, 'ProjectHooks' do
       expect(json_response['job_events']).to eq(true)
       expect(json_response['pipeline_events']).to eq(false)
       expect(json_response['wiki_page_events']).to eq(true)
+      expect(json_response['deployment_events']).to eq(true)
+      expect(json_response['releases_events']).to eq(true)
       expect(json_response['enable_ssl_verification']).to eq(true)
       expect(json_response['push_events_branch_filter']).to eq('some-feature-branch')
       expect(json_response).not_to include('token')
@@ -163,6 +172,7 @@ describe API::ProjectHooks, 'ProjectHooks' do
       expect(json_response['job_events']).to eq(hook.job_events)
       expect(json_response['pipeline_events']).to eq(hook.pipeline_events)
       expect(json_response['wiki_page_events']).to eq(hook.wiki_page_events)
+      expect(json_response['releases_events']).to eq(hook.releases_events)
       expect(json_response['enable_ssl_verification']).to eq(hook.enable_ssl_verification)
     end
 
@@ -180,7 +190,7 @@ describe API::ProjectHooks, 'ProjectHooks' do
     end
 
     it "returns 404 error if hook id not found" do
-      put api("/projects/#{project.id}/hooks/1234", user), params: { url: 'http://example.org' }
+      put api("/projects/#{project.id}/hooks/#{non_existing_record_id}", user), params: { url: 'http://example.org' }
       expect(response).to have_gitlab_http_status(:not_found)
     end
 

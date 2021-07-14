@@ -28,8 +28,12 @@ module Gitlab
 
         def handle_response_error(response)
           unless response.success?
-            raise StrategyError.new("Error uploading the project. Code #{response.code}: #{response.message}")
+            raise StrategyError, "Error uploading the project. Code #{response.code}: #{response.message}"
           end
+        end
+
+        def delete_export?
+          false
         end
 
         private
@@ -52,7 +56,10 @@ module Gitlab
         end
 
         def headers
-          { 'Content-Length' => export_size.to_s }
+          {
+            'Content-Type' => 'application/gzip',
+            'Content-Length' => export_size.to_s
+          }
         end
 
         def export_size

@@ -2,7 +2,7 @@
 
 require 'spec_helper'
 
-describe Gitlab::SidekiqDaemon::Monitor do
+RSpec.describe Gitlab::SidekiqDaemon::Monitor do
   let(:monitor) { described_class.new }
 
   describe '#within_job' do
@@ -225,7 +225,7 @@ describe Gitlab::SidekiqDaemon::Monitor do
 
         after do
           thread.kill
-        rescue
+        rescue StandardError
         end
 
         it 'does log cancellation message' do

@@ -5,19 +5,19 @@ module QA
     module Project
       module SubMenus
         module CiCd
-          include Page::Project::SubMenus::Common
+          extend QA::Page::PageConcern
 
           def self.included(base)
+            super
+
             base.class_eval do
-              view 'app/views/layouts/nav/sidebar/_project.html.haml' do
-                element :link_pipelines
-              end
+              include QA::Page::Project::SubMenus::Common
             end
           end
 
           def click_ci_cd_pipelines
             within_sidebar do
-              click_element :link_pipelines
+              click_element(:sidebar_menu_link, menu_item: 'CI/CD')
             end
           end
         end

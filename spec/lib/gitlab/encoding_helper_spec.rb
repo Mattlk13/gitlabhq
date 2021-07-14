@@ -2,7 +2,7 @@
 
 require "spec_helper"
 
-describe Gitlab::EncodingHelper do
+RSpec.describe Gitlab::EncodingHelper do
   let(:ext_class) { Class.new { extend Gitlab::EncodingHelper } }
   let(:binary_string) { File.read(Rails.root + "spec/fixtures/dk.png") }
 
@@ -128,10 +128,17 @@ describe Gitlab::EncodingHelper do
       expect { ext_class.encode_utf8('') }.not_to raise_error
     end
 
+    it 'replaces invalid and undefined chars with the replace argument' do
+      str = 'hællo'.encode(Encoding::UTF_16LE).force_encoding(Encoding::ASCII_8BIT)
+
+      expect(ext_class.encode_utf8(str, replace: "\u{FFFD}")).to eq("h�llo")
+    end
+
     context 'with strings that can be forcefully encoded into utf8' do
       let(:test_string) do
         "refs/heads/FixSymbolsTitleDropdown".encode("ASCII-8BIT")
       end
+
       let(:expected_string) do
         "refs/heads/FixSymbolsTitleDropdown".encode("UTF-8")
       end
@@ -207,6 +214,65 @@ describe Gitlab::EncodingHelper do
 
       expect(io_stream.external_encoding.name).to eq('ASCII-8BIT')
       expect(test).not_to eq(io_stream)
+    end
+  end
+
+  describe '#detect_encoding' do
+    subject { ext_class.detect_encoding(data, **kwargs) }
+
+    let(:data) { binary_string }
+    let(:kwargs) { {} }
+
+    shared_examples 'detects encoding' do
+      it { is_expected.to be_a(Hash) }
+
+      it 'correctly detects the binary' do
+        expect(subject[:type]).to eq(:binary)
+      end
+
+      context 'data is nil' do
+        let(:data) { nil }
+
+        it { is_expected.to be_nil }
+      end
+
+      context 'limit is provided' do
+        let(:kwargs) do
+          { limit: 10 }
+        end
+
+        it 'correctly detects the binary' do
+          expect(subject[:type]).to eq(:binary)
+        end
+      end
+    end
+
+    context 'cached_encoding_detection is enabled' do
+      before do
+        stub_feature_flags(cached_encoding_detection: true)
+      end
+
+      it_behaves_like 'detects encoding'
+
+      context 'cache_key is provided' do
+        let(:kwargs) do
+          { cache_key: %w(foo bar) }
+        end
+
+        it 'uses that cache_key to serve from the cache' do
+          expect(Rails.cache).to receive(:fetch).with([:detect_binary, CharlockHolmes::VERSION, %w(foo bar)], expires_in: 1.week).and_call_original
+
+          expect(subject[:type]).to eq(:binary)
+        end
+      end
+    end
+
+    context 'cached_encoding_detection is disabled' do
+      before do
+        stub_feature_flags(cached_encoding_detection: false)
+      end
+
+      it_behaves_like 'detects encoding'
     end
   end
 end

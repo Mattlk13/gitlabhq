@@ -2,12 +2,13 @@
 
 require "spec_helper"
 
-describe "User creates a merge request", :js do
+RSpec.describe "User creates a merge request", :js do
   include ProjectForksHelper
 
+  let_it_be(:project) { create(:project, :repository) }
+  let_it_be(:user) { create(:user) }
+
   let(:title) { "Some feature" }
-  let(:project) { create(:project, :repository) }
-  let(:user) { create(:user) }
 
   before do
     project.add_maintainer(user)
@@ -31,10 +32,30 @@ describe "User creates a merge request", :js do
     end
 
     fill_in("Title", with: title)
-    click_button("Submit merge request")
+    click_button("Create merge request")
 
     page.within(".merge-request") do
       expect(page).to have_content(title)
+    end
+  end
+
+  context "XSS branch name exists" do
+    before do
+      project.repository.create_branch("<img/src='x'/onerror=alert('oops')>", "master")
+    end
+
+    it "doesn't execute the dodgy branch name" do
+      visit(project_new_merge_request_path(project))
+
+      find(".js-source-branch").click
+      click_link("<img/src='x'/onerror=alert('oops')>")
+
+      find(".js-target-branch").click
+      click_link("feature")
+
+      click_button("Compare branches")
+
+      expect { page.driver.browser.switch_to.alert }.to raise_error(Selenium::WebDriver::Error::NoSuchAlertError)
     end
   end
 
@@ -67,7 +88,7 @@ describe "User creates a merge request", :js do
 
       click_button("Compare branches and continue")
 
-      expect(page).to have_css("h3.page-title", text: "New Merge Request")
+      expect(page).to have_css("h3.page-title", text: "New merge request")
 
       page.within("form#new_merge_request") do
         fill_in("Title", with: title)
@@ -83,7 +104,7 @@ describe "User creates a merge request", :js do
       end
       find('.js-assignee-search').click
 
-      click_button("Submit merge request")
+      click_button("Create merge request")
 
       expect(page).to have_content(title).and have_content("Request to merge #{user.namespace.path}:#{source_branch} into master")
     end

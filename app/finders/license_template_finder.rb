@@ -13,8 +13,6 @@
 class LicenseTemplateFinder
   include Gitlab::Utils::StrongMemoize
 
-  prepend_if_ee('::EE::LicenseTemplateFinder') # rubocop: disable Cop/InjectEnterpriseEditionModule
-
   attr_reader :project, :params
 
   def initialize(project, params = {})
@@ -30,6 +28,10 @@ class LicenseTemplateFinder
     end
   end
 
+  def template_names
+    ::Gitlab::Template::BaseTemplate.template_names_by_category(vendored_licenses)
+  end
+
   private
 
   def vendored_licenses
@@ -38,6 +40,7 @@ class LicenseTemplateFinder
         LicenseTemplate.new(
           key: license.key,
           name: license.name,
+          project: project,
           nickname: license.nickname,
           category: (license.featured? ? :Popular : :Other),
           content: license.content,
@@ -52,3 +55,5 @@ class LicenseTemplateFinder
     params.fetch(:popular, nil)
   end
 end
+
+LicenseTemplateFinder.prepend_mod_with('LicenseTemplateFinder')

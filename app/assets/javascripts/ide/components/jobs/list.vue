@@ -1,6 +1,6 @@
 <script>
-import { mapActions } from 'vuex';
 import { GlLoadingIcon } from '@gitlab/ui';
+import { mapActions } from 'vuex';
 import Stage from './stage.vue';
 
 export default {
@@ -26,7 +26,7 @@ export default {
 
 <template>
   <div>
-    <gl-loading-icon v-if="loading && !stages.length" :size="2" class="prepend-top-default" />
+    <gl-loading-icon v-if="loading && !stages.length" size="lg" class="gl-mt-3" />
     <template v-else>
       <stage
         v-for="stage in stages"

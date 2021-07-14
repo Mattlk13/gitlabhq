@@ -5,7 +5,7 @@ require 'fast_spec_helper'
 # Patching ActiveSupport::Concern
 require_relative '../../../../config/initializers/0_as_concern'
 
-describe Gitlab::Patch::Prependable do
+RSpec.describe Gitlab::Patch::Prependable do
   before do
     @prepended_modules = []
   end
@@ -229,6 +229,24 @@ describe Gitlab::Patch::Prependable do
     it "raises an error" do
       expect { subject }
         .to raise_error(described_class::MultiplePrependedBlocks)
+    end
+  end
+
+  describe 'the extra hack for override verification' do
+    context 'when ENV["STATIC_VERIFICATION"] is not defined' do
+      it 'does not extend ClassMethods onto the defining module' do
+        expect(ee).not_to respond_to(:class_name)
+      end
+    end
+
+    context 'when ENV["STATIC_VERIFICATION"] is defined' do
+      before do
+        stub_env('STATIC_VERIFICATION', 'true')
+      end
+
+      it 'does extend ClassMethods onto the defining module' do
+        expect(ee).to respond_to(:class_name)
+      end
     end
   end
 end

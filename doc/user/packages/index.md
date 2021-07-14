@@ -1,47 +1,68 @@
-# GitLab Package Registry
+---
+stage: Package
+group: Package
+info: To determine the technical writer assigned to the Stage/Group associated with this page, see https://about.gitlab.com/handbook/engineering/ux/technical-writing/#assignments
+---
 
-GitLab Packages allows organizations to utilize GitLab as a private repository
-for a variety of common package managers. Users are able to build and publish
+# Packages and Registries **(FREE)**
+
+The GitLab [Package Registry](package_registry/index.md) acts as a private or public registry
+for a variety of common package managers. You can publish and share
 packages, which can be easily consumed as a dependency in downstream projects.
 
-The Packages feature allows GitLab to act as a repository for the following:
+The Package Registry supports the following formats:
 
-| Software repository | Description | Available in GitLab version |
-| ------------------- | ----------- | --------------------------- |
-| [Container Registry](container_registry/index.md)   | The GitLab Container Registry enables every project in GitLab to have its own space to store [Docker](https://www.docker.com/) images. | 8.8+ |
-| [Dependency Proxy](dependency_proxy/index.md) **(PREMIUM)** | The GitLab Dependency Proxy sets up a local proxy for frequently used upstream images/packages. | 11.11+ |
-| [Conan Repository](conan_repository/index.md) **(PREMIUM)** | The GitLab Conan Repository enables every project in GitLab to have its own space to store [Conan](https://conan.io/) packages. | 12.6+ |
-| [Maven Repository](maven_repository/index.md) **(PREMIUM)** | The GitLab Maven Repository enables every project in GitLab to have its own space to store [Maven](https://maven.apache.org/) packages. | 11.3+ |
-| [NPM Registry](npm_registry/index.md) **(PREMIUM)**  | The GitLab NPM Registry enables every project in GitLab to have its own space to store [NPM](https://www.npmjs.com/) packages. | 11.7+ |
-| [NuGet Repository](nuget_repository/index.md) **(PREMIUM)**  | The GitLab NuGet Repository will enable every project in GitLab to have its own space to store [NuGet](https://www.nuget.org/) packages. | 12.8+ |
+| Package type | GitLab version |
+| ------------ | -------------- |
+| [Composer](composer_repository/index.md) | 13.2+ |
+| [Conan](conan_repository/index.md) | 12.6+ |
+| [Go](go_proxy/index.md) | 13.1+ |
+| [Helm](helm_repository/index.md) | 14.1+ |
+| [Maven](maven_repository/index.md) | 11.3+ |
+| [npm](npm_registry/index.md) | 11.7+ |
+| [NuGet](nuget_repository/index.md) | 12.8+ |
+| [PyPI](pypi_repository/index.md) | 12.10+ |
+| [Generic packages](generic_packages/index.md) | 13.5+ |
+| [Ruby gems](rubygems_registry/index.md) | 13.10+ |
 
-## Suggested contributions
+You can also use the [API](../../api/packages.md) to administer the Package Registry.
 
-Consider contributing to GitLab. This [development documentation](../../development/packages.md) will
-guide you through the process. Or check out how other members of the community
-are adding support for [PHP](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/17417) or [Terraform](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/18834).
+## Accepting contributions
 
-| Format | Use case |
+The below table lists formats that are not supported, but are accepting Community contributions for. Consider contributing to GitLab. This [development documentation](../../development/packages.md)
+guides you through the process.
+
+<!-- vale gitlab.Spelling = NO -->
+
+| Format | Status |
 | ------ | ------ |
-| [Cargo](https://gitlab.com/gitlab-org/gitlab/issues/33060) | Cargo is the Rust package manager. Build, publish and share Rust packages  |
-| [Chef](https://gitlab.com/gitlab-org/gitlab/issues/36889) | Configuration management with Chef using all the benefits of a repository manager. |
-| [CocoaPods](https://gitlab.com/gitlab-org/gitlab/issues/36890) | Speed up development with Xcode and CocoaPods. |
-| [Conda](https://gitlab.com/gitlab-org/gitlab/issues/36891) | Secure and private local Conda repositories. |
-| [CRAN](https://gitlab.com/gitlab-org/gitlab/issues/36892) | Deploy and resolve CRAN packages for the R language. |
-| [Debian](https://gitlab.com/gitlab-org/gitlab/issues/5835) | Host and provision Debian packages. |
-| [Go](https://gitlab.com/gitlab-org/gitlab/issues/9773) | Resolve Go dependencies from and publish your Go packages to GitLab.  |
-| [Opkg](https://gitlab.com/gitlab-org/gitlab/issues/36894) | Optimize your work with OpenWrt using Opkg repositories. |
-| [P2](https://gitlab.com/gitlab-org/gitlab/issues/36895) | Host all your Eclipse plugins in your own GitLab P2 repository. |
-| [Puppet](https://gitlab.com/gitlab-org/gitlab/issues/36897) | Configuration management meets repository management with Puppet repositories. |
-| [PyPi](https://gitlab.com/gitlab-org/gitlab/issues/10483) | Host PyPi distributions. |
-| [RPM](https://gitlab.com/gitlab-org/gitlab/issues/5932) | Distribute RPMs directly from GitLab. |
-| [RubyGems](https://gitlab.com/gitlab-org/gitlab/issues/803) | Use GitLab to host your own gems. |
-| [SBT](https://gitlab.com/gitlab-org/gitlab/issues/36898) | Resolve dependencies from and deploy build output to SBT repositories when running SBT builds. |
-| [Vagrant](https://gitlab.com/gitlab-org/gitlab/issues/36899) | Securely host your Vagrant boxes in local repositories. |
+| Chef      | [#36889](https://gitlab.com/gitlab-org/gitlab/-/issues/36889) |
+| CocoaPods | [#36890](https://gitlab.com/gitlab-org/gitlab/-/issues/36890) |
+| Conda     | [#36891](https://gitlab.com/gitlab-org/gitlab/-/issues/36891) |
+| CRAN      | [#36892](https://gitlab.com/gitlab-org/gitlab/-/issues/36892) |
+| Debian    | [Draft: Merge Request](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/50438) |
+| Opkg      | [#36894](https://gitlab.com/gitlab-org/gitlab/-/issues/36894) |
+| P2        | [#36895](https://gitlab.com/gitlab-org/gitlab/-/issues/36895) |
+| Puppet    | [#36897](https://gitlab.com/gitlab-org/gitlab/-/issues/36897) |
+| RPM       | [#5932](https://gitlab.com/gitlab-org/gitlab/-/issues/5932) |
+| SBT       | [#36898](https://gitlab.com/gitlab-org/gitlab/-/issues/36898) |
+| Vagrant   | [#36899](https://gitlab.com/gitlab-org/gitlab/-/issues/36899) |
 
-## Package workflows
+<!-- vale gitlab.Spelling = YES -->
+## Container Registry
 
-Learning how to use the GitLab Package Registry will help you build your own custom package workflow.
+The GitLab [Container Registry](container_registry/index.md) is a secure and private registry for container images. It's built on open source software and completely integrated within GitLab. Use GitLab CI/CD to create and publish images. Use the GitLab [API](../../api/container_registry.md) to manage the registry across groups and projects.
 
-- [Use a project as a package registry](./workflows/project_registry.md) to publish all of your packages to one project.
-- [Working with a monorepo](./workflows/monorepo.md): Learn how to publish multiple different packages from one monorepo project.
+## Infrastructure Registry
+
+The GitLab [Infrastructure Registry](infrastructure_registry/index.md) is a secure and private registry for infrastructure packages. You can use GitLab CI/CD to create and publish infrastructure packages.
+
+The Infrastructure Registry supports the following formats:
+
+| Package type | GitLab version |
+| ------------ | -------------- |
+| [Terraform Module](terraform_module_registry/index.md) | 14.0+ |
+
+## Dependency Proxy
+
+The [Dependency Proxy](dependency_proxy/index.md) is a local proxy for frequently-used upstream images and packages.

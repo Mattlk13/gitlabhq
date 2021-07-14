@@ -2,7 +2,7 @@
 
 require 'spec_helper'
 
-describe API::Discussions do
+RSpec.describe API::Discussions do
   let(:user) { create(:user) }
   let!(:project) { create(:project, :public, :repository, namespace: user.namespace) }
   let(:private_user) { create(:user) }
@@ -31,7 +31,7 @@ describe API::Discussions do
 
   context 'when noteable is a Snippet' do
     let!(:snippet) { create(:project_snippet, project: project, author: user) }
-    let!(:snippet_note) { create(:discussion_note_on_snippet, noteable: snippet, project: project, author: user) }
+    let!(:snippet_note) { create(:discussion_note_on_project_snippet, noteable: snippet, project: project, author: user) }
 
     it_behaves_like 'discussions API', 'projects', 'snippets', 'id' do
       let(:parent) { project }
@@ -59,6 +59,30 @@ describe API::Discussions do
           params: { body: 'hi!', position: position }
 
         expect(response).to have_gitlab_http_status(:bad_request)
+      end
+    end
+
+    context "when a commit parameter is given" do
+      it "creates the discussion on that commit within the merge request" do
+        # SHAs of "feature" and its parent in spec/support/gitlab-git-test.git
+        mr_commit = '0b4bc9a49b562e85de7cc9e834518ea6828729b9'
+        parent_commit = 'ae73cb07c9eeaf35924a10f713b364d32b2dd34f'
+        file = "files/ruby/feature.rb"
+        position = build(
+          :text_diff_position,
+          :added,
+          file: file,
+          new_line: 1,
+          base_sha: parent_commit,
+          head_sha: mr_commit,
+          start_sha: parent_commit
+        )
+
+        post api("/projects/#{project.id}/merge_requests/#{noteable['iid']}/discussions", user),
+          params: { body: 'MR discussion on commit', position: position.to_h, commit_id: mr_commit }
+
+        expect(response).to have_gitlab_http_status(:created)
+        expect(json_response['notes'].first['commit_id']).to eq(mr_commit)
       end
     end
   end

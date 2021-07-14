@@ -1,16 +1,16 @@
 # frozen_string_literal: true
 
 require 'spec_helper'
-require Rails.root.join('db', 'post_migrate', '20200127111840_fix_projects_without_project_feature.rb')
+require_migration!
 
-describe FixProjectsWithoutProjectFeature, :migration do
-  let(:namespace) { table(:namespaces).create(name: 'gitlab', path: 'gitlab-org') }
+RSpec.describe FixProjectsWithoutProjectFeature do
+  let(:namespace) { table(:namespaces).create!(name: 'gitlab', path: 'gitlab-org') }
 
   let!(:projects) do
     [
-      table(:projects).create(namespace_id: namespace.id, name: 'foo 1'),
-      table(:projects).create(namespace_id: namespace.id, name: 'foo 2'),
-      table(:projects).create(namespace_id: namespace.id, name: 'foo 3')
+      table(:projects).create!(namespace_id: namespace.id, name: 'foo 1'),
+      table(:projects).create!(namespace_id: namespace.id, name: 'foo 2'),
+      table(:projects).create!(namespace_id: namespace.id, name: 'foo 3')
     ]
   end
 
@@ -20,7 +20,7 @@ describe FixProjectsWithoutProjectFeature, :migration do
 
   around do |example|
     Sidekiq::Testing.fake! do
-      Timecop.freeze do
+      freeze_time do
         example.call
       end
     end

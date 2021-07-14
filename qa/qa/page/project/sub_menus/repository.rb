@@ -5,27 +5,34 @@ module QA
     module Project
       module SubMenus
         module Repository
-          include Page::Project::SubMenus::Common
+          extend QA::Page::PageConcern
 
           def self.included(base)
+            super
+
             base.class_eval do
-              view 'app/views/layouts/nav/sidebar/_project.html.haml' do
-                element :project_menu_repo
-                element :branches_link
-              end
+              include QA::Page::Project::SubMenus::Common
             end
           end
 
           def click_repository
             within_sidebar do
-              click_element(:project_menu_repo)
+              click_element(:sidebar_menu_link, menu_item: 'Repository')
             end
           end
 
           def go_to_repository_branches
             hover_repository do
               within_submenu do
-                click_element(:branches_link)
+                click_element(:sidebar_menu_item_link, menu_item: 'Branches')
+              end
+            end
+          end
+
+          def go_to_repository_tags
+            hover_repository do
+              within_submenu do
+                click_element(:sidebar_menu_item_link, menu_item: 'Tags')
               end
             end
           end
@@ -34,7 +41,7 @@ module QA
 
           def hover_repository
             within_sidebar do
-              find_element(:project_menu_repo).hover
+              find_element(:sidebar_menu_link, menu_item: 'Repository').hover
 
               yield
             end
@@ -44,5 +51,3 @@ module QA
     end
   end
 end
-
-QA::Page::Project::SubMenus::Repository.prepend_if_ee('QA::EE::Page::Project::SubMenus::Repository')

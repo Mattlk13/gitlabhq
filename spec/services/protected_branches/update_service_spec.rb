@@ -2,7 +2,7 @@
 
 require 'spec_helper'
 
-describe ProtectedBranches::UpdateService do
+RSpec.describe ProtectedBranches::UpdateService do
   let(:protected_branch) { create(:protected_branch) }
   let(:project) { protected_branch.project }
   let(:user) { project.owner }
@@ -27,7 +27,7 @@ describe ProtectedBranches::UpdateService do
 
     context 'when a policy restricts rule creation' do
       before do
-        policy = instance_double(ProtectedBranchPolicy, can?: false)
+        policy = instance_double(ProtectedBranchPolicy, allowed?: false)
         expect(ProtectedBranchPolicy).to receive(:new).and_return(policy)
       end
 

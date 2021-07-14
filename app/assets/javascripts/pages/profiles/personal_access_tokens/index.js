@@ -1,3 +1,4 @@
-import DueDateSelectors from '~/due_date_select';
+import { initExpiresAtField, initProjectsField } from '~/access_tokens';
 
-document.addEventListener('DOMContentLoaded', () => new DueDateSelectors());
+initExpiresAtField();
+initProjectsField();

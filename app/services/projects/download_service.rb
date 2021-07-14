@@ -7,7 +7,8 @@ module Projects
     ].freeze
 
     def initialize(project, url)
-      @project, @url = project, url
+      @project = project
+      @url = url
     end
 
     def execute
@@ -27,7 +28,7 @@ module Projects
     end
 
     def http?(url)
-      url =~ /\A#{URI.regexp(%w(http https))}\z/
+      url =~ /\A#{URI::DEFAULT_PARSER.make_regexp(%w(http https))}\z/
     end
 
     def valid_domain?(url)

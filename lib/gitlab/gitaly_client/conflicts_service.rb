@@ -21,7 +21,6 @@ module Gitlab
           their_commit_oid: @their_commit_oid
         )
         response = GitalyClient.call(@repository.storage, :conflicts_service, :list_conflict_files, request, timeout: GitalyClient.long_timeout)
-
         GitalyClient::ConflictFilesStitcher.new(response, @gitaly_repo)
       end
 
@@ -50,7 +49,7 @@ module Gitlab
           end
         end
 
-        response = GitalyClient.call(@repository.storage, :conflicts_service, :resolve_conflicts, req_enum, remote_storage: target_repository.storage, timeout: GitalyClient.medium_timeout)
+        response = GitalyClient.call(@repository.storage, :conflicts_service, :resolve_conflicts, req_enum, remote_storage: target_repository.storage, timeout: GitalyClient.long_timeout)
 
         if response.resolution_error.present?
           raise Gitlab::Git::Conflict::Resolver::ResolutionError, response.resolution_error
@@ -68,7 +67,8 @@ module Gitlab
           source_branch: encode_binary(source_branch),
           target_branch: encode_binary(target_branch),
           commit_message: encode_binary(resolution.commit_message),
-          user: Gitlab::Git::User.from_gitlab(resolution.user).to_gitaly
+          user: Gitlab::Git::User.from_gitlab(resolution.user).to_gitaly,
+          timestamp: Google::Protobuf::Timestamp.new(seconds: Time.now.utc.to_i)
         )
       end
     end

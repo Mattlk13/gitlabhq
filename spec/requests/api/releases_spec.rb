@@ -2,25 +2,23 @@
 
 require 'spec_helper'
 
-describe API::Releases do
+RSpec.describe API::Releases do
   let(:project) { create(:project, :repository, :private) }
   let(:maintainer) { create(:user) }
   let(:reporter) { create(:user) }
+  let(:developer) { create(:user) }
   let(:guest) { create(:user) }
   let(:non_project_member) { create(:user) }
   let(:commit) { create(:commit, project: project) }
-  let(:last_release) { project.releases.last }
 
   before do
     project.add_maintainer(maintainer)
     project.add_reporter(reporter)
     project.add_guest(guest)
-
-    project.repository.add_tag(maintainer, 'v0.1', commit.id)
-    project.repository.add_tag(maintainer, 'v0.2', commit.id)
+    project.add_developer(developer)
   end
 
-  describe 'GET /projects/:id/releases' do
+  describe 'GET /projects/:id/releases', :use_clean_rails_redis_caching do
     context 'when there are two releases' do
       let!(:release_1) do
         create(:release,
@@ -52,6 +50,55 @@ describe API::Releases do
         expect(json_response.second['tag_name']).to eq(release_1.tag)
       end
 
+      it 'does not include description_html' do
+        get api("/projects/#{project.id}/releases", maintainer)
+
+        expect(json_response.map { |h| h['description_html'] }).to contain_exactly(nil, nil)
+      end
+
+      RSpec.shared_examples 'release sorting' do |order_by|
+        subject { get api(url, access_level), params: { sort: sort, order_by: order_by } }
+
+        context "sorting by #{order_by}" do
+          context 'ascending order' do
+            let(:sort) { 'asc' }
+
+            it 'returns the sorted releases' do
+              subject
+
+              expect(json_response.map { |release| release['name'] }).to eq(releases.map(&:name))
+            end
+          end
+
+          context 'descending order' do
+            let(:sort) { 'desc' }
+
+            it 'returns the sorted releases' do
+              subject
+
+              expect(json_response.map { |release| release['name'] }).to eq(releases.reverse.map(&:name))
+            end
+          end
+        end
+      end
+
+      context 'return releases in sorted order' do
+        before do
+          release_2.update_attribute(:created_at, 3.days.ago)
+        end
+
+        let(:url) { "/projects/#{project.id}/releases" }
+        let(:access_level) { maintainer }
+
+        it_behaves_like 'release sorting', 'released_at' do
+          let(:releases) { [release_1, release_2] }
+        end
+
+        it_behaves_like 'release sorting', 'created_at' do
+          let(:releases) { [release_2, release_1] }
+        end
+      end
+
       it 'matches response schema' do
         get api("/projects/#{project.id}/releases", maintainer)
 
@@ -67,20 +114,13 @@ describe API::Releases do
         expect(json_response.second['tag_path']).to eq("/#{release_1.project.full_path}/-/tags/#{release_1.tag}")
       end
 
-      it 'returns the merge requests and issues links, with correct query' do
-        get api("/projects/#{project.id}/releases", maintainer)
+      context 'when include_html_description option is true' do
+        it 'includes description_html field' do
+          get api("/projects/#{project.id}/releases", maintainer), params: { include_html_description: true }
 
-        links = json_response.first['_links']
-        release = json_response.first['tag_name']
-        expected_query = "release_tag=#{release}&scope=all&state=opened"
-        path_base = "/#{project.namespace.path}/#{project.path}"
-        mr_uri = URI.parse(links['merge_requests_url'])
-        issue_uri = URI.parse(links['issues_url'])
-
-        expect(mr_uri.path).to eq("#{path_base}/-/merge_requests")
-        expect(issue_uri.path).to eq("#{path_base}/issues")
-        expect(mr_uri.query).to eq(expected_query)
-        expect(issue_uri.query).to eq(expected_query)
+          expect(json_response.map { |h| h['description_html'] })
+            .to contain_exactly(instance_of(String), instance_of(String))
+        end
       end
     end
 
@@ -102,6 +142,62 @@ describe API::Releases do
 
       expect(response).to have_gitlab_http_status(:ok)
       expect(json_response.first['upcoming_release']).to eq(false)
+    end
+
+    it 'avoids N+1 queries', :use_sql_query_cache do
+      create(:release, :with_evidence, project: project, tag: 'v0.1', author: maintainer)
+      create(:release_link, release: project.releases.first)
+
+      control_count = ActiveRecord::QueryRecorder.new(skip_cached: false) do
+        get api("/projects/#{project.id}/releases", maintainer)
+      end.count
+
+      create_list(:release, 2, :with_evidence, project: project, tag: 'v0.1', author: maintainer)
+      create_list(:release, 2, project: project)
+      create_list(:release_link, 2, release: project.releases.first)
+      create_list(:release_link, 2, release: project.releases.last)
+
+      expect do
+        get api("/projects/#{project.id}/releases", maintainer)
+      end.not_to exceed_all_query_limit(control_count)
+    end
+
+    it 'serializes releases for the first time and read cached data from the second time' do
+      create_list(:release, 2, project: project)
+
+      expect(API::Entities::Release)
+        .to receive(:represent).with(instance_of(Release), any_args)
+        .twice
+
+      5.times { get api("/projects/#{project.id}/releases", maintainer) }
+    end
+
+    it 'increments the cache key when link is updated' do
+      releases = create_list(:release, 2, project: project)
+
+      expect(API::Entities::Release)
+        .to receive(:represent).with(instance_of(Release), any_args)
+        .exactly(4).times
+
+      2.times { get api("/projects/#{project.id}/releases", maintainer) }
+
+      releases.each { |release| create(:release_link, release: release) }
+
+      3.times { get api("/projects/#{project.id}/releases", maintainer) }
+    end
+
+    it 'increments the cache key when evidence is updated' do
+      releases = create_list(:release, 2, project: project)
+
+      expect(API::Entities::Release)
+        .to receive(:represent).with(instance_of(Release), any_args)
+        .exactly(4).times
+
+      2.times { get api("/projects/#{project.id}/releases", maintainer) }
+
+      releases.each { |release| create(:evidence, release: release) }
+
+      3.times { get api("/projects/#{project.id}/releases", maintainer) }
     end
 
     context 'when tag does not exist in git repository' do
@@ -187,6 +283,20 @@ describe API::Releases do
         end
       end
     end
+
+    context 'when releases are public and request user is absent' do
+      let(:project) { create(:project, :repository, :public) }
+
+      it 'returns the releases' do
+        create(:release, project: project, tag: 'v0.1')
+
+        get api("/projects/#{project.id}/releases")
+
+        expect(response).to have_gitlab_http_status(:ok)
+        expect(json_response.count).to eq(1)
+        expect(json_response.first['tag_name']).to eq('v0.1')
+      end
+    end
   end
 
   describe 'GET /projects/:id/releases/:tag_name' do
@@ -233,28 +343,46 @@ describe API::Releases do
           .to match_array(release.sources.map(&:url))
       end
 
-      context "when release description contains confidential issue's link" do
-        let(:confidential_issue) do
-          create(:issue,
-                 :confidential,
-                 project: project,
-                 title: 'A vulnerability')
-        end
+      it 'does not include description_html' do
+        get api("/projects/#{project.id}/releases/v0.1", maintainer)
 
-        let!(:release) do
-          create(:release,
-                 project: project,
-                 tag: 'v0.1',
-                 sha: commit.id,
-                 author: maintainer,
-                 description: "This is confidential #{confidential_issue.to_reference}")
-        end
+        expect(json_response['description_html']).to eq(nil)
+      end
 
-        it "does not expose confidential issue's title" do
+      context 'with evidence' do
+        let!(:evidence) { create(:evidence, release: release) }
+
+        it 'returns the evidence' do
           get api("/projects/#{project.id}/releases/v0.1", maintainer)
 
-          expect(json_response['description_html']).to include(confidential_issue.to_reference)
-          expect(json_response['description_html']).not_to include('A vulnerability')
+          expect(json_response['evidences'].count).to eq(1)
+        end
+
+        it '#collected_at' do
+          travel_to(Time.now.round) do
+            get api("/projects/#{project.id}/releases/v0.1", maintainer)
+
+            expect(json_response['evidences'].first['collected_at'].to_datetime.to_i).to be_within(1.minute).of(release.evidences.first.created_at.to_i)
+          end
+        end
+      end
+
+      context 'when release is associated to mutiple milestones' do
+        context 'milestones order' do
+          let_it_be(:project) { create(:project, :repository, :public) }
+          let_it_be_with_reload(:release_with_milestones) { create(:release, tag: 'v3.14', project: project) }
+
+          let(:actual_milestone_title_order) do
+            get api("/projects/#{project.id}/releases/#{release_with_milestones.tag}", non_project_member)
+
+            json_response['milestones'].map { |m| m['title'] }
+          end
+
+          before do
+            release_with_milestones.update!(milestones: [milestone_2, milestone_1])
+          end
+
+          it_behaves_like 'correct release milestone order'
         end
       end
 
@@ -296,6 +424,14 @@ describe API::Releases do
         end
       end
 
+      context 'when include_html_description option is true' do
+        it 'includes description_html field' do
+          get api("/projects/#{project.id}/releases/v0.1", maintainer), params: { include_html_description: true }
+
+          expect(json_response['description_html']).to be_instance_of(String)
+        end
+      end
+
       context 'when user is a guest' do
         it 'responds 403 Forbidden' do
           get api("/projects/#{project.id}/releases/v0.1", guest)
@@ -327,8 +463,22 @@ describe API::Releases do
     end
 
     context 'when specified tag is not found in the project' do
-      it 'cannot find the release entry' do
+      it 'returns 404 for maintater' do
         get api("/projects/#{project.id}/releases/non_exist_tag", maintainer)
+
+        expect(response).to have_gitlab_http_status(:not_found)
+        expect(json_response['message']).to eq('404 Not Found')
+      end
+
+      it 'returns project not found for no user' do
+        get api("/projects/#{project.id}/releases/non_exist_tag", nil)
+
+        expect(response).to have_gitlab_http_status(:not_found)
+        expect(json_response['message']).to eq('404 Project Not Found')
+      end
+
+      it 'returns forbidden for guest' do
+        get api("/projects/#{project.id}/releases/non_existing_tag", guest)
 
         expect(response).to have_gitlab_http_status(:forbidden)
       end
@@ -359,10 +509,27 @@ describe API::Releases do
 
           let(:milestone) { create(:milestone, project: project) }
 
+          it 'matches schema' do
+            get api("/projects/#{project.id}/releases/v0.1", non_project_member)
+
+            expect(response).to match_response_schema('public_api/v4/release')
+          end
+
           it 'exposes milestones' do
             get api("/projects/#{project.id}/releases/v0.1", non_project_member)
 
             expect(json_response['milestones'].first['title']).to eq(milestone.title)
+          end
+
+          it 'returns issue stats for milestone' do
+            create_list(:issue, 2, milestone: milestone, project: project)
+            create_list(:issue, 3, :closed, milestone: milestone, project: project)
+
+            get api("/projects/#{project.id}/releases/v0.1", non_project_member)
+
+            issue_stats = json_response['milestones'].first["issue_stats"]
+            expect(issue_stats["total"]).to eq(5)
+            expect(issue_stats["closed"]).to eq(3)
           end
 
           context 'when project restricts visibility of issues and merge requests' do
@@ -394,8 +561,22 @@ describe API::Releases do
       {
         name: 'New release',
         tag_name: 'v0.1',
-        description: 'Super nice release'
+        description: 'Super nice release',
+        assets: {
+          links: [
+            {
+              name: 'An example runbook link',
+              url: 'https://example.com/runbook',
+              link_type: 'runbook',
+              filepath: '/permanent/path/to/runbook'
+            }
+          ]
+        }
       }
+    end
+
+    before do
+      initialize_tags
     end
 
     it 'accepts the request' do
@@ -409,14 +590,38 @@ describe API::Releases do
         post api("/projects/#{project.id}/releases", maintainer), params: params
       end.to change { Release.count }.by(1)
 
-      expect(project.releases.last.name).to eq('New release')
+      release = project.releases.last
+
+      aggregate_failures do
+        expect(release.name).to eq('New release')
+        expect(release.tag).to eq('v0.1')
+        expect(release.description).to eq('Super nice release')
+        expect(release.links.last.name).to eq('An example runbook link')
+        expect(release.links.last.url).to eq('https://example.com/runbook')
+        expect(release.links.last.link_type).to eq('runbook')
+        expect(release.links.last.filepath).to eq('/permanent/path/to/runbook')
+      end
+    end
+
+    it 'creates a new release without description' do
+      params = {
+          name: 'New release without description',
+          tag_name: 'v0.1',
+          released_at: '2019-03-25 10:00:00'
+      }
+
+      expect do
+        post api("/projects/#{project.id}/releases", maintainer), params: params
+      end.to change { Release.count }.by(1)
+
+      expect(project.releases.last.name).to eq('New release without description')
       expect(project.releases.last.tag).to eq('v0.1')
-      expect(project.releases.last.description).to eq('Super nice release')
+      expect(project.releases.last.description).to eq(nil)
     end
 
     it 'sets the released_at to the current time if the released_at parameter is not provided' do
       now = Time.zone.parse('2015-08-25 06:00:00Z')
-      Timecop.freeze(now) do
+      travel_to(now) do
         post api("/projects/#{project.id}/releases", maintainer), params: params
 
         expect(project.releases.last.released_at).to eq(now)
@@ -459,26 +664,6 @@ describe API::Releases do
       expect(project.releases.last.released_at).to eq('2019-03-25T01:00:00Z')
     end
 
-    context 'when description is empty' do
-      let(:params) do
-        {
-          name: 'New release',
-          tag_name: 'v0.1',
-          description: ''
-        }
-      end
-
-      it 'returns an error as validation failure' do
-        expect do
-          post api("/projects/#{project.id}/releases", maintainer), params: params
-        end.not_to change { Release.count }
-
-        expect(response).to have_gitlab_http_status(:bad_request)
-        expect(json_response['message'])
-          .to eq("Validation failed: Description can't be blank")
-      end
-    end
-
     it 'matches response schema' do
       post api("/projects/#{project.id}/releases", maintainer), params: params
 
@@ -489,6 +674,28 @@ describe API::Releases do
       expect do
         post api("/projects/#{project.id}/releases", maintainer), params: params
       end.not_to change { Project.find_by_id(project.id).repository.tag_count }
+    end
+
+    context 'with protected tag' do
+      context 'when user has access to the protected tag' do
+        let!(:protected_tag) { create(:protected_tag, :developers_can_create, name: '*', project: project) }
+
+        it 'accepts the request' do
+          post api("/projects/#{project.id}/releases", developer), params: params
+
+          expect(response).to have_gitlab_http_status(:created)
+        end
+      end
+
+      context 'when user does not have access to the protected tag' do
+        let!(:protected_tag) { create(:protected_tag, :maintainers_can_create, name: '*', project: project) }
+
+        it 'forbids the request' do
+          post api("/projects/#{project.id}/releases", developer), params: params
+
+          expect(response).to have_gitlab_http_status(:forbidden)
+        end
+      end
     end
 
     context 'when user is a reporter' do
@@ -558,7 +765,7 @@ describe API::Releases do
           end
         end
 
-        context 'when create two assets' do
+        context 'when creating two assets' do
           let(:params) do
             base_params.merge({
               assets: {
@@ -604,7 +811,7 @@ describe API::Releases do
     end
 
     context 'when using JOB-TOKEN auth' do
-      let(:job) { create(:ci_build, user: maintainer) }
+      let(:job) { create(:ci_build, user: maintainer, project: project) }
       let(:params) do
         {
           name: 'Another release',
@@ -631,11 +838,19 @@ describe API::Releases do
       end
 
       context 'when a valid token is provided' do
-        it 'creates the release' do
+        it 'creates the release for a running job' do
+          job.update!(status: :running)
           post api("/projects/#{project.id}/releases"), params: params.merge(job_token: job.token)
 
           expect(response).to have_gitlab_http_status(:created)
           expect(project.releases.last.description).to eq('Another nice release')
+        end
+
+        it 'returns an :unauthorized error for a completed job' do
+          job.success!
+          post api("/projects/#{project.id}/releases"), params: params.merge(job_token: job.token)
+
+          expect(response).to have_gitlab_http_status(:unauthorized)
         end
       end
     end
@@ -679,10 +894,10 @@ describe API::Releases do
       context 'when tag name is HEAD' do
         let(:tag_name) { 'HEAD' }
 
-        it 'returns an error as failure on tag creation' do
+        it 'returns a 400 error as failure on tag creation' do
           post api("/projects/#{project.id}/releases", maintainer), params: params
 
-          expect(response).to have_gitlab_http_status(:internal_server_error)
+          expect(response).to have_gitlab_http_status(:bad_request)
           expect(json_response['message']).to eq('Tag name invalid')
         end
       end
@@ -690,10 +905,10 @@ describe API::Releases do
       context 'when tag name is empty' do
         let(:tag_name) { '' }
 
-        it 'returns an error as failure on tag creation' do
+        it 'returns a 400 error as failure on tag creation' do
           post api("/projects/#{project.id}/releases", maintainer), params: params
 
-          expect(response).to have_gitlab_http_status(:internal_server_error)
+          expect(response).to have_gitlab_http_status(:bad_request)
           expect(json_response['message']).to eq('Tag name invalid')
         end
       end
@@ -711,105 +926,61 @@ describe API::Releases do
       end
     end
 
-    context 'Evidence collection' do
-      let(:params) do
-        {
-          name: 'New release',
-          tag_name: 'v0.1',
-          description: 'Super nice release',
-          released_at: released_at
-        }.compact
+    context 'with milestones' do
+      let(:subject) { post api("/projects/#{project.id}/releases", maintainer), params: params }
+      let(:milestone) { create(:milestone, project: project, title: 'v1.0') }
+      let(:returned_milestones) { json_response['milestones'].map {|m| m['title']} }
+
+      before do
+        params.merge!(milestone_params)
+
+        subject
       end
 
-      around do |example|
-        Timecop.freeze { example.run }
-      end
+      context 'with a project milestone' do
+        let(:milestone_params) { { milestones: [milestone.title] } }
 
-      subject do
-        post api("/projects/#{project.id}/releases", maintainer), params: params
-      end
-
-      context 'historical release' do
-        let(:released_at) { 3.weeks.ago }
-
-        it 'does not execute CreateEvidenceWorker' do
-          expect { subject }.not_to change(CreateEvidenceWorker.jobs, :size)
-        end
-
-        it 'does not create an Evidence object', :sidekiq_inline do
-          expect { subject }.not_to change(Evidence, :count)
-        end
-
-        it 'is a historical release' do
-          subject
-
-          expect(last_release.historical_release?).to be_truthy
-        end
-
-        it 'is not an upcoming release' do
-          subject
-
-          expect(last_release.upcoming_release?).to be_falsy
+        it 'adds the milestone' do
+          expect(response).to have_gitlab_http_status(:created)
+          expect(returned_milestones).to match_array(['v1.0'])
         end
       end
 
-      context 'immediate release' do
-        let(:released_at) { nil }
+      context 'with multiple milestones' do
+        let(:milestone2) { create(:milestone, project: project, title: 'm2') }
+        let(:milestone_params) { { milestones: [milestone.title, milestone2.title] } }
 
-        it 'sets `released_at` to the current dttm' do
-          subject
-
-          expect(last_release.updated_at).to be_like_time(Time.now)
-        end
-
-        it 'queues CreateEvidenceWorker' do
-          expect { subject }.to change(CreateEvidenceWorker.jobs, :size).by(1)
-        end
-
-        it 'creates Evidence', :sidekiq_inline do
-          expect { subject }.to change(Evidence, :count).by(1)
-        end
-
-        it 'is not a historical release' do
-          subject
-
-          expect(last_release.historical_release?).to be_falsy
-        end
-
-        it 'is not an upcoming release' do
-          subject
-
-          expect(last_release.upcoming_release?).to be_falsy
+        it 'adds all milestones' do
+          expect(response).to have_gitlab_http_status(:created)
+          expect(returned_milestones).to match_array(['v1.0', 'm2'])
         end
       end
 
-      context 'upcoming release' do
-        let(:released_at) { 1.day.from_now }
+      context 'with an empty milestone' do
+        let(:milestone_params) { { milestones: [] } }
 
-        it 'queues CreateEvidenceWorker' do
-          expect { subject }.to change(CreateEvidenceWorker.jobs, :size).by(1)
+        it 'removes all milestones' do
+          expect(response).to have_gitlab_http_status(:created)
+          expect(json_response['milestones']).to be_nil
         end
+      end
 
-        it 'queues CreateEvidenceWorker at the released_at timestamp' do
-          subject
+      context 'with a non-existant milestone' do
+        let(:milestone_params) { { milestones: ['xyz'] } }
 
-          expect(CreateEvidenceWorker.jobs.last['at']).to eq(released_at.to_i)
+        it 'returns a 400 error as milestone not found' do
+          expect(response).to have_gitlab_http_status(:bad_request)
+          expect(json_response['message']).to eq("Milestone(s) not found: xyz")
         end
+      end
 
-        it 'creates Evidence', :sidekiq_inline do
-          expect { subject }.to change(Evidence, :count).by(1)
-        end
+      context 'with a milestone from a different project' do
+        let(:milestone) { create(:milestone, title: 'v1.0') }
+        let(:milestone_params) { { milestones: [milestone.title] } }
 
-        it 'is not a historical release' do
-          subject
-
-          expect(last_release.historical_release?).to be_falsy
-        end
-
-        it 'is an upcoming release' do
-          subject
-
-          expect(last_release.upcoming_release?).to be_truthy
+        it 'returns a 400 error as milestone not found' do
+          expect(response).to have_gitlab_http_status(:bad_request)
+          expect(json_response['message']).to eq("Milestone(s) not found: v1.0")
         end
       end
     end
@@ -825,6 +996,10 @@ describe API::Releases do
              name: 'New release',
              released_at: '2018-03-01T22:00:00Z',
              description: 'Super nice release')
+    end
+
+    before do
+      initialize_tags
     end
 
     it 'accepts the request' do
@@ -859,6 +1034,28 @@ describe API::Releases do
       put api("/projects/#{project.id}/releases/v0.1", maintainer), params: params
 
       expect(project.releases.last.released_at).to eq('2015-10-10T05:00:00Z')
+    end
+
+    context 'with protected tag' do
+      context 'when user has access to the protected tag' do
+        let!(:protected_tag) { create(:protected_tag, :developers_can_create, name: '*', project: project) }
+
+        it 'accepts the request' do
+          put api("/projects/#{project.id}/releases/v0.1", developer), params: params
+
+          expect(response).to have_gitlab_http_status(:ok)
+        end
+      end
+
+      context 'when user does not have access to the protected tag' do
+        let!(:protected_tag) { create(:protected_tag, :maintainers_can_create, name: '*', project: project) }
+
+        it 'forbids the request' do
+          put api("/projects/#{project.id}/releases/v0.1", developer), params: params
+
+          expect(response).to have_gitlab_http_status(:forbidden)
+        end
+      end
     end
 
     context 'when user tries to update sha' do
@@ -918,6 +1115,94 @@ describe API::Releases do
         end
       end
     end
+
+    context 'with milestones' do
+      let(:returned_milestones) { json_response['milestones'].map {|m| m['title']} }
+
+      subject { put api("/projects/#{project.id}/releases/v0.1", maintainer), params: params }
+
+      context 'when a milestone is passed in' do
+        let(:milestone) { create(:milestone, project: project, title: 'v1.0') }
+        let(:milestone_title) { milestone.title }
+        let(:params) { { milestones: [milestone_title] } }
+
+        before do
+          release.milestones << milestone
+        end
+
+        context 'a different milestone' do
+          let(:milestone_title) { 'v2.0' }
+          let!(:milestone2) { create(:milestone, project: project, title: milestone_title) }
+
+          it 'replaces the milestone' do
+            subject
+
+            expect(response).to have_gitlab_http_status(:ok)
+            expect(returned_milestones).to match_array(['v2.0'])
+          end
+        end
+
+        context 'an identical milestone' do
+          let(:milestone_title) { 'v1.0' }
+
+          it 'does not change the milestone' do
+            subject
+
+            expect(response).to have_gitlab_http_status(:ok)
+            expect(returned_milestones).to match_array(['v1.0'])
+          end
+        end
+
+        context 'an empty milestone' do
+          let(:milestone_title) { nil }
+
+          it 'removes the milestone' do
+            subject
+
+            expect(response).to have_gitlab_http_status(:ok)
+            expect(json_response['milestones']).to be_nil
+          end
+        end
+
+        context 'without milestones parameter' do
+          let(:params) { { name: 'some new name' } }
+
+          it 'does not change the milestone' do
+            subject
+
+            expect(response).to have_gitlab_http_status(:ok)
+            expect(returned_milestones).to match_array(['v1.0'])
+          end
+        end
+
+        context 'multiple milestones' do
+          context 'with one new' do
+            let!(:milestone2) { create(:milestone, project: project, title: 'milestone2') }
+            let(:params) { { milestones: [milestone.title, milestone2.title] } }
+
+            it 'adds the new milestone' do
+              subject
+
+              expect(response).to have_gitlab_http_status(:ok)
+              expect(returned_milestones).to match_array(['v1.0', 'milestone2'])
+            end
+          end
+
+          context 'with all new' do
+            let!(:milestone2) { create(:milestone, project: project, title: 'milestone2') }
+            let!(:milestone3) { create(:milestone, project: project, title: 'milestone3') }
+            let(:params) { { milestones: [milestone2.title, milestone3.title] } }
+
+            it 'replaces the milestones' do
+              subject
+
+              expect(response).to have_gitlab_http_status(:ok)
+              expect(returned_milestones).to match_array(%w(milestone2 milestone3))
+            end
+          end
+        end
+      end
+    end
   end
 
   describe 'DELETE /projects/:id/releases/:tag_name' do
@@ -951,6 +1236,28 @@ describe API::Releases do
       delete api("/projects/#{project.id}/releases/v0.1", maintainer)
 
       expect(response).to match_response_schema('public_api/v4/release')
+    end
+
+    context 'with protected tag' do
+      context 'when user has access to the protected tag' do
+        let!(:protected_tag) { create(:protected_tag, :developers_can_create, name: '*', project: project) }
+
+        it 'accepts the request' do
+          delete api("/projects/#{project.id}/releases/v0.1", developer)
+
+          expect(response).to have_gitlab_http_status(:ok)
+        end
+      end
+
+      context 'when user does not have access to the protected tag' do
+        let!(:protected_tag) { create(:protected_tag, :maintainers_can_create, name: '*', project: project) }
+
+        it 'forbids the request' do
+          delete api("/projects/#{project.id}/releases/v0.1", developer)
+
+          expect(response).to have_gitlab_http_status(:forbidden)
+        end
+      end
     end
 
     context 'when there are no corresponding releases' do
@@ -988,5 +1295,35 @@ describe API::Releases do
         end
       end
     end
+  end
+
+  describe 'Track API events', :snowplow do
+    context 'when tracking event with labels from User-Agent' do
+      it 'adds the tracked User-Agent to the label of the tracked event' do
+        get api("/projects/#{project.id}/releases", maintainer), headers: { 'User-Agent' => described_class::RELEASE_CLI_USER_AGENT }
+
+        assert_snowplow_event('get_releases', true)
+      end
+
+      it 'skips label when User-Agent is invalid' do
+        get api("/projects/#{project.id}/releases", maintainer), headers: { 'User-Agent' => 'invalid_user_agent' }
+        assert_snowplow_event('get_releases', false)
+      end
+    end
+  end
+
+  def initialize_tags
+    project.repository.add_tag(maintainer, 'v0.1', commit.id)
+    project.repository.add_tag(maintainer, 'v0.2', commit.id)
+  end
+
+  def assert_snowplow_event(action, release_cli, user = maintainer)
+    expect_snowplow_event(
+      category: described_class.name,
+      action: action,
+      project: project,
+      user: user,
+      release_cli: release_cli
+    )
   end
 end

@@ -2,13 +2,24 @@
 
 module API
   module Entities
-    class Snippet < Grape::Entity
-      expose :id, :title, :file_name, :description, :visibility
+    class Snippet < BasicSnippet
       expose :author, using: Entities::UserBasic
-      expose :updated_at, :created_at
-      expose :project_id
-      expose :web_url do |snippet|
-        Gitlab::UrlBuilder.build(snippet)
+      expose :file_name do |snippet|
+        snippet_files.first || snippet.file_name
+      end
+      expose :files do |snippet, options|
+        snippet_files.map do |file|
+          {
+            path: file,
+            raw_url: Gitlab::UrlBuilder.build(snippet, file: file, ref: snippet.repository.root_ref)
+          }
+        end
+      end
+
+      private
+
+      def snippet_files
+        @snippet_files ||= object.list_files
       end
     end
   end

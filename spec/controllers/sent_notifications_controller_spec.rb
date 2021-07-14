@@ -2,7 +2,7 @@
 
 require 'spec_helper'
 
-describe SentNotificationsController do
+RSpec.describe SentNotificationsController do
   let(:user) { create(:user) }
   let(:project) { create(:project, :public) }
   let(:private_project) { create(:project, :private) }
@@ -76,7 +76,7 @@ describe SentNotificationsController do
           end
 
           it 'renders unsubscribe page' do
-            expect(response.status).to eq(200)
+            expect(response).to have_gitlab_http_status(:ok)
             expect(response).to render_template :unsubscribe
           end
 
@@ -216,6 +216,7 @@ describe SentNotificationsController do
             merge_request.subscriptions.create(user: user, project: project, subscribed: true)
           end
         end
+
         let(:sent_notification) { create(:sent_notification, project: project, noteable: merge_request, recipient: user) }
 
         before do

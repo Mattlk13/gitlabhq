@@ -5,14 +5,8 @@ module QA
     module Project
       module_function
 
-      def add_member(project:, username:)
-        project.visit!
-
-        Page::Project::Menu.perform(&:go_to_members_settings)
-
-        Page::Project::Settings::Members.perform do |member_settings|
-          member_settings.add_member(username)
-        end
+      def go_to_create_project_from_template
+        Page::Project::New.perform(&:click_create_from_template_link)
       end
     end
   end

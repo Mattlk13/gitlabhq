@@ -1,3 +1,5 @@
+import { parseBoolean } from '../../lib/utils/common_utils';
+
 /**
  * Adds the line number property
  * @param Object line
@@ -11,13 +13,13 @@ export const parseLine = (line = {}, lineNumber) => ({
 /**
  * When a line has `section_header` set to true, we create a new
  * structure to allow to nest the lines that belong to the
- * collpasible section
+ * collapsible section
  *
  * @param Object line
  * @param Number lineNumber
  */
 export const parseHeaderLine = (line = {}, lineNumber) => ({
-  isClosed: false,
+  isClosed: parseBoolean(line.section_options?.collapsed),
   isHeader: true,
   line: parseLine(line, lineNumber),
   lines: [],
@@ -41,7 +43,7 @@ export const parseHeaderLine = (line = {}, lineNumber) => ({
  * @param Object durationLine
  */
 export function addDurationToHeader(data, durationLine) {
-  data.forEach(el => {
+  data.forEach((el) => {
     if (el.line && el.line.section === durationLine.section) {
       el.line.section_duration = durationLine.section_duration;
     }
@@ -70,7 +72,7 @@ export const isCollapsibleSection = (acc = [], last = {}, section = {}) =>
  * @param Array acc
  * @returns Number
  */
-export const getIncrementalLineNumber = acc => {
+export const getIncrementalLineNumber = (acc) => {
   let lineNumberValue;
   const lastIndex = acc.length - 1;
   const lastElement = acc[lastIndex];
@@ -91,7 +93,7 @@ export const getIncrementalLineNumber = acc => {
  * Parses the job log content into a structure usable by the template
  *
  * For collaspible lines (section_header = true):
- *    - creates a new array to hold the lines that are collpasible,
+ *    - creates a new array to hold the lines that are collapsible,
  *    - adds a isClosed property to handle toggle
  *    - adds a isHeader property to handle template logic
  *    - adds the section_duration
@@ -102,7 +104,7 @@ export const getIncrementalLineNumber = acc => {
  * @param Array accumulator
  * @returns Array parsed log lines
  */
-export const logLinesParser = (lines = [], accumulator = []) =>
+export const logLinesParserLegacy = (lines = [], accumulator = []) =>
   lines.reduce(
     (acc, line, index) => {
       const lineNumber = accumulator.length > 0 ? getIncrementalLineNumber(acc) : index;
@@ -128,6 +130,77 @@ export const logLinesParser = (lines = [], accumulator = []) =>
     },
     [...accumulator],
   );
+
+export const logLinesParser = (lines = [], previousTraceState = {}, prevParsedLines = []) => {
+  let currentLine = previousTraceState?.prevLineCount ?? 0;
+  let currentHeader = previousTraceState?.currentHeader;
+  let isPreviousLineHeader = previousTraceState?.isPreviousLineHeader ?? false;
+  const parsedLines = prevParsedLines.length > 0 ? prevParsedLines : [];
+  const sectionsQueue = previousTraceState?.sectionsQueue ?? [];
+
+  for (let i = 0; i < lines.length; i += 1) {
+    const line = lines[i];
+    // First run we can use the current index, later runs we have to retrieve the last number of lines
+    currentLine = previousTraceState?.prevLineCount ? currentLine + 1 : i + 1;
+
+    if (line.section_header && !isPreviousLineHeader) {
+      // If there's no previous line header that means we're at the root of the log
+
+      isPreviousLineHeader = true;
+      parsedLines.push(parseHeaderLine(line, currentLine));
+      currentHeader = { index: parsedLines.length - 1 };
+    } else if (line.section_header && isPreviousLineHeader) {
+      // If there's a current section, we can't push to the parsedLines array
+      sectionsQueue.push(currentHeader);
+      currentHeader = parseHeaderLine(line, currentLine); // Let's parse the incoming header line
+    } else if (line.section && !line.section_duration) {
+      // We're inside a collapsible section and want to parse a standard line
+      if (currentHeader?.index) {
+        // If the current section header is only an index, add the line as part of the lines
+        // array of the current collapsible section
+        parsedLines[currentHeader.index].lines.push(parseLine(line, currentLine));
+      } else {
+        // Otherwise add it to the innermost collapsible section lines array
+        currentHeader.lines.push(parseLine(line, currentLine));
+      }
+    } else if (line.section && line.section_duration) {
+      // NOTE: This marks the end of a section_header
+      const previousSection = sectionsQueue.pop();
+
+      // Add the duration to section header
+      // If at the root, just push the end to the current parsedLine,
+      // otherwise, push it to the previous sections queue
+      if (currentHeader?.index) {
+        parsedLines[currentHeader.index].line.section_duration = line.section_duration;
+        isPreviousLineHeader = false;
+        currentHeader = null;
+      } else {
+        currentHeader.line.section_duration = line.section_duration;
+
+        if (previousSection && previousSection?.index) {
+          // Is the previous section on root?
+          parsedLines[previousSection.index].lines.push(currentHeader);
+        } else if (previousSection && !previousSection?.index) {
+          previousSection.lines.push(currentHeader);
+        }
+
+        currentHeader = previousSection;
+      }
+    } else {
+      parsedLines.push(parseLine(line, currentLine));
+    }
+  }
+
+  return {
+    parsedLines,
+    auxiliaryPartialTraceHelpers: {
+      isPreviousLineHeader,
+      currentHeader,
+      sectionsQueue,
+      prevLineCount: lines.length,
+    },
+  };
+};
 
 /**
  * Finds the repeated offset, removes the old one
@@ -175,7 +248,5 @@ export const findOffsetAndRemove = (newLog = [], oldParsed = []) => {
 export const updateIncrementalTrace = (newLog = [], oldParsed = []) => {
   const parsedLog = findOffsetAndRemove(newLog, oldParsed);
 
-  return logLinesParser(newLog, parsedLog);
+  return logLinesParserLegacy(newLog, parsedLog);
 };
-
-export const isNewJobLogActive = () => gon && gon.features && gon.features.jobLogJson;

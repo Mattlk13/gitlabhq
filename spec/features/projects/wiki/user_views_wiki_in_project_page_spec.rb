@@ -2,16 +2,13 @@
 
 require 'spec_helper'
 
-describe 'Projects > Wiki > User views wiki in project page' do
-  let(:user) { create(:user) }
-
+RSpec.describe 'Projects > Wiki > User views wiki in project page' do
   before do
-    project.add_maintainer(user)
-    sign_in(user)
+    sign_in(project.owner)
   end
 
   context 'when repository is disabled for project' do
-    let(:project) do
+    let_it_be(:project) do
       create(:project,
              :wiki_repo,
              :repository_disabled,
@@ -21,7 +18,7 @@ describe 'Projects > Wiki > User views wiki in project page' do
 
     context 'when wiki homepage contains a link' do
       before do
-        create(:wiki_page, wiki: project.wiki, attrs: { title: 'home', content: '[some link](other-page)' })
+        create(:wiki_page, wiki: project.wiki, title: 'home', content: '[some link](other-page)')
       end
 
       it 'displays the correct URL for the link' do

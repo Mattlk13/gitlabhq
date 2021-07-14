@@ -2,20 +2,27 @@
 
 module Groups
   class VariablesController < Groups::ApplicationController
-    before_action :authorize_admin_build!
+    before_action :authorize_admin_group!
 
     skip_cross_project_access_check :show, :update
+
+    feature_category :pipeline_authoring
 
     def show
       respond_to do |format|
         format.json do
-          render status: :ok, json: { variables: GroupVariableSerializer.new.represent(@group.variables) }
+          render status: :ok, json: { variables: ::Ci::GroupVariableSerializer.new.represent(@group.variables) }
         end
       end
     end
 
     def update
-      if @group.update(group_variables_params)
+      update_result = Ci::ChangeVariablesService.new(
+        container: @group, current_user: current_user,
+        params: group_variables_params
+      ).execute
+
+      if update_result
         respond_to do |format|
           format.json { render_group_variables }
         end
@@ -29,7 +36,7 @@ module Groups
     private
 
     def render_group_variables
-      render status: :ok, json: { variables: GroupVariableSerializer.new.represent(@group.variables) }
+      render status: :ok, json: { variables: ::Ci::GroupVariableSerializer.new.represent(@group.variables) }
     end
 
     def render_error
@@ -49,3 +56,5 @@ module Groups
     end
   end
 end
+
+Groups::VariablesController.prepend_mod_with('Groups::VariablesController')

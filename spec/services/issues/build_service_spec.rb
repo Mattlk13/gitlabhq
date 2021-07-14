@@ -1,17 +1,21 @@
 # frozen_string_literal: true
 
-require 'spec_helper.rb'
+require 'spec_helper'
 
-describe Issues::BuildService do
-  let(:project) { create(:project, :repository) }
-  let(:user) { create(:user) }
+RSpec.describe Issues::BuildService do
+  let_it_be(:project) { create(:project, :repository) }
+  let_it_be(:developer) { create(:user) }
+  let_it_be(:guest) { create(:user) }
 
-  before do
-    project.add_developer(user)
+  let(:user) { developer }
+
+  before_all do
+    project.add_developer(developer)
+    project.add_guest(guest)
   end
 
   def build_issue(issue_params = {})
-    described_class.new(project, user, issue_params).execute
+    described_class.new(project: project, current_user: user, params: issue_params).execute
   end
 
   context 'for a single discussion' do
@@ -37,7 +41,7 @@ describe Issues::BuildService do
     describe '#items_for_discussions' do
       it 'has an item for each discussion' do
         create(:diff_note_on_merge_request, noteable: merge_request, project: merge_request.source_project, line_number: 13)
-        service = described_class.new(project, user, merge_request_to_resolve_discussions_of: merge_request.iid)
+        service = described_class.new(project: project, current_user: user, params: { merge_request_to_resolve_discussions_of: merge_request.iid })
 
         service.execute
 
@@ -46,7 +50,7 @@ describe Issues::BuildService do
     end
 
     describe '#item_for_discussion' do
-      let(:service) { described_class.new(project, user, merge_request_to_resolve_discussions_of: merge_request.iid) }
+      let(:service) { described_class.new(project: project, current_user: user, params: { merge_request_to_resolve_discussions_of: merge_request.iid }) }
 
       it 'mentions the author of the note' do
         discussion = create(:diff_note_on_merge_request, author: create(:user, username: 'author')).to_discussion
@@ -134,18 +138,57 @@ describe Issues::BuildService do
   end
 
   describe '#execute' do
-    it 'builds a new issues with given params' do
-      milestone = create(:milestone, project: project)
-      issue = build_issue(milestone_id: milestone.id)
+    context 'as developer' do
+      it 'builds a new issues with given params' do
+        milestone = create(:milestone, project: project)
+        issue = build_issue(milestone_id: milestone.id)
 
-      expect(issue.milestone).to eq(milestone)
+        expect(issue.milestone).to eq(milestone)
+      end
+
+      it 'sets milestone to nil if it is not available for the project' do
+        milestone = create(:milestone, project: create(:project))
+        issue = build_issue(milestone_id: milestone.id)
+
+        expect(issue.milestone).to be_nil
+      end
     end
 
-    it 'sets milestone to nil if it is not available for the project' do
-      milestone = create(:milestone, project: create(:project))
-      issue = build_issue(milestone_id: milestone.id)
+    context 'as guest' do
+      let(:user) { guest }
 
-      expect(issue.milestone).to be_nil
+      it 'cannot set milestone' do
+        milestone = create(:milestone, project: project)
+        issue = build_issue(milestone_id: milestone.id)
+
+        expect(issue.milestone).to be_nil
+      end
+
+      context 'setting issue type' do
+        it 'defaults to issue if issue_type not given' do
+          issue = build_issue
+
+          expect(issue).to be_issue
+        end
+
+        it 'sets issue' do
+          issue = build_issue(issue_type: 'issue')
+
+          expect(issue).to be_issue
+        end
+
+        it 'sets incident' do
+          issue = build_issue(issue_type: 'incident')
+
+          expect(issue).to be_incident
+        end
+
+        it 'cannot set invalid type' do
+          issue = build_issue(issue_type: 'invalid type')
+
+          expect(issue).to be_issue
+        end
+      end
     end
   end
 end

@@ -2,7 +2,7 @@
 
 require 'spec_helper'
 
-describe Gitlab::LegacyGithubImport::PullRequestFormatter do
+RSpec.describe Gitlab::LegacyGithubImport::PullRequestFormatter do
   let(:client) { double }
   let(:project) { create(:project, :repository) }
   let(:source_sha) { create(:commit, project: project).id }
@@ -260,7 +260,7 @@ describe Gitlab::LegacyGithubImport::PullRequestFormatter do
 
   context 'when importing a Gitea project' do
     before do
-      project.update(import_type: 'gitea')
+      project.update!(import_type: 'gitea')
     end
 
     it_behaves_like 'Gitlab::LegacyGithubImport::PullRequestFormatter#attributes'

@@ -1,8 +1,11 @@
 ---
 type: concepts
+stage: Release
+group: Release
+info: To determine the technical writer assigned to the Stage/Group associated with this page, see https://about.gitlab.com/handbook/engineering/ux/technical-writing/#assignments
 ---
 
-# DNS records overview
+# DNS records overview **(FREE)**
 
 _Read this document for a brief overview of DNS records in the scope
 of GitLab Pages, for beginners in web development._
@@ -20,23 +23,27 @@ GitLab Pages site.
 
 Note that **how to** add DNS records depends on which server your domain
 is hosted on. Every control panel has its own place to do it. If you are
-not an admin of your domain, and don't have access to your registrar,
-you'll need to ask for the technical support of your hosting service
+not an administrator of your domain, and don't have access to your registrar,
+you must ask the technical support of your hosting service
 to do it for you.
 
 To help you out, we've gathered some instructions on how to do that
 for the most popular hosting services:
 
+<!-- vale gitlab.Spelling = NO -->
+
 - [Amazon](https://docs.aws.amazon.com/AmazonS3/latest/dev/website-hosting-custom-domain-walkthrough.html)
-- [Bluehost](https://my.bluehost.com/cgi/help/559)
-- [CloudFlare](https://support.cloudflare.com/hc/en-us/articles/201720164-Creating-a-Cloudflare-account-and-adding-a-website)
+- [Bluehost](https://www.bluehost.com/help/article/dns-management-add-edit-or-delete-dns-entries)
+- [Cloudflare](https://support.cloudflare.com/hc/en-us/articles/201720164-Creating-a-Cloudflare-account-and-adding-a-website)
 - [cPanel](https://documentation.cpanel.net/display/84Docs/Edit+DNS+Zone)
 - [DreamHost](https://help.dreamhost.com/hc/en-us/articles/215414867-How-do-I-add-custom-DNS-records-)
 - [Go Daddy](https://www.godaddy.com/help/add-an-a-record-19238)
 - [Hostgator](https://www.hostgator.com/help/article/changing-dns-records)
-- [Inmotion hosting](https://my.bluehost.com/cgi/help/559)
+- [Inmotion hosting](https://www.bluehost.com/help/article/dns-management-add-edit-or-delete-dns-entries)
 - [Media Temple](https://mediatemple.net/community/products/dv/204403794/how-can-i-change-the-dns-records-for-my-domain)
 - [Microsoft](https://docs.microsoft.com/en-us/previous-versions/windows/it-pro/windows-2000-server/bb727018(v=technet.10))
+
+<!-- vale gitlab.Spelling = YES -->
 
 If your hosting service is not listed above, you can just try to
 search the web for `how to add dns record on <my hosting service>`.
@@ -60,7 +67,7 @@ Example:
 
 - `www` => `CNAME` => `example.com`
 
-This way, visitors visiting `www.example.com` will be redirected to
+This way, visitors visiting `www.example.com` are redirected to
 `example.com`.
 
 ## MX record

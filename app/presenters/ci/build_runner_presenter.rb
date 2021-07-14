@@ -27,14 +27,21 @@ module Ci
     def git_depth
       if git_depth_variable
         git_depth_variable[:value]
-      elsif Feature.enabled?(:ci_project_git_depth, default_enabled: true)
+      else
         project.ci_default_git_depth
       end.to_i
     end
 
+    def runner_variables
+      if Feature.enabled?(:variable_inside_variable, project)
+        variables.sort_and_expand_all(project, keep_undefined: true).to_runner_variables
+      else
+        variables.to_runner_variables
+      end
+    end
+
     def refspecs
       specs = []
-      specs << refspec_for_pipeline_ref if should_expose_merge_request_ref?
       specs << refspec_for_persistent_ref if persistent_ref_exist?
 
       if git_depth > 0
@@ -48,25 +55,24 @@ module Ci
       specs
     end
 
-    private
+    # rubocop: disable CodeReuse/ActiveRecord
+    def all_dependencies
+      dependencies = super
 
-    # We will stop exposing merge request refs when we fully depend on persistent refs
-    # (i.e. remove `refspec_for_pipeline_ref` when we remove `depend_on_persistent_pipeline_ref` feature flag.)
-    # `ci_force_exposing_merge_request_refs` is an extra feature flag that allows us to
-    # forcibly expose MR refs even if the `depend_on_persistent_pipeline_ref` feature flag enabled.
-    # This is useful when we see an unexpected behaviors/reports from users.
-    # See https://gitlab.com/gitlab-org/gitlab/issues/35140.
-    def should_expose_merge_request_ref?
-      return false unless merge_request_ref?
-      return true if Feature.enabled?(:ci_force_exposing_merge_request_refs, project)
+      if Feature.enabled?(:preload_associations_jobs_request_api_endpoint, project, default_enabled: :yaml)
+        ActiveRecord::Associations::Preloader.new.preload(dependencies, :job_artifacts_archive)
+      end
 
-      Feature.disabled?(:depend_on_persistent_pipeline_ref, project, default_enabled: true)
+      dependencies
     end
+    # rubocop: enable CodeReuse/ActiveRecord
+
+    private
 
     def create_archive(artifacts)
       return unless artifacts[:untracked] || artifacts[:paths]
 
-      {
+      archive = {
         artifact_type: :archive,
         artifact_format: :zip,
         name: artifacts[:name],
@@ -75,6 +81,12 @@ module Ci
         when: artifacts[:when],
         expire_in: artifacts[:expire_in]
       }
+
+      if artifacts.dig(:exclude).present?
+        archive.merge(exclude: artifacts[:exclude])
+      else
+        archive
+      end
     end
 
     def create_reports(reports, expire_in:)
@@ -100,20 +112,22 @@ module Ci
       "+#{Gitlab::Git::TAG_REF_PREFIX}#{ref}:#{RUNNER_REMOTE_TAG_PREFIX}#{ref}"
     end
 
-    def refspec_for_pipeline_ref
-      "+#{ref}:#{ref}"
-    end
-
     def refspec_for_persistent_ref
-      "+#{persistent_ref_path}:#{persistent_ref_path}"
+      # Use persistent_ref.sha because it sometimes causes 'git fetch' to do
+      # less work. See
+      # https://gitlab.com/gitlab-com/gl-infra/scalability/-/issues/746.
+      "+#{pipeline.persistent_ref.sha}:#{pipeline.persistent_ref.path}"
     end
 
     def persistent_ref_exist?
-      pipeline.persistent_ref.exist?
-    end
+      ##
+      # Persistent refs for pipelines definitely exist from GitLab 12.4,
+      # hence, we don't need to check the ref existence before passing it to runners.
+      # Checking refs pressurizes gitaly node and should be avoided.
+      # Issue: https://gitlab.com/gitlab-com/gl-infra/production/-/issues/2143
+      return true if Feature.enabled?(:ci_skip_persistent_ref_existence_check)
 
-    def persistent_ref_path
-      pipeline.persistent_ref.path
+      pipeline.persistent_ref.exist?
     end
 
     def git_depth_variable
@@ -123,3 +137,5 @@ module Ci
     end
   end
 end
+
+Ci::BuildRunnerPresenter.prepend_mod_with('Ci::BuildRunnerPresenter')

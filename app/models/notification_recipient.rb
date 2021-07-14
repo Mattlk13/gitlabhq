@@ -5,7 +5,7 @@ class NotificationRecipient
 
   attr_reader :user, :type, :reason
 
-  def initialize(user, type, **opts)
+  def initialize(user, type, opts = {})
     unless NotificationSetting.levels.key?(type) || type == :subscription
       raise ArgumentError, "invalid type: #{type.inspect}"
     end
@@ -52,10 +52,9 @@ class NotificationRecipient
     when :mention
       @type == :mention
     when :participating
-      %i[failed_pipeline fixed_pipeline].include?(@custom_action) ||
-        %i[participating mention].include?(@type)
+      participating_custom_action? || participating_or_mention?
     when :custom
-      custom_enabled? || %i[participating mention].include?(@type)
+      custom_enabled? || participating_or_mention?
     when :watch
       !excluded_watcher_action?
     else
@@ -74,10 +73,12 @@ class NotificationRecipient
   end
 
   def unsubscribed?
-    return false unless @target
-    return false unless @target.respond_to?(:subscriptions)
+    subscribable_target = @target.is_a?(Note) ? @target.noteable : @target
 
-    subscription = @target.subscriptions.find { |subscription| subscription.user_id == @user.id }
+    return false unless subscribable_target
+    return false unless subscribable_target.respond_to?(:subscriptions)
+
+    subscription = subscribable_target.subscriptions.find { |subscription| subscription.user_id == @user.id }
     subscription && !subscription.subscribed
   end
 
@@ -172,5 +173,13 @@ class NotificationRecipient
       .where(user: user)
       .where.not(level: NotificationSetting.levels[:global])
       .first
+  end
+
+  def participating_custom_action?
+    %i[failed_pipeline fixed_pipeline moved_project].include?(@custom_action)
+  end
+
+  def participating_or_mention?
+    %i[participating mention].include?(@type)
   end
 end

@@ -32,7 +32,8 @@ module Gitlab
           user: Gitlab::Git::User.from_gitlab(user).to_gitaly,
           tag_name: encode_binary(tag_name),
           target_revision: encode_binary(target),
-          message: encode_binary(message.to_s)
+          message: encode_binary(message.to_s),
+          timestamp: Google::Protobuf::Timestamp.new(seconds: Time.now.utc.to_i)
         )
 
         response = GitalyClient.call(@repository.storage, :operation_service, :user_create_tag, request, timeout: GitalyClient.long_timeout)
@@ -58,7 +59,7 @@ module Gitlab
                                      :user_create_branch, request, timeout: GitalyClient.long_timeout)
 
         if response.pre_receive_error.present?
-          raise Gitlab::Git::PreReceiveError.new(response.pre_receive_error)
+          raise Gitlab::Git::PreReceiveError, response.pre_receive_error
         end
 
         branch = response.branch
@@ -102,7 +103,7 @@ module Gitlab
         end
       end
 
-      def user_merge_to_ref(user, source_sha, branch, target_ref, message, first_parent_ref)
+      def user_merge_to_ref(user, source_sha:, branch:, target_ref:, message:, first_parent_ref:, allow_conflicts: false)
         request = Gitaly::UserMergeToRefRequest.new(
           repository: @gitaly_repo,
           source_sha: source_sha,
@@ -110,7 +111,9 @@ module Gitlab
           target_ref: encode_binary(target_ref),
           user: Gitlab::Git::User.from_gitlab(user).to_gitaly,
           message: encode_binary(message),
-          first_parent_ref: encode_binary(first_parent_ref)
+          first_parent_ref: encode_binary(first_parent_ref),
+          allow_conflicts: allow_conflicts,
+          timestamp: Google::Protobuf::Timestamp.new(seconds: Time.now.utc.to_i)
         )
 
         response = GitalyClient.call(@repository.storage, :operation_service,
@@ -139,7 +142,8 @@ module Gitlab
             user: Gitlab::Git::User.from_gitlab(user).to_gitaly,
             commit_id: source_sha,
             branch: encode_binary(target_branch),
-            message: encode_binary(message)
+            message: encode_binary(message),
+            timestamp: Google::Protobuf::Timestamp.new(seconds: Time.now.utc.to_i)
           )
         )
 
@@ -155,7 +159,7 @@ module Gitlab
 
         branch_update = second_response.branch_update
         return if branch_update.nil?
-        raise Gitlab::Git::CommitError.new('failed to apply merge to branch') unless branch_update.commit_id.present?
+        raise Gitlab::Git::CommitError, 'failed to apply merge to branch' unless branch_update.commit_id.present?
 
         Gitlab::Git::OperationService::BranchUpdate.from_gitaly(branch_update)
       ensure
@@ -178,29 +182,35 @@ module Gitlab
           timeout: GitalyClient.long_timeout
         )
 
+        if response.pre_receive_error.present?
+          raise Gitlab::Git::PreReceiveError.new(response.pre_receive_error, fallback_message: "pre-receive hook failed.")
+        end
+
         Gitlab::Git::OperationService::BranchUpdate.from_gitaly(response.branch_update)
       rescue GRPC::FailedPrecondition => e
         raise Gitlab::Git::CommitError, e
       end
 
-      def user_cherry_pick(user:, commit:, branch_name:, message:, start_branch_name:, start_repository:)
+      def user_cherry_pick(user:, commit:, branch_name:, message:, start_branch_name:, start_repository:, dry_run: false)
         call_cherry_pick_or_revert(:cherry_pick,
                                    user: user,
                                    commit: commit,
                                    branch_name: branch_name,
                                    message: message,
                                    start_branch_name: start_branch_name,
-                                   start_repository: start_repository)
+                                   start_repository: start_repository,
+                                   dry_run: dry_run)
       end
 
-      def user_revert(user:, commit:, branch_name:, message:, start_branch_name:, start_repository:)
+      def user_revert(user:, commit:, branch_name:, message:, start_branch_name:, start_repository:, dry_run: false)
         call_cherry_pick_or_revert(:revert,
                                    user: user,
                                    commit: commit,
                                    branch_name: branch_name,
                                    message: message,
                                    start_branch_name: start_branch_name,
-                                   start_repository: start_repository)
+                                   start_repository: start_repository,
+                                   dry_run: dry_run)
       end
 
       def rebase(user, rebase_id, branch:, branch_sha:, remote_repository:, remote_branch:, push_options: [])
@@ -227,7 +237,8 @@ module Gitlab
               branch_sha: branch_sha,
               remote_repository: remote_repository.gitaly_repository,
               remote_branch: encode_binary(remote_branch),
-              git_push_options: push_options
+              git_push_options: push_options,
+              timestamp: Google::Protobuf::Timestamp.new(seconds: Time.now.utc.to_i)
             )
           )
         )
@@ -248,16 +259,16 @@ module Gitlab
         request_enum.close
       end
 
-      def user_squash(user, squash_id, branch, start_sha, end_sha, author, message)
+      def user_squash(user, squash_id, start_sha, end_sha, author, message, time = Time.now.utc)
         request = Gitaly::UserSquashRequest.new(
           repository: @gitaly_repo,
           user: Gitlab::Git::User.from_gitlab(user).to_gitaly,
           squash_id: squash_id.to_s,
-          branch: encode_binary(branch),
           start_sha: start_sha,
           end_sha: end_sha,
           author: Gitlab::Git::User.from_gitlab(author).to_gitaly,
-          commit_message: encode_binary(message)
+          commit_message: encode_binary(message),
+          timestamp: Google::Protobuf::Timestamp.new(seconds: time.to_i)
         )
 
         response = GitalyClient.call(
@@ -282,7 +293,8 @@ module Gitlab
           commit_sha: commit_sha,
           branch: encode_binary(branch),
           submodule: encode_binary(submodule),
-          commit_message: encode_binary(message)
+          commit_message: encode_binary(message),
+          timestamp: Google::Protobuf::Timestamp.new(seconds: Time.now.utc.to_i)
         )
 
         response = GitalyClient.call(
@@ -351,7 +363,8 @@ module Gitlab
         header = Gitaly::UserApplyPatchRequest::Header.new(
           repository: @gitaly_repo,
           user: Gitlab::Git::User.from_gitlab(user).to_gitaly,
-          target_branch: encode_binary(branch_name)
+          target_branch: encode_binary(branch_name),
+          timestamp: Google::Protobuf::Timestamp.new(seconds: Time.now.utc.to_i)
         )
         reader = binary_io(patches)
 
@@ -387,7 +400,7 @@ module Gitlab
         response
       end
 
-      def call_cherry_pick_or_revert(rpc, user:, commit:, branch_name:, message:, start_branch_name:, start_repository:)
+      def call_cherry_pick_or_revert(rpc, user:, commit:, branch_name:, message:, start_branch_name:, start_repository:, dry_run:)
         request_class = "Gitaly::User#{rpc.to_s.camelcase}Request".constantize
 
         request = request_class.new(
@@ -397,7 +410,8 @@ module Gitlab
           branch_name: encode_binary(branch_name),
           message: encode_binary(message),
           start_branch_name: encode_binary(start_branch_name.to_s),
-          start_repository: start_repository.gitaly_repository
+          start_repository: start_repository.gitaly_repository,
+          dry_run: dry_run
         )
 
         response = GitalyClient.call(
@@ -439,7 +453,8 @@ module Gitlab
           start_branch_name: encode_binary(start_branch_name),
           start_repository: start_repository.gitaly_repository,
           force: force,
-          start_sha: encode_binary(start_sha)
+          start_sha: encode_binary(start_sha),
+          timestamp: Google::Protobuf::Timestamp.new(seconds: Time.now.utc.to_i)
         )
       end
       # rubocop:enable Metrics/ParameterLists

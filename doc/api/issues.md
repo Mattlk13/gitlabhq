@@ -1,26 +1,35 @@
-# Issues API
+---
+stage: Plan
+group: Project Management
+info: To determine the technical writer assigned to the Stage/Group associated with this page, see https://about.gitlab.com/handbook/engineering/ux/technical-writing/#assignments
+---
 
-Every API call to issues must be authenticated.
+# Issues API **(FREE)**
 
-If a user is not a member of a project and the project is private, a `GET`
-request on that project will result in a `404` status code.
+Interact with [GitLab Issues](../user/project/issues/index.md) using the REST API.
+
+If a user is not a member of a private project, a `GET`
+request on that project results in a `404` status code.
 
 ## Issues pagination
 
 By default, `GET` requests return 20 results at a time because the API results
 are paginated.
 
-Read more on [pagination](README.md#pagination).
+Read more on [pagination](index.md#pagination).
 
-CAUTION: **Deprecation**
-> `reference` attribute in response is deprecated in favour of `references`.
-> Introduced [GitLab 12.6](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/20354)
+WARNING:
+The `reference` attribute in responses is deprecated in favor of `references`.
+Introduced in [GitLab 12.6](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/20354).
 
-NOTE: **Note**
-> `references.relative` is relative to the group / project that the issue is being requested. When issue is fetched from its project
-> `relative` format would be the same as `short` format and when requested across groups / projects it is expected to be the same as `full` format.
+NOTE:
+The `references.relative` attribute is relative to the group or project of the issue being requested.
+When an issue is fetched from its project, the `relative` format is the same as the `short` format.
+When requested across groups or projects, it's expected to be the same as the `full` format.
 
 ## List issues
+
+> The `weight` property moved to GitLab Premium in 13.9.
 
 Get all issues the authenticated user has access to. By default it
 returns only issues created by the current user. To get all issues,
@@ -28,48 +37,53 @@ use parameter `scope=all`.
 
 ```plaintext
 GET /issues
-GET /issues?state=opened
-GET /issues?state=closed
+GET /issues?assignee_id=5
+GET /issues?author_id=5
+GET /issues?confidential=true
+GET /issues?iids[]=42&iids[]=43
 GET /issues?labels=foo
 GET /issues?labels=foo,bar
 GET /issues?labels=foo,bar&state=opened
 GET /issues?milestone=1.0.0
 GET /issues?milestone=1.0.0&state=opened
-GET /issues?iids[]=42&iids[]=43
-GET /issues?author_id=5
-GET /issues?assignee_id=5
 GET /issues?my_reaction_emoji=star
 GET /issues?search=foo&in=title
-GET /issues?confidential=true
+GET /issues?state=closed
+GET /issues?state=opened
 ```
 
 | Attribute           | Type             | Required   | Description                                                                                                                                         |
 | ------------------- | ---------------- | ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `state`             | string           | no         | Return `all` issues or just those that are `opened` or `closed`                                                                                       |
-| `labels`            | string           | no         | Comma-separated list of label names, issues must have all labels to be returned. `None` lists all issues with no labels. `Any` lists all issues with at least one label. `No+Label` (Deprecated) lists all issues with no labels. Predefined names are case-insensitive. |
-| `with_labels_details` | Boolean        | no         | If `true`, response will return more details for each label in labels field: `:name`, `:color`, `:description`, `:description_html`, `:text_color`. Default is `false`. The `description_html` attribute was introduced in [GitLab 12.7](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/21413)|
-| `milestone`         | string           | no         | The milestone title. `None` lists all issues with no milestone. `Any` lists all issues that have an assigned milestone.                             |
-| `scope`             | string           | no         | Return issues for the given scope: `created_by_me`, `assigned_to_me` or `all`. Defaults to `created_by_me`<br> For versions before 11.0, use the now deprecated `created-by-me` or `assigned-to-me` scopes instead.<br> _([Introduced][ce-13004] in GitLab 9.5. [Changed to snake_case][ce-18935] in GitLab 11.0)_ |
-| `author_id`         | integer          | no         | Return issues created by the given user `id`. Mutually exclusive with `author_username`. Combine with `scope=all` or `scope=assigned_to_me`. _([Introduced][ce-13004] in GitLab 9.5)_ |
+| `assignee_id`       | integer          | no         | Return issues assigned to the given user `id`. Mutually exclusive with `assignee_username`. `None` returns unassigned issues. `Any` returns issues with an assignee. _([Introduced](https://gitlab.com/gitlab-org/gitlab-foss/-/merge_requests/13004) in GitLab 9.5)_ |
+| `assignee_username` | string array     | no         | Return issues assigned to the given `username`. Similar to `assignee_id` and mutually exclusive with `assignee_id`. In GitLab CE, the `assignee_username` array should only contain a single value. Otherwise, an invalid parameter error is returned. |
+| `author_id`         | integer          | no         | Return issues created by the given user `id`. Mutually exclusive with `author_username`. Combine with `scope=all` or `scope=assigned_to_me`. _([Introduced](https://gitlab.com/gitlab-org/gitlab-foss/-/merge_requests/13004) in GitLab 9.5)_ |
 | `author_username`   | string           | no         | Return issues created by the given `username`. Similar to `author_id` and mutually exclusive with `author_id`. |
-| `assignee_id`       | integer          | no         | Return issues assigned to the given user `id`. Mutually exclusive with `assignee_username`. `None` returns unassigned issues. `Any` returns issues with an assignee. _([Introduced][ce-13004] in GitLab 9.5)_ |
-| `assignee_username` | string array     | no         | Return issues assigned to the given `username`. Similar to `assignee_id` and mutually exclusive with `assignee_id`. In CE version `assignee_username` array should only contain a single value or an invalid param error will be returned otherwise. |
-| `my_reaction_emoji` | string           | no         | Return issues reacted by the authenticated user by the given `emoji`. `None` returns issues not given a reaction. `Any` returns issues given at least one reaction. _([Introduced][ce-14016] in GitLab 10.0)_ |
-| `weight` **(STARTER)** | integer       | no         | Return issues with the specified `weight`. `None` returns issues with no weight assigned. `Any` returns issues with a weight assigned.              |
+| `confidential`      | boolean          | no         | Filter confidential or public issues.                                                                                                               |
+| `created_after`     | datetime         | no         | Return issues created on or after the given time. Expected in ISO 8601 format (`2019-03-15T08:00:00Z`) |
+| `created_before`    | datetime         | no         | Return issues created on or before the given time. Expected in ISO 8601 format (`2019-03-15T08:00:00Z`) |
+| `due_date`          | string           | no         | Return issues that have no due date, are overdue, or whose due date is this week, this month, or between two weeks ago and next month. Accepts: `0` (no due date), `overdue`, `week`, `month`, `next_month_and_previous_two_weeks`. _(Introduced in [GitLab 13.3](https://gitlab.com/gitlab-org/gitlab/-/issues/233420))_ |
 | `iids[]`            | integer array    | no         | Return only the issues having the given `iid`                                                                                                       |
-| `order_by`          | string           | no         | Return issues ordered by `created_at`, `updated_at`, `priority`, `due_date`, `relative_position`, `label_priority`, `milestone_due`, `popularity`, `weight` fields. Default is `created_at`                                                               |
-| `sort`              | string           | no         | Return issues sorted in `asc` or `desc` order. Default is `desc`                                                                                    |
-| `search`            | string           | no         | Search issues against their `title` and `description`                                                                                               |
 | `in`                | string           | no         | Modify the scope of the `search` attribute. `title`, `description`, or a string joining them with comma. Default is `title,description`             |
-| `created_after`     | datetime         | no         | Return issues created on or after the given time                                                                                                    |
-| `created_before`    | datetime         | no         | Return issues created on or before the given time                                                                                                   |
-| `updated_after`     | datetime         | no         | Return issues updated on or after the given time                                                                                                    |
-| `updated_before`    | datetime         | no         | Return issues updated on or before the given time                                                                                                   |
-| `confidential`      | Boolean          | no         | Filter confidential or public issues.                                                                                                               |
-| `not`               | Hash             | no         | Return issues that do not match the parameters supplied. Accepts: `labels`, `milestone`, `author_id`, `author_username`, `assignee_id`, `assignee_username`, `my_reaction_emoji`, `search`, `in` |
+| `issue_type`        | string           | no         | Filter to a given type of issue. One of `issue`, `incident`, or `test_case`. _(Introduced in [GitLab 13.12](https://gitlab.com/gitlab-org/gitlab/-/issues/260375))_ |
+| `iteration_id` **(PREMIUM)** | integer | no         | Return issues assigned to the given iteration ID. `None` returns issues that do not belong to an iteration. `Any` returns issues that belong to an iteration. Mutually exclusive with `iteration_title`. _([Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/118742) in GitLab 13.6)_ |
+| `iteration_title` **(PREMIUM)** | string | no       | Return issues assigned to the iteration with the given title. Similar to `iteration_id` and mutually exclusive with `iteration_id`. _([Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/118742) in GitLab 13.6)_ |
+| `labels`            | string           | no         | Comma-separated list of label names, issues must have all labels to be returned. `None` lists all issues with no labels. `Any` lists all issues with at least one label. `No+Label` (Deprecated) lists all issues with no labels. Predefined names are case-insensitive. |
+| `milestone`         | string           | no         | The milestone title. `None` lists all issues with no milestone. `Any` lists all issues that have an assigned milestone.                             |
+| `my_reaction_emoji` | string           | no         | Return issues reacted by the authenticated user by the given `emoji`. `None` returns issues not given a reaction. `Any` returns issues given at least one reaction. _([Introduced](https://gitlab.com/gitlab-org/gitlab-foss/-/merge_requests/14016) in GitLab 10.0)_ |
+| `non_archived`      | boolean          | no         | Return issues only from non-archived projects. If `false`, the response returns issues from both archived and non-archived projects. Default is `true`. _(Introduced in [GitLab 13.0](https://gitlab.com/gitlab-org/gitlab/-/issues/197170))_ |
+| `not`               | Hash             | no         | Return issues that do not match the parameters supplied. Accepts: `assignee_id`, `assignee_username`, `author_id`, `author_username`, `iids`, `iteration_id`, `iteration_title`, `labels`, `milestone`, and `weight`. |
+| `order_by`          | string           | no         | Return issues ordered by `created_at`, `updated_at`, `priority`, `due_date`, `relative_position`, `label_priority`, `milestone_due`, `popularity`, `weight` fields. Default is `created_at`                                                               |
+| `scope`             | string           | no         | Return issues for the given scope: `created_by_me`, `assigned_to_me` or `all`. Defaults to `created_by_me`<br> For versions before 11.0, use the now deprecated `created-by-me` or `assigned-to-me` scopes instead.<br> _([Introduced](https://gitlab.com/gitlab-org/gitlab-foss/-/merge_requests/13004) in GitLab 9.5. [Changed to snake_case](https://gitlab.com/gitlab-org/gitlab-foss/-/merge_requests/18935) in GitLab 11.0)_ |
+| `search`            | string           | no         | Search issues against their `title` and `description`                                                                                               |
+| `sort`              | string           | no         | Return issues sorted in `asc` or `desc` order. Default is `desc`                                                                                    |
+| `state`             | string           | no         | Return `all` issues or just those that are `opened` or `closed`                                                                                       |
+| `updated_after`     | datetime         | no         | Return issues updated on or after the given time. Expected in ISO 8601 format (`2019-03-15T08:00:00Z`) |
+| `updated_before`    | datetime         | no         | Return issues updated on or before the given time. Expected in ISO 8601 format (`2019-03-15T08:00:00Z`) |
+| `weight` **(PREMIUM)** | integer       | no         | Return issues with the specified `weight`. `None` returns issues with no weight assigned. `Any` returns issues with a weight assigned.              |
+| `with_labels_details` | boolean        | no         | If `true`, the response returns more details for each label in labels field: `:name`, `:color`, `:description`, `:description_html`, `:text_color`. Default is `false`. The `description_html` attribute was introduced in [GitLab 12.7](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/21413)|
 
 ```shell
-curl --header "PRIVATE-TOKEN: <your_access_token>" https://gitlab.example.com/api/v4/issues
+curl --header "PRIVATE-TOKEN: <your_access_token>" "https://gitlab.example.com/api/v4/issues"
 ```
 
 Example response:
@@ -115,6 +129,7 @@ Example response:
          "avatar_url" : null,
          "username" : "root"
       },
+      "type" : "ISSUE",
       "updated_at" : "2016-01-04T15:31:51.081Z",
       "closed_at" : null,
       "closed_by" : null,
@@ -129,7 +144,7 @@ Example response:
       "merge_requests_count": 0,
       "user_notes_count": 1,
       "due_date": "2016-07-22",
-      "web_url": "http://example.com/my-group/my-project/issues/6",
+      "web_url": "http://gitlab.example.com/my-group/my-project/issues/6",
       "references": {
         "short": "#6",
         "relative": "my-group/my-project#6",
@@ -145,11 +160,12 @@ Example response:
       "task_status": "10 of 15 tasks completed",
       "confidential": false,
       "discussion_locked": false,
+      "issue_type": "issue",
       "_links":{
-         "self":"http://example.com/api/v4/projects/1/issues/76",
-         "notes":"`http://example.com/`api/v4/projects/1/issues/76/notes",
-         "award_emoji":"http://example.com/api/v4/projects/1/issues/76/award_emoji",
-         "project":"http://example.com/api/v4/projects/1"
+         "self":"http://gitlab.example.com/api/v4/projects/1/issues/76",
+         "notes":"http://gitlab.example.com/api/v4/projects/1/issues/76/notes",
+         "award_emoji":"http://gitlab.example.com/api/v4/projects/1/issues/76/award_emoji",
+         "project":"http://gitlab.example.com/api/v4/projects/1"
       },
       "task_completion_status":{
          "count":0,
@@ -159,8 +175,7 @@ Example response:
 ]
 ```
 
-Users on GitLab [Starter, Bronze, or higher](https://about.gitlab.com/pricing/) will also see
-the `weight` parameter:
+Issues created by users on GitLab Premium or higher include the `weight` property:
 
 ```json
 [
@@ -173,59 +188,108 @@ the `weight` parameter:
 ]
 ```
 
-**Note**: `assignee` column is deprecated, now we show it as a single-sized array `assignees` to conform to the GitLab EE API.
+Issues created by users on GitLab Premium or higher include the `epic` property:
 
-**Note**: The `closed_by` attribute was [introduced in GitLab 10.6][ce-17042]. This value will only be present for issues which were closed after GitLab 10.6 and when the user account that closed the issue still exists.
+```json
+{
+   "project_id" : 4,
+   "description" : "Omnis vero earum sunt corporis dolor et placeat.",
+   "epic_iid" : 5, //deprecated, use `iid` of the `epic` attribute
+   "epic": {
+     "id" : 42,
+     "iid" : 5,
+     "title": "My epic epic",
+     "url" : "/groups/h5bp/-/epics/5",
+     "group_id": 8
+   },
+   ...
+}
+```
+
+Issues created by users on GitLab Ultimate include the `health_status` property:
+
+```json
+[
+   {
+      "state" : "opened",
+      "description" : "Ratione dolores corrupti mollitia soluta quia.",
+      "health_status": "on_track",
+      ...
+   }
+]
+```
+
+WARNING:
+The `assignee` column is deprecated. We now show it as a single-sized array `assignees` to conform
+to the GitLab EE API.
+
+WARNING:
+The `epic_iid` attribute is deprecated and [scheduled for removal in API version 5](https://gitlab.com/gitlab-org/gitlab/-/issues/35157).
+Please use `iid` of the `epic` attribute instead.
+
+NOTE:
+The `closed_by` attribute was [introduced in GitLab 10.6](https://gitlab.com/gitlab-org/gitlab-foss/-/merge_requests/17042).
+This value is only present for issues closed after GitLab 10.6 and if the user account
+that closed the issue still exists.
 
 ## List group issues
 
+> The `weight` property moved to GitLab Premium in 13.9.
+
 Get a list of a group's issues.
+
+If the group is private, credentials need to be provided for authorization.
+The preferred way to do this, is by using [personal access tokens](../user/profile/personal_access_tokens.md).
 
 ```plaintext
 GET /groups/:id/issues
-GET /groups/:id/issues?state=opened
-GET /groups/:id/issues?state=closed
+GET /groups/:id/issues?assignee_id=5
+GET /groups/:id/issues?author_id=5
+GET /groups/:id/issues?confidential=true
+GET /groups/:id/issues?iids[]=42&iids[]=43
 GET /groups/:id/issues?labels=foo
 GET /groups/:id/issues?labels=foo,bar
 GET /groups/:id/issues?labels=foo,bar&state=opened
 GET /groups/:id/issues?milestone=1.0.0
 GET /groups/:id/issues?milestone=1.0.0&state=opened
-GET /groups/:id/issues?iids[]=42&iids[]=43
-GET /groups/:id/issues?search=issue+title+or+description
-GET /groups/:id/issues?author_id=5
-GET /groups/:id/issues?assignee_id=5
 GET /groups/:id/issues?my_reaction_emoji=star
-GET /groups/:id/issues?confidential=true
+GET /groups/:id/issues?search=issue+title+or+description
+GET /groups/:id/issues?state=closed
+GET /groups/:id/issues?state=opened
 ```
 
 | Attribute           | Type             | Required   | Description                                                                                                                   |
 | ------------------- | ---------------- | ---------- | ----------------------------------------------------------------------------------------------------------------------------- |
-| `id`                | integer/string   | yes        | The ID or [URL-encoded path of the group](README.md#namespaced-path-encoding) owned by the authenticated user                 |
-| `state`             | string           | no         | Return all issues or just those that are `opened` or `closed`                                                                 |
-| `labels`            | string           | no         | Comma-separated list of label names, issues must have all labels to be returned. `None` lists all issues with no labels. `Any` lists all issues with at least one label. `No+Label` (Deprecated) lists all issues with no labels. Predefined names are case-insensitive. |
-| `with_labels_details` | Boolean        | no         | If `true`, response will return more details for each label in labels field: `:name`, `:color`, `:description`, `:description_html`, `:text_color`. Default is `false`. The `description_html` attribute was introduced in [GitLab 12.7](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/21413) |
-| `iids[]`            | integer array    | no         | Return only the issues having the given `iid`                                                                                 |
-| `milestone`         | string           | no         | The milestone title. `None` lists all issues with no milestone. `Any` lists all issues that have an assigned milestone.       |
-| `scope`             | string           | no         | Return issues for the given scope: `created_by_me`, `assigned_to_me` or `all`.<br> For versions before 11.0, use the now deprecated `created-by-me` or `assigned-to-me` scopes instead.<br> _([Introduced][ce-13004] in GitLab 9.5. [Changed to snake_case][ce-18935] in GitLab 11.0)_ |
-| `author_id`         | integer          | no         | Return issues created by the given user `id`. Mutually exclusive with `author_username`. Combine with `scope=all` or `scope=assigned_to_me`. _([Introduced][ce-13004] in GitLab 9.5)_ |
+| `assignee_id`       | integer          | no         | Return issues assigned to the given user `id`. Mutually exclusive with `assignee_username`. `None` returns unassigned issues. `Any` returns issues with an assignee. _([Introduced](https://gitlab.com/gitlab-org/gitlab-foss/-/merge_requests/13004) in GitLab 9.5)_ |
+| `assignee_username` | string array     | no         | Return issues assigned to the given `username`. Similar to `assignee_id` and mutually exclusive with `assignee_id`. In GitLab CE, the `assignee_username` array should only contain a single value. Otherwise, an invalid parameter error is returned. |
+| `author_id`         | integer          | no         | Return issues created by the given user `id`. Mutually exclusive with `author_username`. Combine with `scope=all` or `scope=assigned_to_me`. _([Introduced](https://gitlab.com/gitlab-org/gitlab-foss/-/merge_requests/13004) in GitLab 9.5)_ |
 | `author_username`   | string           | no         | Return issues created by the given `username`. Similar to `author_id` and mutually exclusive with `author_id`. |
-| `assignee_id`       | integer          | no         | Return issues assigned to the given user `id`. Mutually exclusive with `assignee_username`. `None` returns unassigned issues. `Any` returns issues with an assignee. _([Introduced][ce-13004] in GitLab 9.5)_ |
-| `assignee_username` | string array     | no         | Return issues assigned to the given `username`. Similar to `assignee_id` and mutually exclusive with `assignee_id`. In CE version `assignee_username` array should only contain a single value or an invalid param error will be returned otherwise. |
-| `my_reaction_emoji` | string           | no         | Return issues reacted by the authenticated user by the given `emoji`. `None` returns issues not given a reaction. `Any` returns issues given at least one reaction. _([Introduced][ce-14016] in GitLab 10.0)_ |
-| `weight` **(STARTER)** | integer       | no         | Return issues with the specified `weight`. `None` returns issues with no weight assigned. `Any` returns issues with a weight assigned. |
-| `order_by`          | string           | no         | Return issues ordered by `created_at`, `updated_at`, `priority`, `due_date`, `relative_position`, `label_priority`, `milestone_due`, `popularity`, `weight` fields. Default is `created_at`                                                               |
-| `sort`              | string           | no         | Return issues sorted in `asc` or `desc` order. Default is `desc`                                                              |
-| `search`            | string           | no         | Search group issues against their `title` and `description`                                                                   |
-| `created_after`     | datetime         | no         | Return issues created on or after the given time                                                                              |
-| `created_before`    | datetime         | no         | Return issues created on or before the given time                                                                             |
-| `updated_after`     | datetime         | no         | Return issues updated on or after the given time                                                                              |
-| `updated_before`    | datetime         | no         | Return issues updated on or before the given time                                                                             |
-| `confidential`     | Boolean          | no         | Filter confidential or public issues.                                                                                         |
+| `confidential`     | boolean          | no         | Filter confidential or public issues.                                                                                         |
+| `created_after`     | datetime         | no         | Return issues created on or after the given time. Expected in ISO 8601 format (`2019-03-15T08:00:00Z`) |
+| `created_before`    | datetime         | no         | Return issues created on or before the given time. Expected in ISO 8601 format (`2019-03-15T08:00:00Z`) |
+| `due_date`          | string           | no         | Return issues that have no due date, are overdue, or whose due date is this week, this month, or between two weeks ago and next month. Accepts: `0` (no due date), `overdue`, `week`, `month`, `next_month_and_previous_two_weeks`. _(Introduced in [GitLab 13.3](https://gitlab.com/gitlab-org/gitlab/-/issues/233420))_ |
+| `id`                | integer/string   | yes        | The ID or [URL-encoded path of the group](index.md#namespaced-path-encoding) owned by the authenticated user                 |
+| `iids[]`            | integer array    | no         | Return only the issues having the given `iid`                                                                                 |
+| `issue_type`        | string           | no         | Filter to a given type of issue. One of `issue`, `incident`, or `test_case`. _(Introduced in [GitLab 13.12](https://gitlab.com/gitlab-org/gitlab/-/issues/260375))_ |
+| `iteration_id` **(PREMIUM)** | integer | no         | Return issues assigned to the given iteration ID. `None` returns issues that do not belong to an iteration. `Any` returns issues that belong to an iteration. Mutually exclusive with `iteration_title`. _([Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/118742) in GitLab 13.6)_ |
+| `iteration_title` **(PREMIUM)** | string | no       | Return issues assigned to the iteration with the given title. Similar to `iteration_id` and mutually exclusive with `iteration_id`. _([Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/118742) in GitLab 13.6)_ |
+| `labels`            | string           | no         | Comma-separated list of label names, issues must have all labels to be returned. `None` lists all issues with no labels. `Any` lists all issues with at least one label. `No+Label` (Deprecated) lists all issues with no labels. Predefined names are case-insensitive. |
+| `milestone`         | string           | no         | The milestone title. `None` lists all issues with no milestone. `Any` lists all issues that have an assigned milestone.       |
+| `my_reaction_emoji` | string           | no         | Return issues reacted by the authenticated user by the given `emoji`. `None` returns issues not given a reaction. `Any` returns issues given at least one reaction. _([Introduced](https://gitlab.com/gitlab-org/gitlab-foss/-/merge_requests/14016) in GitLab 10.0)_ |
+| `non_archived`      | boolean          | no         | Return issues from non archived projects. Default is true. _(Introduced in [GitLab 12.8](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/23785))_ |
 | `not`               | Hash             | no         | Return issues that do not match the parameters supplied. Accepts: `labels`, `milestone`, `author_id`, `author_username`, `assignee_id`, `assignee_username`, `my_reaction_emoji`, `search`, `in` |
-| `non_archived`      | Boolean          | no         | Return issues from non archived projects. Default is true. _(Introduced in [GitLab 12.8](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/23785))_ |
+| `order_by`          | string           | no         | Return issues ordered by `created_at`, `updated_at`, `priority`, `due_date`, `relative_position`, `label_priority`, `milestone_due`, `popularity`, `weight` fields. Default is `created_at`                                                               |
+| `scope`             | string           | no         | Return issues for the given scope: `created_by_me`, `assigned_to_me` or `all`.<br> For versions before 11.0, use the now deprecated `created-by-me` or `assigned-to-me` scopes instead.<br> _([Introduced](https://gitlab.com/gitlab-org/gitlab-foss/-/merge_requests/13004) in GitLab 9.5. [Changed to snake_case](https://gitlab.com/gitlab-org/gitlab-foss/-/merge_requests/18935) in GitLab 11.0)_ |
+| `search`            | string           | no         | Search group issues against their `title` and `description`                                                                   |
+| `sort`              | string           | no         | Return issues sorted in `asc` or `desc` order. Default is `desc`                                                              |
+| `state`             | string           | no         | Return all issues or just those that are `opened` or `closed`                                                                 |
+| `updated_after`     | datetime         | no         | Return issues updated on or after the given time. Expected in ISO 8601 format (`2019-03-15T08:00:00Z`) |
+| `updated_before`    | datetime         | no         | Return issues updated on or before the given time. Expected in ISO 8601 format (`2019-03-15T08:00:00Z`) |
+| `weight` **(PREMIUM)** | integer       | no         | Return issues with the specified `weight`. `None` returns issues with no weight assigned. `Any` returns issues with a weight assigned. |
+| `with_labels_details` | boolean        | no         | If `true`, the response returns more details for each label in labels field: `:name`, `:color`, `:description`, `:description_html`, `:text_color`. Default is `false`. The `description_html` attribute was introduced in [GitLab 12.7](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/21413) |
 
 ```shell
-curl --header "PRIVATE-TOKEN: <your_access_token>" https://gitlab.example.com/api/v4/groups/4/issues
+curl --header "PRIVATE-TOKEN: <your_access_token>" "https://gitlab.example.com/api/v4/groups/4/issues"
 ```
 
 Example response:
@@ -272,6 +336,7 @@ Example response:
          "id" : 9,
          "name" : "Dr. Luella Kovacek"
       },
+      "type" : "ISSUE",
       "labels" : ["foo", "bar"],
       "upvotes": 4,
       "downvotes": 0,
@@ -284,7 +349,7 @@ Example response:
       "closed_by" : null,
       "user_notes_count": 1,
       "due_date": null,
-      "web_url": "http://example.com/my-group/my-project/issues/1",
+      "web_url": "http://gitlab.example.com/my-group/my-project/issues/1",
       "references": {
         "short": "#1",
         "relative": "my-project#1",
@@ -300,11 +365,12 @@ Example response:
       "task_status": "10 of 15 tasks completed",
       "confidential": false,
       "discussion_locked": false,
+      "issue_type": "issue",
       "_links":{
-         "self":"http://example.com/api/v4/projects/4/issues/41",
-         "notes":"`http://example.com/`api/v4/projects/4/issues/41/notes",
-         "award_emoji":"http://example.com/api/v4/projects/4/issues/41/award_emoji",
-         "project":"http://example.com/api/v4/projects/4"
+         "self":"http://gitlab.example.com/api/v4/projects/4/issues/41",
+         "notes":"http://gitlab.example.com/api/v4/projects/4/issues/41/notes",
+         "award_emoji":"http://gitlab.example.com/api/v4/projects/4/issues/41/award_emoji",
+         "project":"http://gitlab.example.com/api/v4/projects/4"
       },
       "task_completion_status":{
          "count":0,
@@ -314,8 +380,7 @@ Example response:
 ]
 ```
 
-Users on GitLab [Starter, Bronze, or higher](https://about.gitlab.com/pricing/) will also see
-the `weight` parameter:
+Issues created by users on GitLab Premium or higher include the `weight` property:
 
 ```json
 [
@@ -328,58 +393,106 @@ the `weight` parameter:
 ]
 ```
 
-**Note**: `assignee` column is deprecated, now we show it as a single-sized array `assignees` to conform to the GitLab EE API.
+Issues created by users on GitLab Premium or higher include the `epic` property:
 
-**Note**: The `closed_by` attribute was [introduced in GitLab 10.6][ce-17042]. This value will only be present for issues which were closed after GitLab 10.6 and when the user account that closed the issue still exists.
+```json
+{
+   "project_id" : 4,
+   "description" : "Omnis vero earum sunt corporis dolor et placeat.",
+   "epic_iid" : 5, //deprecated, use `iid` of the `epic` attribute
+   "epic": {
+     "id" : 42,
+     "iid" : 5,
+     "title": "My epic epic",
+     "url" : "/groups/h5bp/-/epics/5",
+     "group_id": 8
+   },
+   ...
+}
+```
+
+Issues created by users on GitLab Ultimate include the `health_status` property:
+
+```json
+[
+   {
+      "project_id" : 4,
+      "description" : "Omnis vero earum sunt corporis dolor et placeat.",
+      "health_status": "at_risk",
+      ...
+   }
+]
+```
+
+WARNING:
+The `assignee` column is deprecated. We now show it as a single-sized array `assignees` to conform to the GitLab EE API.
+
+WARNING:
+The `epic_iid` attribute is deprecated and [scheduled for removal in API version 5](https://gitlab.com/gitlab-org/gitlab/-/issues/35157).
+Please use `iid` of the `epic` attribute instead.
+
+NOTE:
+The `closed_by` attribute was [introduced in GitLab 10.6](https://gitlab.com/gitlab-org/gitlab-foss/-/merge_requests/17042).
+This value is only present for issues closed after GitLab 10.6 and if the user account that closed
+the issue still exists.
 
 ## List project issues
 
+> The `weight` property moved to GitLab Premium in 13.9.
+
 Get a list of a project's issues.
+
+If the project is private, you need to provide credentials to authorize.
+The preferred way to do this, is by using [personal access tokens](../user/profile/personal_access_tokens.md).
 
 ```plaintext
 GET /projects/:id/issues
-GET /projects/:id/issues?state=opened
-GET /projects/:id/issues?state=closed
+GET /projects/:id/issues?assignee_id=5
+GET /projects/:id/issues?author_id=5
+GET /projects/:id/issues?confidential=true
+GET /projects/:id/issues?iids[]=42&iids[]=43
 GET /projects/:id/issues?labels=foo
 GET /projects/:id/issues?labels=foo,bar
 GET /projects/:id/issues?labels=foo,bar&state=opened
 GET /projects/:id/issues?milestone=1.0.0
 GET /projects/:id/issues?milestone=1.0.0&state=opened
-GET /projects/:id/issues?iids[]=42&iids[]=43
-GET /projects/:id/issues?search=issue+title+or+description
-GET /projects/:id/issues?author_id=5
-GET /projects/:id/issues?assignee_id=5
 GET /projects/:id/issues?my_reaction_emoji=star
-GET /projects/:id/issues?confidential=true
+GET /projects/:id/issues?search=issue+title+or+description
+GET /projects/:id/issues?state=closed
+GET /projects/:id/issues?state=opened
 ```
 
 | Attribute           | Type             | Required   | Description                                                                                                                   |
 | ------------------- | ---------------- | ---------- | ----------------------------------------------------------------------------------------------------------------------------- |
-| `id`                | integer/string   | yes        | The ID or [URL-encoded path of the project](README.md#namespaced-path-encoding) owned by the authenticated user               |
-| `iids[]`            | integer array    | no         | Return only the milestone having the given `iid`                                                                              |
-| `state`             | string           | no         | Return all issues or just those that are `opened` or `closed`                                                                 |
-| `labels`            | string           | no         | Comma-separated list of label names, issues must have all labels to be returned. `None` lists all issues with no labels. `Any` lists all issues with at least one label. `No+Label` (Deprecated) lists all issues with no labels. Predefined names are case-insensitive. |
-| `with_labels_details` | Boolean        | no         | If `true`, response will return more details for each label in labels field: `:name`, `:color`, `:description`, `:description_html`, `:text_color`. Default is `false`. `description_html` Introduced in [GitLab 12.7](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/21413) |
-| `milestone`         | string           | no         | The milestone title. `None` lists all issues with no milestone. `Any` lists all issues that have an assigned milestone.       |
-| `scope`             | string           | no         | Return issues for the given scope: `created_by_me`, `assigned_to_me` or `all`.<br> For versions before 11.0, use the now deprecated `created-by-me` or `assigned-to-me` scopes instead.<br> _([Introduced][ce-13004] in GitLab 9.5. [Changed to snake_case][ce-18935] in GitLab 11.0)_ |
-| `author_id`         | integer          | no         | Return issues created by the given user `id`. Mutually exclusive with `author_username`. Combine with `scope=all` or `scope=assigned_to_me`. _([Introduced][ce-13004] in GitLab 9.5)_ |
+| `assignee_id`       | integer          | no         | Return issues assigned to the given user `id`. Mutually exclusive with `assignee_username`. `None` returns unassigned issues. `Any` returns issues with an assignee. _([Introduced](https://gitlab.com/gitlab-org/gitlab-foss/-/merge_requests/13004) in GitLab 9.5)_ |
+| `assignee_username` | string array     | no         | Return issues assigned to the given `username`. Similar to `assignee_id` and mutually exclusive with `assignee_id`. In GitLab CE, the `assignee_username` array should only contain a single value. Otherwise, an invalid parameter error is returned. |
+| `author_id`         | integer          | no         | Return issues created by the given user `id`. Mutually exclusive with `author_username`. Combine with `scope=all` or `scope=assigned_to_me`. _([Introduced](https://gitlab.com/gitlab-org/gitlab-foss/-/merge_requests/13004) in GitLab 9.5)_ |
 | `author_username`   | string           | no         | Return issues created by the given `username`. Similar to `author_id` and mutually exclusive with `author_id`. |
-| `assignee_id`       | integer          | no         | Return issues assigned to the given user `id`. Mutually exclusive with `assignee_username`. `None` returns unassigned issues. `Any` returns issues with an assignee. _([Introduced][ce-13004] in GitLab 9.5)_ |
-| `assignee_username` | string array     | no         | Return issues assigned to the given `username`. Similar to `assignee_id` and mutually exclusive with `assignee_id`. In CE version `assignee_username` array should only contain a single value or an invalid param error will be returned otherwise. |
-| `my_reaction_emoji` | string           | no         | Return issues reacted by the authenticated user by the given `emoji`. `None` returns issues not given a reaction. `Any` returns issues given at least one reaction. _([Introduced][ce-14016] in GitLab 10.0)_ |
-| `weight` **(STARTER)** | integer       | no         | Return issues with the specified `weight`. `None` returns issues with no weight assigned. `Any` returns issues with a weight assigned. |
-| `order_by`          | string           | no         | Return issues ordered by `created_at`, `updated_at`, `priority`, `due_date`, `relative_position`, `label_priority`, `milestone_due`, `popularity`, `weight` fields. Default is `created_at`                                                               |
-| `sort`              | string           | no         | Return issues sorted in `asc` or `desc` order. Default is `desc`                                                              |
-| `search`            | string           | no         | Search project issues against their `title` and `description`                                                                 |
-| `created_after`     | datetime         | no         | Return issues created on or after the given time                                                                              |
-| `created_before`    | datetime         | no         | Return issues created on or before the given time                                                                             |
-| `updated_after`     | datetime         | no         | Return issues updated on or after the given time                                                                              |
-| `updated_before`    | datetime         | no         | Return issues updated on or before the given time                                                                             |
-| `confidential`     | Boolean          | no         | Filter confidential or public issues.                                                                                         |
+| `confidential`     | boolean          | no         | Filter confidential or public issues.                                                                                         |
+| `created_after`     | datetime         | no         | Return issues created on or after the given time. Expected in ISO 8601 format (`2019-03-15T08:00:00Z`) |
+| `created_before`    | datetime         | no         | Return issues created on or before the given time. Expected in ISO 8601 format (`2019-03-15T08:00:00Z`) |
+| `due_date`          | string           | no         | Return issues that have no due date, are overdue, or whose due date is this week, this month, or between two weeks ago and next month. Accepts: `0` (no due date), `overdue`, `week`, `month`, `next_month_and_previous_two_weeks`. _(Introduced in [GitLab 13.3](https://gitlab.com/gitlab-org/gitlab/-/issues/233420))_ |
+| `id`                | integer/string   | yes        | The ID or [URL-encoded path of the project](index.md#namespaced-path-encoding) owned by the authenticated user               |
+| `iids[]`            | integer array    | no         | Return only the issues having the given `iid`                                                                              |
+| `issue_type`        | string           | no         | Filter to a given type of issue. One of `issue`, `incident`, or `test_case`. _(Introduced in [GitLab 13.12](https://gitlab.com/gitlab-org/gitlab/-/issues/260375))_ |
+| `iteration_id` **(PREMIUM)** | integer | no         | Return issues assigned to the given iteration ID. `None` returns issues that do not belong to an iteration. `Any` returns issues that belong to an iteration. Mutually exclusive with `iteration_title`. _([Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/118742) in GitLab 13.6)_ |
+| `iteration_title` **(PREMIUM)** | string | no       | Return issues assigned to the iteration with the given title. Similar to `iteration_id` and mutually exclusive with `iteration_id`. _([Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/118742) in GitLab 13.6)_ |
+| `labels`            | string           | no         | Comma-separated list of label names, issues must have all labels to be returned. `None` lists all issues with no labels. `Any` lists all issues with at least one label. `No+Label` (Deprecated) lists all issues with no labels. Predefined names are case-insensitive. |
+| `milestone`         | string           | no         | The milestone title. `None` lists all issues with no milestone. `Any` lists all issues that have an assigned milestone.       |
+| `my_reaction_emoji` | string           | no         | Return issues reacted by the authenticated user by the given `emoji`. `None` returns issues not given a reaction. `Any` returns issues given at least one reaction. _([Introduced](https://gitlab.com/gitlab-org/gitlab-foss/-/merge_requests/14016) in GitLab 10.0)_ |
 | `not`               | Hash             | no         | Return issues that do not match the parameters supplied. Accepts: `labels`, `milestone`, `author_id`, `author_username`, `assignee_id`, `assignee_username`, `my_reaction_emoji`, `search`, `in` |
+| `order_by`          | string           | no         | Return issues ordered by `created_at`, `updated_at`, `priority`, `due_date`, `relative_position`, `label_priority`, `milestone_due`, `popularity`, `weight` fields. Default is `created_at`                                                               |
+| `scope`             | string           | no         | Return issues for the given scope: `created_by_me`, `assigned_to_me` or `all`.<br> For versions before 11.0, use the deprecated `created-by-me` or `assigned-to-me` scopes instead.<br> _([Introduced](https://gitlab.com/gitlab-org/gitlab-foss/-/merge_requests/13004) in GitLab 9.5. [Changed to snake_case](https://gitlab.com/gitlab-org/gitlab-foss/-/merge_requests/18935) in GitLab 11.0)_ |
+| `search`            | string           | no         | Search project issues against their `title` and `description`                                                                 |
+| `sort`              | string           | no         | Return issues sorted in `asc` or `desc` order. Default is `desc`                                                              |
+| `state`             | string           | no         | Return all issues or just those that are `opened` or `closed`                                                                 |
+| `updated_after`     | datetime         | no         | Return issues updated on or after the given time. Expected in ISO 8601 format (`2019-03-15T08:00:00Z`) |
+| `updated_before`    | datetime         | no         | Return issues updated on or before the given time. Expected in ISO 8601 format (`2019-03-15T08:00:00Z`) |
+| `weight` **(PREMIUM)** | integer       | no         | Return issues with the specified `weight`. `None` returns issues with no weight assigned. `Any` returns issues with a weight assigned. |
+| `with_labels_details` | boolean        | no         | If `true`, the response returns more details for each label in labels field: `:name`, `:color`, `:description`, `:description_html`, `:text_color`. Default is `false`. `description_html` was introduced in [GitLab 12.7](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/21413) |
 
 ```shell
-curl --header "PRIVATE-TOKEN: <your_access_token>" https://gitlab.example.com/api/v4/projects/4/issues
+curl --header "PRIVATE-TOKEN: <your_access_token>" "https://gitlab.example.com/api/v4/projects/4/issues"
 ```
 
 Example response:
@@ -426,6 +539,7 @@ Example response:
          "id" : 9,
          "name" : "Dr. Luella Kovacek"
       },
+      "type" : "ISSUE",
       "labels" : ["foo", "bar"],
       "upvotes": 4,
       "downvotes": 0,
@@ -445,7 +559,7 @@ Example response:
       },
       "user_notes_count": 1,
       "due_date": "2016-07-22",
-      "web_url": "http://example.com/my-group/my-project/issues/1",
+      "web_url": "http://gitlab.example.com/my-group/my-project/issues/1",
       "references": {
         "short": "#1",
         "relative": "#1",
@@ -461,11 +575,12 @@ Example response:
       "task_status": "10 of 15 tasks completed",
       "confidential": false,
       "discussion_locked": false,
+      "issue_type": "issue",
       "_links":{
-         "self":"http://example.com/api/v4/projects/4/issues/41",
-         "notes":"`http://example.com/`api/v4/projects/4/issues/41/notes",
-         "award_emoji":"http://example.com/api/v4/projects/4/issues/41/award_emoji",
-         "project":"http://example.com/api/v4/projects/4"
+         "self":"http://gitlab.example.com/api/v4/projects/4/issues/41",
+         "notes":"http://gitlab.example.com/api/v4/projects/4/issues/41/notes",
+         "award_emoji":"http://gitlab.example.com/api/v4/projects/4/issues/41/award_emoji",
+         "project":"http://gitlab.example.com/api/v4/projects/4"
       },
       "task_completion_status":{
          "count":0,
@@ -475,8 +590,7 @@ Example response:
 ]
 ```
 
-Users on GitLab [Starter, Bronze, or higher](https://about.gitlab.com/pricing/) will also see
-the `weight` parameter:
+Issues created by users on GitLab Premium or higher include the `weight` property:
 
 ```json
 [
@@ -489,13 +603,220 @@ the `weight` parameter:
 ]
 ```
 
-**Note**: `assignee` column is deprecated, now we show it as a single-sized array `assignees` to conform to the GitLab EE API.
+Issues created by users on GitLab Premium or higher include the `epic` property:
 
-**Note**: The `closed_by` attribute was [introduced in GitLab 10.6][ce-17042]. This value will only be present for issues which were closed after GitLab 10.6 and when the user account that closed the issue still exists.
+```json
+{
+   "project_id" : 4,
+   "description" : "Omnis vero earum sunt corporis dolor et placeat.",
+   "epic_iid" : 5, //deprecated, use `iid` of the `epic` attribute
+   "epic": {
+     "id" : 42,
+     "iid" : 5,
+     "title": "My epic epic",
+     "url" : "/groups/h5bp/-/epics/5",
+     "group_id": 8
+   },
+   ...
+}
+```
+
+Issues created by users on GitLab Ultimate include the `health_status` property:
+
+```json
+[
+   {
+      "project_id" : 4,
+      "description" : "Omnis vero earum sunt corporis dolor et placeat.",
+      "health_status": "at_risk",
+      ...
+   }
+]
+```
+
+WARNING:
+The `assignee` column is deprecated. We now show it as a single-sized array `assignees` to conform to the GitLab EE API.
+
+WARNING:
+The `epic_iid` attribute is deprecated and [scheduled for removal in API version 5](https://gitlab.com/gitlab-org/gitlab/-/issues/35157).
+Please use `iid` of the `epic` attribute instead.
+
+NOTE:
+The `closed_by` attribute was [introduced in GitLab 10.6](https://gitlab.com/gitlab-org/gitlab-foss/-/merge_requests/17042). This value is only present for issues closed after GitLab 10.6 and if the user account that closed
+the issue still exists.
 
 ## Single issue
 
+Only for administrators. Get a single issue.
+
+The preferred way to do this is by using [personal access tokens](../user/profile/personal_access_tokens.md).
+
+```plaintext
+GET /issues/:id
+```
+
+| Attribute   | Type    | Required | Description                          |
+|-------------|---------|----------|--------------------------------------|
+| `id`        | integer | yes      | The ID of the issue                  |
+
+```shell
+curl --header "PRIVATE-TOKEN: <your_access_token>" "https://gitlab.example.com/api/v4/issues/41"
+```
+
+Example response:
+
+```json
+{
+  "id": 1,
+  "milestone": {
+    "due_date": null,
+    "project_id": 4,
+    "state": "closed",
+    "description": "Rerum est voluptatem provident consequuntur molestias similique ipsum dolor.",
+    "iid": 3,
+    "id": 11,
+    "title": "v3.0",
+    "created_at": "2016-01-04T15:31:39.788Z",
+    "updated_at": "2016-01-04T15:31:39.788Z",
+    "closed_at": "2016-01-05T15:31:46.176Z"
+  },
+  "author": {
+    "state": "active",
+    "web_url": "https://gitlab.example.com/root",
+    "avatar_url": null,
+    "username": "root",
+    "id": 1,
+    "name": "Administrator"
+  },
+  "description": "Omnis vero earum sunt corporis dolor et placeat.",
+  "state": "closed",
+  "iid": 1,
+  "assignees": [
+    {
+      "avatar_url": null,
+      "web_url": "https://gitlab.example.com/lennie",
+      "state": "active",
+      "username": "lennie",
+      "id": 9,
+      "name": "Dr. Luella Kovacek"
+    }
+  ],
+  "assignee": {
+    "avatar_url": null,
+    "web_url": "https://gitlab.example.com/lennie",
+    "state": "active",
+    "username": "lennie",
+    "id": 9,
+    "name": "Dr. Luella Kovacek"
+  },
+  "type": "ISSUE",
+  "labels": [],
+  "upvotes": 4,
+  "downvotes": 0,
+  "merge_requests_count": 0,
+  "title": "Ut commodi ullam eos dolores perferendis nihil sunt.",
+  "updated_at": "2016-01-04T15:31:46.176Z",
+  "created_at": "2016-01-04T15:31:46.176Z",
+  "closed_at": null,
+  "closed_by": null,
+  "subscribed": false,
+  "user_notes_count": 1,
+  "due_date": null,
+  "web_url": "http://example.com/my-group/my-project/issues/1",
+  "references": {
+    "short": "#1",
+    "relative": "#1",
+    "full": "my-group/my-project#1"
+  },
+  "time_stats": {
+    "time_estimate": 0,
+    "total_time_spent": 0,
+    "human_time_estimate": null,
+    "human_total_time_spent": null
+  },
+  "confidential": false,
+  "discussion_locked": false,
+  "issue_type": "issue",
+  "task_completion_status": {
+    "count": 0,
+    "completed_count": 0
+  },
+  "weight": null,
+  "has_tasks": false,
+  "_links": {
+    "self": "http://gitlab.example:3000/api/v4/projects/1/issues/1",
+    "notes": "http://gitlab.example:3000/api/v4/projects/1/issues/1/notes",
+    "award_emoji": "http://gitlab.example:3000/api/v4/projects/1/issues/1/award_emoji",
+    "project": "http://gitlab.example:3000/api/v4/projects/1"
+  },
+  "moved_to_id": null,
+  "service_desk_reply_to": "service.desk@gitlab.com"
+}
+```
+
+Issues created by users on GitLab Premium or higher include the `weight` property:
+
+```json
+{
+   "project_id" : 4,
+   "description" : "Omnis vero earum sunt corporis dolor et placeat.",
+   "weight": null,
+   ...
+}
+```
+
+Issues created by users on GitLab Premium or higher include the `epic` property:
+
+```json
+{
+   "project_id" : 4,
+   "description" : "Omnis vero earum sunt corporis dolor et placeat.",
+   "epic": {
+   "epic_iid" : 5, //deprecated, use `iid` of the `epic` attribute
+   "epic": {
+     "id" : 42,
+     "iid" : 5,
+     "title": "My epic epic",
+     "url" : "/groups/h5bp/-/epics/5",
+     "group_id": 8
+   },
+   ...
+}
+```
+
+Users of [GitLab Ultimate](https://about.gitlab.com/pricing/) can also see the `health_status`
+property:
+
+```json
+[
+   {
+      "project_id" : 4,
+      "description" : "Omnis vero earum sunt corporis dolor et placeat.",
+      "health_status": "on_track",
+      ...
+   }
+]
+```
+
+WARNING:
+The `assignee` column is deprecated. We now show it as a single-sized array `assignees` to conform
+to the GitLab EE API.
+
+WARNING:
+The `epic_iid` attribute is deprecated, and [scheduled for removal in API version 5](https://gitlab.com/gitlab-org/gitlab/-/issues/35157).
+Please use `iid` of the `epic` attribute instead.
+
+NOTE:
+The `closed_by` attribute was [introduced in GitLab 10.6](https://gitlab.com/gitlab-org/gitlab-foss/-/merge_requests/17042).
+This value is only present for issues closed after GitLab 10.6 and if the user account
+that closed the issue still exists.
+
+## Single project issue
+
 Get a single project issue.
+
+If the project is private or the issue is confidential, you need to provide credentials to authorize.
+The preferred way to do this, is by using [personal access tokens](../user/profile/personal_access_tokens.md).
 
 ```plaintext
 GET /projects/:id/issues/:issue_iid
@@ -503,11 +824,11 @@ GET /projects/:id/issues/:issue_iid
 
 | Attribute   | Type    | Required | Description                          |
 |-------------|---------|----------|--------------------------------------|
-| `id`        | integer/string | yes      | The ID or [URL-encoded path of the project](README.md#namespaced-path-encoding) owned by the authenticated user  |
+| `id`        | integer/string | yes      | The ID or [URL-encoded path of the project](index.md#namespaced-path-encoding) owned by the authenticated user  |
 | `issue_iid` | integer | yes      | The internal ID of a project's issue |
 
 ```shell
-curl --header "PRIVATE-TOKEN: <your_access_token>" https://gitlab.example.com/api/v4/projects/4/issues/41
+curl --header "PRIVATE-TOKEN: <your_access_token>" "https://gitlab.example.com/api/v4/projects/4/issues/41"
 ```
 
 Example response:
@@ -554,6 +875,7 @@ Example response:
       "id" : 9,
       "name" : "Dr. Luella Kovacek"
    },
+   "type" : "ISSUE",
    "labels" : [],
    "upvotes": 4,
    "downvotes": 0,
@@ -567,7 +889,7 @@ Example response:
    "subscribed": false,
    "user_notes_count": 1,
    "due_date": null,
-   "web_url": "http://example.com/my-group/my-project/issues/1",
+   "web_url": "http://gitlab.example.com/my-group/my-project/issues/1",
    "references": {
      "short": "#1",
      "relative": "#1",
@@ -581,11 +903,12 @@ Example response:
    },
    "confidential": false,
    "discussion_locked": false,
+   "issue_type": "issue",
    "_links": {
-      "self": "http://example.com/api/v4/projects/1/issues/2",
-      "notes": "http://example.com/api/v4/projects/1/issues/2/notes",
-      "award_emoji": "http://example.com/api/v4/projects/1/issues/2/award_emoji",
-      "project": "http://example.com/api/v4/projects/1"
+      "self": "http://gitlab.example.com/api/v4/projects/1/issues/2",
+      "notes": "http://gitlab.example.com/api/v4/projects/1/issues/2/notes",
+      "award_emoji": "http://gitlab.example.com/api/v4/projects/1/issues/2/award_emoji",
+      "project": "http://gitlab.example.com/api/v4/projects/1"
    },
    "task_completion_status":{
       "count":0,
@@ -594,8 +917,7 @@ Example response:
 }
 ```
 
-Users on GitLab [Starter, Bronze, or higher](https://about.gitlab.com/pricing/) will also see
-the `weight` parameter:
+Issues created by users on GitLab Premium or higher include the `weight` property:
 
 ```json
 {
@@ -606,14 +928,12 @@ the `weight` parameter:
 }
 ```
 
-Users on GitLab [Ultimate](https://about.gitlab.com/pricing/) will additionally see
-the `epic` property:
+Issues created by users on GitLab Premium or higher include the `epic` property:
 
-```javascript
+```json
 {
    "project_id" : 4,
    "description" : "Omnis vero earum sunt corporis dolor et placeat.",
-   "epic": {
    "epic_iid" : 5, //deprecated, use `iid` of the `epic` attribute
    "epic": {
      "id" : 42,
@@ -622,18 +942,38 @@ the `epic` property:
      "url" : "/groups/h5bp/-/epics/5",
      "group_id": 8
    },
-   // ...
+   ...
 }
 ```
 
-**Note**: `assignee` column is deprecated, now we show it as a single-sized array `assignees` to conform to the GitLab EE API.
+Users of [GitLab Ultimate](https://about.gitlab.com/pricing/) can also see the `health_status`
+property:
 
-**Note**: The `closed_by` attribute was [introduced in GitLab 10.6][ce-17042]. This value will only be present for issues which were closed after GitLab 10.6 and when the user account that closed the issue still exists.
+```json
+[
+   {
+      "project_id" : 4,
+      "description" : "Omnis vero earum sunt corporis dolor et placeat.",
+      "health_status": "on_track",
+      ...
+   }
+]
+```
 
-**Note**: The `epic_iid` attribute is deprecated and [will be removed in 13.0](https://gitlab.com/gitlab-org/gitlab/issues/35157).
+WARNING:
+The `assignee` column is deprecated. We now show it as a single-sized array `assignees` to conform to the GitLab EE API.
+
+WARNING:
+The `epic_iid` attribute is deprecated and [scheduled for removal in API version 5](https://gitlab.com/gitlab-org/gitlab/-/issues/35157).
 Please use `iid` of the `epic` attribute instead.
 
+NOTE:
+The `closed_by` attribute was [introduced in GitLab 10.6](https://gitlab.com/gitlab-org/gitlab-foss/-/merge_requests/17042). This value is only present for issues closed after GitLab 10.6 and if the user account that closed
+the issue still exists.
+
 ## New issue
+
+> The `weight` property moved to GitLab Premium in 13.9.
 
 Creates a new project issue.
 
@@ -643,24 +983,26 @@ POST /projects/:id/issues
 
 | Attribute                                 | Type           | Required | Description  |
 |-------------------------------------------|----------------|----------|--------------|
-| `id`                                      | integer/string | yes      | The ID or [URL-encoded path of the project](README.md#namespaced-path-encoding) owned by the authenticated user |
-| `iid`                                     | integer/string | no       | The internal ID of the project's issue (requires admin or project owner rights) |
-| `title`                                   | string         | yes      | The title of an issue |
+| `assignee_id`                             | integer        | no       | The ID of the user to assign the issue to. Only appears on GitLab Free. |
+| `assignee_ids` **(PREMIUM)**              | integer array  | no       | The IDs of the users to assign the issue to. |
+| `confidential`                            | boolean        | no       | Set an issue to be confidential. Default is `false`.  |
+| `created_at`                              | string         | no       | When the issue was created. Date time string, ISO 8601 formatted, for example `2016-03-11T03:45:40Z`. Requires administrator or project/group owner rights. |
 | `description`                             | string         | no       | The description of an issue. Limited to 1,048,576 characters. |
-| `confidential`                            | Boolean        | no       | Set an issue to be confidential. Default is `false`.  |
-| `assignee_ids`                            | integer array  | no       | The ID of a user to assign issue |
-| `milestone_id`                            | integer        | no       | The global ID of a milestone to assign issue  |
+| `discussion_to_resolve`                   | string         | no       | The ID of a discussion to resolve. This fills out the issue with a default description and mark the discussion as resolved. Use in combination with `merge_request_to_resolve_discussions_of`. |
+| `due_date`                                | string         | no       | The due date. Date time string in the format `YYYY-MM-DD`, for example `2016-03-11` |
+| `epic_id` **(PREMIUM)** | integer | no | ID of the epic to add the issue to. Valid values are greater than or equal to 0. |
+| `epic_iid` **(PREMIUM)** | integer | no | IID of the epic to add the issue to. Valid values are greater than or equal to 0. (deprecated, [scheduled for removal in API version 5](https://gitlab.com/gitlab-org/gitlab/-/issues/35157)) |
+| `id`                                      | integer/string | yes      | The ID or [URL-encoded path of the project](index.md#namespaced-path-encoding) owned by the authenticated user |
+| `iid`                                     | integer/string | no       | The internal ID of the project's issue (requires administrator or project owner rights) |
+| `issue_type`                              | string         | no       | The type of issue. One of `issue`, `incident`, or `test_case`. Default is `issue`. |
 | `labels`                                  | string         | no       | Comma-separated label names for an issue  |
-| `created_at`                              | string         | no       | Date time string, ISO 8601 formatted, e.g. `2016-03-11T03:45:40Z` (requires admin or project/group owner rights) |
-| `due_date`                                | string         | no       | Date time string in the format YEAR-MONTH-DAY, e.g. `2016-03-11` |
-| `merge_request_to_resolve_discussions_of` | integer        | no       | The IID of a merge request in which to resolve all issues. This will fill the issue with a default description and mark all discussions as resolved. When passing a description or title, these values will take precedence over the default values.|
-| `discussion_to_resolve`                   | string         | no       | The ID of a discussion to resolve. This will fill in the issue with a default description and mark the discussion as resolved. Use in combination with `merge_request_to_resolve_discussions_of`. |
-| `weight` **(STARTER)**                    | integer        | no       | The weight of the issue. Valid values are greater than or equal to 0. |
-| `epic_id` **(ULTIMATE)** | integer | no | ID of the epic to add the issue to. Valid values are greater than or equal to 0. |
-| `epic_iid` **(ULTIMATE)** | integer | no | IID of the epic to add the issue to. Valid values are greater than or equal to 0. (deprecated, [will be removed in 13.0](https://gitlab.com/gitlab-org/gitlab/issues/35157)) |
+| `merge_request_to_resolve_discussions_of` | integer        | no       | The IID of a merge request in which to resolve all issues. This fills out the issue with a default description and mark all discussions as resolved. When passing a description or title, these values take precedence over the default values.|
+| `milestone_id`                            | integer        | no       | The global ID of a milestone to assign issue. To find the `milestone_id` associated with a milestone, view an issue with the milestone assigned and [use the API](#single-project-issue) to retrieve the issue's details. |
+| `title`                                   | string         | yes      | The title of an issue |
+| `weight` **(PREMIUM)**                    | integer        | no       | The weight of the issue. Valid values are greater than or equal to 0. |
 
 ```shell
-curl --request POST --header "PRIVATE-TOKEN: <your_access_token>" https://gitlab.example.com/api/v4/projects/4/issues?title=Issues%20with%20auth&labels=bug
+curl --request POST --header "PRIVATE-TOKEN: <your_access_token>" "https://gitlab.example.com/api/v4/projects/4/issues?title=Issues%20with%20auth&labels=bug"
 ```
 
 Example response:
@@ -675,6 +1017,7 @@ Example response:
    "state" : "opened",
    "assignees" : [],
    "assignee" : null,
+   "type" : "ISSUE",
    "labels" : [
       "bug"
    ],
@@ -697,7 +1040,7 @@ Example response:
    "subscribed" : true,
    "user_notes_count": 0,
    "due_date": null,
-   "web_url": "http://example.com/my-group/my-project/issues/14",
+   "web_url": "http://gitlab.example.com/my-group/my-project/issues/14",
    "references": {
      "short": "#14",
      "relative": "#14",
@@ -711,11 +1054,12 @@ Example response:
    },
    "confidential": false,
    "discussion_locked": false,
+   "issue_type": "issue",
    "_links": {
-      "self": "http://example.com/api/v4/projects/1/issues/2",
-      "notes": "http://example.com/api/v4/projects/1/issues/2/notes",
-      "award_emoji": "http://example.com/api/v4/projects/1/issues/2/award_emoji",
-      "project": "http://example.com/api/v4/projects/1"
+      "self": "http://gitlab.example.com/api/v4/projects/1/issues/2",
+      "notes": "http://gitlab.example.com/api/v4/projects/1/issues/2/notes",
+      "award_emoji": "http://gitlab.example.com/api/v4/projects/1/issues/2/award_emoji",
+      "project": "http://gitlab.example.com/api/v4/projects/1"
    },
    "task_completion_status":{
       "count":0,
@@ -724,8 +1068,7 @@ Example response:
 }
 ```
 
-Users on GitLab [Starter, Bronze, or higher](https://about.gitlab.com/pricing/) will also see
-the `weight` parameter:
+Issues created by users on GitLab Premium or higher include the `weight` property:
 
 ```json
 {
@@ -736,14 +1079,74 @@ the `weight` parameter:
 }
 ```
 
-**Note**: `assignee` column is deprecated, now we show it as a single-sized array `assignees` to conform to the GitLab EE API.
+Issues created by users on GitLab Premium or higher include the `epic` property:
 
-**Note**: The `closed_by` attribute was [introduced in GitLab 10.6][ce-17042]. This value will only be present for issues which were closed after GitLab 10.6 and when the user account that closed the issue still exists.
+```json
+{
+   "project_id" : 4,
+   "description" : "Omnis vero earum sunt corporis dolor et placeat.",
+   "epic_iid" : 5, //deprecated, use `iid` of the `epic` attribute
+   "epic": {
+     "id" : 42,
+     "iid" : 5,
+     "title": "My epic epic",
+     "url" : "/groups/h5bp/-/epics/5",
+     "group_id": 8
+   },
+   ...
+}
+```
+
+Issues created by users on GitLab Ultimate include the `health_status` property:
+
+```json
+[
+   {
+      "project_id" : 4,
+      "description" : "Omnis vero earum sunt corporis dolor et placeat.",
+      "health_status": "on_track",
+      ...
+   }
+]
+```
+
+WARNING:
+The `assignee` column is deprecated. We now show it as a single-sized array `assignees` to conform to the GitLab EE API.
+
+WARNING:
+The `epic_iid` attribute is deprecated and [scheduled for removal in API version 5](https://gitlab.com/gitlab-org/gitlab/-/issues/35157).
+Please use `iid` of the `epic` attribute instead.
+
+NOTE:
+The `closed_by` attribute was [introduced in GitLab 10.6](https://gitlab.com/gitlab-org/gitlab-foss/-/merge_requests/17042). This value is only present for issues closed after GitLab 10.6 and if the user account that closed
+the issue still exists.
+
+## Rate limits
+
+To help avoid abuse, users can be limited to a specific number of `Create` requests per minute.
+See [Issues rate limits](../user/admin_area/settings/rate_limit_on_issues_creation.md).
 
 ## Edit issue
 
+> The `weight` property moved to GitLab Premium in 13.9.
+
 Updates an existing project issue. This call is also used to mark an issue as
 closed.
+
+At least one of the following parameters is required for the request to be successful:
+
+- `:assignee_id`
+- `:assignee_ids`
+- `:confidential`
+- `:created_at`
+- `:description`
+- `:discussion_locked`
+- `:due_date`
+- `:issue_type`
+- `:labels`
+- `:milestone_id`
+- `:state_event`
+- `:title`
 
 ```plaintext
 PUT /projects/:id/issues/:issue_iid
@@ -751,24 +1154,27 @@ PUT /projects/:id/issues/:issue_iid
 
 | Attribute      | Type    | Required | Description                                                                                                |
 |----------------|---------|----------|------------------------------------------------------------------------------------------------------------|
-| `id`           | integer/string | yes | The ID or [URL-encoded path of the project](README.md#namespaced-path-encoding) owned by the authenticated user |
-| `issue_iid`    | integer | yes      | The internal ID of a project's issue                                                                       |
-| `title`        | string  | no       | The title of an issue                                                                                      |
-| `description`  | string  | no       | The description of an issue. Limited to 1,048,576 characters.        |
-| `confidential` | Boolean | no       | Updates an issue to be confidential                                                                        |
+| `add_labels`   | string  | no       | Comma-separated label names to add to an issue.                                                            |
 | `assignee_ids` | integer array | no | The ID of the user(s) to assign the issue to. Set to `0` or provide an empty value to unassign all assignees. |
-| `milestone_id` | integer | no       | The global ID of a milestone to assign the issue to. Set to `0` or provide an empty value to unassign a milestone.|
+| `confidential` | boolean | no       | Updates an issue to be confidential                                                                        |
+| `description`  | string  | no       | The description of an issue. Limited to 1,048,576 characters.        |
+| `discussion_locked` | boolean | no  | Flag indicating if the issue's discussion is locked. If the discussion is locked only project members can add or edit comments. |
+| `due_date`     | string  | no       | The due date. Date time string in the format `YYYY-MM-DD`, for example `2016-03-11`                                           |
+| `epic_id` **(PREMIUM)** | integer | no | ID of the epic to add the issue to. Valid values are greater than or equal to 0. |
+| `epic_iid` **(PREMIUM)** | integer | no | IID of the epic to add the issue to. Valid values are greater than or equal to 0. (deprecated, [scheduled for removal in API version 5](https://gitlab.com/gitlab-org/gitlab/-/issues/35157)) |
+| `id`           | integer/string | yes | The ID or [URL-encoded path of the project](index.md#namespaced-path-encoding) owned by the authenticated user |
+| `issue_iid`    | integer | yes      | The internal ID of a project's issue                                                                       |
+| `issue_type`   | string  | no       | Updates the type of issue. One of `issue`, `incident`, or `test_case`. |
 | `labels`       | string  | no       | Comma-separated label names for an issue. Set to an empty string to unassign all labels.                   |
+| `milestone_id` | integer | no       | The global ID of a milestone to assign the issue to. Set to `0` or provide an empty value to unassign a milestone.|
+| `remove_labels`| string  | no       | Comma-separated label names to remove from an issue.                                                       |
 | `state_event`  | string  | no       | The state event of an issue. Set `close` to close the issue and `reopen` to reopen it                      |
-| `updated_at`   | string  | no       | Date time string, ISO 8601 formatted, e.g. `2016-03-11T03:45:40Z` (requires admin or project owner rights). Empty string or null values are not accepted.|
-| `due_date`     | string  | no       | Date time string in the format YEAR-MONTH-DAY, e.g. `2016-03-11`                                           |
-| `weight` **(STARTER)** | integer | no | The weight of the issue. Valid values are greater than or equal to 0. 0                                                                    |
-| `discussion_locked` | Boolean | no  | Flag indicating if the issue's discussion is locked. If the discussion is locked only project members can add or edit comments. |
-| `epic_id` **(ULTIMATE)** | integer | no | ID of the epic to add the issue to. Valid values are greater than or equal to 0. |
-| `epic_iid` **(ULTIMATE)** | integer | no | IID of the epic to add the issue to. Valid values are greater than or equal to 0. (deprecated, [will be removed in 13.0](https://gitlab.com/gitlab-org/gitlab/issues/35157)) |
+| `title`        | string  | no       | The title of an issue                                                                                      |
+| `updated_at`   | string  | no       | When the issue was updated. Date time string, ISO 8601 formatted, for example `2016-03-11T03:45:40Z` (requires administrator or project owner rights). Empty string or null values are not accepted.|
+| `weight` **(PREMIUM)** | integer | no | The weight of the issue. Valid values are greater than or equal to 0. 0                                                                    |
 
 ```shell
-curl --request PUT --header "PRIVATE-TOKEN: <your_access_token>" https://gitlab.example.com/api/v4/projects/4/issues/85?state_event=close
+curl --request PUT --header "PRIVATE-TOKEN: <your_access_token>" "https://gitlab.example.com/api/v4/projects/4/issues/85?state_event=close"
 ```
 
 Example response:
@@ -812,7 +1218,7 @@ Example response:
    "subscribed" : true,
    "user_notes_count": 0,
    "due_date": "2016-07-22",
-   "web_url": "http://example.com/my-group/my-project/issues/15",
+   "web_url": "http://gitlab.example.com/my-group/my-project/issues/15",
    "references": {
      "short": "#15",
      "relative": "#15",
@@ -826,11 +1232,12 @@ Example response:
    },
    "confidential": false,
    "discussion_locked": false,
+   "issue_type": "issue",
    "_links": {
-      "self": "http://example.com/api/v4/projects/1/issues/2",
-      "notes": "http://example.com/api/v4/projects/1/issues/2/notes",
-      "award_emoji": "http://example.com/api/v4/projects/1/issues/2/award_emoji",
-      "project": "http://example.com/api/v4/projects/1"
+      "self": "http://gitlab.example.com/api/v4/projects/1/issues/2",
+      "notes": "http://gitlab.example.com/api/v4/projects/1/issues/2/notes",
+      "award_emoji": "http://gitlab.example.com/api/v4/projects/1/issues/2/award_emoji",
+      "project": "http://gitlab.example.com/api/v4/projects/1"
    },
    "task_completion_status":{
       "count":0,
@@ -839,8 +1246,7 @@ Example response:
 }
 ```
 
-Users on GitLab [Starter, Bronze, or higher](https://about.gitlab.com/pricing/) will also see
-the `weight` parameter:
+Issues created by users on GitLab Premium or higher include the `weight` property:
 
 ```json
 {
@@ -851,18 +1257,51 @@ the `weight` parameter:
 }
 ```
 
-NOTE: **Note:**
-At least one of following parameters is required to be passed for the request to be successful: `:assignee_id`, `:assignee_ids`, `:confidential`, `:created_at`, `:description`, `:discussion_locked`, `:due_date`, `:labels`, `:milestone_id`, `:state_event`, or `:title`.
+Issues created by users on GitLab Premium or higher include the `epic` property:
 
-NOTE: **Note**:
+```json
+{
+   "project_id" : 4,
+   "description" : "Omnis vero earum sunt corporis dolor et placeat.",
+   "epic_iid" : 5, //deprecated, use `iid` of the `epic` attribute
+   "epic": {
+     "id" : 42,
+     "iid" : 5,
+     "title": "My epic epic",
+     "url" : "/groups/h5bp/-/epics/5",
+     "group_id": 8
+   },
+   ...
+}
+```
+
+Issues created by users on GitLab Ultimate include the `health_status` property:
+
+```json
+[
+   {
+      "project_id" : 4,
+      "description" : "Omnis vero earum sunt corporis dolor et placeat.",
+      "health_status": "on_track",
+      ...
+   }
+]
+```
+
+NOTE:
+The `closed_by` attribute was [introduced in GitLab 10.6](https://gitlab.com/gitlab-org/gitlab-foss/-/merge_requests/17042). This value is only present for issues closed after GitLab 10.6 and if the user account that closed
+the issue still exists.
+
+WARNING:
+The `epic_iid` attribute is deprecated and [scheduled for removal in API version 5](https://gitlab.com/gitlab-org/gitlab/-/issues/35157).
+Please use `iid` of the `epic` attribute instead.
+
+WARNING:
 `assignee` column is deprecated. We now show it as a single-sized array `assignees` to conform to the GitLab EE API.
-
-NOTE: **Note**:
-The `closed_by` attribute was [introduced in GitLab 10.6][ce-17042]. This value will only be present for issues which were closed after GitLab 10.6 and when the user account that closed the issue still exists.
 
 ## Delete an issue
 
-Only for admins and project owners. Deletes the issue in question.
+Only for administrators and project owners. Deletes an issue.
 
 ```plaintext
 DELETE /projects/:id/issues/:issue_iid
@@ -870,21 +1309,42 @@ DELETE /projects/:id/issues/:issue_iid
 
 | Attribute   | Type    | Required | Description                          |
 |-------------|---------|----------|--------------------------------------|
-| `id`        | integer/string | yes      | The ID or [URL-encoded path of the project](README.md#namespaced-path-encoding) owned by the authenticated user  |
+| `id`        | integer/string | yes      | The ID or [URL-encoded path of the project](index.md#namespaced-path-encoding) owned by the authenticated user  |
 | `issue_iid` | integer | yes      | The internal ID of a project's issue |
 
 ```shell
-curl --request DELETE --header "PRIVATE-TOKEN: <your_access_token>" https://gitlab.example.com/api/v4/projects/4/issues/85
+curl --request DELETE --header "PRIVATE-TOKEN: <your_access_token>" "https://gitlab.example.com/api/v4/projects/4/issues/85"
+```
+
+## Reorder an issue
+
+> [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/211864) in GitLab 13.2.
+
+Reorders an issue, you can see the results when sorting issues manually
+
+```plaintext
+PUT /projects/:id/issues/:issue_iid/reorder
+```
+
+| Attribute   | Type    | Required | Description                          |
+|-------------|---------|----------|--------------------------------------|
+| `id`        | integer/string | yes      | The ID or [URL-encoded path of the project](index.md#namespaced-path-encoding) owned by the authenticated user  |
+| `issue_iid` | integer | yes      | The internal ID of the project's issue |
+| `move_after_id` | integer | no | The ID of a project's issue that should be placed after this issue |
+| `move_before_id` | integer | no | The ID of a project's issue that should be placed before this issue |
+
+```shell
+curl --request PUT --header "PRIVATE-TOKEN: <your_access_token>" "https://gitlab.example.com/api/v4/projects/4/issues/85/reorder?move_after_id=51&move_before_id=92"
 ```
 
 ## Move an issue
 
 Moves an issue to a different project. If the target project
-equals the source project or the user has insufficient permissions to move an
-issue, error `400` together with an explaining error message is returned.
+is the source project or the user has insufficient permissions,
+an error message with status code `400` is returned.
 
-If a given label and/or milestone with the same name also exists in the target
-project, it will then be assigned to the issue that is being moved.
+If a given label or milestone with the same name also exists in the target
+project, it's then assigned to the issue being moved.
 
 ```plaintext
 POST /projects/:id/issues/:issue_iid/move
@@ -892,12 +1352,12 @@ POST /projects/:id/issues/:issue_iid/move
 
 | Attribute       | Type    | Required | Description                          |
 |-----------------|---------|----------|--------------------------------------|
-| `id`            | integer/string | yes      | The ID or [URL-encoded path of the project](README.md#namespaced-path-encoding) owned by the authenticated user  |
+| `id`            | integer/string | yes      | The ID or [URL-encoded path of the project](index.md#namespaced-path-encoding) owned by the authenticated user  |
 | `issue_iid`     | integer | yes      | The internal ID of a project's issue |
 | `to_project_id` | integer | yes      | The ID of the new project            |
 
 ```shell
-curl --header "PRIVATE-TOKEN: <your_access_token>" --form to_project_id=5 https://gitlab.example.com/api/v4/projects/4/issues/85/move
+curl --header "PRIVATE-TOKEN: <your_access_token>" --form to_project_id=5 "https://gitlab.example.com/api/v4/projects/4/issues/85/move"
 ```
 
 Example response:
@@ -935,6 +1395,7 @@ Example response:
     "avatar_url": "http://www.gravatar.com/avatar/46f6f7dc858ada7be1853f7fb96e81da?s=80&d=identicon",
     "web_url": "https://gitlab.example.com/axel.block"
   },
+  "type" : "ISSUE",
   "author": {
     "name": "Kris Steuber",
     "username": "solon.cremin",
@@ -944,7 +1405,7 @@ Example response:
     "web_url": "https://gitlab.example.com/solon.cremin"
   },
   "due_date": null,
-  "web_url": "http://example.com/my-group/my-project/issues/11",
+  "web_url": "http://gitlab.example.com/my-group/my-project/issues/11",
   "references": {
     "short": "#11",
     "relative": "#11",
@@ -958,11 +1419,12 @@ Example response:
   },
   "confidential": false,
   "discussion_locked": false,
+  "issue_type": "issue",
   "_links": {
-    "self": "http://example.com/api/v4/projects/1/issues/2",
-    "notes": "http://example.com/api/v4/projects/1/issues/2/notes",
-    "award_emoji": "http://example.com/api/v4/projects/1/issues/2/award_emoji",
-    "project": "http://example.com/api/v4/projects/1"
+    "self": "http://gitlab.example.com/api/v4/projects/1/issues/2",
+    "notes": "http://gitlab.example.com/api/v4/projects/1/issues/2/notes",
+    "award_emoji": "http://gitlab.example.com/api/v4/projects/1/issues/2/award_emoji",
+    "project": "http://gitlab.example.com/api/v4/projects/1"
   },
   "task_completion_status":{
      "count":0,
@@ -971,8 +1433,7 @@ Example response:
 }
 ```
 
-Users on GitLab [Starter, Bronze, or higher](https://about.gitlab.com/pricing/) will also see
-the `weight` parameter:
+Issues created by users on GitLab Premium or higher include the `weight` property:
 
 ```json
 {
@@ -983,9 +1444,47 @@ the `weight` parameter:
 }
 ```
 
-**Note**: `assignee` column is deprecated, now we show it as a single-sized array `assignees` to conform to the GitLab EE API.
+Issues created by users on GitLab Premium or higher include the `epic` property:
 
-**Note**: The `closed_by` attribute was [introduced in GitLab 10.6][ce-17042]. This value will only be present for issues which were closed after GitLab 10.6 and when the user account that closed the issue still exists.
+```json
+{
+   "project_id" : 4,
+   "description" : "Omnis vero earum sunt corporis dolor et placeat.",
+   "epic_iid" : 5, //deprecated, use `iid` of the `epic` attribute
+   "epic": {
+     "id" : 42,
+     "iid" : 5,
+     "title": "My epic epic",
+     "url" : "/groups/h5bp/-/epics/5",
+     "group_id": 8
+   },
+   ...
+}
+```
+
+Issues created by users on GitLab Ultimate include the `health_status` property:
+
+```json
+[
+   {
+      "project_id" : 4,
+      "description" : "Omnis vero earum sunt corporis dolor et placeat.",
+      "health_status": "on_track",
+      ...
+   }
+]
+```
+
+WARNING:
+The `assignee` column is deprecated. We now show it as a single-sized array `assignees` to conform to the GitLab EE API.
+
+WARNING:
+The `epic_iid` attribute is deprecated and [scheduled for removal in API version 5](https://gitlab.com/gitlab-org/gitlab/-/issues/35157).
+Please use `iid` of the `epic` attribute instead.
+
+NOTE:
+The `closed_by` attribute was [introduced in GitLab 10.6](https://gitlab.com/gitlab-org/gitlab-foss/-/merge_requests/17042). This value is only present for issues closed after GitLab 10.6 and if the user account that closed
+the issue still exists.
 
 ## Subscribe to an issue
 
@@ -999,11 +1498,11 @@ POST /projects/:id/issues/:issue_iid/subscribe
 
 | Attribute   | Type    | Required | Description                          |
 |-------------|---------|----------|--------------------------------------|
-| `id`        | integer/string | yes      | The ID or [URL-encoded path of the project](README.md#namespaced-path-encoding) owned by the authenticated user  |
+| `id`        | integer/string | yes      | The ID or [URL-encoded path of the project](index.md#namespaced-path-encoding) owned by the authenticated user  |
 | `issue_iid` | integer | yes      | The internal ID of a project's issue |
 
 ```shell
-curl --request POST --header "PRIVATE-TOKEN: <your_access_token>" https://gitlab.example.com/api/v4/projects/5/issues/93/subscribe
+curl --request POST --header "PRIVATE-TOKEN: <your_access_token>" "https://gitlab.example.com/api/v4/projects/5/issues/93/subscribe"
 ```
 
 Example response:
@@ -1041,6 +1540,7 @@ Example response:
     "avatar_url": "http://www.gravatar.com/avatar/46f6f7dc858ada7be1853f7fb96e81da?s=80&d=identicon",
     "web_url": "https://gitlab.example.com/axel.block"
   },
+  "type" : "ISSUE",
   "author": {
     "name": "Kris Steuber",
     "username": "solon.cremin",
@@ -1050,7 +1550,7 @@ Example response:
     "web_url": "https://gitlab.example.com/solon.cremin"
   },
   "due_date": null,
-  "web_url": "http://example.com/my-group/my-project/issues/11",
+  "web_url": "http://gitlab.example.com/my-group/my-project/issues/11",
   "references": {
     "short": "#11",
     "relative": "#11",
@@ -1064,11 +1564,12 @@ Example response:
   },
   "confidential": false,
   "discussion_locked": false,
+  "issue_type": "issue",
   "_links": {
-    "self": "http://example.com/api/v4/projects/1/issues/2",
-    "notes": "http://example.com/api/v4/projects/1/issues/2/notes",
-    "award_emoji": "http://example.com/api/v4/projects/1/issues/2/award_emoji",
-    "project": "http://example.com/api/v4/projects/1"
+    "self": "http://gitlab.example.com/api/v4/projects/1/issues/2",
+    "notes": "http://gitlab.example.com/api/v4/projects/1/issues/2/notes",
+    "award_emoji": "http://gitlab.example.com/api/v4/projects/1/issues/2/award_emoji",
+    "project": "http://gitlab.example.com/api/v4/projects/1"
   },
   "task_completion_status":{
      "count":0,
@@ -1077,8 +1578,7 @@ Example response:
 }
 ```
 
-Users on GitLab [Starter, Bronze, or higher](https://about.gitlab.com/pricing/) will also see
-the `weight` parameter:
+Issues created by users on GitLab Premium or higher include the `weight` property:
 
 ```json
 {
@@ -1089,9 +1589,47 @@ the `weight` parameter:
 }
 ```
 
-**Note**: `assignee` column is deprecated, now we show it as a single-sized array `assignees` to conform to the GitLab EE API.
+Issues created by users on GitLab Premium or higher include the `epic` property:
 
-**Note**: The `closed_by` attribute was [introduced in GitLab 10.6][ce-17042]. This value will only be present for issues which were closed after GitLab 10.6 and when the user account that closed the issue still exists.
+```json
+{
+   "project_id" : 4,
+   "description" : "Omnis vero earum sunt corporis dolor et placeat.",
+   "epic_iid" : 5, //deprecated, use `iid` of the `epic` attribute
+   "epic": {
+     "id" : 42,
+     "iid" : 5,
+     "title": "My epic epic",
+     "url" : "/groups/h5bp/-/epics/5",
+     "group_id": 8
+   },
+   ...
+}
+```
+
+Issues created by users on GitLab Ultimate include the `health_status` property:
+
+```json
+[
+   {
+      "project_id" : 4,
+      "description" : "Omnis vero earum sunt corporis dolor et placeat.",
+      "health_status": "on_track",
+      ...
+   }
+]
+```
+
+WARNING:
+The `assignee` column is deprecated. We now show it as a single-sized array `assignees` to conform to the GitLab EE API.
+
+WARNING:
+The `epic_iid` attribute is deprecated and [scheduled for removal in API version 5](https://gitlab.com/gitlab-org/gitlab/-/issues/35157).
+Please use `iid` of the `epic` attribute instead.
+
+NOTE:
+The `closed_by` attribute was [introduced in GitLab 10.6](https://gitlab.com/gitlab-org/gitlab-foss/-/merge_requests/17042). This value is only present for issues closed after GitLab 10.6 and if the user account that closed
+the issue still exists.
 
 ## Unsubscribe from an issue
 
@@ -1105,11 +1643,11 @@ POST /projects/:id/issues/:issue_iid/unsubscribe
 
 | Attribute   | Type    | Required | Description                          |
 |-------------|---------|----------|--------------------------------------|
-| `id`        | integer/string | yes      | The ID or [URL-encoded path of the project](README.md#namespaced-path-encoding) owned by the authenticated user  |
+| `id`        | integer/string | yes      | The ID or [URL-encoded path of the project](index.md#namespaced-path-encoding) owned by the authenticated user  |
 | `issue_iid` | integer | yes      | The internal ID of a project's issue |
 
 ```shell
-curl --request POST --header "PRIVATE-TOKEN: <your_access_token>" https://gitlab.example.com/api/v4/projects/5/issues/93/unsubscribe
+curl --request POST --header "PRIVATE-TOKEN: <your_access_token>" "https://gitlab.example.com/api/v4/projects/5/issues/93/unsubscribe"
 ```
 
 Example response:
@@ -1137,6 +1675,7 @@ Example response:
     "avatar_url": "http://www.gravatar.com/avatar/3e6f06a86cf27fa8b56f3f74f7615987?s=80&d=identicon",
     "web_url": "https://gitlab.example.com/keyon"
   },
+  "type" : "ISSUE",
   "closed_at": null,
   "closed_by": null,
   "author": {
@@ -1149,7 +1688,7 @@ Example response:
   },
   "subscribed": false,
   "due_date": null,
-  "web_url": "http://example.com/my-group/my-project/issues/12",
+  "web_url": "http://gitlab.example.com/my-group/my-project/issues/12",
   "references": {
     "short": "#12",
     "relative": "#12",
@@ -1157,6 +1696,7 @@ Example response:
   },
   "confidential": false,
   "discussion_locked": false,
+  "issue_type": "issue",
   "task_completion_status":{
      "count":0,
      "completed_count":0
@@ -1164,10 +1704,10 @@ Example response:
 }
 ```
 
-## Create a todo
+## Create a to-do item
 
-Manually creates a todo for the current user on an issue. If
-there already exists a todo for the user on that issue, status code `304` is
+Manually creates a to-do item for the current user on an issue. If
+there already exists a to-do item for the user on that issue, status code `304` is
 returned.
 
 ```plaintext
@@ -1176,11 +1716,11 @@ POST /projects/:id/issues/:issue_iid/todo
 
 | Attribute   | Type    | Required | Description                          |
 |-------------|---------|----------|--------------------------------------|
-| `id`        | integer/string | yes      | The ID or [URL-encoded path of the project](README.md#namespaced-path-encoding) owned by the authenticated user  |
+| `id`        | integer/string | yes      | The ID or [URL-encoded path of the project](index.md#namespaced-path-encoding) owned by the authenticated user  |
 | `issue_iid` | integer | yes      | The internal ID of a project's issue |
 
 ```shell
-curl --request POST --header "PRIVATE-TOKEN: <your_access_token>" https://gitlab.example.com/api/v4/projects/5/issues/93/todo
+curl --request POST --header "PRIVATE-TOKEN: <your_access_token>" "https://gitlab.example.com/api/v4/projects/5/issues/93/todo"
 ```
 
 Example response:
@@ -1190,8 +1730,8 @@ Example response:
   "id": 112,
   "project": {
     "id": 5,
-    "name": "Gitlab Ci",
-    "name_with_namespace": "Gitlab Org / Gitlab Ci",
+    "name": "GitLab CI/CD",
+    "name_with_namespace": "GitLab Org / GitLab CI/CD",
     "path": "gitlab-ci",
     "path_with_namespace": "gitlab-org/gitlab-ci"
   },
@@ -1242,6 +1782,7 @@ Example response:
       "avatar_url": "http://www.gravatar.com/avatar/a7fa515d53450023c83d62986d0658a8?s=80&d=identicon",
       "web_url": "https://gitlab.example.com/francisca"
     },
+    "type" : "ISSUE",
     "author": {
       "name": "Maxie Medhurst",
       "username": "craig_rutherford",
@@ -1256,7 +1797,7 @@ Example response:
     "downvotes": 0,
     "merge_requests_count": 0,
     "due_date": null,
-    "web_url": "http://example.com/my-group/my-project/issues/10",
+    "web_url": "http://gitlab.example.com/my-group/my-project/issues/10",
     "references": {
       "short": "#10",
       "relative": "#10",
@@ -1264,6 +1805,7 @@ Example response:
     },
     "confidential": false,
     "discussion_locked": false,
+    "issue_type": "issue",
     "task_completion_status":{
        "count":0,
        "completed_count":0
@@ -1276,9 +1818,67 @@ Example response:
 }
 ```
 
-**Note**: `assignee` column is deprecated, now we show it as a single-sized array `assignees` to conform to the GitLab EE API.
+WARNING:
+The `assignee` column is deprecated. We now show it as a single-sized array `assignees` to conform to the GitLab EE API.
 
-**Note**: The `closed_by` attribute was [introduced in GitLab 10.6][ce-17042]. This value will only be present for issues which were closed after GitLab 10.6 and when the user account that closed the issue still exists.
+NOTE:
+The `closed_by` attribute was [introduced in GitLab 10.6](https://gitlab.com/gitlab-org/gitlab-foss/-/merge_requests/17042). This value is only present for issues closed after GitLab 10.6 and if the user account that closed
+the issue still exists.
+
+## Promote an issue to an epic **(PREMIUM)**
+
+Promotes an issue to an epic by adding a comment with the `/promote`
+[quick action](../user/project/quick_actions.md).
+
+To learn more about promoting issues to epics, visit [Manage epics](../user/group/epics/manage_epics.md#promote-an-issue-to-an-epic).
+
+```plaintext
+POST /projects/:id/issues/:issue_iid/notes
+```
+
+Supported attributes:
+
+| Attribute   | Type           | Required | Description |
+| :---------- | :------------- | :------- | :---------- |
+| `id`        | integer/string | yes      | The ID or [URL-encoded path of the project](index.md#namespaced-path-encoding) owned by the authenticated user |
+| `issue_iid` | integer        | yes      | The internal ID of a project's issue |
+| `body`      | String         | yes      | The content of a note. Must contain `/promote` at the start of a new line. |
+
+Example request:
+
+```shell
+curl --request POST --header "PRIVATE-TOKEN: <your_access_token>" "https://gitlab.example.com/api/v4/projects/5/issues/11/notes?body=Lets%20promote%20this%20to%20an%20epic%0A%0A%2Fpromote"
+```
+
+Example response:
+
+```json
+{
+   "id":699,
+   "type":null,
+   "body":"Lets promote this to an epic",
+   "attachment":null,
+   "author": {
+      "id":1,
+      "name":"Alexandra Bashirian",
+      "username":"eileen.lowe",
+      "state":"active",
+      "avatar_url":"https://www.gravatar.com/avatar/e64c7d89f26bd1972efa854d13d7dd61?s=80&d=identicon",
+      "web_url":"https://gitlab.example.com/eileen.lowe"
+   },
+   "created_at":"2020-12-03T12:27:17.844Z",
+   "updated_at":"2020-12-03T12:27:17.844Z",
+   "system":false,
+   "noteable_id":461,
+   "noteable_type":"Issue",
+   "resolvable":false,
+   "confidential":false,
+   "noteable_iid":33,
+   "commands_changes": {
+      "promote_to_epic":true
+   }
+}
+```
 
 ## Set a time estimate for an issue
 
@@ -1290,12 +1890,12 @@ POST /projects/:id/issues/:issue_iid/time_estimate
 
 | Attribute   | Type    | Required | Description                              |
 |-------------|---------|----------|------------------------------------------|
-| `id`        | integer/string | yes      | The ID or [URL-encoded path of the project](README.md#namespaced-path-encoding) owned by the authenticated user      |
-| `issue_iid` | integer | yes      | The internal ID of a project's issue     |
 | `duration`  | string  | yes      | The duration in human format. e.g: 3h30m |
+| `id`        | integer/string | yes      | The ID or [URL-encoded path of the project](index.md#namespaced-path-encoding) owned by the authenticated user      |
+| `issue_iid` | integer | yes      | The internal ID of a project's issue     |
 
 ```shell
-curl --request POST --header "PRIVATE-TOKEN: <your_access_token>" https://gitlab.example.com/api/v4/projects/5/issues/93/time_estimate?duration=3h30m
+curl --request POST --header "PRIVATE-TOKEN: <your_access_token>" "https://gitlab.example.com/api/v4/projects/5/issues/93/time_estimate?duration=3h30m"
 ```
 
 Example response:
@@ -1319,11 +1919,11 @@ POST /projects/:id/issues/:issue_iid/reset_time_estimate
 
 | Attribute   | Type    | Required | Description                          |
 |-------------|---------|----------|--------------------------------------|
-| `id`        | integer/string | yes      | The ID or [URL-encoded path of the project](README.md#namespaced-path-encoding) owned by the authenticated user  |
+| `id`        | integer/string | yes      | The ID or [URL-encoded path of the project](index.md#namespaced-path-encoding) owned by the authenticated user  |
 | `issue_iid` | integer | yes      | The internal ID of a project's issue |
 
 ```shell
-curl --request POST --header "PRIVATE-TOKEN: <your_access_token>" https://gitlab.example.com/api/v4/projects/5/issues/93/reset_time_estimate
+curl --request POST --header "PRIVATE-TOKEN: <your_access_token>" "https://gitlab.example.com/api/v4/projects/5/issues/93/reset_time_estimate"
 ```
 
 Example response:
@@ -1347,12 +1947,12 @@ POST /projects/:id/issues/:issue_iid/add_spent_time
 
 | Attribute   | Type    | Required | Description                              |
 |-------------|---------|----------|------------------------------------------|
-| `id`        | integer/string | yes      | The ID or [URL-encoded path of the project](README.md#namespaced-path-encoding) owned by the authenticated user      |
-| `issue_iid` | integer | yes      | The internal ID of a project's issue     |
 | `duration`  | string  | yes      | The duration in human format. e.g: 3h30m |
+| `id`        | integer/string | yes      | The ID or [URL-encoded path of the project](index.md#namespaced-path-encoding) owned by the authenticated user      |
+| `issue_iid` | integer | yes      | The internal ID of a project's issue     |
 
 ```shell
-curl --request POST --header "PRIVATE-TOKEN: <your_access_token>" https://gitlab.example.com/api/v4/projects/5/issues/93/add_spent_time?duration=1h
+curl --request POST --header "PRIVATE-TOKEN: <your_access_token>" "https://gitlab.example.com/api/v4/projects/5/issues/93/add_spent_time?duration=1h"
 ```
 
 Example response:
@@ -1376,11 +1976,11 @@ POST /projects/:id/issues/:issue_iid/reset_spent_time
 
 | Attribute   | Type    | Required | Description                          |
 |-------------|---------|----------|--------------------------------------|
-| `id`        | integer/string | yes      | The ID or [URL-encoded path of the project](README.md#namespaced-path-encoding) owned by the authenticated user |
+| `id`        | integer/string | yes      | The ID or [URL-encoded path of the project](index.md#namespaced-path-encoding) owned by the authenticated user |
 | `issue_iid` | integer | yes      | The internal ID of a project's issue |
 
 ```shell
-curl --request POST --header "PRIVATE-TOKEN: <your_access_token>" https://gitlab.example.com/api/v4/projects/5/issues/93/reset_spent_time
+curl --request POST --header "PRIVATE-TOKEN: <your_access_token>" "https://gitlab.example.com/api/v4/projects/5/issues/93/reset_spent_time"
 ```
 
 Example response:
@@ -1396,17 +1996,20 @@ Example response:
 
 ## Get time tracking stats
 
+If the project is private or the issue is confidential, you need to provide credentials to authorize.
+The preferred way to do this, is by using [personal access tokens](../user/profile/personal_access_tokens.md).
+
 ```plaintext
 GET /projects/:id/issues/:issue_iid/time_stats
 ```
 
 | Attribute   | Type    | Required | Description                          |
 |-------------|---------|----------|--------------------------------------|
-| `id`        | integer/string | yes      | The ID or [URL-encoded path of the project](README.md#namespaced-path-encoding) owned by the authenticated user  |
+| `id`        | integer/string | yes      | The ID or [URL-encoded path of the project](index.md#namespaced-path-encoding) owned by the authenticated user  |
 | `issue_iid` | integer | yes      | The internal ID of a project's issue |
 
 ```shell
-curl --header "PRIVATE-TOKEN: <your_access_token>" https://gitlab.example.com/api/v4/projects/5/issues/93/time_stats
+curl --header "PRIVATE-TOKEN: <your_access_token>" "https://gitlab.example.com/api/v4/projects/5/issues/93/time_stats"
 ```
 
 Example response:
@@ -1424,17 +2027,20 @@ Example response:
 
 Get all the merge requests that are related to the issue.
 
+If the project is private or the issue is confidential, you need to provide credentials to authorize.
+The preferred way to do this, is by using [personal access tokens](../user/profile/personal_access_tokens.md).
+
 ```plaintext
-GET /projects/:id/issues/:issue_id/related_merge_requests
+GET /projects/:id/issues/:issue_iid/related_merge_requests
 ```
 
 | Attribute   | Type    | Required | Description                          |
 |-------------|---------|----------|--------------------------------------|
-| `id`        | integer/string | yes      | The ID or [URL-encoded path of the project](README.md#namespaced-path-encoding) owned by the authenticated user  |
+| `id`        | integer/string | yes      | The ID or [URL-encoded path of the project](index.md#namespaced-path-encoding) owned by the authenticated user  |
 | `issue_iid` | integer | yes      | The internal ID of a project's issue |
 
 ```shell
-curl --header "PRIVATE-TOKEN: <your_access_token>" https://gitlab.example.com/api/v4/projects/1/issues/11/related_merge_requests
+curl --header "PRIVATE-TOKEN: <your_access_token>" "https://gitlab.example.com/api/v4/projects/1/issues/11/related_merge_requests"
 ```
 
 Example response:
@@ -1476,6 +2082,7 @@ Example response:
     "source_project_id": 1,
     "target_project_id": 1,
     "labels": [],
+    "draft": false,
     "work_in_progress": false,
     "milestone": {
       "id": 27,
@@ -1576,21 +2183,24 @@ Example response:
 ]
 ```
 
-## List merge requests that will close issue on merge
+## List merge requests that close a particular issue on merge
 
-Get all the merge requests that will close issue when merged.
+Get all merge requests that close a particular issue when merged.
+
+If the project is private or the issue is confidential, you need to provide credentials to authorize.
+The preferred way to do this, is by using [personal access tokens](../user/profile/personal_access_tokens.md).
 
 ```plaintext
 GET /projects/:id/issues/:issue_iid/closed_by
 ```
 
-| Attribute   | Type    | Required | Description                          |
-| ---------   | ----    | -------- | -----------                          |
-| `id`        | integer | yes      | The ID of a project                  |
-| `issue_iid` | integer | yes      | The internal ID of a project issue   |
+| Attribute   | Type           | Required | Description                        |
+| ----------- | ---------------| -------- | ---------------------------------- |
+| `id`        | integer/string | yes      | The ID or [URL-encoded path of the project](index.md#namespaced-path-encoding) owned by the authenticated user |
+| `issue_iid` | integer        | yes      | The internal ID of a project issue |
 
 ```shell
-curl --header "PRIVATE-TOKEN: <your_access_token>" https://gitlab.example.com/api/v4/projects/1/issues/11/closed_by
+curl --header "PRIVATE-TOKEN: <your_access_token>" "https://gitlab.example.com/api/v4/projects/1/issues/11/closed_by"
 ```
 
 Example response:
@@ -1624,6 +2234,7 @@ Example response:
     "closed_at": null,
     "closed_by": null,
     "labels": [],
+    "draft": false,
     "work_in_progress": false,
     "milestone": null,
     "merge_when_pipeline_succeeds": false,
@@ -1653,17 +2264,20 @@ Example response:
 
 ## Participants on issues
 
+If the project is private or the issue is confidential, you need to provide credentials to authorize.
+The preferred way to do this, is by using [personal access tokens](../user/profile/personal_access_tokens.md).
+
 ```plaintext
 GET /projects/:id/issues/:issue_iid/participants
 ```
 
 | Attribute   | Type    | Required | Description                          |
 |-------------|---------|----------|--------------------------------------|
-| `id`        | integer/string | yes      | The ID or [URL-encoded path of the project](README.md#namespaced-path-encoding) owned by the authenticated user  |
+| `id`        | integer/string | yes      | The ID or [URL-encoded path of the project](index.md#namespaced-path-encoding) owned by the authenticated user  |
 | `issue_iid` | integer | yes      | The internal ID of a project's issue |
 
 ```shell
-curl --header "PRIVATE-TOKEN: <your_access_token>" https://gitlab.example.com/api/v4/projects/5/issues/93/participants
+curl --header "PRIVATE-TOKEN: <your_access_token>" "https://gitlab.example.com/api/v4/projects/5/issues/93/participants"
 ```
 
 Example response:
@@ -1676,7 +2290,7 @@ Example response:
     "username": "user1",
     "state": "active",
     "avatar_url": "http://www.gravatar.com/avatar/c922747a93b40d1ea88262bf1aebee62?s=80&d=identicon",
-    "web_url": "http://localhost/user1"
+    "web_url": "http://gitlab.example.com/user1"
   },
   {
     "id": 5,
@@ -1684,7 +2298,7 @@ Example response:
     "username": "user5",
     "state": "active",
     "avatar_url": "http://www.gravatar.com/avatar/4aea8cf834ed91844a2da4ff7ae6b491?s=80&d=identicon",
-    "web_url": "http://localhost/user5"
+    "web_url": "http://gitlab.example.com/user5"
   }
 ]
 ```
@@ -1695,7 +2309,7 @@ Comments are done via the [notes](notes.md) resource.
 
 ## Get user agent details
 
-Available only for admins.
+Available only for administrators.
 
 ```plaintext
 GET /projects/:id/issues/:issue_iid/user_agent_detail
@@ -1703,11 +2317,11 @@ GET /projects/:id/issues/:issue_iid/user_agent_detail
 
 | Attribute   | Type    | Required | Description                          |
 |-------------|---------|----------|--------------------------------------|
-| `id`        | integer/string | yes      | The ID or [URL-encoded path of the project](README.md#namespaced-path-encoding) owned by the authenticated user  |
+| `id`        | integer/string | yes      | The ID or [URL-encoded path of the project](index.md#namespaced-path-encoding) owned by the authenticated user  |
 | `issue_iid` | integer | yes      | The internal ID of a project's issue |
 
 ```shell
-curl --header "PRIVATE-TOKEN: <your_access_token>" https://gitlab.example.com/api/v4/projects/5/issues/93/user_agent_detail
+curl --header "PRIVATE-TOKEN: <your_access_token>" "https://gitlab.example.com/api/v4/projects/5/issues/93/user_agent_detail"
 ```
 
 Example response:
@@ -1720,7 +2334,100 @@ Example response:
 }
 ```
 
-[ce-13004]: https://gitlab.com/gitlab-org/gitlab-foss/-/merge_requests/13004
-[ce-14016]: https://gitlab.com/gitlab-org/gitlab-foss/-/merge_requests/14016
-[ce-17042]: https://gitlab.com/gitlab-org/gitlab-foss/-/merge_requests/17042
-[ce-18935]: https://gitlab.com/gitlab-org/gitlab-foss/-/merge_requests/18935
+## List issue state events
+
+To track which state was set, who did it, and when it happened, check out
+[Resource state events API](resource_state_events.md#issues).
+
+## Upload metric image
+
+Available only for Incident issues.
+
+```plaintext
+POST /projects/:id/issues/:issue_iid/metric_images
+```
+
+| Attribute   | Type    | Required | Description                          |
+|-------------|---------|----------|--------------------------------------|
+| `id`        | integer/string | yes      | The ID or [URL-encoded path of the project](index.md#namespaced-path-encoding) owned by the authenticated user  |
+| `issue_iid` | integer | yes      | The internal ID of a project's issue |
+| `file` | file | yes      | The image file to be uploaded |
+| `url` | string | no      | The URL to view more metric information |
+
+```shell
+curl --header "PRIVATE-TOKEN: <your_access_token>" --form 'file=@/path/to/file.png' \
+--form 'url=http://example.com' "https://gitlab.example.com/api/v4/projects/5/issues/93/metric_images"
+```
+
+Example response:
+
+```json
+{
+    "id": 23,
+    "created_at": "2020-11-13T00:06:18.084Z",
+    "filename": "file.png",
+    "file_path": "/uploads/-/system/issuable_metric_image/file/23/file.png",
+    "url": "http://example.com"
+}
+```
+
+## List metric images
+
+Available only for Incident issues.
+
+```plaintext
+GET /projects/:id/issues/:issue_iid/metric_images
+```
+
+| Attribute   | Type    | Required | Description                          |
+|-------------|---------|----------|--------------------------------------|
+| `id`        | integer/string | yes      | The ID or [URL-encoded path of the project](index.md#namespaced-path-encoding) owned by the authenticated user  |
+| `issue_iid` | integer | yes      | The internal ID of a project's issue |
+
+```shell
+curl --header "PRIVATE-TOKEN: <your_access_token>" "https://gitlab.example.com/api/v4/projects/5/issues/93/metric_images"
+```
+
+Example response:
+
+```json
+[
+    {
+        "id": 17,
+        "created_at": "2020-11-12T20:07:58.156Z",
+        "filename": "sample_2054",
+        "file_path": "/uploads/-/system/issuable_metric_image/file/17/sample_2054.png",
+        "url": "example.com/metric"
+    },
+    {
+        "id": 18,
+        "created_at": "2020-11-12T20:14:26.441Z",
+        "filename": "sample_2054",
+        "file_path": "/uploads/-/system/issuable_metric_image/file/18/sample_2054.png",
+        "url": "example.com/metric"
+    }
+]
+```
+
+## Delete metric image
+
+Available only for Incident issues.
+
+```plaintext
+DELETE /projects/:id/issues/:issue_iid/metric_images/:image_id
+```
+
+| Attribute   | Type    | Required | Description                          |
+|-------------|---------|----------|--------------------------------------|
+| `id`        | integer/string | yes      | The ID or [URL-encoded path of the project](index.md#namespaced-path-encoding) owned by the authenticated user  |
+| `issue_iid` | integer | yes      | The internal ID of a project's issue |
+| `image_id` | integer | yes      | The ID of the image |
+
+```shell
+curl --header "PRIVATE-TOKEN: <your_access_token>" --request DELETE "https://gitlab.example.com/api/v4/projects/5/issues/93/metric_images/1"
+```
+
+Can return the following status codes:
+
+- `204 No Content`, if the image was deleted successfully.
+- `400 Bad Request`, if the image could not be deleted.

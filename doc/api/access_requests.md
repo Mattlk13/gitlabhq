@@ -1,18 +1,26 @@
+---
+stage: Manage
+group: Access
+info: "To determine the technical writer assigned to the Stage/Group associated with this page, see https://about.gitlab.com/handbook/engineering/ux/technical-writing/#assignments"
+type: reference, api
+---
+
 # Group and project access requests API
 
- >**Note:** This feature was introduced in GitLab 8.11
+> [Introduced](https://gitlab.com/gitlab-org/gitlab-foss/-/issues/18583) in GitLab 8.11.
 
 ## Valid access levels
 
- The access levels are defined in the `Gitlab::Access` module. Currently, these levels are recognized:
+The access levels are defined in the `Gitlab::Access` module, and the
+following levels are recognized:
 
-```plaintext
-10 => Guest access
-20 => Reporter access
-30 => Developer access
-40 => Maintainer access
-50 => Owner access # Only valid for groups
-```
+- No access (`0`)
+- Minimal access (`5`) ([Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/220203) in GitLab 13.5.)
+- Guest (`10`)
+- Reporter (`20`)
+- Developer (`30`)
+- Maintainer (`40`)
+- Owner (`50`) - Only valid to set for groups
 
 ## List access requests for a group or project
 
@@ -25,13 +33,13 @@ GET /projects/:id/access_requests
 
 | Attribute | Type           | Required | Description |
 | --------- | -------------- | -------- | ----------- |
-| `id`      | integer/string | yes      | The ID or [URL-encoded path of the project](README.md#namespaced-path-encoding) owned by the authenticated user |
+| `id`      | integer/string | yes      | The ID or [URL-encoded path of the project](index.md#namespaced-path-encoding) owned by the authenticated user |
 
 Example request:
 
 ```shell
-curl --header "PRIVATE-TOKEN: <your_access_token>" https://gitlab.example.com/api/v4/groups/:id/access_requests
-curl --header "PRIVATE-TOKEN: <your_access_token>" https://gitlab.example.com/api/v4/projects/:id/access_requests
+curl --header "PRIVATE-TOKEN: <your_access_token>" "https://gitlab.example.com/api/v4/groups/:id/access_requests"
+curl --header "PRIVATE-TOKEN: <your_access_token>" "https://gitlab.example.com/api/v4/projects/:id/access_requests"
 ```
 
 Example response:
@@ -68,13 +76,13 @@ POST /projects/:id/access_requests
 
 | Attribute | Type           | Required | Description |
 | --------- | -------------- | -------- | ----------- |
-| `id`      | integer/string | yes      | The ID or [URL-encoded path of the project](README.md#namespaced-path-encoding) owned by the authenticated user |
+| `id`      | integer/string | yes      | The ID or [URL-encoded path of the project](index.md#namespaced-path-encoding) owned by the authenticated user |
 
 Example request:
 
 ```shell
-curl --request POST --header "PRIVATE-TOKEN: <your_access_token>" https://gitlab.example.com/api/v4/groups/:id/access_requests
-curl --request POST --header "PRIVATE-TOKEN: <your_access_token>" https://gitlab.example.com/api/v4/projects/:id/access_requests
+curl --request POST --header "PRIVATE-TOKEN: <your_access_token>" "https://gitlab.example.com/api/v4/groups/:id/access_requests"
+curl --request POST --header "PRIVATE-TOKEN: <your_access_token>" "https://gitlab.example.com/api/v4/projects/:id/access_requests"
 ```
 
 Example response:
@@ -101,15 +109,15 @@ PUT /projects/:id/access_requests/:user_id/approve
 
 | Attribute      | Type           | Required | Description |
 | -------------- | -------------- | -------- | ----------- |
-| `id`           | integer/string | yes      | The ID or [URL-encoded path of the project](README.md#namespaced-path-encoding) owned by the authenticated user |
+| `id`           | integer/string | yes      | The ID or [URL-encoded path of the project](index.md#namespaced-path-encoding) owned by the authenticated user |
 | `user_id`      | integer        | yes      | The user ID of the access requester                                                                             |
-| `access_level` | integer        | no       | A valid access level (defaults: `30`, developer access level)                                                   |
+| `access_level` | integer        | no       | A valid access level (defaults: `30`, the Developer role)                                                   |
 
 Example request:
 
 ```shell
-curl --request PUT --header "PRIVATE-TOKEN: <your_access_token>" https://gitlab.example.com/api/v4/groups/:id/access_requests/:user_id/approve?access_level=20
-curl --request PUT --header "PRIVATE-TOKEN: <your_access_token>" https://gitlab.example.com/api/v4/projects/:id/access_requests/:user_id/approve?access_level=20
+curl --request PUT --header "PRIVATE-TOKEN: <your_access_token>" "https://gitlab.example.com/api/v4/groups/:id/access_requests/:user_id/approve?access_level=20"
+curl --request PUT --header "PRIVATE-TOKEN: <your_access_token>" "https://gitlab.example.com/api/v4/projects/:id/access_requests/:user_id/approve?access_level=20"
 ```
 
 Example response:
@@ -136,12 +144,12 @@ DELETE /projects/:id/access_requests/:user_id
 
 | Attribute | Type           | Required | Description |
 | --------- | -------------- | -------- | ----------- |
-| `id`      | integer/string | yes      | The ID or [URL-encoded path of the project](README.md#namespaced-path-encoding) owned by the authenticated user |
+| `id`      | integer/string | yes      | The ID or [URL-encoded path of the project](index.md#namespaced-path-encoding) owned by the authenticated user |
 | `user_id` | integer        | yes      | The user ID of the access requester                                                                             |
 
 Example request:
 
 ```shell
-curl --request DELETE --header "PRIVATE-TOKEN: <your_access_token>" https://gitlab.example.com/api/v4/groups/:id/access_requests/:user_id
-curl --request DELETE --header "PRIVATE-TOKEN: <your_access_token>" https://gitlab.example.com/api/v4/projects/:id/access_requests/:user_id
+curl --request DELETE --header "PRIVATE-TOKEN: <your_access_token>" "https://gitlab.example.com/api/v4/groups/:id/access_requests/:user_id"
+curl --request DELETE --header "PRIVATE-TOKEN: <your_access_token>" "https://gitlab.example.com/api/v4/projects/:id/access_requests/:user_id"
 ```

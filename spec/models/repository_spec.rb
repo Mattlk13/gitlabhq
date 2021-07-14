@@ -2,7 +2,7 @@
 
 require 'spec_helper'
 
-describe Repository do
+RSpec.describe Repository do
   include RepoHelpers
   include GitHelpers
 
@@ -41,6 +41,7 @@ describe Repository do
 
   describe '#branch_names_contains' do
     let_it_be(:project) { create(:project, :repository) }
+
     let(:repository) { project.repository }
 
     subject { repository.branch_names_contains(sample_commit.id) }
@@ -88,8 +89,8 @@ describe Repository do
         subject { repository.tags_sorted_by('updated_desc').map(&:name) }
 
         before do
-          double_first = double(committed_date: Time.now)
-          double_last = double(committed_date: Time.now - 1.second)
+          double_first = double(committed_date: Time.current)
+          double_last = double(committed_date: Time.current - 1.second)
 
           allow(tag_a).to receive(:dereferenced_target).and_return(double_first)
           allow(tag_b).to receive(:dereferenced_target).and_return(double_last)
@@ -103,8 +104,8 @@ describe Repository do
         subject { repository.tags_sorted_by('updated_asc').map(&:name) }
 
         before do
-          double_first = double(committed_date: Time.now - 1.second)
-          double_last = double(committed_date: Time.now)
+          double_first = double(committed_date: Time.current - 1.second)
+          double_last = double(committed_date: Time.current)
 
           allow(tag_a).to receive(:dereferenced_target).and_return(double_last)
           allow(tag_b).to receive(:dereferenced_target).and_return(double_first)
@@ -123,10 +124,10 @@ describe Repository do
           options = { message: 'test tag message\n',
                       tagger: { name: 'John Smith', email: 'john@gmail.com' } }
 
-          rugged_repo(repository).tags.create(annotated_tag_name, 'a48e4fc218069f68ef2e769dd8dfea3991362175', options)
+          rugged_repo(repository).tags.create(annotated_tag_name, 'a48e4fc218069f68ef2e769dd8dfea3991362175', **options)
 
-          double_first = double(committed_date: Time.now - 1.second)
-          double_last = double(committed_date: Time.now)
+          double_first = double(committed_date: Time.current - 1.second)
+          double_last = double(committed_date: Time.current)
 
           allow(tag_a).to receive(:dereferenced_target).and_return(double_last)
           allow(tag_b).to receive(:dereferenced_target).and_return(double_first)
@@ -167,6 +168,22 @@ describe Repository do
       it 'returns false' do
         expect(repository.ref_exists?('refs/heads/invalid:master')).to be false
       end
+    end
+  end
+
+  describe '#search_branch_names' do
+    subject(:search_branch_names) { repository.search_branch_names('conflict-*') }
+
+    it 'returns matching branch names' do
+      expect(search_branch_names).to contain_exactly(
+        'conflict-binary-file',
+        'conflict-resolvable',
+        'conflict-contains-conflict-markers',
+        'conflict-missing-side',
+        'conflict-start',
+        'conflict-non-utf8',
+        'conflict-too-large'
+      )
     end
   end
 
@@ -227,7 +244,7 @@ describe Repository do
         tree_builder = Rugged::Tree::Builder.new(rugged)
         tree_builder.insert({ oid: blob_id, name: "hello\x80world", filemode: 0100644 })
         tree_id = tree_builder.write
-        user = { email: "jcai@gitlab.com", time: Time.now, name: "John Cai" }
+        user = { email: "jcai@gitlab.com", time: Time.current.to_time, name: "John Cai" }
 
         Rugged::Commit.create(rugged, message: 'some commit message', parents: [rugged.head.target.oid], tree: tree_id, committer: user, author: user)
       end
@@ -252,6 +269,21 @@ describe Repository do
         end
       end
     end
+
+    context 'with filename with pathspec characters' do
+      let(:filename) { ':wq' }
+      let(:newrev) { project.repository.commit('master').sha }
+
+      before do
+        create_file_in_repo(project, 'master', 'master', filename, 'Test file')
+      end
+
+      subject { repository.last_commit_for_path('master', filename, literal_pathspec: true).id }
+
+      it 'returns a commit SHA' do
+        expect(subject).to eq(newrev)
+      end
+    end
   end
 
   describe '#last_commit_id_for_path' do
@@ -274,6 +306,21 @@ describe Repository do
         expect_to_raise_storage_error do
           broken_repository.last_commit_for_path(sample_commit.id, '.gitignore').id
         end
+      end
+    end
+
+    context 'with filename with pathspec characters' do
+      let(:filename) { ':wq' }
+      let(:newrev) { project.repository.commit('master').sha }
+
+      before do
+        create_file_in_repo(project, 'master', 'master', filename, 'Test file')
+      end
+
+      subject { repository.last_commit_id_for_path('master', filename, literal_pathspec: true) }
+
+      it 'returns a commit SHA' do
+        expect(subject).to eq(newrev)
       end
     end
   end
@@ -352,6 +399,7 @@ describe Repository do
 
   describe '#new_commits' do
     let_it_be(:project) { create(:project, :repository) }
+
     let(:repository) { project.repository }
 
     subject { repository.new_commits(rev) }
@@ -380,6 +428,7 @@ describe Repository do
 
   describe '#commits_by' do
     let_it_be(:project) { create(:project, :repository) }
+
     let(:oids) { TestEnv::BRANCH_SHA.values }
 
     subject { project.repository.commits_by(oids: oids) }
@@ -451,12 +500,6 @@ describe Repository do
       subject { repository.blob_at(repository.head_commit.sha, '.gitignore') }
 
       it { is_expected.to be_an_instance_of(::Blob) }
-    end
-
-    context 'readme blob on HEAD' do
-      subject { repository.blob_at(repository.head_commit.sha, 'README.md') }
-
-      it { is_expected.to be_an_instance_of(::ReadmeBlob) }
     end
 
     context 'readme blob not on HEAD' do
@@ -557,15 +600,19 @@ describe Repository do
       end
 
       it "is expired when the branches caches are expired" do
-        expect(cache).to receive(:delete).with(:merged_branch_names).at_least(:once)
+        expect(cache).to receive(:delete) do |*args|
+          expect(args).to include(:merged_branch_names)
+        end
 
-        repository.send(:expire_branches_cache)
+        repository.expire_branches_cache
       end
 
       it "is expired when the repository caches are expired" do
-        expect(cache).to receive(:delete).with(:merged_branch_names).at_least(:once)
+        expect(cache).to receive(:delete) do |*args|
+          expect(args).to include(:merged_branch_names)
+        end
 
-        repository.send(:expire_all_method_caches)
+        repository.expire_all_method_caches
       end
     end
 
@@ -949,6 +996,104 @@ describe Repository do
     end
   end
 
+  describe '#search_files_by_wildcard_path' do
+    let(:ref) { 'master' }
+
+    subject(:result) { repository.search_files_by_wildcard_path(path, ref) }
+
+    context 'when specifying a normal path' do
+      let(:path) { 'files/images/logo-black.png' }
+
+      it 'returns the path' do
+        expect(result).to eq(['files/images/logo-black.png'])
+      end
+    end
+
+    context 'when specifying a wildcard path' do
+      let(:path) { '*.md' }
+
+      it 'returns files matching the path in the root folder' do
+        expect(result).to contain_exactly('CONTRIBUTING.md',
+                                          'MAINTENANCE.md',
+                                          'PROCESS.md',
+                                          'README.md')
+      end
+    end
+
+    context 'when specifying a wildcard path for all' do
+      let(:path) { '**.md' }
+
+      it 'returns all matching files in all folders' do
+        expect(result).to contain_exactly('CONTRIBUTING.md',
+                                          'MAINTENANCE.md',
+                                          'PROCESS.md',
+                                          'README.md',
+                                          'files/markdown/ruby-style-guide.md',
+                                          'with space/README.md')
+      end
+    end
+
+    context 'when specifying a path to subfolders using two asterisks and a slash' do
+      let(:path) { 'files/**/*.md' }
+
+      it 'returns all files matching the path' do
+        expect(result).to contain_exactly('files/markdown/ruby-style-guide.md')
+      end
+    end
+
+    context 'when specifying a wildcard path to subfolder with just two asterisks' do
+      let(:path) { 'files/**.md' }
+
+      it 'returns all files in the matching path' do
+        expect(result).to contain_exactly('files/markdown/ruby-style-guide.md')
+      end
+    end
+
+    context 'when specifying a wildcard path to subfolder with one asterisk' do
+      let(:path) { 'files/*/*.md' }
+
+      it 'returns all files in the matching path' do
+        expect(result).to contain_exactly('files/markdown/ruby-style-guide.md')
+      end
+    end
+
+    context 'when specifying a wildcard path for an unknown number of subfolder levels' do
+      let(:path) { '**/*.rb' }
+
+      it 'returns all matched files in all subfolders' do
+        expect(result).to contain_exactly('encoding/russian.rb',
+                                          'files/ruby/popen.rb',
+                                          'files/ruby/regex.rb',
+                                          'files/ruby/version_info.rb')
+      end
+    end
+
+    context 'when specifying a wildcard path to one level of subfolders' do
+      let(:path) { '*/*.rb' }
+
+      it 'returns all matched files in one subfolder' do
+        expect(result).to contain_exactly('encoding/russian.rb')
+      end
+    end
+
+    context 'when sending regexp' do
+      let(:path) { '.*\.rb' }
+
+      it 'ignores the regexp and returns an empty array' do
+        expect(result).to eq([])
+      end
+    end
+
+    context 'when sending another ref' do
+      let(:path) { 'files' }
+      let(:ref) { 'other-branch' }
+
+      it 'returns an empty array' do
+        expect(result).to eq([])
+      end
+    end
+  end
+
   describe '#async_remove_remote' do
     before do
       masterrev = repository.find_branch('master').dereferenced_target
@@ -974,9 +1119,73 @@ describe Repository do
       end
 
       it 'returns nil' do
-        expect(Rails.logger).to receive(:info).with("Remove remote job failed to create for #{project.id} with remote name joe.")
+        expect(Gitlab::AppLogger).to receive(:info).with("Remove remote job failed to create for #{project.id} with remote name joe.")
 
         expect(repository.async_remove_remote('joe')).to be_nil
+      end
+    end
+  end
+
+  describe '#fetch_as_mirror' do
+    let(:url) { "http://example.com" }
+
+    context 'when :fetch_remote_params is enabled' do
+      let(:remote_name) { "remote-name" }
+
+      before do
+        stub_feature_flags(fetch_remote_params: true)
+      end
+
+      it 'fetches the URL without creating a remote' do
+        expect(repository).not_to receive(:add_remote)
+        expect(repository)
+          .to receive(:fetch_remote)
+          .with(remote_name, url: url, forced: false, prune: true, refmap: :all_refs)
+          .and_return(nil)
+
+        repository.fetch_as_mirror(url, remote_name: remote_name)
+      end
+    end
+
+    context 'when :fetch_remote_params is disabled' do
+      before do
+        stub_feature_flags(fetch_remote_params: false)
+      end
+
+      shared_examples 'a fetch' do
+        it 'adds and fetches a remote' do
+          expect(repository)
+            .to receive(:add_remote)
+            .with(expected_remote, url, mirror_refmap: :all_refs)
+            .and_return(nil)
+          expect(repository)
+            .to receive(:fetch_remote)
+            .with(expected_remote, forced: false, prune: true)
+            .and_return(nil)
+
+          repository.fetch_as_mirror(url, remote_name: remote_name)
+        end
+      end
+
+      context 'with temporary remote' do
+        let(:remote_name) { nil }
+        let(:expected_remote_suffix) { "123456" }
+        let(:expected_remote) { "tmp-#{expected_remote_suffix}" }
+
+        before do
+          expect(repository)
+            .to receive(:async_remove_remote).with(expected_remote).and_return(nil)
+          allow(SecureRandom).to receive(:hex).and_return(expected_remote_suffix)
+        end
+
+        it_behaves_like 'a fetch'
+      end
+
+      context 'with remote name' do
+        let(:remote_name) { "foo" }
+        let(:expected_remote) { "foo" }
+
+        it_behaves_like 'a fetch'
       end
     end
   end
@@ -1008,7 +1217,8 @@ describe Repository do
 
   describe '#create_ref' do
     it 'redirects the call to write_ref' do
-      ref, ref_path = '1', '2'
+      ref = '1'
+      ref_path = '2'
 
       expect(repository.raw_repository).to receive(:write_ref).with(ref_path, ref)
 
@@ -1108,11 +1318,11 @@ describe Repository do
       expect(repository.license_key).to be_nil
     end
 
-    it 'returns nil when the content is not recognizable' do
+    it 'returns other when the content is not recognizable' do
       repository.create_file(user, 'LICENSE', 'Gitlab B.V.',
         message: 'Add LICENSE', branch_name: 'master')
 
-      expect(repository.license_key).to be_nil
+      expect(repository.license_key).to eq('other')
     end
 
     it 'returns nil when the commit SHA does not exist' do
@@ -1152,11 +1362,12 @@ describe Repository do
       expect(repository.license).to be_nil
     end
 
-    it 'returns nil when the content is not recognizable' do
+    it 'returns other when the content is not recognizable' do
+      license = Licensee::License.new('other')
       repository.create_file(user, 'LICENSE', 'Gitlab B.V.',
         message: 'Add LICENSE', branch_name: 'master')
 
-      expect(repository.license).to be_nil
+      expect(repository.license).to eq(license)
     end
 
     it 'returns the license' do
@@ -1211,6 +1422,33 @@ describe Repository do
 
       it 'is false' do
         is_expected.to eq(false)
+      end
+    end
+  end
+
+  describe '#has_ambiguous_refs?' do
+    using RSpec::Parameterized::TableSyntax
+
+    where(:branch_names, :tag_names, :result) do
+      nil | nil | false
+      %w() | %w() | false
+      %w(a b) | %w() | false
+      %w() | %w(c d) | false
+      %w(a b) | %w(c d) | false
+      %w(a/b) | %w(c/d) | false
+      %w(a b) | %w(c d a/z) | true
+      %w(a b c/z) | %w(c d) | true
+      %w(a/b/z) | %w(a/b) | false # we only consider refs ambiguous before the first slash
+      %w(a/b/z) | %w(a/b a) | true
+      %w(ab) | %w(abc/d a b) | false
+    end
+
+    with_them do
+      it do
+        allow(repository).to receive(:branch_names).and_return(branch_names)
+        allow(repository).to receive(:tag_names).and_return(tag_names)
+
+        expect(repository.has_ambiguous_refs?).to eq(result)
       end
     end
   end
@@ -1446,17 +1684,13 @@ describe Repository do
     let(:empty_repository) { create(:project_empty_repo).repository }
 
     it 'returns empty array for an empty repository' do
-      # rubocop:disable Style/WordArray
-      expect(empty_repository.blobs_at(['master', 'foobar'])).to eq([])
-      # rubocop:enable Style/WordArray
+      expect(empty_repository.blobs_at(%w[master foobar])).to eq([])
     end
 
     it 'returns blob array for a non-empty repository' do
       repository.create_file(User.last, 'foobar', 'CONTENT', message: 'message', branch_name: 'master')
 
-      # rubocop:disable Style/WordArray
-      blobs = repository.blobs_at([['master', 'foobar']])
-      # rubocop:enable Style/WordArray
+      blobs = repository.blobs_at([%w[master foobar]])
 
       expect(blobs.first.name).to eq('foobar')
       expect(blobs.size).to eq(1)
@@ -1595,12 +1829,13 @@ describe Repository do
     end
 
     it 'writes merge of source SHA and first parent ref to MR merge_ref_path' do
-      merge_commit_id = repository.merge_to_ref(user,
-                                                merge_request.diff_head_sha,
-                                                merge_request,
-                                                merge_request.merge_ref_path,
-                                                'Custom message',
-                                                merge_request.target_branch_ref)
+      merge_commit_id =
+        repository.merge_to_ref(user,
+          source_sha: merge_request.diff_head_sha,
+          branch: merge_request.target_branch,
+          target_ref: merge_request.merge_ref_path,
+          message: 'Custom message',
+          first_parent_ref: merge_request.target_branch_ref)
 
       merge_commit = repository.commit(merge_commit_id)
 
@@ -1881,7 +2116,6 @@ describe Repository do
       expect(repository).to receive(:expire_method_caches).with([
         :size,
         :commit_count,
-        :rendered_readme,
         :readme_path,
         :contribution_guide,
         :changelog,
@@ -1898,10 +2132,11 @@ describe Repository do
         :root_ref,
         :merged_branch_names,
         :has_visible_content?,
-        :issue_template_names,
-        :merge_request_template_names,
-        :metrics_dashboard_paths,
-        :xcode_project?
+        :issue_template_names_hash,
+        :merge_request_template_names_hash,
+        :user_defined_metrics_dashboard_paths,
+        :xcode_project?,
+        :has_ambiguous_refs?
       ])
 
       repository.after_change_head
@@ -1926,32 +2161,6 @@ describe Repository do
       expect(repository).to receive(:repository_event).with(:push_tag)
 
       repository.before_push_tag
-    end
-  end
-
-  describe '#after_import' do
-    subject { repository.after_import }
-
-    it 'flushes and builds the cache' do
-      expect(repository).to receive(:expire_content_cache)
-
-      subject
-    end
-
-    it 'calls DetectRepositoryLanguagesWorker' do
-      expect(DetectRepositoryLanguagesWorker).to receive(:perform_async)
-
-      subject
-    end
-
-    context 'with a wiki repository' do
-      let(:repository) { project.wiki.repository }
-
-      it 'does not call DetectRepositoryLanguagesWorker' do
-        expect(DetectRepositoryLanguagesWorker).not_to receive(:perform_async)
-
-        subject
-      end
     end
   end
 
@@ -1993,6 +2202,22 @@ describe Repository do
       expect(repository).not_to receive(:expire_branches_cache)
 
       repository.after_remove_branch(expire_cache: false)
+    end
+  end
+
+  describe '#lookup' do
+    before do
+      allow(repository.raw_repository).to receive(:lookup).and_return('interesting_blob')
+    end
+
+    it 'uses the lookup cache' do
+      2.times.each { repository.lookup('sha1') }
+
+      expect(repository.raw_repository).to have_received(:lookup).once
+    end
+
+    it 'returns the correct value' do
+      expect(repository.lookup('sha1')).to eq('interesting_blob')
     end
   end
 
@@ -2072,7 +2297,7 @@ describe Repository do
   describe '#expire_branches_cache' do
     it 'expires the cache' do
       expect(repository).to receive(:expire_method_caches)
-        .with(%i(branch_names merged_branch_names branch_count has_visible_content?))
+        .with(%i(branch_names merged_branch_names branch_count has_visible_content? has_ambiguous_refs?))
         .and_call_original
 
       repository.expire_branches_cache
@@ -2082,7 +2307,7 @@ describe Repository do
   describe '#expire_tags_cache' do
     it 'expires the cache' do
       expect(repository).to receive(:expire_method_caches)
-        .with(%i(tag_names tag_count))
+        .with(%i(tag_names tag_count has_ambiguous_refs?))
         .and_call_original
 
       repository.expire_tags_cache
@@ -2266,14 +2491,6 @@ describe Repository do
           expect(repository.readme).to be_nil
         end
       end
-
-      context 'when a README exists' do
-        let(:project) { create(:project, :repository) }
-
-        it 'returns the README' do
-          expect(repository.readme).to be_an_instance_of(ReadmeBlob)
-        end
-      end
     end
   end
 
@@ -2303,7 +2520,7 @@ describe Repository do
         end
 
         it 'caches the response' do
-          expect(repository).to receive(:readme).and_call_original.once
+          expect(repository.head_tree).to receive(:readme_path).and_call_original.once
 
           2.times do
             expect(repository.readme_path).to eq("README.md")
@@ -2479,9 +2696,8 @@ describe Repository do
   describe '#refresh_method_caches' do
     it 'refreshes the caches of the given types' do
       expect(repository).to receive(:expire_method_caches)
-        .with(%i(rendered_readme readme_path license_blob license_key license))
+        .with(%i(readme_path license_blob license_key license))
 
-      expect(repository).to receive(:rendered_readme)
       expect(repository).to receive(:readme_path)
       expect(repository).to receive(:license_blob)
       expect(repository).to receive(:license_key)
@@ -2656,7 +2872,7 @@ describe Repository do
         expect(subject).to be_a(Gitlab::Git::Repository)
         expect(subject.relative_path).to eq(project.disk_path + '.wiki.git')
         expect(subject.gl_repository).to eq("wiki-#{project.id}")
-        expect(subject.gl_project_path).to eq(project.full_path)
+        expect(subject.gl_project_path).to eq(project.wiki.full_path)
       end
     end
   end
@@ -2673,6 +2889,7 @@ describe Repository do
        build(:commit, author: author_c),
        build(:commit, author: author_c)]
     end
+
     let(:order_by) { nil }
     let(:sort) { nil }
 
@@ -2770,6 +2987,7 @@ describe Repository do
 
   describe '#merge_base' do
     let_it_be(:project) { create(:project, :repository) }
+
     subject(:repository) { project.repository }
 
     it 'only makes one gitaly call' do
@@ -2868,6 +3086,7 @@ describe Repository do
 
   describe "#blobs_metadata" do
     let_it_be(:project) { create(:project, :repository) }
+
     let(:repository) { project.repository }
 
     def expect_metadata_blob(thing)
@@ -2895,9 +3114,156 @@ describe Repository do
     end
   end
 
+  describe '#project' do
+    it 'returns the project for a project snippet' do
+      snippet = create(:project_snippet)
+
+      expect(snippet.repository.project).to be(snippet.project)
+    end
+
+    it 'returns nil for a personal snippet' do
+      snippet = create(:personal_snippet)
+
+      expect(snippet.repository.project).to be_nil
+    end
+
+    it 'returns the project for a project wiki' do
+      wiki = create(:project_wiki)
+
+      expect(wiki.project).to be(wiki.repository.project)
+    end
+
+    it 'returns the container if it is a project' do
+      expect(repository.project).to be(project)
+    end
+
+    it 'returns nil if the container is not a project' do
+      repository.container = Group.new
+
+      expect(repository.project).to be_nil
+    end
+  end
+
   describe '#submodule_links' do
     it 'returns an instance of Gitlab::SubmoduleLinks' do
       expect(repository.submodule_links).to be_a(Gitlab::SubmoduleLinks)
+    end
+  end
+
+  describe '#lfs_enabled?' do
+    let_it_be(:project) { create(:project, :repository, :design_repo, lfs_enabled: true) }
+
+    subject { repository.lfs_enabled? }
+
+    context 'for a project repository' do
+      let(:repository) { project.repository }
+
+      it 'returns true when LFS is enabled' do
+        stub_lfs_setting(enabled: true)
+
+        is_expected.to be_truthy
+      end
+
+      it 'returns false when LFS is disabled' do
+        stub_lfs_setting(enabled: false)
+
+        is_expected.to be_falsy
+      end
+    end
+
+    context 'for a project wiki repository' do
+      let(:repository) { project.wiki.repository }
+
+      it 'delegates to the project' do
+        expect(project).to receive(:lfs_enabled?).and_return(true)
+
+        is_expected.to be_truthy
+      end
+    end
+
+    context 'for a project snippet repository' do
+      let(:snippet) { create(:project_snippet, project: project) }
+      let(:repository) { snippet.repository }
+
+      it 'returns false when LFS is enabled' do
+        stub_lfs_setting(enabled: true)
+
+        is_expected.to be_falsy
+      end
+    end
+
+    context 'for a personal snippet repository' do
+      let(:snippet) { create(:personal_snippet) }
+      let(:repository) { snippet.repository }
+
+      it 'returns false when LFS is enabled' do
+        stub_lfs_setting(enabled: true)
+
+        is_expected.to be_falsy
+      end
+    end
+
+    context 'for a design repository' do
+      let(:repository) { project.design_repository }
+
+      it 'returns true when LFS is enabled' do
+        stub_lfs_setting(enabled: true)
+
+        is_expected.to be_truthy
+      end
+
+      it 'returns false when LFS is disabled' do
+        stub_lfs_setting(enabled: false)
+
+        is_expected.to be_falsy
+      end
+    end
+  end
+
+  describe '.pick_storage_shard', :request_store do
+    before do
+      storages = {
+        'default' => Gitlab::GitalyClient::StorageSettings.new('path' => 'tmp/tests/repositories'),
+        'picked'  => Gitlab::GitalyClient::StorageSettings.new('path' => 'tmp/tests/repositories')
+      }
+
+      allow(Gitlab.config.repositories).to receive(:storages).and_return(storages)
+      stub_env('IN_MEMORY_APPLICATION_SETTINGS', 'false')
+      Gitlab::CurrentSettings.current_application_settings
+
+      update_storages({ 'picked' => 0, 'default' => 100 })
+    end
+
+    context 'when expire is false' do
+      it 'does not expire existing repository storage value' do
+        previous_storage = described_class.pick_storage_shard
+        expect(previous_storage).to eq('default')
+        expect(Gitlab::CurrentSettings).not_to receive(:expire_current_application_settings)
+
+        update_storages({ 'picked' => 100, 'default' => 0 })
+
+        new_storage = described_class.pick_storage_shard(expire: false)
+        expect(new_storage).to eq(previous_storage)
+      end
+    end
+
+    context 'when expire is true' do
+      it 'expires existing repository storage value' do
+        previous_storage = described_class.pick_storage_shard
+        expect(previous_storage).to eq('default')
+        expect(Gitlab::CurrentSettings).to receive(:expire_current_application_settings).and_call_original
+
+        update_storages({ 'picked' => 100, 'default' => 0 })
+
+        new_storage = described_class.pick_storage_shard(expire: true)
+        expect(new_storage).to eq('picked')
+      end
+    end
+
+    def update_storages(storage_hash)
+      settings = ApplicationSetting.last
+      settings.repository_storages_weighted = storage_hash
+      settings.save!
     end
   end
 end

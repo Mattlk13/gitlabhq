@@ -5,10 +5,12 @@ module API
     module NotesHelpers
       include ::RendersNotes
 
-      def self.noteable_types
-        # This is a method instead of a constant, allowing EE to more easily
-        # extend it.
-        [Issue, MergeRequest, Snippet]
+      def self.feature_category_per_noteable_type
+        {
+          Issue => :issue_tracking,
+          MergeRequest => :code_review,
+          Snippet => :snippets
+        }
       end
 
       def update_note(noteable, note_id)
@@ -17,8 +19,9 @@ module API
         authorize! :admin_note, note
 
         opts = {
-          note: params[:body]
-        }
+          note: params[:body],
+          confidential: params[:confidential]
+        }.compact
         parent = noteable_parent(noteable)
         project = parent if parent.is_a?(Project)
 
@@ -113,6 +116,7 @@ module API
       end
 
       def create_note(noteable, opts)
+        disable_query_limiting
         authorize!(:create_note, noteable)
 
         parent = noteable_parent(noteable)
@@ -132,15 +136,19 @@ module API
 
         if resolved
           parent = noteable_parent(noteable)
-          ::Discussions::ResolveService.new(parent, current_user, merge_request: noteable).execute(discussion)
+          ::Discussions::ResolveService.new(parent, current_user, one_or_more_discussions: discussion).execute
         else
-          discussion.unresolve!
+          ::Discussions::UnresolveService.new(discussion, current_user).execute
         end
 
         present discussion, with: Entities::Discussion
+      end
+
+      def disable_query_limiting
+        Gitlab::QueryLimiting.disable!('https://gitlab.com/gitlab-org/gitlab/-/issues/211538')
       end
     end
   end
 end
 
-API::Helpers::NotesHelpers.prepend_if_ee('EE::API::Helpers::NotesHelpers')
+API::Helpers::NotesHelpers.prepend_mod_with('API::Helpers::NotesHelpers')

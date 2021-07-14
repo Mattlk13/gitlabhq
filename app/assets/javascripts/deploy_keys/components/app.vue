@@ -1,18 +1,21 @@
 <script>
-import { GlLoadingIcon } from '@gitlab/ui';
+import { GlLoadingIcon, GlIcon } from '@gitlab/ui';
+import createFlash from '~/flash';
 import { s__ } from '~/locale';
-import Flash from '~/flash';
 import NavigationTabs from '~/vue_shared/components/navigation_tabs.vue';
 import eventHub from '../eventhub';
 import DeployKeysService from '../service';
 import DeployKeysStore from '../store';
+import ConfirmModal from './confirm_modal.vue';
 import KeysPanel from './keys_panel.vue';
 
 export default {
   components: {
+    ConfirmModal,
     KeysPanel,
     NavigationTabs,
     GlLoadingIcon,
+    GlIcon,
   },
   props: {
     endpoint: {
@@ -29,6 +32,9 @@ export default {
       currentTab: 'enabled_keys',
       isLoading: false,
       store: new DeployKeysStore(),
+      removeKey: () => {},
+      cancel: () => {},
+      confirmModalVisible: false,
     };
   },
   scopes: {
@@ -38,7 +44,7 @@ export default {
   },
   computed: {
     tabs() {
-      return Object.keys(this.$options.scopes).map(scope => {
+      return Object.keys(this.$options.scopes).map((scope) => {
         const count = Array.isArray(this.keys[scope]) ? this.keys[scope].length : null;
 
         return {
@@ -60,16 +66,16 @@ export default {
     this.service = new DeployKeysService(this.endpoint);
 
     eventHub.$on('enable.key', this.enableKey);
-    eventHub.$on('remove.key', this.disableKey);
-    eventHub.$on('disable.key', this.disableKey);
+    eventHub.$on('remove.key', this.confirmRemoveKey);
+    eventHub.$on('disable.key', this.confirmRemoveKey);
   },
   mounted() {
     this.fetchKeys();
   },
   beforeDestroy() {
     eventHub.$off('enable.key', this.enableKey);
-    eventHub.$off('remove.key', this.disableKey);
-    eventHub.$off('disable.key', this.disableKey);
+    eventHub.$off('remove.key', this.confirmRemoveKey);
+    eventHub.$off('disable.key', this.confirmRemoveKey);
   },
   methods: {
     onChangeTab(tab) {
@@ -80,51 +86,67 @@ export default {
 
       return this.service
         .getKeys()
-        .then(data => {
+        .then((data) => {
           this.isLoading = false;
           this.store.keys = data;
         })
         .catch(() => {
           this.isLoading = false;
           this.store.keys = {};
-          return new Flash(s__('DeployKeys|Error getting deploy keys'));
+          return createFlash({
+            message: s__('DeployKeys|Error getting deploy keys'),
+          });
         });
     },
     enableKey(deployKey) {
       this.service
         .enableKey(deployKey.id)
         .then(this.fetchKeys)
-        .catch(() => new Flash(s__('DeployKeys|Error enabling deploy key')));
+        .catch(() =>
+          createFlash({
+            message: s__('DeployKeys|Error enabling deploy key'),
+          }),
+        );
     },
-    disableKey(deployKey, callback) {
-      if (
-        // eslint-disable-next-line no-alert
-        window.confirm(s__('DeployKeys|You are going to remove this deploy key. Are you sure?'))
-      ) {
+    confirmRemoveKey(deployKey, callback) {
+      const hideModal = () => {
+        this.confirmModalVisible = false;
+        callback?.();
+      };
+      this.removeKey = () => {
         this.service
           .disableKey(deployKey.id)
           .then(this.fetchKeys)
-          .then(callback)
-          .catch(() => new Flash(s__('DeployKeys|Error removing deploy key')));
-      } else {
-        callback();
-      }
+          .then(hideModal)
+          .catch(() =>
+            createFlash({
+              message: s__('DeployKeys|Error removing deploy key'),
+            }),
+          );
+      };
+      this.cancel = hideModal;
+      this.confirmModalVisible = true;
     },
   },
 };
 </script>
 
 <template>
-  <div class="append-bottom-default deploy-keys">
+  <div class="gl-mb-3 deploy-keys">
+    <confirm-modal :visible="confirmModalVisible" @remove="removeKey" @cancel="cancel" />
     <gl-loading-icon
       v-if="isLoading && !hasKeys"
       :label="s__('DeployKeys|Loading deploy keys')"
-      :size="2"
+      size="lg"
     />
     <template v-else-if="hasKeys">
       <div class="top-area scrolling-tabs-container inner-page-scroll-tabs">
-        <div class="fade-left"><i class="fa fa-angle-left" aria-hidden="true"> </i></div>
-        <div class="fade-right"><i class="fa fa-angle-right" aria-hidden="true"> </i></div>
+        <div class="fade-left">
+          <gl-icon name="chevron-lg-left" :size="12" />
+        </div>
+        <div class="fade-right">
+          <gl-icon name="chevron-lg-right" :size="12" />
+        </div>
 
         <navigation-tabs :tabs="tabs" scope="deployKeys" @onChangeTab="onChangeTab" />
       </div>
@@ -133,7 +155,7 @@ export default {
         :keys="keys[currentTab]"
         :store="store"
         :endpoint="endpoint"
-        data-qa-selector="project_deploy_keys"
+        data-qa-selector="project_deploy_keys_container"
       />
     </template>
   </div>

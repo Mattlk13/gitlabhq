@@ -72,14 +72,6 @@ class EnvironmentStatus
       .merge_request_diff_files.where(deleted_file: false)
   end
 
-  def changed_paths
-    changes.map { |change| change[:path] }
-  end
-
-  def changed_urls
-    changes.map { |change| change[:external_url] }
-  end
-
   def has_route_map?
     project.route_map_for(sha).present?
   end
@@ -108,7 +100,7 @@ class EnvironmentStatus
   def self.build_environments_status(mr, user, pipeline)
     return [] unless pipeline
 
-    pipeline.environments.includes(:project).available.map do |environment|
+    pipeline.environments_in_self_and_descendants.includes(:project).available.map do |environment|
       next unless Ability.allowed?(user, :read_environment, environment)
 
       EnvironmentStatus.new(pipeline.project, environment, mr, pipeline.sha)

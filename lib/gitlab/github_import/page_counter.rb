@@ -19,12 +19,16 @@ module Gitlab
       #
       # Returns true if the page number was overwritten, false otherwise.
       def set(page)
-        Caching.write_if_greater(cache_key, page)
+        Gitlab::Cache::Import::Caching.write_if_greater(cache_key, page)
       end
 
       # Returns the current value from the cache.
       def current
-        Caching.read_integer(cache_key) || 1
+        Gitlab::Cache::Import::Caching.read_integer(cache_key) || 1
+      end
+
+      def expire!
+        Gitlab::Cache::Import::Caching.expire(cache_key, 0)
       end
     end
   end

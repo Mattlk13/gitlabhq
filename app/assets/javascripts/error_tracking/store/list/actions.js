@@ -1,8 +1,8 @@
-import Service from '../../services';
-import * as types from './mutation_types';
 import createFlash from '~/flash';
 import Poll from '~/lib/utils/poll';
-import { __, sprintf } from '~/locale';
+import { __ } from '~/locale';
+import Service from '../../services';
+import * as types from './mutation_types';
 
 let eTagPoll;
 
@@ -18,6 +18,7 @@ export function startPolling({ state, commit, dispatch }) {
         search_term: state.searchQuery,
         sort: state.sortField,
         cursor: state.cursor,
+        issue_status: state.statusFilter,
       },
     },
     successCallback: ({ data }) => {
@@ -30,17 +31,11 @@ export function startPolling({ state, commit, dispatch }) {
       commit(types.SET_LOADING, false);
       dispatch('stopPolling');
     },
-    errorCallback: ({ response }) => {
-      let errorMessage = '';
-      if (response && response.data && response.data.message) {
-        errorMessage = response.data.message;
-      }
+    errorCallback: () => {
       commit(types.SET_LOADING, false);
-      createFlash(
-        sprintf(__(`Failed to load errors from Sentry. Error message: %{errorMessage}`), {
-          errorMessage,
-        }),
-      );
+      createFlash({
+        message: __('Failed to load errors from Sentry.'),
+      });
     },
   });
 
@@ -83,6 +78,12 @@ export const searchByQuery = ({ commit, dispatch }, query) => {
   dispatch('startPolling');
 };
 
+export const filterByStatus = ({ commit, dispatch }, status) => {
+  commit(types.SET_STATUS_FILTER, status);
+  dispatch('stopPolling');
+  dispatch('startPolling');
+};
+
 export const sortByField = ({ commit, dispatch }, field) => {
   commit(types.SET_CURSOR, null);
   commit(types.SET_SORT_FIELD, field);
@@ -103,5 +104,3 @@ export const fetchPaginatedResults = ({ commit, dispatch }, cursor) => {
 export const removeIgnoredResolvedErrors = ({ commit }, error) => {
   commit(types.REMOVE_IGNORED_RESOLVED_ERRORS, error);
 };
-
-export default () => {};

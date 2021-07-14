@@ -20,7 +20,7 @@ module Projects
     rescue Exception => e # rubocop:disable Lint/RescueException
       attempt_restore_repositories(source_project)
 
-      if e.class == Exception
+      if e.instance_of?(Exception)
         raise StandardError, e.message
       else
         raise
@@ -32,12 +32,12 @@ module Projects
     def move_before_destroy_relationships(source_project)
       options = { remove_remaining_elements: false }
 
-      ::Projects::MoveUsersStarProjectsService.new(@project, @current_user).execute(source_project, options)
-      ::Projects::MoveAccessService.new(@project, @current_user).execute(source_project, options)
-      ::Projects::MoveDeployKeysProjectsService.new(@project, @current_user).execute(source_project, options)
-      ::Projects::MoveNotificationSettingsService.new(@project, @current_user).execute(source_project, options)
-      ::Projects::MoveForksService.new(@project, @current_user).execute(source_project, options)
-      ::Projects::MoveLfsObjectsProjectsService.new(@project, @current_user).execute(source_project, options)
+      ::Projects::MoveUsersStarProjectsService.new(@project, @current_user).execute(source_project, **options)
+      ::Projects::MoveAccessService.new(@project, @current_user).execute(source_project, **options)
+      ::Projects::MoveDeployKeysProjectsService.new(@project, @current_user).execute(source_project, **options)
+      ::Projects::MoveNotificationSettingsService.new(@project, @current_user).execute(source_project, **options)
+      ::Projects::MoveForksService.new(@project, @current_user).execute(source_project, **options)
+      ::Projects::MoveLfsObjectsProjectsService.new(@project, @current_user).execute(source_project, **options)
       add_source_project_to_fork_network(source_project)
     end
 

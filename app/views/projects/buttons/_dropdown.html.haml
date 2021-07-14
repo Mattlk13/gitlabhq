@@ -8,9 +8,9 @@
 
 - if show_menu
   .project-action-button.dropdown.inline<
-    %a.btn.dropdown-toggle.has-tooltip.qa-create-new-dropdown{ href: '#', title: _('Create new...'), 'data-toggle' => 'dropdown', 'data-container' => 'body', 'aria-label' => _('Create new...'), 'data-display' => 'static' }
-      = icon('plus')
-      = icon("caret-down")
+    %a.btn.btn-default.gl-button.dropdown-toggle.has-tooltip.qa-create-new-dropdown{ href: '#', title: _('Create new...'), 'data-toggle' => 'dropdown', 'data-container' => 'body', 'aria-label' => _('Create new...'), 'data-display' => 'static' }
+      = sprite_icon('plus', css_class: 'gl-icon')
+      = sprite_icon("chevron-down", css_class: 'gl-icon')
     %ul.dropdown-menu.dropdown-menu-right.project-home-dropdown
       - if can_create_issue || merge_project || can_create_project_snippet
         %li.dropdown-header= _('This project')
@@ -28,14 +28,14 @@
         %li.dropdown-header= _('This repository')
 
       - if can_push_code
-        %li.qa-new-file-option= link_to _('New file'), project_new_blob_path(@project, @project.default_branch || 'master')
+        %li.qa-new-file-option= link_to _('New file'), project_new_blob_path(@project, @project.default_branch_or_main)
         - unless @project.empty_repo?
           %li= link_to _('New branch'), new_project_branch_path(@project)
           %li= link_to _('New tag'), new_project_tag_path(@project)
       - elsif can_collaborate_with_project?(@project)
-        %li= link_to _('New file'), project_new_blob_path(@project, @project.default_branch || 'master')
+        %li= link_to _('New file'), project_new_blob_path(@project, @project.default_branch_or_main)
       - elsif create_mr_from_new_fork
-        - continue_params = { to: project_new_blob_path(@project, @project.default_branch || 'master'),
+        - continue_params = { to: project_new_blob_path(@project, @project.default_branch_or_main),
                               notice: edit_in_new_fork_notice,
                               notice_now: edit_in_new_fork_notice_now }
         - fork_path = project_forks_path(@project, namespace_key: current_user.namespace.id, continue: continue_params)

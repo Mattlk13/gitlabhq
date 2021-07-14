@@ -2,8 +2,9 @@
 
 require 'spec_helper'
 
-describe Snippets::BulkDestroyService do
+RSpec.describe Snippets::BulkDestroyService do
   let_it_be(:project) { create(:project) }
+
   let(:user) { create(:user) }
   let!(:personal_snippet) { create(:personal_snippet, :repository, author: user) }
   let!(:project_snippet) { create(:project_snippet, :repository, project: project, author: user) }
@@ -68,6 +69,18 @@ describe Snippets::BulkDestroyService do
 
       it_behaves_like 'error is raised' do
         let(:error_message) { "You don't have access to delete these snippets." }
+      end
+
+      context 'when hard_delete option is passed' do
+        subject { described_class.new(service_user, snippets).execute(hard_delete: true) }
+
+        it 'returns a ServiceResponse success response' do
+          expect(subject).to be_success
+        end
+
+        it 'deletes all the snippets that belong to the user' do
+          expect { subject }.to change(Snippet, :count).by(-2)
+        end
       end
     end
 

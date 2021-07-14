@@ -18,11 +18,11 @@ module Gitlab
       end
 
       def execute
-        Gitlab::Import::SetAsyncJid.set_jid(project)
+        Gitlab::Import::SetAsyncJid.set_jid(project.import_state)
         schedule_first_tasks_page
 
         true
-      rescue => e
+      rescue StandardError => e
         fail_import(e.message)
 
         false

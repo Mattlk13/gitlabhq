@@ -2,7 +2,7 @@
 
 require 'spec_helper'
 
-describe Banzai::Filter::RepositoryLinkFilter do
+RSpec.describe Banzai::Filter::RepositoryLinkFilter do
   include GitHelpers
   include RepoHelpers
 
@@ -12,7 +12,7 @@ describe Banzai::Filter::RepositoryLinkFilter do
       project:        project,
       current_user:   user,
       group:          group,
-      project_wiki:   project_wiki,
+      wiki:           wiki,
       ref:            ref,
       requested_path: requested_path,
       only_path:      only_path
@@ -53,7 +53,7 @@ describe Banzai::Filter::RepositoryLinkFilter do
   let(:project_path)   { project.full_path }
   let(:ref)            { 'markdown' }
   let(:commit)         { project.commit(ref) }
-  let(:project_wiki)   { nil }
+  let(:wiki)           { nil }
   let(:requested_path) { '/' }
   let(:only_path)      { true }
 
@@ -94,8 +94,8 @@ describe Banzai::Filter::RepositoryLinkFilter do
     end
   end
 
-  context 'with a project_wiki' do
-    let(:project_wiki) { double('ProjectWiki') }
+  context 'with a wiki' do
+    let(:wiki) { double('ProjectWiki') }
 
     include_examples :preserve_unchanged
   end
@@ -145,10 +145,38 @@ describe Banzai::Filter::RepositoryLinkFilter do
   it 'ignores ref if commit is passed' do
     doc = filter(link('non/existent.file'), commit: project.commit('empty-branch') )
     expect(doc.at_css('a')['href'])
-      .to eq "/#{project_path}/#{ref}/non/existent.file" # non-existent files have no leading blob/raw/tree
+      .to eq "/#{project_path}/-/blob/#{ref}/non/existent.file"
   end
 
   shared_examples :valid_repository do
+    it 'handles Gitaly unavailable exceptions gracefully' do
+      allow_next_instance_of(Gitlab::GitalyClient::BlobService) do |blob_service|
+        allow(blob_service).to receive(:get_blob_types).and_raise(GRPC::Unavailable)
+      end
+
+      expect(Gitlab::ErrorTracking).to receive(:track_exception).with(
+        an_instance_of(GRPC::Unavailable), project_id: project.id
+      )
+      doc = ""
+      expect { doc = filter(link('doc/api/README.md')) }.not_to raise_error
+      expect(doc.at_css('a')['href'])
+          .to eq "/#{project_path}/-/blob/#{ref}/doc/api/README.md"
+    end
+
+    it 'handles Gitaly timeout exceptions gracefully' do
+      allow_next_instance_of(Gitlab::GitalyClient::BlobService) do |blob_service|
+        allow(blob_service).to receive(:get_blob_types).and_raise(GRPC::DeadlineExceeded)
+      end
+
+      expect(Gitlab::ErrorTracking).to receive(:track_exception).with(
+        an_instance_of(GRPC::DeadlineExceeded), project_id: project.id
+      )
+      doc = ""
+      expect { doc = filter(link('doc/api/README.md')) }.not_to raise_error
+      expect(doc.at_css('a')['href'])
+          .to eq "/#{project_path}/-/blob/#{ref}/doc/api/README.md"
+    end
+
     it 'rebuilds absolute URL for a file in the repo' do
       doc = filter(link('/doc/api/README.md'))
       expect(doc.at_css('a')['href'])
@@ -171,6 +199,12 @@ describe Banzai::Filter::RepositoryLinkFilter do
       doc = filter(link('doc/api/README.md'))
       expect(doc.at_css('a')['href'])
         .to eq "/#{project_path}/-/blob/#{ref}/doc/api/README.md"
+    end
+
+    it 'rebuilds relative URL for a missing file in the repo' do
+      doc = filter(link('missing-file'))
+      expect(doc.at_css('a')['href'])
+        .to eq "/#{project_path}/-/blob/#{ref}/missing-file"
     end
 
     it 'rebuilds relative URL for a file in the repo with leading ./' do

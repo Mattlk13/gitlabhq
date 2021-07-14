@@ -3,8 +3,6 @@
 module Gitlab
   module LegacyGithubImport
     class Importer
-      include Gitlab::ShellAdapter
-
       def self.refmap
         Gitlab::GithubImport.refmap
       end
@@ -38,7 +36,7 @@ module Gitlab
           }
         end
 
-        @client = Client.new(credentials[:user], opts)
+        @client = Client.new(credentials[:user], **opts)
       end
 
       def execute
@@ -96,7 +94,7 @@ module Gitlab
           labels.each do |raw|
             gh_label = LabelFormatter.new(project, raw)
             gh_label.create!
-          rescue => e
+          rescue StandardError => e
             errors << { type: :label, url: Gitlab::UrlSanitizer.sanitize(gh_label.url), errors: e.message }
           end
         end
@@ -109,7 +107,7 @@ module Gitlab
           milestones.each do |raw|
             gh_milestone = MilestoneFormatter.new(project, raw)
             gh_milestone.create!
-          rescue => e
+          rescue StandardError => e
             errors << { type: :milestone, url: Gitlab::UrlSanitizer.sanitize(gh_milestone.url), errors: e.message }
           end
         end
@@ -130,7 +128,7 @@ module Gitlab
                 end
 
               apply_labels(issuable, raw)
-            rescue => e
+            rescue StandardError => e
               errors << { type: :issue, url: Gitlab::UrlSanitizer.sanitize(gh_issue.url), errors: e.message }
             end
           end
@@ -155,7 +153,7 @@ module Gitlab
               if project.gitea_import?
                 apply_labels(merge_request, raw)
               end
-            rescue => e
+            rescue StandardError => e
               errors << { type: :pull_request, url: Gitlab::UrlSanitizer.sanitize(gh_pull_request.url), errors: e.message }
             ensure
               clean_up_restored_branches(gh_pull_request)
@@ -238,7 +236,7 @@ module Gitlab
             next unless issuable
 
             issuable.notes.create!(comment.attributes)
-          rescue => e
+          rescue StandardError => e
             errors << { type: :comment, url: Gitlab::UrlSanitizer.sanitize(raw.url), errors: e.message }
           end
         end
@@ -264,11 +262,11 @@ module Gitlab
       end
 
       def import_wiki
-        unless project.wiki.repository_exists?
-          wiki = WikiFormatter.new(project)
-          gitlab_shell.import_wiki_repository(project, wiki)
-        end
-      rescue Gitlab::Shell::Error => e
+        return if project.wiki.repository_exists?
+
+        wiki = WikiFormatter.new(project)
+        project.wiki.repository.import_repository(wiki.import_url)
+      rescue ::Gitlab::Git::CommandError => e
         # GitHub error message when the wiki repo has not been created,
         # this means that repo has wiki enabled, but have no pages. So,
         # we can skip the import.
@@ -282,7 +280,7 @@ module Gitlab
           releases.each do |raw|
             gh_release = ReleaseFormatter.new(project, raw)
             gh_release.create! if gh_release.valid?
-          rescue => e
+          rescue StandardError => e
             errors << { type: :release, url: Gitlab::UrlSanitizer.sanitize(gh_release.url), errors: e.message }
           end
         end
@@ -305,6 +303,8 @@ module Gitlab
         end
 
         imported!(resource_type)
+      rescue ::Octokit::NotFound => e
+        errors << { type: resource_type, errors: e.message }
       end
 
       def imported?(resource_type)

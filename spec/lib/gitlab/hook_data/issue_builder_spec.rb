@@ -2,9 +2,10 @@
 
 require 'spec_helper'
 
-describe Gitlab::HookData::IssueBuilder do
+RSpec.describe Gitlab::HookData::IssueBuilder do
   let_it_be(:label) { create(:label) }
   let_it_be(:issue) { create(:labeled_issue, labels: [label], project: label.project) }
+
   let(:builder) { described_class.new(issue) }
 
   describe '#build' do
@@ -18,6 +19,7 @@ describe Gitlab::HookData::IssueBuilder do
         confidential
         created_at
         description
+        discussion_locked
         due_date
         id
         iid
@@ -40,10 +42,13 @@ describe Gitlab::HookData::IssueBuilder do
 
     it 'includes additional attrs' do
       expect(data).to include(:total_time_spent)
+      expect(data).to include(:time_change)
       expect(data).to include(:human_time_estimate)
       expect(data).to include(:human_total_time_spent)
+      expect(data).to include(:human_time_change)
       expect(data).to include(:assignee_ids)
       expect(data).to include(:state)
+      expect(data).to include(:severity)
       expect(data).to include('labels' => [label.hook_attrs])
     end
 

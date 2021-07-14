@@ -13,19 +13,38 @@ module Projects
 
       def project_update_params
         error_tracking_params
+          .merge(alerting_setting_params)
           .merge(metrics_setting_params)
           .merge(grafana_integration_params)
           .merge(prometheus_integration_params)
           .merge(incident_management_setting_params)
+          .merge(tracing_setting_params)
+      end
+
+      def alerting_setting_params
+        return {} unless can?(current_user, :read_prometheus_alerts, project)
+
+        attr = params[:alerting_setting_attributes]
+        return {} unless attr
+
+        regenerate_token = attr.delete(:regenerate_token)
+
+        if regenerate_token
+          attr[:token] = nil
+        else
+          attr = attr.except(:token)
+        end
+
+        { alerting_setting_attributes: attr }
       end
 
       def metrics_setting_params
         attribs = params[:metrics_setting_attributes]
         return {} unless attribs
 
-        destroy = attribs[:external_dashboard_url].blank?
+        attribs[:external_dashboard_url] = attribs[:external_dashboard_url].presence
 
-        { metrics_setting_attributes: attribs.merge(_destroy: destroy) }
+        { metrics_setting_attributes: attribs }
       end
 
       def error_tracking_params
@@ -83,17 +102,37 @@ module Projects
       def prometheus_integration_params
         return {} unless attrs = params[:prometheus_integration_attributes]
 
-        service = project.find_or_initialize_service(::PrometheusService.to_param)
-        service.assign_attributes(attrs)
+        integration = project.find_or_initialize_integration(::Integrations::Prometheus.to_param)
+        integration.assign_attributes(attrs)
 
-        { prometheus_service_attributes: service.attributes.except(*%w(id project_id created_at updated_at)) }
+        { prometheus_integration_attributes: integration.attributes.except(*%w[id project_id created_at updated_at]) }
       end
 
       def incident_management_setting_params
-        params.slice(:incident_management_setting_attributes)
+        attrs = params[:incident_management_setting_attributes]
+        return {} unless attrs
+
+        regenerate_token = attrs.delete(:regenerate_token)
+
+        if regenerate_token
+          attrs[:pagerduty_token] = nil
+        else
+          attrs = attrs.except(:pagerduty_token)
+        end
+
+        { incident_management_setting_attributes: attrs }
+      end
+
+      def tracing_setting_params
+        attr = params[:tracing_setting_attributes]
+        return {} unless attr
+
+        destroy = attr[:external_url].blank?
+
+        { tracing_setting_attributes: attr.merge(_destroy: destroy) }
       end
     end
   end
 end
 
-Projects::Operations::UpdateService.prepend_if_ee('::EE::Projects::Operations::UpdateService')
+Projects::Operations::UpdateService.prepend_mod_with('Projects::Operations::UpdateService')

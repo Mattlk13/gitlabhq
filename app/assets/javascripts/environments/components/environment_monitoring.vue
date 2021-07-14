@@ -4,11 +4,8 @@ import { __ } from '~/locale';
 /**
  * Renders the Monitoring (Metrics) link in environments table.
  */
-import Icon from '~/vue_shared/components/icon.vue';
-
 export default {
   components: {
-    Icon,
     GlButton,
   },
   directives: {
@@ -33,10 +30,9 @@ export default {
     :href="monitoringUrl"
     :title="title"
     :aria-label="title"
-    class="monitoring-url d-none d-sm-none d-md-block"
+    class="monitoring-url gl-display-none gl-sm-display-none gl-md-display-block"
+    icon="chart"
     rel="noopener noreferrer nofollow"
     variant="default"
-  >
-    <icon name="chart" />
-  </gl-button>
+  />
 </template>

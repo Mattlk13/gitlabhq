@@ -1,62 +1,84 @@
 import $ from 'jquery';
+import { delay } from 'lodash';
+import { __, s__ } from '~/locale';
+import toast from '~/vue_shared/plugins/global_toast';
 import axios from '../lib/utils/axios_utils';
-import flash from '../flash';
-import { __ } from '~/locale';
+import initForm from './edit';
+import eventHub from './edit/event_hub';
 
 export default class IntegrationSettingsForm {
   constructor(formSelector) {
     this.$form = $(formSelector);
+    this.formActive = false;
+
+    this.vue = null;
 
     // Form Metadata
-    this.canTestService = this.$form.data('canTest');
     this.testEndPoint = this.$form.data('testUrl');
-
-    // Form Child Elements
-    this.$serviceToggle = this.$form.find('#service_active');
-    this.$submitBtn = this.$form.find('button[type="submit"]');
-    this.$submitBtnLoader = this.$submitBtn.find('.js-btn-spinner');
-    this.$submitBtnLabel = this.$submitBtn.find('.js-btn-label');
   }
 
   init() {
-    // Initialize View
-    this.toggleServiceState(this.$serviceToggle.is(':checked'));
+    // Init Vue component
+    this.vue = initForm(
+      document.querySelector('.js-vue-integration-settings'),
+      document.querySelector('.js-vue-default-integration-settings'),
+    );
+    eventHub.$on('toggle', (active) => {
+      this.formActive = active;
+      this.toggleServiceState();
+    });
+    eventHub.$on('testIntegration', () => {
+      this.testIntegration();
+    });
+    eventHub.$on('saveIntegration', () => {
+      this.saveIntegration();
+    });
+    eventHub.$on('getJiraIssueTypes', () => {
+      // eslint-disable-next-line no-jquery/no-serialize
+      this.getJiraIssueTypes(this.$form.serialize());
+    });
 
-    // Bind Event Listeners
-    this.$serviceToggle.on('change', e => this.handleServiceToggle(e));
-    this.$submitBtn.on('click', e => this.handleSettingsSave(e));
+    eventHub.$emit('formInitialized');
   }
 
-  handleSettingsSave(e) {
-    // Check if Service is marked active, as if not marked active,
-    // We can skip testing it and directly go ahead to allow form to
-    // be submitted
-    if (!this.$serviceToggle.is(':checked')) {
-      return;
-    }
+  saveIntegration() {
+    // Save Service if not active and check the following if active;
+    // 1) If form contents are valid
+    // 2) If this service can be saved
+    // If both conditions are true, we override form submission
+    // and save the service using provided configuration.
+    const formValid = this.$form.get(0).checkValidity() || this.formActive === false;
 
+    if (formValid) {
+      delay(() => {
+        this.$form.trigger('submit');
+      }, 100);
+    } else {
+      eventHub.$emit('validateForm');
+      this.vue.$store.dispatch('setIsSaving', false);
+    }
+  }
+
+  testIntegration() {
     // Service was marked active so now we check;
     // 1) If form contents are valid
     // 2) If this service can be tested
     // If both conditions are true, we override form submission
     // and test the service using provided configuration.
-    if (this.$form.get(0).checkValidity() && this.canTestService) {
-      e.preventDefault();
+    if (this.$form.get(0).checkValidity()) {
       // eslint-disable-next-line no-jquery/no-serialize
       this.testSettings(this.$form.serialize());
+    } else {
+      eventHub.$emit('validateForm');
+      this.vue.$store.dispatch('setIsTesting', false);
     }
-  }
-
-  handleServiceToggle(e) {
-    this.toggleServiceState($(e.currentTarget).is(':checked'));
   }
 
   /**
    * Change Form's validation enforcement based on service status (active/inactive)
    */
-  toggleServiceState(serviceActive) {
-    this.toggleSubmitBtnLabel(serviceActive);
-    if (serviceActive) {
+  toggleServiceState() {
+    if (this.formActive) {
       this.$form.removeAttr('novalidate');
     } else if (!this.$form.attr('novalidate')) {
       this.$form.attr('novalidate', 'novalidate');
@@ -64,67 +86,66 @@ export default class IntegrationSettingsForm {
   }
 
   /**
-   * Toggle Submit button label based on Integration status and ability to test service
+   * Get a list of Jira issue types for the currently configured project
+   *
+   * @param {string} formData - URL encoded string containing the form data
+   *
+   * @return {Promise}
    */
-  toggleSubmitBtnLabel(serviceActive) {
-    let btnLabel = __('Save changes');
+  getJiraIssueTypes(formData) {
+    const {
+      $store: { dispatch },
+    } = this.vue;
 
-    if (serviceActive && this.canTestService) {
-      btnLabel = __('Test settings and save changes');
-    }
+    dispatch('requestJiraIssueTypes');
 
-    this.$submitBtnLabel.text(btnLabel);
+    return this.fetchTestSettings(formData)
+      .then(
+        ({
+          data: {
+            issuetypes,
+            error,
+            message = s__('Integrations|Connection failed. Please check your settings.'),
+          },
+        }) => {
+          if (error || !issuetypes?.length) {
+            eventHub.$emit('validateForm');
+            throw new Error(message);
+          }
+
+          dispatch('receiveJiraIssueTypesSuccess', issuetypes);
+        },
+      )
+      .catch(({ message = __('Something went wrong on our end.') }) => {
+        dispatch('receiveJiraIssueTypesError', message);
+      });
   }
 
   /**
-   * Toggle Submit button state based on provided boolean value of `saveTestActive`
-   * When enabled, it does two things, and reverts back when disabled
-   *
-   * 1. It shows load spinner on submit button
-   * 2. Makes submit button disabled
+   *  Send request to the test endpoint which checks if the current config is valid
    */
-  toggleSubmitBtnState(saveTestActive) {
-    if (saveTestActive) {
-      this.$submitBtn.disable();
-      this.$submitBtnLoader.removeClass('hidden');
-    } else {
-      this.$submitBtn.enable();
-      this.$submitBtnLoader.addClass('hidden');
-    }
+  fetchTestSettings(formData) {
+    return axios.put(this.testEndPoint, formData);
   }
 
   /**
    * Test Integration config
    */
   testSettings(formData) {
-    this.toggleSubmitBtnState(true);
-
-    return axios
-      .put(this.testEndPoint, formData)
+    return this.fetchTestSettings(formData)
       .then(({ data }) => {
         if (data.error) {
-          let flashActions;
-
-          if (data.test_failed) {
-            flashActions = {
-              title: __('Save anyway'),
-              clickHandler: e => {
-                e.preventDefault();
-                this.$form.submit();
-              },
-            };
-          }
-
-          flash(`${data.message} ${data.service_response}`, 'alert', document, flashActions);
+          toast(`${data.message} ${data.service_response}`);
         } else {
-          this.$form.submit();
+          this.vue.$store.dispatch('receiveJiraIssueTypesSuccess', data.issuetypes);
+          toast(s__('Integrations|Connection successful.'));
         }
-
-        this.toggleSubmitBtnState(false);
       })
       .catch(() => {
-        flash(__('Something went wrong on our end.'));
-        this.toggleSubmitBtnState(false);
+        toast(__('Something went wrong on our end.'));
+      })
+      .finally(() => {
+        this.vue.$store.dispatch('setIsTesting', false);
       });
   }
 }

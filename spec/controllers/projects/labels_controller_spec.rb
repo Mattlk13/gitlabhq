@@ -2,10 +2,10 @@
 
 require 'spec_helper'
 
-describe Projects::LabelsController do
-  let(:group)   { create(:group) }
-  let(:project) { create(:project, namespace: group) }
-  let(:user)    { create(:user) }
+RSpec.describe Projects::LabelsController do
+  let_it_be(:group)   { create(:group) }
+  let_it_be(:project, reload: true) { create(:project, namespace: group) }
+  let_it_be(:user)    { create(:user) }
 
   before do
     project.add_maintainer(user)
@@ -14,16 +14,21 @@ describe Projects::LabelsController do
   end
 
   describe 'GET #index' do
-    let!(:label_1) { create(:label, project: project, priority: 1, title: 'Label 1') }
-    let!(:label_2) { create(:label, project: project, priority: 3, title: 'Label 2') }
-    let!(:label_3) { create(:label, project: project, priority: 1, title: 'Label 3') }
-    let!(:label_4) { create(:label, project: project, title: 'Label 4') }
-    let!(:label_5) { create(:label, project: project, title: 'Label 5') }
+    let_it_be(:label_1) { create(:label, project: project, priority: 1, title: 'Label 1') }
+    let_it_be(:label_2) { create(:label, project: project, priority: 3, title: 'Label 2') }
+    let_it_be(:label_3) { create(:label, project: project, priority: 1, title: 'Label 3') }
+    let_it_be(:label_4) { create(:label, project: project, title: 'Label 4') }
+    let_it_be(:label_5) { create(:label, project: project, title: 'Label 5') }
 
-    let!(:group_label_1) { create(:group_label, group: group, title: 'Group Label 1') }
-    let!(:group_label_2) { create(:group_label, group: group, title: 'Group Label 2') }
-    let!(:group_label_3) { create(:group_label, group: group, title: 'Group Label 3') }
-    let!(:group_label_4) { create(:group_label, group: group, title: 'Group Label 4') }
+    let_it_be(:group_label_1) { create(:group_label, group: group, title: 'Group Label 1') }
+    let_it_be(:group_label_2) { create(:group_label, group: group, title: 'Group Label 2') }
+    let_it_be(:group_label_3) { create(:group_label, group: group, title: 'Group Label 3') }
+    let_it_be(:group_label_4) { create(:group_label, group: group, title: 'Group Label 4') }
+
+    let_it_be(:group_labels) { [group_label_3, group_label_4]}
+    let_it_be(:project_labels) { [label_4, label_5]}
+    let_it_be(:group_priority_labels) { [group_label_1, group_label_2]}
+    let_it_be(:project_priority_labels) { [label_1, label_2, label_3]}
 
     before do
       create(:label_priority, project: project, label: group_label_1, priority: 3)
@@ -60,11 +65,51 @@ describe Projects::LabelsController do
       end
 
       it 'does not include group labels when project does not belong to a group' do
-        project.update(namespace: create(:namespace))
+        project.update!(namespace: create(:namespace))
 
         list_labels
 
         expect(assigns(:labels)).not_to include(group_label_3, group_label_4)
+      end
+    end
+
+    context 'with subgroups' do
+      let_it_be(:subgroup) { create(:group, parent: group) }
+      let_it_be(:subgroup_label_1) { create(:group_label, group: subgroup, title: 'subgroup_label_1') }
+      let_it_be(:subgroup_label_2) { create(:group_label, group: subgroup, title: 'subgroup_label_2') }
+
+      before do
+        project.update!(namespace: subgroup)
+        subgroup.add_owner(user)
+        create(:label_priority, project: project, label: subgroup_label_2, priority: 1)
+      end
+
+      it 'returns ancestor group labels', :aggregate_failures do
+        params = { namespace_id: project.namespace.to_param, project_id: project }
+        get :index, params: params
+
+        expect(assigns(:labels)).to match_array([subgroup_label_1] + group_labels + project_labels)
+        expect(assigns(:prioritized_labels)).to match_array([subgroup_label_2] + group_priority_labels + project_priority_labels)
+      end
+    end
+
+    context 'with views rendered' do
+      render_views
+
+      before do
+        list_labels
+      end
+
+      it 'avoids N+1 queries' do
+        control = ActiveRecord::QueryRecorder.new(skip_cached: false) { list_labels }
+
+        create_list(:label, 3, project: project)
+        create_list(:group_label, 3, group: group)
+
+        # some n+1 queries still exist
+        # calls to get max project authorization access level
+        expect { list_labels }.not_to exceed_all_query_limit(control.count).with_threshold(25)
+        expect(assigns(:labels).count).to eq(10)
       end
     end
 
@@ -75,7 +120,7 @@ describe Projects::LabelsController do
 
   describe 'POST #generate' do
     context 'personal project' do
-      let(:personal_project) { create(:project, namespace: user.namespace) }
+      let_it_be(:personal_project) { create(:project, namespace: user.namespace) }
 
       it 'creates labels' do
         post :generate, params: { namespace_id: personal_project.namespace.to_param, project_id: personal_project }
@@ -116,8 +161,8 @@ describe Projects::LabelsController do
   end
 
   describe 'POST #promote' do
-    let!(:promoted_label_name) { "Promoted Label" }
-    let!(:label_1) { create(:label, title: promoted_label_name, project: project) }
+    let_it_be(:promoted_label_name) { "Promoted Label" }
+    let_it_be(:label_1) { create(:label, title: promoted_label_name, project: project) }
 
     context 'not group reporters' do
       it 'denies access' do
@@ -156,7 +201,7 @@ describe Projects::LabelsController do
       context 'service raising InvalidRecord' do
         before do
           expect_any_instance_of(Labels::PromoteService).to receive(:execute) do |label|
-            raise ActiveRecord::RecordInvalid.new(label_1)
+            raise ActiveRecord::RecordInvalid, label_1
           end
         end
 
@@ -196,7 +241,7 @@ describe Projects::LabelsController do
       end
 
       context 'when requesting a redirected path' do
-        let!(:redirect_route) { project.redirect_routes.create(path: project.full_path + 'old') }
+        let_it_be(:redirect_route) { project.redirect_routes.create!(path: project.full_path + 'old') }
 
         it 'redirects to the canonical path' do
           get :index, params: { namespace_id: project.namespace, project_id: project.to_param + 'old' }
@@ -242,7 +287,7 @@ describe Projects::LabelsController do
     end
 
     context 'when requesting a redirected path' do
-      let!(:redirect_route) { project.redirect_routes.create(path: project.full_path + 'old') }
+      let_it_be(:redirect_route) { project.redirect_routes.create!(path: project.full_path + 'old') }
 
       it 'returns not found' do
         post :generate, params: { namespace_id: project.namespace, project_id: project.to_param + 'old' }

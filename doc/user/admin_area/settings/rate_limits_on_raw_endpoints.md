@@ -1,15 +1,21 @@
 ---
+stage: none
+group: unassigned
+info: To determine the technical writer assigned to the Stage/Group associated with this page, see https://about.gitlab.com/handbook/engineering/ux/technical-writing/#assignments
 type: reference
 ---
 
-# Rate limits on raw endpoints **(CORE ONLY)**
+# Rate limits on raw endpoints **(FREE SELF)**
 
 > [Introduced](https://gitlab.com/gitlab-org/gitlab-foss/-/merge_requests/30829) in GitLab 12.2.
 
-This setting allows you to rate limit the requests to raw endpoints, defaults to `300` requests per minute.
-It can be modified in **Admin Area > Settings > Network > Performance Optimization**.
+This setting defaults to `300` requests per minute, and allows you to rate limit the requests to raw endpoints:
 
-For example, requests over `300` per minute to `https://gitlab.com/gitlab-org/gitlab-foss/raw/master/app/controllers/application_controller.rb` will be blocked. Access to the raw file will be released after 1 minute.
+1. On the top bar, select **Menu >** **{admin}** **Admin**.
+1. In the left sidebar, select **Settings > Network**.
+1. Expand **Performance optimization**.
+
+For example, requests over `300` per minute to `https://gitlab.com/gitlab-org/gitlab-foss/raw/master/app/controllers/application_controller.rb` are blocked. Access to the raw file is released after 1 minute.
 
 ![Rate limits on raw endpoints](img/rate_limits_on_raw_endpoints.png)
 

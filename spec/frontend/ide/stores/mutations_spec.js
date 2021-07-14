@@ -55,30 +55,6 @@ describe('Multi-file store mutations', () => {
     });
   });
 
-  describe('SET_LEFT_PANEL_COLLAPSED', () => {
-    it('sets left panel collapsed', () => {
-      mutations.SET_LEFT_PANEL_COLLAPSED(localState, true);
-
-      expect(localState.leftPanelCollapsed).toBeTruthy();
-
-      mutations.SET_LEFT_PANEL_COLLAPSED(localState, false);
-
-      expect(localState.leftPanelCollapsed).toBeFalsy();
-    });
-  });
-
-  describe('SET_RIGHT_PANEL_COLLAPSED', () => {
-    it('sets right panel collapsed', () => {
-      mutations.SET_RIGHT_PANEL_COLLAPSED(localState, true);
-
-      expect(localState.rightPanelCollapsed).toBeTruthy();
-
-      mutations.SET_RIGHT_PANEL_COLLAPSED(localState, false);
-
-      expect(localState.rightPanelCollapsed).toBeFalsy();
-    });
-  });
-
   describe('CLEAR_STAGED_CHANGES', () => {
     it('clears stagedFiles array', () => {
       localState.stagedFiles.push('a');
@@ -122,8 +98,8 @@ describe('Multi-file store mutations', () => {
   describe('CREATE_TMP_ENTRY', () => {
     beforeEach(() => {
       localState.currentProjectId = 'gitlab-ce';
-      localState.currentBranchId = 'master';
-      localState.trees['gitlab-ce/master'] = {
+      localState.currentBranchId = 'main';
+      localState.trees['gitlab-ce/main'] = {
         tree: [],
       };
     });
@@ -137,30 +113,10 @@ describe('Multi-file store mutations', () => {
           },
           treeList: [tmpFile],
         },
-        projectId: 'gitlab-ce',
-        branchId: 'master',
       });
 
-      expect(localState.trees['gitlab-ce/master'].tree.length).toEqual(1);
+      expect(localState.trees['gitlab-ce/main'].tree.length).toEqual(1);
       expect(localState.entries.test.tempFile).toEqual(true);
-    });
-
-    it('marks entry as replacing previous entry if the old one has been deleted', () => {
-      const tmpFile = file('test');
-      localState.entries.test = { ...tmpFile, deleted: true };
-      mutations.CREATE_TMP_ENTRY(localState, {
-        data: {
-          entries: {
-            test: { ...tmpFile, tempFile: true, changed: true },
-          },
-          treeList: [tmpFile],
-        },
-        projectId: 'gitlab-ce',
-        branchId: 'master',
-      });
-
-      expect(localState.trees['gitlab-ce/master'].tree.length).toEqual(1);
-      expect(localState.entries.test.replaces).toEqual(true);
     });
   });
 
@@ -207,8 +163,8 @@ describe('Multi-file store mutations', () => {
   describe('DELETE_ENTRY', () => {
     beforeEach(() => {
       localState.currentProjectId = 'gitlab-ce';
-      localState.currentBranchId = 'master';
-      localState.trees['gitlab-ce/master'] = {
+      localState.currentBranchId = 'main';
+      localState.trees['gitlab-ce/main'] = {
         tree: [],
       };
     });
@@ -228,11 +184,11 @@ describe('Multi-file store mutations', () => {
         path: 'filePath',
         deleted: false,
       };
-      localState.trees['gitlab-ce/master'].tree.push(localState.entries.filePath);
+      localState.trees['gitlab-ce/main'].tree.push(localState.entries.filePath);
 
       mutations.DELETE_ENTRY(localState, 'filePath');
 
-      expect(localState.trees['gitlab-ce/master'].tree).toEqual([]);
+      expect(localState.trees['gitlab-ce/main'].tree).toEqual([]);
     });
 
     it('removes from parent tree', () => {
@@ -273,7 +229,7 @@ describe('Multi-file store mutations', () => {
       expect(localState.changedFiles).toEqual([]);
     });
 
-    it('removes tempFile from changedFiles when deleted', () => {
+    it('removes tempFile from changedFiles and stagedFiles when deleted', () => {
       localState.entries.filePath = {
         path: 'filePath',
         deleted: false,
@@ -282,20 +238,12 @@ describe('Multi-file store mutations', () => {
       };
 
       localState.changedFiles.push({ ...localState.entries.filePath });
+      localState.stagedFiles.push({ ...localState.entries.filePath });
 
       mutations.DELETE_ENTRY(localState, 'filePath');
 
       expect(localState.changedFiles).toEqual([]);
-    });
-
-    it('bursts unused seal', () => {
-      localState.entries.test = file('test');
-
-      expect(localState.unusedSeal).toBe(true);
-
-      mutations.DELETE_ENTRY(localState, 'test');
-
-      expect(localState.unusedSeal).toBe(false);
+      expect(localState.stagedFiles).toEqual([]);
     });
   });
 
@@ -305,10 +253,6 @@ describe('Multi-file store mutations', () => {
         ...file('test'),
         prevPath: 'testing-123',
         rawPath: `${TEST_HOST}/testing-123`,
-        permalink: `${TEST_HOST}/testing-123`,
-        commitsPath: `${TEST_HOST}/testing-123`,
-        blamePath: `${TEST_HOST}/testing-123`,
-        replaces: true,
       };
       localState.entries.test = f;
       localState.changedFiles.push(f);
@@ -323,46 +267,24 @@ describe('Multi-file store mutations', () => {
       expect(f).toEqual(
         expect.objectContaining({
           rawPath: `${TEST_HOST}/test`,
-          permalink: `${TEST_HOST}/test`,
-          commitsPath: `${TEST_HOST}/test`,
-          blamePath: `${TEST_HOST}/test`,
-          replaces: false,
           prevId: undefined,
           prevPath: undefined,
           prevName: undefined,
-          prevUrl: undefined,
           prevKey: undefined,
         }),
       );
     });
   });
 
-  describe('OPEN_NEW_ENTRY_MODAL', () => {
-    it('sets entryModal', () => {
-      localState.entries.testPath = file();
-
-      mutations.OPEN_NEW_ENTRY_MODAL(localState, {
-        type: 'test',
-        path: 'testPath',
-      });
-
-      expect(localState.entryModal).toEqual({
-        type: 'test',
-        path: 'testPath',
-        entry: localState.entries.testPath,
-      });
-    });
-  });
-
   describe('RENAME_ENTRY', () => {
     beforeEach(() => {
       localState.trees = {
-        'gitlab-ce/master': {
+        'gitlab-ce/main': {
           tree: [],
         },
       };
       localState.currentProjectId = 'gitlab-ce';
-      localState.currentBranchId = 'master';
+      localState.currentBranchId = 'main';
       localState.entries = {
         oldPath: file('oldPath', 'oldPath', 'blob'),
       };
@@ -412,7 +334,6 @@ describe('Multi-file store mutations', () => {
       };
       Object.assign(localState.entries['root-folder/oldPath'], {
         parentPath: 'root-folder',
-        url: 'root-folder/oldPath-blob-root-folder/oldPath',
       });
 
       mutations.RENAME_ENTRY(localState, {
@@ -441,9 +362,6 @@ describe('Multi-file store mutations', () => {
     });
 
     it('renames entry, preserving old parameters', () => {
-      Object.assign(localState.entries.oldPath, {
-        url: `project/-/oldPath`,
-      });
       const oldPathData = localState.entries.oldPath;
 
       mutations.RENAME_ENTRY(localState, {
@@ -457,12 +375,10 @@ describe('Multi-file store mutations', () => {
         id: 'newPath',
         path: 'newPath',
         name: 'newPath',
-        url: `project/-/newPath`,
         key: expect.stringMatching('newPath'),
         prevId: 'oldPath',
         prevName: 'oldPath',
         prevPath: 'oldPath',
-        prevUrl: `project/-/oldPath`,
         prevKey: oldPathData.key,
         prevParentPath: oldPathData.parentPath,
       });
@@ -484,7 +400,6 @@ describe('Multi-file store mutations', () => {
           prevId: expect.anything(),
           prevName: expect.anything(),
           prevPath: expect.anything(),
-          prevUrl: expect.anything(),
           prevKey: expect.anything(),
           prevParentPath: expect.anything(),
         }),
@@ -494,7 +409,7 @@ describe('Multi-file store mutations', () => {
     it('properly handles files with spaces in name', () => {
       const path = 'my fancy path';
       const newPath = 'new path';
-      const oldEntry = { ...file(path, path, 'blob'), url: `project/-/${path}` };
+      const oldEntry = file(path, path, 'blob');
 
       localState.entries[path] = oldEntry;
 
@@ -510,12 +425,10 @@ describe('Multi-file store mutations', () => {
         id: newPath,
         path: newPath,
         name: newPath,
-        url: `project/-/new path`,
         key: expect.stringMatching(newPath),
         prevId: path,
         prevName: path,
         prevPath: path,
-        prevUrl: `project/-/my fancy path`,
         prevKey: oldEntry.key,
         prevParentPath: oldEntry.parentPath,
       });
@@ -549,7 +462,7 @@ describe('Multi-file store mutations', () => {
         gamma,
       };
 
-      localState.trees['gitlab-ce/master'].tree = [alpha, beta, gamma];
+      localState.trees['gitlab-ce/main'].tree = [alpha, beta, gamma];
 
       mutations.RENAME_ENTRY(localState, {
         path: 'alpha',
@@ -558,7 +471,7 @@ describe('Multi-file store mutations', () => {
         parentPath: '',
       });
 
-      expect(localState.trees['gitlab-ce/master'].tree).toEqual([
+      expect(localState.trees['gitlab-ce/main'].tree).toEqual([
         expect.objectContaining({
           name: 'beta',
         }),
@@ -624,7 +537,7 @@ describe('Multi-file store mutations', () => {
 
     it('correctly saves original values if an entry is renamed multiple times', () => {
       const original = { ...localState.entries.oldPath };
-      const paramsToCheck = ['prevId', 'prevPath', 'prevName', 'prevUrl'];
+      const paramsToCheck = ['prevId', 'prevPath', 'prevName'];
       const expectedObj = paramsToCheck.reduce(
         (o, param) => ({ ...o, [param]: original[param.replace('prev', '').toLowerCase()] }),
         {},
@@ -652,7 +565,6 @@ describe('Multi-file store mutations', () => {
           prevId: 'lorem/orig',
           prevPath: 'lorem/orig',
           prevName: 'orig',
-          prevUrl: 'project/-/loren/orig',
           prevKey: 'lorem/orig',
           prevParentPath: 'lorem',
         };
@@ -677,7 +589,6 @@ describe('Multi-file store mutations', () => {
             prevId: undefined,
             prevPath: undefined,
             prevName: undefined,
-            prevUrl: undefined,
             prevKey: undefined,
             prevParentPath: undefined,
           }),

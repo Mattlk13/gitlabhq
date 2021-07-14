@@ -3,15 +3,26 @@
 module Groups
   module Settings
     class CiCdController < Groups::ApplicationController
+      include RunnerSetupScripts
+
+      layout 'group_settings'
       skip_cross_project_access_check :show
       before_action :authorize_admin_group!
       before_action :authorize_update_max_artifacts_size!, only: [:update]
-      before_action do
-        push_frontend_feature_flag(:new_variables_ui, @group)
-      end
-      before_action :define_variables, only: [:show, :create_deploy_token]
+      before_action :define_variables, only: [:show]
+      before_action :push_licensed_features, only: [:show]
+
+      feature_category :continuous_integration
+
+      NUMBER_OF_RUNNERS_PER_PAGE = 4
 
       def show
+        runners_finder = Ci::RunnersFinder.new(current_user: current_user, group: @group, params: params)
+        # We need all runners for count
+        @all_group_runners = runners_finder.execute.except(:limit, :offset)
+        @group_runners = runners_finder.execute.page(params[:page]).per(NUMBER_OF_RUNNERS_PER_PAGE)
+
+        @sort = runners_finder.sort_key
       end
 
       def update
@@ -41,21 +52,14 @@ module Groups
         redirect_to group_settings_ci_cd_path
       end
 
-      def create_deploy_token
-        @new_deploy_token = Groups::DeployTokens::CreateService.new(@group, current_user, deploy_token_params).execute
-
-        if @new_deploy_token.persisted?
-          flash.now[:notice] = s_('DeployTokens|Your new group deploy token has been created.')
-        end
-
-        render 'show'
+      def runner_setup_scripts
+        private_runner_setup_scripts
       end
 
       private
 
       def define_variables
         define_ci_variables
-        define_deploy_token_variables
       end
 
       def define_ci_variables
@@ -63,12 +67,6 @@ module Groups
           .present(current_user: current_user)
         @variables = group.variables.order_key_asc
           .map { |variable| variable.present(current_user: current_user) }
-      end
-
-      def define_deploy_token_variables
-        @deploy_tokens = @group.deploy_tokens.active
-
-        @new_deploy_token = DeployToken.new
       end
 
       def authorize_admin_group!
@@ -95,9 +93,11 @@ module Groups
         params.require(:group).permit(:max_artifacts_size)
       end
 
-      def deploy_token_params
-        params.require(:deploy_token).permit(:name, :expires_at, :read_repository, :read_registry, :username)
+      # Overridden in EE
+      def push_licensed_features
       end
     end
   end
 end
+
+Groups::Settings::CiCdController.prepend_mod_with('Groups::Settings::CiCdController')

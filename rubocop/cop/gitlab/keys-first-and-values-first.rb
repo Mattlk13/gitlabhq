@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module RuboCop
   module Cop
     module Gitlab
@@ -26,7 +28,7 @@ module RuboCop
                            elsif node.descendants.first.method_name == :keys
                              '.each_key'
                            else
-                             throw("Expect '.values.first' or '.keys.first', but get #{node.descendants.first.method_name}.first")
+                             throw("Expect '.values.first' or '.keys.first', but get #{node.descendants.first.method_name}.first") # rubocop:disable Cop/BanCatchThrow
                            end
 
             upto_including_keys_or_values = node.descendants.first.source_range

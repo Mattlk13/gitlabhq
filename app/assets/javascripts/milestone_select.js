@@ -1,18 +1,19 @@
-/* eslint-disable one-var, no-else-return, no-self-compare, consistent-return, no-param-reassign, no-shadow */
+/* eslint-disable one-var, no-self-compare, consistent-return, no-param-reassign, no-shadow */
 /* global Issuable */
 /* global ListMilestone */
 
 import $ from 'jquery';
-import _ from 'underscore';
-import { __ } from '~/locale';
-import '~/gl_dropdown';
-import axios from './lib/utils/axios_utils';
-import { timeFor } from './lib/utils/datetime_utility';
-import ModalStore from './boards/stores/modal_store';
+import { template, escape } from 'lodash';
+import Api from '~/api';
+import initDeprecatedJQueryDropdown from '~/deprecated_jquery_dropdown';
+import { __, sprintf } from '~/locale';
+import { sortMilestonesByDueDate } from '~/milestones/milestone_utils';
 import boardsStore, {
   boardStoreIssueSet,
   boardStoreIssueDelete,
 } from './boards/stores/boards_store';
+import axios from './lib/utils/axios_utils';
+import { timeFor, parsePikadayDate, dateInWords } from './lib/utils/datetime_utility';
 
 export default class MilestoneSelect {
   constructor(currentProject, els, options = {}) {
@@ -34,10 +35,10 @@ export default class MilestoneSelect {
     $els.each((i, dropdown) => {
       let milestoneLinkNoneTemplate,
         milestoneLinkTemplate,
+        milestoneExpiredLinkTemplate,
         selectedMilestone,
         selectedMilestoneDefault;
       const $dropdown = $(dropdown);
-      const milestonesUrl = $dropdown.data('milestones');
       const issueUpdateURL = $dropdown.data('issueUpdate');
       const showNo = $dropdown.data('showNo');
       const showAny = $dropdown.data('showAny');
@@ -52,70 +53,110 @@ export default class MilestoneSelect {
       const $block = $selectBox.closest('.block');
       const $sidebarCollapsedValue = $block.find('.sidebar-collapsed-icon');
       const $value = $block.find('.value');
-      // eslint-disable-next-line no-jquery/no-fade
-      const $loading = $block.find('.block-loading').fadeOut();
+      const $loading = $block.find('.block-loading').addClass('gl-display-none');
       selectedMilestoneDefault = showAny ? '' : null;
       selectedMilestoneDefault =
-        showNo && defaultNo ? __('No Milestone') : selectedMilestoneDefault;
+        showNo && defaultNo ? __('No milestone') : selectedMilestoneDefault;
       selectedMilestone = $dropdown.data('selected') || selectedMilestoneDefault;
 
       if (issueUpdateURL) {
-        milestoneLinkTemplate = _.template(
+        milestoneLinkTemplate = template(
           '<a href="<%- web_url %>" class="bold has-tooltip" data-container="body" title="<%- remaining %>"><%- title %></a>',
+        );
+        milestoneExpiredLinkTemplate = template(
+          '<a href="<%- web_url %>" class="bold has-tooltip" data-container="body" title="<%- remaining %>"><%- title %> (Past due)</a>',
         );
         milestoneLinkNoneTemplate = `<span class="no-value">${__('None')}</span>`;
       }
-      return $dropdown.glDropdown({
+      return initDeprecatedJQueryDropdown($dropdown, {
         showMenuAbove,
-        data: (term, callback) =>
-          axios.get(milestonesUrl).then(({ data }) => {
-            const extraOptions = [];
-            if (showAny) {
-              extraOptions.push({
-                id: null,
-                name: null,
-                title: __('Any Milestone'),
-              });
-            }
-            if (showNo) {
-              extraOptions.push({
-                id: -1,
-                name: __('No Milestone'),
-                title: __('No Milestone'),
-              });
-            }
-            if (showUpcoming) {
-              extraOptions.push({
-                id: -2,
-                name: '#upcoming',
-                title: __('Upcoming'),
-              });
-            }
-            if (showStarted) {
-              extraOptions.push({
-                id: -3,
-                name: '#started',
-                title: __('Started'),
-              });
-            }
-            if (extraOptions.length) {
-              extraOptions.push({ type: 'divider' });
-            }
+        data: (term, callback) => {
+          let contextId = parseInt($dropdown.get(0).dataset.projectId, 10);
+          let getMilestones = Api.projectMilestones.bind(Api);
+          const reqParams = { state: 'active', include_parent_milestones: true };
 
-            callback(extraOptions.concat(data));
-            if (showMenuAbove) {
-              $dropdown.data('glDropdown').positionMenuAbove();
-            }
-            $(`[data-milestone-id="${_.escape(selectedMilestone)}"] > a`).addClass('is-active');
-          }),
-        renderRow: milestone => `
-          <li data-milestone-id="${_.escape(milestone.name)}">
+          if (term) {
+            reqParams.search = term.trim();
+          }
+
+          if (!contextId) {
+            contextId = $dropdown.get(0).dataset.groupId;
+            delete reqParams.include_parent_milestones;
+            getMilestones = Api.groupMilestones.bind(Api);
+          }
+
+          // We don't use $.data() as it caches initial value and never updates!
+          return getMilestones(contextId, reqParams)
+            .then(({ data }) =>
+              data
+                .map((m) => ({
+                  ...m,
+                  // Public API includes `title` instead of `name`.
+                  name: m.title,
+                }))
+                .sort(sortMilestonesByDueDate),
+            )
+            .then((data) => {
+              const extraOptions = [];
+              if (showAny) {
+                extraOptions.push({
+                  id: null,
+                  name: null,
+                  title: __('Any milestone'),
+                });
+              }
+              if (showNo && term.trim() === '') {
+                extraOptions.push({
+                  id: -1,
+                  name: __('No milestone'),
+                  title: __('No milestone'),
+                });
+              }
+              if (showUpcoming) {
+                extraOptions.push({
+                  id: -2,
+                  name: '#upcoming',
+                  title: __('Upcoming'),
+                });
+              }
+              if (showStarted) {
+                extraOptions.push({
+                  id: -3,
+                  name: '#started',
+                  title: __('Started'),
+                });
+              }
+              if (extraOptions.length) {
+                extraOptions.push({ type: 'divider' });
+              }
+
+              callback(extraOptions.concat(data));
+              if (showMenuAbove) {
+                $dropdown.data('deprecatedJQueryDropdown').positionMenuAbove();
+              }
+              $(`[data-milestone-id="${selectedMilestone}"] > a`).addClass('is-active');
+            });
+        },
+        renderRow: (milestone) => {
+          const milestoneName = milestone.title || milestone.name;
+          let milestoneDisplayName = escape(milestoneName);
+
+          if (milestone.expired) {
+            milestoneDisplayName = sprintf(__('%{milestone} (expired)'), {
+              milestone: milestoneDisplayName,
+            });
+          }
+
+          return `
+          <li data-milestone-id="${escape(milestoneName)}">
             <a href='#' class='dropdown-menu-milestone-link'>
-              ${_.escape(milestone.title)}
+              ${milestoneDisplayName}
             </a>
           </li>
-        `,
+        `;
+        },
         filterable: true,
+        filterRemote: true,
         search: {
           fields: ['title'],
         },
@@ -123,17 +164,18 @@ export default class MilestoneSelect {
         toggleLabel: (selected, el) => {
           if (selected && 'id' in selected && $(el).hasClass('is-active')) {
             return selected.title;
-          } else {
-            return defaultLabel;
           }
+          return defaultLabel;
         },
         defaultLabel,
         fieldName: $dropdown.data('fieldName'),
-        text: milestone => _.escape(milestone.title),
-        id: milestone => {
-          if (!useId && !$dropdown.is('.js-issuable-form-dropdown')) {
-            return milestone.name;
-          } else {
+        text: (milestone) => escape(milestone.title),
+        id: (milestone) => {
+          if (milestone !== undefined) {
+            if (!useId && !$dropdown.is('.js-issuable-form-dropdown')) {
+              return milestone.name;
+            }
+
             return milestone.id;
           }
         },
@@ -142,20 +184,20 @@ export default class MilestoneSelect {
           // display:block overrides the hide-collapse rule
           return $value.css('display', '');
         },
-        opened: e => {
+        opened: (e) => {
           const $el = $(e.currentTarget);
           if ($dropdown.hasClass('js-issue-board-sidebar') || options.handleClick) {
             selectedMilestone = $dropdown[0].dataset.selected || selectedMilestoneDefault;
           }
           $('a.is-active', $el).removeClass('is-active');
-          $(`[data-milestone-id="${_.escape(selectedMilestone)}"] > a`, $el).addClass('is-active');
+          $(`[data-milestone-id="${selectedMilestone}"] > a`, $el).addClass('is-active');
         },
         vue: $dropdown.hasClass('js-issue-board-sidebar'),
-        clicked: clickEvent => {
+        clicked: (clickEvent) => {
           const { e } = clickEvent;
           let selected = clickEvent.selectedObj;
 
-          let data, modalStoreFilter;
+          let data;
           if (!selected) return;
 
           if (options.handleClick) {
@@ -178,14 +220,7 @@ export default class MilestoneSelect {
             return;
           }
 
-          if ($dropdown.closest('.add-issues-modal').length) {
-            modalStoreFilter = ModalStore.store.filter;
-          }
-
-          if (modalStoreFilter) {
-            modalStoreFilter[$dropdown.data('fieldName')] = selected.name;
-            e.preventDefault();
-          } else if ($dropdown.hasClass('js-filter-submit') && (isIssueIndex || isMRIndex)) {
+          if ($dropdown.hasClass('js-filter-submit') && (isIssueIndex || isMRIndex)) {
             return Issuable.filterResults($dropdown.closest('form'));
           } else if ($dropdown.hasClass('js-filter-submit')) {
             return $dropdown.closest('form').submit();
@@ -203,40 +238,44 @@ export default class MilestoneSelect {
             }
 
             $dropdown.trigger('loading.gl.dropdown');
-            // eslint-disable-next-line no-jquery/no-fade
-            $loading.removeClass('hidden').fadeIn();
+            $loading.removeClass('gl-display-none');
 
             boardsStore.detail.issue
               .update($dropdown.attr('data-issue-update'))
               .then(() => {
                 $dropdown.trigger('loaded.gl.dropdown');
-                // eslint-disable-next-line no-jquery/no-fade
-                $loading.fadeOut();
+                $loading.addClass('gl-display-none');
               })
               .catch(() => {
-                // eslint-disable-next-line no-jquery/no-fade
-                $loading.fadeOut();
+                $loading.addClass('gl-display-none');
               });
           } else {
             selected = $selectBox.find('input[type="hidden"]').val();
             data = {};
             data[abilityName] = {};
             data[abilityName].milestone_id = selected != null ? selected : null;
-            // eslint-disable-next-line no-jquery/no-fade
-            $loading.removeClass('hidden').fadeIn();
+            $loading.removeClass('gl-display-none');
             $dropdown.trigger('loading.gl.dropdown');
             return axios
               .put(issueUpdateURL, data)
               .then(({ data }) => {
                 $dropdown.trigger('loaded.gl.dropdown');
-                // eslint-disable-next-line no-jquery/no-fade
-                $loading.fadeOut();
+                $loading.addClass('gl-display-none');
                 $selectBox.hide();
                 $value.css('display', '');
                 if (data.milestone != null) {
                   data.milestone.remaining = timeFor(data.milestone.due_date);
                   data.milestone.name = data.milestone.title;
-                  $value.html(milestoneLinkTemplate(data.milestone));
+                  $value.html(
+                    data.milestone.expired
+                      ? milestoneExpiredLinkTemplate({
+                          ...data.milestone,
+                          remaining: sprintf(__('%{due_date} (Past due)'), {
+                            due_date: dateInWords(parsePikadayDate(data.milestone.due_date)),
+                          }),
+                        })
+                      : milestoneLinkTemplate(data.milestone),
+                  );
                   return $sidebarCollapsedValue
                     .attr(
                       'data-original-title',
@@ -244,17 +283,15 @@ export default class MilestoneSelect {
                     )
                     .find('span')
                     .text(data.milestone.title);
-                } else {
-                  $value.html(milestoneLinkNoneTemplate);
-                  return $sidebarCollapsedValue
-                    .attr('data-original-title', __('Milestone'))
-                    .find('span')
-                    .text(__('None'));
                 }
+                $value.html(milestoneLinkNoneTemplate);
+                return $sidebarCollapsedValue
+                  .attr('data-original-title', __('Milestone'))
+                  .find('span')
+                  .text(__('None'));
               })
               .catch(() => {
-                // eslint-disable-next-line no-jquery/no-fade
-                $loading.fadeOut();
+                $loading.addClass('gl-display-none');
               });
           }
         },

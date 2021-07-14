@@ -4,6 +4,7 @@ class Notify < ApplicationMailer
   include ActionDispatch::Routing::PolymorphicRoutes
   include GitlabRoutingHelper
   include EmailsHelper
+  include ReminderEmailsHelper
   include IssuablesHelper
 
   include Emails::Issues
@@ -17,16 +18,23 @@ class Notify < ApplicationMailer
   include Emails::AutoDevops
   include Emails::RemoteMirrors
   include Emails::Releases
+  include Emails::Groups
+  include Emails::Reviews
+  include Emails::ServiceDesk
+  include Emails::InProductMarketing
+  include Emails::AdminNotification
 
-  helper MilestonesHelper
+  helper TimeboxesHelper
   helper MergeRequestsHelper
   helper DiffHelper
   helper BlobHelper
   helper EmailsHelper
+  helper ReminderEmailsHelper
   helper MembersHelper
   helper AvatarsHelper
   helper GitlabRoutingHelper
   helper IssuablesHelper
+  helper InProductMarketingHelper
 
   def test_email(recipient_email, subject, body)
     mail(to: recipient_email,
@@ -63,7 +71,7 @@ class Notify < ApplicationMailer
     return unless sender = User.find(sender_id)
 
     address = default_sender_address
-    address.display_name = sender_name.presence || sender.name
+    address.display_name = sender_name.presence || "#{sender.name} (#{sender.to_reference})"
 
     if send_from_user_email && can_send_from_user_email?(sender)
       address.address = sender.email
@@ -171,7 +179,7 @@ class Notify < ApplicationMailer
     headers['In-Reply-To'] = message_id(note.references.last)
     headers['References'] = note.references.map { |ref| message_id(ref) }
 
-    headers['X-GitLab-Discussion-ID'] = note.discussion.id if note.part_of_discussion?
+    headers['X-GitLab-Discussion-ID'] = note.discussion.id if note.part_of_discussion? || note.can_be_discussion_note?
 
     headers[:subject] = "Re: #{headers[:subject]}" if headers[:subject]
 
@@ -216,4 +224,4 @@ class Notify < ApplicationMailer
   end
 end
 
-Notify.prepend_if_ee('EE::Notify')
+Notify.prepend_mod_with('Notify')

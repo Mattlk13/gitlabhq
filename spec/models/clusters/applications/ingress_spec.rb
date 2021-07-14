@@ -2,7 +2,7 @@
 
 require 'spec_helper'
 
-describe Clusters::Applications::Ingress do
+RSpec.describe Clusters::Applications::Ingress do
   let(:ingress) { create(:clusters_applications_ingress) }
 
   it_behaves_like 'having unique enum values'
@@ -21,26 +21,60 @@ describe Clusters::Applications::Ingress do
   describe '#can_uninstall?' do
     subject { ingress.can_uninstall? }
 
-    it 'returns true if external ip is set and no application exists' do
-      ingress.external_ip = 'IP'
+    context 'with jupyter installed' do
+      before do
+        create(:clusters_applications_jupyter, :installed, cluster: ingress.cluster)
+      end
 
-      is_expected.to be_truthy
+      it 'returns false if external_ip_or_hostname? is true' do
+        ingress.external_ip = 'IP'
+
+        is_expected.to be_falsey
+      end
+
+      it 'returns false if external_ip_or_hostname? is false' do
+        is_expected.to be_falsey
+      end
     end
 
-    it 'returns false if application_jupyter_nil_or_installable? is false' do
-      create(:clusters_applications_jupyter, :installed, cluster: ingress.cluster)
+    context 'with jupyter installable' do
+      before do
+        create(:clusters_applications_jupyter, :installable, cluster: ingress.cluster)
+      end
 
-      is_expected.to be_falsey
+      it 'returns true if external_ip_or_hostname? is true' do
+        ingress.external_ip = 'IP'
+
+        is_expected.to be_truthy
+      end
+
+      it 'returns false if external_ip_or_hostname? is false' do
+        is_expected.to be_falsey
+      end
     end
 
-    it 'returns false if application_elastic_stack_nil_or_installable? is false' do
-      create(:clusters_applications_elastic_stack, :installed, cluster: ingress.cluster)
+    context 'with jupyter nil' do
+      it 'returns false if external_ip_or_hostname? is false' do
+        is_expected.to be_falsey
+      end
 
-      is_expected.to be_falsey
-    end
+      context 'if external_ip_or_hostname? is true' do
+        context 'with IP' do
+          before do
+            ingress.external_ip = 'IP'
+          end
 
-    it 'returns false if external_ip_or_hostname? is false' do
-      is_expected.to be_falsey
+          it { is_expected.to be_truthy }
+        end
+
+        context 'with hostname' do
+          before do
+            ingress.external_hostname = 'example.com'
+          end
+
+          it { is_expected.to be_truthy }
+        end
+      end
     end
   end
 
@@ -97,12 +131,12 @@ describe Clusters::Applications::Ingress do
   describe '#install_command' do
     subject { ingress.install_command }
 
-    it { is_expected.to be_an_instance_of(Gitlab::Kubernetes::Helm::InstallCommand) }
+    it { is_expected.to be_an_instance_of(Gitlab::Kubernetes::Helm::V3::InstallCommand) }
 
     it 'is initialized with ingress arguments' do
       expect(subject.name).to eq('ingress')
-      expect(subject.chart).to eq('stable/nginx-ingress')
-      expect(subject.version).to eq('1.29.3')
+      expect(subject.chart).to eq('ingress/nginx-ingress')
+      expect(subject.version).to eq('1.40.2')
       expect(subject).to be_rbac
       expect(subject.files).to eq(ingress.files)
     end
@@ -119,7 +153,7 @@ describe Clusters::Applications::Ingress do
       let(:ingress) { create(:clusters_applications_ingress, :errored, version: 'nginx') }
 
       it 'is initialized with the locked version' do
-        expect(subject.version).to eq('1.29.3')
+        expect(subject.version).to eq('1.40.2')
       end
     end
   end
@@ -135,71 +169,7 @@ describe Clusters::Applications::Ingress do
       expect(values).to include('repository')
       expect(values).to include('stats')
       expect(values).to include('podAnnotations')
-    end
-  end
-
-  describe '#values' do
-    let(:project) { build(:project) }
-    let(:cluster) { build(:cluster, projects: [project]) }
-
-    context 'when modsecurity_enabled is enabled' do
-      before do
-        allow(subject).to receive(:cluster).and_return(cluster)
-
-        allow(subject).to receive(:modsecurity_enabled).and_return(true)
-      end
-
-      it 'includes modsecurity module enablement' do
-        expect(subject.values).to include("enable-modsecurity: 'true'")
-      end
-
-      it 'includes modsecurity core ruleset enablement' do
-        expect(subject.values).to include("enable-owasp-modsecurity-crs: 'true'")
-      end
-
-      it 'includes modsecurity.conf content' do
-        expect(subject.values).to include('modsecurity.conf')
-        # Includes file content from Ingress#modsecurity_config_content
-        expect(subject.values).to include('SecAuditLog')
-
-        expect(subject.values).to include('extraVolumes')
-        expect(subject.values).to include('extraVolumeMounts')
-      end
-
-      it 'includes modsecurity sidecar container' do
-        expect(subject.values).to include('modsecurity-log-volume')
-
-        expect(subject.values).to include('extraContainers')
-      end
-    end
-
-    context 'when modsecurity_enabled is disabled' do
-      before do
-        allow(subject).to receive(:cluster).and_return(cluster)
-      end
-
-      it 'excludes modsecurity module enablement' do
-        expect(subject.values).not_to include('enable-modsecurity')
-      end
-
-      it 'excludes modsecurity core ruleset enablement' do
-        expect(subject.values).not_to include('enable-owasp-modsecurity-crs')
-      end
-
-      it 'excludes modsecurity.conf content' do
-        expect(subject.values).not_to include('modsecurity.conf')
-        # Excludes file content from Ingress#modsecurity_config_content
-        expect(subject.values).not_to include('SecAuditLog')
-
-        expect(subject.values).not_to include('extraVolumes')
-        expect(subject.values).not_to include('extraVolumeMounts')
-      end
-
-      it 'excludes modsecurity sidecar container' do
-        expect(subject.values).not_to include('modsecurity-log-volume')
-
-        expect(subject.values).not_to include('extraContainers')
-      end
+      expect(values).to include('clusterIP')
     end
   end
 end

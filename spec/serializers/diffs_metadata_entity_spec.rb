@@ -2,7 +2,7 @@
 
 require 'spec_helper'
 
-describe DiffsMetadataEntity do
+RSpec.describe DiffsMetadataEntity do
   let(:user) { create(:user) }
   let(:project) { create(:project, :repository) }
   let(:request) { EntityRequest.new(project: project, current_user: user) }
@@ -28,8 +28,10 @@ describe DiffsMetadataEntity do
         :start_version, :latest_diff, :latest_version_path,
         :added_lines, :removed_lines, :render_overflow_warning,
         :email_patch_path, :plain_diff_path,
-        :merge_request_diffs,
-        :context_commits,
+        :merge_request_diffs, :context_commits, :context_commits_diff,
+        :definition_path_prefix, :source_branch_exists,
+        :can_merge, :conflict_resolution_path, :has_conflicts,
+        :project_name, :project_path, :user_full_name, :username,
         # Attributes
         :diff_files
       )

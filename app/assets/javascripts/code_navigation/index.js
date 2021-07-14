@@ -1,14 +1,18 @@
 import Vue from 'vue';
 import Vuex from 'vuex';
-import store from './store';
 import App from './components/app.vue';
+import createStore from './store';
 
-Vue.use(Vuex);
-
-export default () => {
+export default (initialData) => {
   const el = document.getElementById('js-code-navigation');
 
-  store.dispatch('setInitialData', el.dataset);
+  if (!el) return null;
+
+  Vue.use(Vuex);
+
+  const store = createStore();
+
+  store.dispatch('setInitialData', initialData);
 
   return new Vue({
     el,

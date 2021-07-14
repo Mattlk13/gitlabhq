@@ -3,17 +3,29 @@
 module Avatarable
   extend ActiveSupport::Concern
 
+  USER_AVATAR_SIZES = [16, 20, 23, 24, 26, 32, 36, 38, 40, 48, 60, 64, 90, 96, 120, 160].freeze
+  PROJECT_AVATAR_SIZES = [15, 40, 48, 64, 88].freeze
+  GROUP_AVATAR_SIZES = [15, 37, 38, 39, 40, 64, 96].freeze
+
+  ALLOWED_IMAGE_SCALER_WIDTHS = (USER_AVATAR_SIZES | PROJECT_AVATAR_SIZES | GROUP_AVATAR_SIZES).freeze
+
+  # This value must not be bigger than then: https://gitlab.com/gitlab-org/gitlab/-/blob/master/workhorse/config.toml.example#L20
+  #
+  # https://docs.gitlab.com/ee/development/image_scaling.html
+  MAXIMUM_FILE_SIZE = 200.kilobytes.to_i
+
   included do
     prepend ShadowMethods
     include ObjectStorage::BackgroundMove
     include Gitlab::Utils::StrongMemoize
 
     validate :avatar_type, if: ->(user) { user.avatar.present? && user.avatar_changed? }
-    validates :avatar, file_size: { maximum: 200.kilobytes.to_i }, if: :avatar_changed?
+    validates :avatar, file_size: { maximum: MAXIMUM_FILE_SIZE }, if: :avatar_changed?
 
     mount_uploader :avatar, AvatarUploader
 
     after_initialize :add_avatar_to_batch
+    after_commit :clear_avatar_caches
   end
 
   module ShadowMethods
@@ -33,6 +45,12 @@ module Avatarable
       upload = super if upload.nil?
 
       upload
+    end
+  end
+
+  class_methods do
+    def bot_avatar(image:)
+      Rails.root.join('lib', 'assets', 'images', 'bot_avatars', image).open
     end
   end
 
@@ -114,5 +132,11 @@ module Avatarable
 
   def avatar_mounter
     strong_memoize(:avatar_mounter) { _mounter(:avatar) }
+  end
+
+  def clear_avatar_caches
+    return unless respond_to?(:verified_emails) && verified_emails.any? && avatar_changed?
+
+    Gitlab::AvatarCache.delete_by_email(*verified_emails)
   end
 end

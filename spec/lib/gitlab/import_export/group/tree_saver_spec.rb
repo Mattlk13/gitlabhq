@@ -2,166 +2,82 @@
 
 require 'spec_helper'
 
-describe Gitlab::ImportExport::Group::TreeSaver do
+RSpec.describe Gitlab::ImportExport::Group::TreeSaver do
   describe 'saves the group tree into a json object' do
+    let_it_be(:user) { create(:user) }
+    let_it_be(:group) { setup_groups }
+
     let(:shared) { Gitlab::ImportExport::Shared.new(group) }
-    let(:group_tree_saver) { described_class.new(group: group, current_user: user, shared: shared) }
     let(:export_path) { "#{Dir.tmpdir}/group_tree_saver_spec" }
-    let(:user) { create(:user) }
-    let!(:group) { setup_group }
+
+    subject(:group_tree_saver) { described_class.new(group: group, current_user: user, shared: shared) }
+
+    before_all do
+      group.add_maintainer(user)
+    end
 
     before do
-      group.add_maintainer(user)
-      allow_any_instance_of(Gitlab::ImportExport).to receive(:storage_path).and_return(export_path)
+      allow_next_instance_of(Gitlab::ImportExport) do |import_export|
+        allow(import_export).to receive(:storage_path).and_return(export_path)
+      end
     end
 
     after do
       FileUtils.rm_rf(export_path)
     end
 
-    it 'saves group successfully' do
+    it 'saves the group successfully' do
       expect(group_tree_saver.save).to be true
     end
 
-    context ':export_fast_serialize feature flag checks' do
-      before do
-        expect(Gitlab::ImportExport::Reader).to receive(:new).with(shared: shared, config: group_config).and_return(reader)
-        expect(reader).to receive(:group_tree).and_return(group_tree)
+    it 'fails to export a group' do
+      allow_next_instance_of(Gitlab::ImportExport::Json::NdjsonWriter) do |ndjson_writer|
+        allow(ndjson_writer).to receive(:write_relation_array).and_raise(RuntimeError, 'exception')
       end
 
-      let(:reader) { instance_double('Gitlab::ImportExport::Reader') }
-      let(:group_config) { Gitlab::ImportExport::Config.new(config: Gitlab::ImportExport.group_config_file).to_h }
-      let(:group_tree) do
-        {
-          include: [{ milestones: { include: [] } }],
-          preload: { milestones: nil }
-        }
-      end
+      expect(shared).to receive(:error).with(RuntimeError).and_call_original
 
-      context 'when :export_fast_serialize feature is enabled' do
-        let(:serializer) { instance_double(Gitlab::ImportExport::FastHashSerializer) }
-
-        before do
-          stub_feature_flags(export_fast_serialize: true)
-
-          expect(Gitlab::ImportExport::FastHashSerializer).to receive(:new).with(group, group_tree).and_return(serializer)
-        end
-
-        it 'uses FastHashSerializer' do
-          expect(serializer).to receive(:execute)
-
-          group_tree_saver.save
-        end
-      end
-
-      context 'when :export_fast_serialize feature is disabled' do
-        before do
-          stub_feature_flags(export_fast_serialize: false)
-        end
-
-        it 'is serialized via built-in `as_json`' do
-          expect(group).to receive(:as_json).with(group_tree).and_call_original
-
-          group_tree_saver.save
-        end
-      end
+      expect(group_tree_saver.save).to be false
     end
 
-    # It is mostly duplicated in
-    # `spec/lib/gitlab/import_export/fast_hash_serializer_spec.rb`
-    # except:
-    # context 'with description override' do
-    # context 'group members' do
-    # ^ These are specific for the Group::TreeSaver
-    context 'JSON' do
-      let(:saved_group_json) do
+    context 'exported files' do
+      before do
         group_tree_saver.save
-        group_json(group_tree_saver.full_path)
       end
 
-      it 'saves the correct json' do
-        expect(saved_group_json).to include({ 'description' => 'description' })
+      it 'has one group per line' do
+        groups_catalog =
+          File.readlines(exported_path_for('_all.ndjson'))
+          .map { |line| Integer(line) }
+
+        expect(groups_catalog.size).to eq(3)
+        expect(groups_catalog).to eq([
+          group.id,
+          group.descendants.first.id,
+          group.descendants.first.descendants.first.id
+        ])
       end
 
-      it 'has milestones' do
-        expect(saved_group_json['milestones']).not_to be_empty
-      end
+      it 'has a file per group' do
+        group.self_and_descendants.pluck(:id).each do |id|
+          group_attributes_file = exported_path_for("#{id}.json")
 
-      it 'has labels' do
-        expect(saved_group_json['labels']).not_to be_empty
-      end
-
-      it 'has boards' do
-        expect(saved_group_json['boards']).not_to be_empty
-      end
-
-      it 'has board label list' do
-        expect(saved_group_json['boards'].first['lists']).not_to be_empty
-      end
-
-      it 'has group members' do
-        expect(saved_group_json['members']).not_to be_empty
-      end
-
-      it 'has priorities associated to labels' do
-        expect(saved_group_json['labels'].first['priorities']).not_to be_empty
-      end
-
-      it 'has badges' do
-        expect(saved_group_json['badges']).not_to be_empty
-      end
-
-      context 'group children' do
-        let(:children) { group.children }
-
-        it 'exports group children' do
-          expect(saved_group_json['children'].length).to eq(children.count)
-        end
-
-        it 'exports group children of children' do
-          expect(saved_group_json['children'].first['children'].length).to eq(children.first.children.count)
+          expect(File.exist?(group_attributes_file)).to be(true)
         end
       end
 
-      context 'group members' do
-        let(:user2) { create(:user, email: 'group@member.com') }
-        let(:member_emails) do
-          saved_group_json['members'].map do |pm|
-            pm['user']['email']
-          end
+      context 'group attributes file' do
+        let(:group_attributes_file) { exported_path_for("#{group.id}.json") }
+        let(:group_attributes) { ::JSON.parse(File.read(group_attributes_file)) }
+
+        it 'has a file for each group with its attributes' do
+          expect(group_attributes['description']).to eq(group.description)
+          expect(group_attributes['parent_id']).to eq(group.parent_id)
         end
 
-        before do
-          group.add_developer(user2)
-        end
-
-        it 'exports group members as group owner' do
-          group.add_owner(user)
-
-          expect(member_emails).to include('group@member.com')
-        end
-
-        context 'as admin' do
-          let(:user) { create(:admin) }
-
-          it 'exports group members as admin' do
-            expect(member_emails).to include('group@member.com')
-          end
-
-          it 'exports group members' do
-            member_types = saved_group_json['members'].map { |pm| pm['source_type'] }
-
-            expect(member_types).to all(eq('Namespace'))
-          end
-        end
-      end
-
-      context 'group attributes' do
         shared_examples 'excluded attributes' do
           excluded_attributes = %w[
-            id
             owner_id
-            parent_id
             created_at
             updated_at
             runners_token
@@ -171,32 +87,54 @@ describe Gitlab::ImportExport::Group::TreeSaver do
 
           excluded_attributes.each do |excluded_attribute|
             it 'does not contain excluded attribute' do
-              expect(saved_group_json).not_to include(excluded_attribute => group.public_send(excluded_attribute))
+              expect(group_attributes).not_to include(excluded_attribute => group.public_send(excluded_attribute))
             end
           end
         end
 
         include_examples 'excluded attributes'
       end
+
+      it 'has a file for each group association' do
+        group.self_and_descendants do |g|
+          %w[
+            badges
+            boards
+            epics
+            labels
+            members
+            milestones
+          ].each do |association|
+            path = exported_path_for("#{g.id}", "#{association}.ndjson")
+            expect(File.exist?(path)).to eq(true), "#{path} does not exist"
+          end
+        end
+      end
     end
   end
 
-  def setup_group
-    group = create(:group, description: 'description')
-    sub_group = create(:group, description: 'description', parent: group)
-    create(:group, description: 'description', parent: sub_group)
+  def exported_path_for(*file)
+    File.join(group_tree_saver.full_path, 'groups', *file)
+  end
+
+  def setup_groups
+    root = setup_group
+    subgroup = setup_group(parent: root)
+    setup_group(parent: subgroup)
+
+    root
+  end
+
+  def setup_group(parent: nil)
+    group = create(:group, description: 'description', parent: parent)
     create(:milestone, group: group)
     create(:group_badge, group: group)
     group_label = create(:group_label, group: group)
-    create(:label_priority, label: group_label, priority: 1)
     board = create(:board, group: group, milestone_id: Milestone::Upcoming.id)
     create(:list, board: board, label: group_label)
     create(:group_badge, group: group)
+    create(:label_priority, label: group_label, priority: 1)
 
     group
-  end
-
-  def group_json(filename)
-    JSON.parse(IO.read(filename))
   end
 end

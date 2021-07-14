@@ -2,6 +2,26 @@
 
 module Gitlab
   module ErrorTracking
+    # Exceptions in this group will receive custom Sentry fingerprinting
+    CUSTOM_FINGERPRINTING = %w[
+      Acme::Client::Error::BadNonce
+      Acme::Client::Error::NotFound
+      Acme::Client::Error::RateLimited
+      Acme::Client::Error::Timeout
+      Acme::Client::Error::UnsupportedOperation
+      ActiveRecord::ConnectionTimeoutError
+      Gitlab::RequestContext::RequestDeadlineExceeded
+      GRPC::DeadlineExceeded
+      JIRA::HTTPError
+      Rack::Timeout::RequestTimeoutException
+    ].freeze
+
+    PROCESSORS = [
+      ::Gitlab::ErrorTracking::Processor::SidekiqProcessor,
+      ::Gitlab::ErrorTracking::Processor::GrpcErrorProcessor,
+      ::Gitlab::ErrorTracking::Processor::ContextPayloadProcessor
+    ].freeze
+
     class << self
       def configure
         Raven.configure do |config|
@@ -11,29 +31,13 @@ module Gitlab
 
           # Sanitize fields based on those sanitized from Rails.
           config.sanitize_fields = Rails.application.config.filter_parameters.map(&:to_s)
+
           # Sanitize authentication headers
           config.sanitize_http_headers = %w[Authorization Private-Token]
-          config.tags = { program: Gitlab.process_name }
-          # Debugging for https://gitlab.com/gitlab-org/gitlab-foss/issues/57727
-          config.before_send = method(:add_context_from_exception_type)
+          config.before_send = method(:before_send)
+
+          yield config if block_given?
         end
-      end
-
-      def with_context(current_user = nil)
-        last_user_context = Raven.context.user
-
-        user_context = {
-          id: current_user&.id,
-          email: current_user&.email,
-          username: current_user&.username
-        }.compact
-
-        Raven.tags_context(default_tags)
-        Raven.user_context(user_context)
-
-        yield
-      ensure
-        Raven.user_context(last_user_context)
       end
 
       # This should be used when you want to passthrough exception handling:
@@ -92,36 +96,28 @@ module Gitlab
 
       private
 
-      def process_exception(exception, sentry: false, logging: true, extra:)
-        exception.try(:sentry_extra_data)&.tap do |data|
-          extra = extra.merge(data) if data.is_a?(Hash)
-        end
+      def before_send(event, hint)
+        inject_context_for_exception(event, hint[:exception])
+        custom_fingerprinting(event, hint[:exception])
 
-        extra = sanitize_request_parameters(extra)
-
-        if sentry && Raven.configuration.server
-          Raven.capture_exception(exception, tags: default_tags, extra: extra)
-        end
-
-        if logging
-          # TODO: this logic could migrate into `Gitlab::ExceptionLogFormatter`
-          # and we could also flatten deep nested hashes if required for search
-          # (e.g. if `extra` includes hash of hashes).
-          # In the current implementation, we don't flatten multi-level folded hashes.
-          log_hash = {}
-          Raven.context.tags.each { |name, value| log_hash["tags.#{name}"] = value }
-          Raven.context.user.each { |name, value| log_hash["user.#{name}"] = value }
-          Raven.context.extra.merge(extra).each { |name, value| log_hash["extra.#{name}"] = value }
-
-          Gitlab::ExceptionLogFormatter.format!(exception, log_hash)
-
-          Gitlab::ErrorTracking::Logger.error(log_hash)
+        PROCESSORS.reduce(event) do |processed_event, processor|
+          processor.call(processed_event)
         end
       end
 
-      def sanitize_request_parameters(parameters)
-        filter = ActiveSupport::ParameterFilter.new(::Rails.application.config.filter_parameters)
-        filter.filter(parameters)
+      def process_exception(exception, sentry: false, logging: true, extra:)
+        context_payload = Gitlab::ErrorTracking::ContextPayloadGenerator.generate(exception, extra)
+
+        if sentry && Raven.configuration.server
+          Raven.capture_exception(exception, **context_payload)
+        end
+
+        if logging
+          formatter = Gitlab::ErrorTracking::LogFormatter.new
+          log_hash = formatter.generate_log(exception, context_payload)
+
+          Gitlab::ErrorTracking::Logger.error(log_hash)
+        end
       end
 
       def sentry_dsn
@@ -135,26 +131,21 @@ module Gitlab
         Rails.env.development? || Rails.env.test?
       end
 
-      def default_tags
-        {
-          Labkit::Correlation::CorrelationId::LOG_KEY.to_sym => Labkit::Correlation::CorrelationId.current_id,
-          locale: I18n.locale
-        }
+      # Group common, mostly non-actionable exceptions by type and message,
+      # rather than cause
+      def custom_fingerprinting(event, ex)
+        return event unless CUSTOM_FINGERPRINTING.include?(ex.class.name)
+
+        event.fingerprint = [ex.class.name, ex.message]
       end
 
-      def add_context_from_exception_type(event, hint)
-        if ActiveModel::MissingAttributeError === hint[:exception]
-          columns_hash = ActiveRecord::Base
-                            .connection
-                            .schema_cache
-                            .instance_variable_get(:@columns_hash)
-                            .map { |k, v| [k, v.map(&:first)] }
-                            .to_h
-
-          event.extra.merge!(columns_hash)
+      def inject_context_for_exception(event, ex)
+        case ex
+        when ActiveRecord::StatementInvalid
+          event.extra[:sql] = PgQuery.normalize(ex.sql.to_s)
+        else
+          inject_context_for_exception(event, ex.cause) if ex.cause.present?
         end
-
-        event
       end
     end
   end

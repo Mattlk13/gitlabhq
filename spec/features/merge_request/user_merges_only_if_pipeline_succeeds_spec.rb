@@ -2,7 +2,7 @@
 
 require 'spec_helper'
 
-describe 'Merge request > User merges only if pipeline succeeds', :js do
+RSpec.describe 'Merge request > User merges only if pipeline succeeds', :js do
   let(:merge_request) { create(:merge_request_with_diffs) }
   let(:project)       { merge_request.target_project }
 
@@ -57,7 +57,7 @@ describe 'Merge request > User merges only if pipeline succeeds', :js do
           wait_for_requests
 
           expect(page).to have_css('button[disabled="disabled"]', text: 'Merge')
-          expect(page).to have_content('Please retry the job or push a new commit to fix the failure')
+          expect(page).to have_content('The pipeline for this merge request did not complete. Push a new commit to fix the failure, or check the troubleshooting documentation to see other possible actions.')
         end
       end
 
@@ -70,7 +70,7 @@ describe 'Merge request > User merges only if pipeline succeeds', :js do
           wait_for_requests
 
           expect(page).not_to have_button 'Merge'
-          expect(page).to have_content('Please retry the job or push a new commit to fix the failure')
+          expect(page).to have_content('The pipeline for this merge request did not complete. Push a new commit to fix the failure, or check the troubleshooting documentation to see other possible actions.')
         end
       end
 

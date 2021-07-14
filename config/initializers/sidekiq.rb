@@ -1,60 +1,52 @@
 # frozen_string_literal: true
-
-require 'sidekiq/web'
+module SidekiqLogArguments
+  def self.enabled?
+    Gitlab::Utils.to_boolean(ENV['SIDEKIQ_LOG_ARGUMENTS'], default: true)
+  end
+end
 
 def enable_reliable_fetch?
   return true unless Feature::FlipperFeature.table_exists?
 
-  Feature.enabled?(:gitlab_sidekiq_reliable_fetcher, default_enabled: true)
+  Feature.enabled?(:gitlab_sidekiq_reliable_fetcher, type: :ops, default_enabled: true)
 end
 
 def enable_semi_reliable_fetch_mode?
   return true unless Feature::FlipperFeature.table_exists?
 
-  Feature.enabled?(:gitlab_sidekiq_enable_semi_reliable_fetcher, default_enabled: true)
+  Feature.enabled?(:gitlab_sidekiq_enable_semi_reliable_fetcher, type: :ops, default_enabled: true)
 end
-
-# Disable the Sidekiq Rack session since GitLab already has its own session store.
-# CSRF protection still works (https://github.com/mperham/sidekiq/commit/315504e766c4fd88a29b7772169060afc4c40329).
-Sidekiq::Web.set :sessions, false
 
 # Custom Queues configuration
 queues_config_hash = Gitlab::Redis::Queues.params
 queues_config_hash[:namespace] = Gitlab::Redis::Queues::SIDEKIQ_NAMESPACE
 
-# Default is to retry 25 times with exponential backoff. That's too much.
-Sidekiq.default_worker_options = { retry: 3 }
-
-if Rails.env.development?
-  Sidekiq.default_worker_options[:backtrace] = true
-end
-
 enable_json_logs = Gitlab.config.sidekiq.log_format == 'json'
 enable_sidekiq_memory_killer = ENV['SIDEKIQ_MEMORY_KILLER_MAX_RSS'].to_i.nonzero?
-use_sidekiq_daemon_memory_killer = ENV["SIDEKIQ_DAEMON_MEMORY_KILLER"].to_i.nonzero?
+use_sidekiq_daemon_memory_killer = ENV.fetch("SIDEKIQ_DAEMON_MEMORY_KILLER", 1).to_i.nonzero?
 use_sidekiq_legacy_memory_killer = !use_sidekiq_daemon_memory_killer
-use_request_store = ENV.fetch('SIDEKIQ_REQUEST_STORE', 1).to_i.nonzero?
 
 Sidekiq.configure_server do |config|
-  config.redis = queues_config_hash
-
-  config.server_middleware(&Gitlab::SidekiqMiddleware.server_configurator({
-    metrics: Settings.monitoring.sidekiq_exporter,
-    arguments_logger: ENV['SIDEKIQ_LOG_ARGUMENTS'] && !enable_json_logs,
-    memory_killer: enable_sidekiq_memory_killer && use_sidekiq_legacy_memory_killer,
-    request_store: use_request_store
-  }))
-
   if enable_json_logs
     Sidekiq.logger.formatter = Gitlab::SidekiqLogging::JSONFormatter.new
     config.options[:job_logger] = Gitlab::SidekiqLogging::StructuredLogger
 
-    # Remove the default-provided handler
+    # Remove the default-provided handler. The exception is logged inside
+    # Gitlab::SidekiqLogging::StructuredLogger
     config.error_handlers.reject! { |handler| handler.is_a?(Sidekiq::ExceptionHandler::Logger) }
-    config.error_handlers << Gitlab::SidekiqLogging::ExceptionHandler.new
   end
 
+  config.redis = queues_config_hash
+
+  config.server_middleware(&Gitlab::SidekiqMiddleware.server_configurator({
+    metrics: Settings.monitoring.sidekiq_exporter,
+    arguments_logger: SidekiqLogArguments.enabled? && !enable_json_logs,
+    memory_killer: enable_sidekiq_memory_killer && use_sidekiq_legacy_memory_killer
+  }))
+
   config.client_middleware(&Gitlab::SidekiqMiddleware.client_configurator)
+
+  config.death_handlers << Gitlab::SidekiqDeathHandler.method(:handler)
 
   config.on :startup do
     # Clear any connections that might have been obtained before starting
@@ -77,7 +69,7 @@ Sidekiq.configure_server do |config|
 
   # Sidekiq-cron: load recurring jobs from gitlab.yml
   # UGLY Hack to get nested hash from settingslogic
-  cron_jobs = JSON.parse(Gitlab.config.cron_jobs.to_json)
+  cron_jobs = Gitlab::Json.parse(Gitlab.config.cron_jobs.to_json)
   # UGLY hack: Settingslogic doesn't allow 'class' key
   cron_jobs_required_keys = %w(job_class cron)
   cron_jobs.each do |k, v|
@@ -85,7 +77,7 @@ Sidekiq.configure_server do |config|
       cron_jobs[k]['class'] = cron_jobs[k].delete('job_class')
     else
       cron_jobs.delete(k)
-      Rails.logger.error("Invalid cron_jobs config key: '#{k}'. Check your gitlab config file.") # rubocop:disable Gitlab/RailsLogger
+      Gitlab::AppLogger.error("Invalid cron_jobs config key: '#{k}'. Check your gitlab config file.")
     end
   end
   Sidekiq::Cron::Job.load_from_hash! cron_jobs
@@ -108,6 +100,11 @@ end
 
 Sidekiq.configure_client do |config|
   config.redis = queues_config_hash
+  # We only need to do this for other clients. If Sidekiq-server is the
+  # client scheduling jobs, we have access to the regular sidekiq logger that
+  # writes to STDOUT
+  Sidekiq.logger = Gitlab::SidekiqLogging::ClientLogger.build
+  Sidekiq.logger.formatter = Gitlab::SidekiqLogging::JSONFormatter.new if enable_json_logs
 
   config.client_middleware(&Gitlab::SidekiqMiddleware.client_configurator)
 end

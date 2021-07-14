@@ -1,7 +1,9 @@
 #!/usr/bin/env ruby
+# frozen_string_literal: true
 
 require_relative '../spec/simplecov_env'
 SimpleCovEnv.configure_profile
+SimpleCovEnv.configure_formatter
 
 module SimpleCov
   module ResultMerger
@@ -13,7 +15,7 @@ module SimpleCov
       def resultset_hashes
         resultset_files.map do |path|
           JSON.parse(File.read(path))
-        rescue
+        rescue StandardError
           {}
         end
       end

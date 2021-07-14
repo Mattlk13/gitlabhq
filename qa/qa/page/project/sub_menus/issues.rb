@@ -5,35 +5,32 @@ module QA
     module Project
       module SubMenus
         module Issues
-          include Page::Project::SubMenus::Common
+          extend QA::Page::PageConcern
 
           def self.included(base)
+            super
+
             base.class_eval do
-              view 'app/views/layouts/nav/sidebar/_project.html.haml' do
-                element :issue_boards_link
-                element :issues_item
-                element :labels_link
-                element :milestones_link
-              end
+              include QA::Page::Project::SubMenus::Common
             end
           end
 
           def click_issues
             within_sidebar do
-              click_link('Issues')
+              click_element(:sidebar_menu_link, menu_item: 'Issues')
             end
           end
 
           def click_milestones
             within_sidebar do
-              click_element :milestones_link
+              click_element(:sidebar_menu_item_link, menu_item: 'Milestones')
             end
           end
 
           def go_to_boards
             hover_issues do
               within_submenu do
-                click_element(:issue_boards_link)
+                click_element(:sidebar_menu_item_link, menu_item: 'Boards')
               end
             end
           end
@@ -41,7 +38,15 @@ module QA
           def go_to_labels
             hover_issues do
               within_submenu do
-                click_element(:labels_link)
+                click_element(:sidebar_menu_item_link, menu_item: 'Labels')
+              end
+            end
+          end
+
+          def go_to_milestones
+            hover_issues do
+              within_submenu do
+                click_element(:sidebar_menu_item_link, menu_item: 'Milestones')
               end
             end
           end
@@ -50,8 +55,8 @@ module QA
 
           def hover_issues
             within_sidebar do
-              scroll_to_element(:issues_item)
-              find_element(:issues_item).hover
+              scroll_to_element(:sidebar_menu_link, menu_item: 'Issues')
+              find_element(:sidebar_menu_link, menu_item: 'Issues').hover
 
               yield
             end

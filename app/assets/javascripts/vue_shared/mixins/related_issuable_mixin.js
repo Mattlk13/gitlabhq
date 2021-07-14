@@ -1,8 +1,6 @@
-import _ from 'underscore';
-import { sprintf, __ } from '~/locale';
+import { isEmpty } from 'lodash';
 import { formatDate } from '~/lib/utils/datetime_utility';
-import tooltip from '~/vue_shared/directives/tooltip';
-import icon from '~/vue_shared/components/icon.vue';
+import { sprintf, __ } from '~/locale';
 import timeagoMixin from '~/vue_shared/mixins/timeago';
 
 const mixins = {
@@ -100,12 +98,6 @@ const mixins = {
       default: () => ({}),
     },
   },
-  components: {
-    icon,
-  },
-  directives: {
-    tooltip,
-  },
   mixins: [timeagoMixin],
   computed: {
     hasState() {
@@ -115,7 +107,7 @@ const mixins = {
       return this.isMergeRequest && this.pipelineStatus && Object.keys(this.pipelineStatus).length;
     },
     isOpen() {
-      return this.state === 'opened';
+      return this.state === 'opened' || this.state === 'reopened';
     },
     isClosed() {
       return this.state === 'closed';
@@ -130,7 +122,7 @@ const mixins = {
       return this.assignees.length > 0;
     },
     hasMilestone() {
-      return !_.isEmpty(this.milestone);
+      return !isEmpty(this.milestone);
     },
     iconName() {
       if (this.isMergeRequest && this.isMerged) {
@@ -144,7 +136,9 @@ const mixins = {
         return 'merge-request-status closed issue-token-state-icon-closed';
       }
 
-      return this.isOpen ? 'issue-token-state-icon-open' : 'issue-token-state-icon-closed';
+      return this.isOpen
+        ? 'issue-token-state-icon-open gl-text-green-500'
+        : 'issue-token-state-icon-closed gl-text-blue-500';
     },
     computedLinkElementType() {
       return this.path.length > 0 ? 'a' : 'span';
@@ -181,7 +175,7 @@ const mixins = {
         return __('Merged');
       }
 
-      return this.isOpen ? __('Opened') : __('Closed');
+      return this.isOpen ? __('Created') : __('Closed');
     },
     stateTimeInWords() {
       if (this.isMerged) {

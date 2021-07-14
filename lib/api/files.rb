@@ -1,13 +1,15 @@
 # frozen_string_literal: true
 
 module API
-  class Files < Grape::API
+  class Files < ::API::Base
     include APIGuard
 
     FILE_ENDPOINT_REQUIREMENTS = API::NAMESPACE_OR_PROJECT_REQUIREMENTS.merge(file_path: API::NO_SLASH_URL_PART_REGEX)
 
     # Prevents returning plain/text responses for files with .txt extension
     after_validation { content_type "application/json" }
+
+    feature_category :source_code_management
 
     helpers ::API::Helpers::HeadersHelpers
 
@@ -56,7 +58,7 @@ module API
           ref: params[:ref],
           blob_id: @blob.id,
           commit_id: @commit.id,
-          last_commit_id: @repo.last_commit_id_for_path(@commit.sha, params[:file_path])
+          last_commit_id: @repo.last_commit_id_for_path(@commit.sha, params[:file_path], literal_pathspec: true)
         }
       end
 
@@ -111,7 +113,7 @@ module API
       desc 'Get raw file metadata from repository'
       params do
         requires :file_path, type: String, file_path: true, desc: 'The url encoded path to the file. Ex. lib%2Fclass%2Erb'
-        requires :ref, type: String, desc: 'The name of branch, tag or commit', allow_blank: false
+        optional :ref, type: String, desc: 'The name of branch, tag or commit', allow_blank: false
       end
       head ":id/repository/files/:file_path/raw", requirements: FILE_ENDPOINT_REQUIREMENTS do
         assign_file_vars!
@@ -122,7 +124,7 @@ module API
       desc 'Get raw file contents from the repository'
       params do
         requires :file_path, type: String, file_path: true, desc: 'The url encoded path to the file. Ex. lib%2Fclass%2Erb'
-        requires :ref, type: String, desc: 'The name of branch, tag commit', allow_blank: false
+        optional :ref, type: String, desc: 'The name of branch, tag or commit', allow_blank: false
       end
       get ":id/repository/files/:file_path/raw", requirements: FILE_ENDPOINT_REQUIREMENTS do
         assign_file_vars!

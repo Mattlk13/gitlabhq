@@ -2,7 +2,7 @@
 
 require 'spec_helper'
 
-describe Types::PermissionTypes::BasePermissionType do
+RSpec.describe Types::PermissionTypes::BasePermissionType do
   let(:permitable) { double('permittable') }
   let(:current_user) { build(:user) }
   let(:context) { { current_user: current_user } }
@@ -11,21 +11,25 @@ describe Types::PermissionTypes::BasePermissionType do
     Class.new(described_class) do
       graphql_name 'TestClass'
 
-      permission_field :do_stuff, resolve: -> (_, _, _) { true }
+      permission_field :do_stuff
       ability_field(:read_issue)
       abilities :admin_issue
+
+      define_method :do_stuff do
+        true
+      end
     end
   end
 
   describe '.permission_field' do
     it 'adds a field for the required permission' do
-      is_expected.to have_graphql_field(:do_stuff)
+      expect(test_type).to have_graphql_field(:do_stuff)
     end
   end
 
   describe '.ability_field' do
     it 'adds a field for the required permission' do
-      is_expected.to have_graphql_field(:read_issue)
+      expect(test_type).to have_graphql_field(:read_issue)
     end
 
     it 'does not add a resolver block if another resolving param is passed' do
@@ -44,7 +48,7 @@ describe Types::PermissionTypes::BasePermissionType do
 
   describe '.abilities' do
     it 'adds a field for the passed permissions' do
-      is_expected.to have_graphql_field(:admin_issue)
+      expect(test_type).to have_graphql_field(:admin_issue)
     end
   end
 end

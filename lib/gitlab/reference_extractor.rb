@@ -4,7 +4,7 @@ module Gitlab
   # Extract possible GFM references from an arbitrary String for further processing.
   class ReferenceExtractor < Banzai::ReferenceExtractor
     REFERABLES = %i(user issue label milestone mentioned_user mentioned_group mentioned_project
-                    merge_request snippet commit commit_range directly_addressed_user epic).freeze
+                    merge_request snippet commit commit_range directly_addressed_user epic iteration vulnerability).freeze
     attr_accessor :project, :current_user, :author
     # This counter is increased by a number of references filtered out by
     # banzai reference exctractor. Note that this counter is stateful and
@@ -24,8 +24,8 @@ module Gitlab
       super(text, context.merge(project: project))
     end
 
-    def references(type)
-      refs = super(type, project, current_user)
+    def references(type, ids_only: false)
+      refs = super(type, project, current_user, ids_only: ids_only)
       @stateful_not_visible_counter += refs[:not_visible].count
 
       refs[:visible]
@@ -38,13 +38,19 @@ module Gitlab
     end
 
     REFERABLES.each do |type|
-      define_method("#{type}s") do
+      define_method(type.to_s.pluralize) do
         @references[type] ||= references(type)
+      end
+
+      if %w(mentioned_user mentioned_group mentioned_project).include?(type.to_s)
+        define_method("#{type}_ids") do
+          @references[type] ||= references(type, ids_only: true)
+        end
       end
     end
 
     def issues
-      if project && project.jira_tracker?
+      if project&.external_references_supported?
         if project.issues_enabled?
           @references[:all_issues] ||= references(:external_issue) + references(:issue)
         else

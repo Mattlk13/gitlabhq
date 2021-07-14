@@ -2,7 +2,7 @@
 
 require 'spec_helper'
 
-describe Gitlab::VisibilityLevel do
+RSpec.describe Gitlab::VisibilityLevel do
   describe '.level_value' do
     it 'converts "public" to integer value' do
       expect(described_class.level_value('public')).to eq(Gitlab::VisibilityLevel::PUBLIC)
@@ -22,13 +22,25 @@ describe Gitlab::VisibilityLevel do
   end
 
   describe '.levels_for_user' do
-    it 'returns all levels for an admin' do
-      user = build(:user, :admin)
+    context 'when admin mode is enabled', :enable_admin_mode do
+      it 'returns all levels for an admin' do
+        user = build(:user, :admin)
 
-      expect(described_class.levels_for_user(user))
-        .to eq([Gitlab::VisibilityLevel::PRIVATE,
-                Gitlab::VisibilityLevel::INTERNAL,
-                Gitlab::VisibilityLevel::PUBLIC])
+        expect(described_class.levels_for_user(user))
+          .to eq([Gitlab::VisibilityLevel::PRIVATE,
+                  Gitlab::VisibilityLevel::INTERNAL,
+                  Gitlab::VisibilityLevel::PUBLIC])
+      end
+    end
+
+    context 'when admin mode is disabled' do
+      it 'returns INTERNAL and PUBLIC for an admin' do
+        user = build(:user, :admin)
+
+        expect(described_class.levels_for_user(user))
+            .to eq([Gitlab::VisibilityLevel::INTERNAL,
+                    Gitlab::VisibilityLevel::PUBLIC])
+      end
     end
 
     it 'returns INTERNAL and PUBLIC for internal users' do
@@ -96,26 +108,51 @@ describe Gitlab::VisibilityLevel do
     end
   end
 
-  describe '#visibility_level_decreased?' do
-    let(:project) { create(:project, :internal) }
+  describe '.restricted_level?, .non_restricted_level?, and .public_level_restricted?' do
+    using RSpec::Parameterized::TableSyntax
 
-    context 'when visibility level decreases' do
-      before do
-        project.update!(visibility_level: described_class::PRIVATE)
-      end
-
-      it 'returns true' do
-        expect(project.visibility_level_decreased?).to be(true)
-      end
+    where(:visibility_levels, :expected_status) do
+      nil | false
+      [Gitlab::VisibilityLevel::PRIVATE] | false
+      [Gitlab::VisibilityLevel::PRIVATE, Gitlab::VisibilityLevel::INTERNAL] | false
+      [Gitlab::VisibilityLevel::PUBLIC] | true
+      [Gitlab::VisibilityLevel::PUBLIC, Gitlab::VisibilityLevel::INTERNAL] | true
     end
 
-    context 'when visibility level does not decrease' do
+    with_them do
       before do
-        project.update!(visibility_level: described_class::PUBLIC)
+        stub_application_setting(restricted_visibility_levels: visibility_levels)
       end
 
-      it 'returns false' do
-        expect(project.visibility_level_decreased?).to be(false)
+      it 'returns the expected status' do
+        expect(described_class.restricted_level?(Gitlab::VisibilityLevel::PUBLIC)).to eq(expected_status)
+        expect(described_class.non_restricted_level?(Gitlab::VisibilityLevel::PUBLIC)).to eq(!expected_status)
+        expect(described_class.public_visibility_restricted?).to eq(expected_status)
+      end
+    end
+  end
+
+  describe '.options' do
+    context 'keys' do
+      it 'returns the allowed visibility levels' do
+        expect(described_class.options.keys).to contain_exactly('Private', 'Internal', 'Public')
+      end
+    end
+  end
+
+  describe '.level_name' do
+    using RSpec::Parameterized::TableSyntax
+
+    where(:level_value, :level_name) do
+      described_class::PRIVATE | 'Private'
+      described_class::INTERNAL | 'Internal'
+      described_class::PUBLIC | 'Public'
+      non_existing_record_access_level | 'Unknown'
+    end
+
+    with_them do
+      it 'returns the name of the visibility level' do
+        expect(described_class.level_name(level_value)).to eq(level_name)
       end
     end
   end

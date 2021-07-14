@@ -2,13 +2,24 @@
 
 require 'spec_helper'
 
-describe Gitlab::EtagCaching::Middleware do
+RSpec.describe Gitlab::EtagCaching::Middleware, :clean_gitlab_redis_shared_state do
   let(:app) { double(:app) }
   let(:middleware) { described_class.new(app) }
   let(:app_status_code) { 200 }
   let(:if_none_match) { nil }
   let(:enabled_path) { '/gitlab-org/gitlab-foss/noteable/issue/1/notes' }
   let(:endpoint) { 'issue_notes' }
+
+  describe '.skip!' do
+    it 'sets the skip header on the response' do
+      rsp = ActionDispatch::Response.new
+      rsp.set_header('Anything', 'Else')
+
+      described_class.skip!(rsp)
+
+      expect(rsp.headers.to_h).to eq(described_class::SKIP_HEADER_KEY => '1', 'Anything' => 'Else')
+    end
+  end
 
   context 'when ETag caching is not enabled for current route' do
     let(:path) { '/gitlab-org/gitlab-foss/tree/master/noteable/issue/1/notes' }
@@ -17,16 +28,23 @@ describe Gitlab::EtagCaching::Middleware do
       mock_app_response
     end
 
-    it 'does not add ETag header' do
+    it 'does not add ETag headers' do
       _, headers, _ = middleware.call(build_request(path, if_none_match))
 
       expect(headers['ETag']).to be_nil
+      expect(headers['X-Gitlab-From-Cache']).to be_nil
     end
 
     it 'passes status code from app' do
       status, _, _ = middleware.call(build_request(path, if_none_match))
 
       expect(status).to eq app_status_code
+    end
+
+    it 'does not set feature category attribute' do
+      expect(Gitlab::ApplicationContext).not_to receive(:push)
+
+      _, _, _ = middleware.call(build_request(path, if_none_match))
     end
   end
 
@@ -68,10 +86,32 @@ describe Gitlab::EtagCaching::Middleware do
       mock_value_in_store('123')
     end
 
-    it 'returns this value as header' do
+    it 'returns the correct headers' do
       _, headers, _ = middleware.call(build_request(path, if_none_match))
 
       expect(headers['ETag']).to eq 'W/"123"'
+    end
+  end
+
+  context 'when the matching route requests that the ETag is skipped' do
+    let(:path) { enabled_path }
+    let(:app) do
+      proc do |_env|
+        response = ActionDispatch::Response.new
+
+        described_class.skip!(response)
+
+        [200, response.headers.to_h, '']
+      end
+    end
+
+    it 'returns the correct headers' do
+      expect(app).to receive(:call).and_call_original
+
+      _, headers, _ = middleware.call(build_request(path, if_none_match))
+
+      expect(headers).not_to have_key('ETag')
+      expect(headers).not_to have_key(described_class::SKIP_HEADER_KEY)
     end
   end
 
@@ -124,6 +164,20 @@ describe Gitlab::EtagCaching::Middleware do
       status, _, _ = middleware.call(build_request(path, if_none_match))
 
       expect(status).to eq 304
+    end
+
+    it 'sets correct headers' do
+      _, headers, _ = middleware.call(build_request(path, if_none_match))
+
+      expect(headers).to include('X-Gitlab-From-Cache' => 'true')
+    end
+
+    it "pushes route's feature category to the context" do
+      expect(Gitlab::ApplicationContext).to receive(:push).with(
+        feature_category: 'issue_tracking'
+      )
+
+      _, _, _ = middleware.call(build_request(path, if_none_match))
     end
 
     it_behaves_like 'sends a process_action.action_controller notification', 304

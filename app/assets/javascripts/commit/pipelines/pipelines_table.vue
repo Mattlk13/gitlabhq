@@ -1,31 +1,27 @@
 <script>
-import { GlButton, GlLoadingIcon } from '@gitlab/ui';
-import { GlBreakpointInstance as bp } from '@gitlab/ui/dist/utils';
+import { GlButton, GlEmptyState, GlLoadingIcon, GlModal, GlLink } from '@gitlab/ui';
+import { getParameterByName } from '~/lib/utils/url_utility';
+import PipelinesTableComponent from '~/pipelines/components/pipelines_list/pipelines_table.vue';
+import eventHub from '~/pipelines/event_hub';
+import PipelinesMixin from '~/pipelines/mixins/pipelines_mixin';
 import PipelinesService from '~/pipelines/services/pipelines_service';
 import PipelineStore from '~/pipelines/stores/pipelines_store';
-import pipelinesMixin from '~/pipelines/mixins/pipelines';
-import eventHub from '~/pipelines/event_hub';
 import TablePagination from '~/vue_shared/components/pagination/table_pagination.vue';
-import { getParameterByName } from '~/lib/utils/common_utils';
-import CIPaginationMixin from '~/vue_shared/mixins/ci_pagination_api_mixin';
+import glFeatureFlagMixin from '~/vue_shared/mixins/gl_feature_flags_mixin';
 
 export default {
   components: {
-    TablePagination,
     GlButton,
+    GlEmptyState,
+    GlLink,
     GlLoadingIcon,
+    GlModal,
+    PipelinesTableComponent,
+    TablePagination,
   },
-  mixins: [pipelinesMixin, CIPaginationMixin],
+  mixins: [PipelinesMixin, glFeatureFlagMixin()],
   props: {
     endpoint: {
-      type: String,
-      required: true,
-    },
-    helpPagePath: {
-      type: String,
-      required: true,
-    },
-    autoDevopsHelpPath: {
       type: String,
       required: true,
     },
@@ -38,10 +34,20 @@ export default {
       required: false,
       default: 'child',
     },
-    canRunPipeline: {
+    canCreatePipelineInTargetProject: {
       type: Boolean,
       required: false,
       default: false,
+    },
+    sourceProjectFullPath: {
+      type: String,
+      required: false,
+      default: '',
+    },
+    targetProjectFullPath: {
+      type: String,
+      required: false,
+      default: '',
     },
     projectId: {
       type: String,
@@ -63,6 +69,7 @@ export default {
       state: store.state,
       page: getParameterByName('page') || '1',
       requestData: {},
+      modalId: 'create-pipeline-for-fork-merge-request-modal',
     };
   },
 
@@ -74,14 +81,29 @@ export default {
       return this.hasError && !this.isLoading;
     },
     /**
-     * The Run Pipeline button can only be rendered when:
-     * - In MR view -  we use `canRunPipeline` for that purpose
+     * The "Run pipeline" button can only be rendered when:
+     * - In MR view -  we use `canCreatePipelineInTargetProject` for that purpose
      * - If the latest pipeline has the `detached_merge_request_pipeline` flag
      *
      * @returns {Boolean}
      */
     canRenderPipelineButton() {
-      return this.canRunPipeline && this.latestPipelineDetachedFlag;
+      return this.latestPipelineDetachedFlag;
+    },
+    isForkMergeRequest() {
+      return this.sourceProjectFullPath !== this.targetProjectFullPath;
+    },
+    isLatestPipelineCreatedInTargetProject() {
+      const latest = this.state.pipelines[0];
+
+      return latest?.project?.full_path === `/${this.targetProjectFullPath}`;
+    },
+    shouldShowSecurityWarning() {
+      return (
+        this.canCreatePipelineInTargetProject &&
+        this.isForkMergeRequest &&
+        !this.isLatestPipelineCreatedInTargetProject
+      );
     },
     /**
      * Checks if either `detached_merge_request_pipeline` or
@@ -98,16 +120,6 @@ export default {
         (latest.flags.detached_merge_request_pipeline || latest.flags.merge_request_pipeline)
       );
     },
-    /**
-     * When we are on Desktop and the button is visible
-     * we need to add a negative margin to the table
-     * to make it inline with the button
-     *
-     * @returns {Boolean}
-     */
-    shouldAddNegativeMargin() {
-      return this.canRenderPipelineButton && bp.isDesktop();
-    },
   },
   created() {
     this.service = new PipelinesService(this.endpoint);
@@ -121,19 +133,19 @@ export default {
       this.store.storePagination(resp.headers);
       this.setCommonData(pipelines);
 
-      const updatePipelinesEvent = new CustomEvent('update-pipelines-count', {
-        detail: {
-          pipelines: resp.data,
-        },
-      });
+      if (resp.headers?.['x-total']) {
+        const updatePipelinesEvent = new CustomEvent('update-pipelines-count', {
+          detail: { pipelineCount: resp.headers['x-total'] },
+        });
 
-      // notifiy to update the count in tabs
-      if (this.$el.parentElement) {
-        this.$el.parentElement.dispatchEvent(updatePipelinesEvent);
+        // notifiy to update the count in tabs
+        if (this.$el.parentElement) {
+          this.$el.parentElement.dispatchEvent(updatePipelinesEvent);
+        }
       }
     },
     /**
-     * When the user clicks on the Run Pipeline button
+     * When the user clicks on the "Run pipeline" button
      * we need to make a post request and
      * to update the table content once the request is finished.
      *
@@ -148,6 +160,13 @@ export default {
         mergeRequestId: this.mergeRequestId,
       });
     },
+    tryRunPipeline() {
+      if (!this.shouldShowSecurityWarning) {
+        this.onClickRunPipeline();
+      } else {
+        this.$refs.modal.show();
+      }
+    },
   },
 };
 </script>
@@ -155,42 +174,89 @@ export default {
   <div class="content-list pipelines">
     <gl-loading-icon
       v-if="isLoading"
-      :label="s__('Pipelines|Loading Pipelines')"
-      :size="3"
+      :label="s__('Pipelines|Loading pipelines')"
+      size="lg"
       class="prepend-top-20"
     />
 
-    <svg-blank-state
+    <gl-empty-state
       v-else-if="shouldRenderErrorState"
       :svg-path="errorStateSvgPath"
-      :message="
+      :title="
         s__(`Pipelines|There was an error fetching the pipelines.
-      Try again in a few moments or contact your support team.`)
+        Try again in a few moments or contact your support team.`)
       "
     />
 
-    <div v-else-if="shouldRenderTable" class="table-holder">
-      <div v-if="canRenderPipelineButton" class="nav justify-content-end">
-        <gl-button
-          v-if="canRenderPipelineButton"
-          variant="success"
-          class="js-run-mr-pipeline prepend-top-10 btn-wide-on-xs"
-          :disabled="state.isRunningMergeRequestPipeline"
-          @click="onClickRunPipeline"
-        >
-          <gl-loading-icon v-if="state.isRunningMergeRequestPipeline" inline />
-          {{ s__('Pipelines|Run Pipeline') }}
-        </gl-button>
-      </div>
+    <div v-else-if="shouldRenderTable">
+      <gl-button
+        v-if="canRenderPipelineButton"
+        block
+        class="gl-mt-3 gl-mb-3 gl-lg-display-none"
+        variant="confirm"
+        data-testid="run_pipeline_button_mobile"
+        :loading="state.isRunningMergeRequestPipeline"
+        @click="tryRunPipeline"
+      >
+        {{ s__('Pipeline|Run pipeline') }}
+      </gl-button>
 
       <pipelines-table-component
         :pipelines="state.pipelines"
         :update-graph-dropdown="updateGraphDropdown"
-        :auto-devops-help-path="autoDevopsHelpPath"
         :view-type="viewType"
-        :class="{ 'negative-margin-top': shouldAddNegativeMargin }"
-      />
+      >
+        <template #table-header-actions>
+          <div v-if="canRenderPipelineButton" class="gl-text-right">
+            <gl-button
+              variant="confirm"
+              data-testid="run_pipeline_button"
+              :loading="state.isRunningMergeRequestPipeline"
+              @click="tryRunPipeline"
+            >
+              {{ s__('Pipeline|Run pipeline') }}
+            </gl-button>
+          </div>
+        </template>
+      </pipelines-table-component>
     </div>
+
+    <gl-modal
+      v-if="canRenderPipelineButton"
+      :id="modalId"
+      ref="modal"
+      :modal-id="modalId"
+      :title="s__('Pipelines|Are you sure you want to run this pipeline?')"
+      :ok-title="s__('Pipeline|Run pipeline')"
+      ok-variant="danger"
+      @ok="onClickRunPipeline"
+    >
+      <p>
+        {{
+          s__(
+            'Pipelines|This pipeline will run code originating from a forked project merge request. This means that the code can potentially have security considerations like exposing CI variables.',
+          )
+        }}
+      </p>
+      <p>
+        {{
+          s__(
+            "Pipelines|It is recommended the code is reviewed thoroughly before running this pipeline with the parent project's CI resource.",
+          )
+        }}
+      </p>
+      <p>
+        {{
+          s__('Pipelines|If you are unsure, please ask a project maintainer to review it for you.')
+        }}
+      </p>
+      <gl-link
+        href="/help/ci/pipelines/merge_request_pipelines.html#run-pipelines-in-the-parent-project-for-merge-requests-from-a-forked-project"
+        target="_blank"
+      >
+        {{ s__('Pipelines|More Information') }}
+      </gl-link>
+    </gl-modal>
 
     <table-pagination
       v-if="shouldRenderPagination"

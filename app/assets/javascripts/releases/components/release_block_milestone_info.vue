@@ -1,18 +1,16 @@
 <script>
-import { GlProgressBar, GlLink, GlBadge, GlButton, GlTooltipDirective } from '@gitlab/ui';
+import { GlProgressBar, GlLink, GlButton, GlTooltipDirective } from '@gitlab/ui';
 import { __, n__, sprintf } from '~/locale';
 import { MAX_MILESTONES_TO_DISPLAY } from '../constants';
-
-/** Sums the values of an array. For use with Array.reduce. */
-const sumReducer = (acc, curr) => acc + curr;
+import IssuableStats from './issuable_stats.vue';
 
 export default {
   name: 'ReleaseBlockMilestoneInfo',
   components: {
     GlProgressBar,
     GlLink,
-    GlBadge,
     GlButton,
+    IssuableStats,
   },
   directives: {
     GlTooltip: GlTooltipDirective,
@@ -21,6 +19,31 @@ export default {
     milestones: {
       type: Array,
       required: true,
+    },
+    openedIssuesPath: {
+      type: String,
+      required: false,
+      default: '',
+    },
+    closedIssuesPath: {
+      type: String,
+      required: false,
+      default: '',
+    },
+    openedMergeRequestsPath: {
+      type: String,
+      required: false,
+      default: '',
+    },
+    mergedMergeRequestsPath: {
+      type: String,
+      required: false,
+      default: '',
+    },
+    closedMergeRequestsPath: {
+      type: String,
+      required: false,
+      default: '',
     },
   },
   data() {
@@ -36,29 +59,48 @@ export default {
       });
     },
     percentComplete() {
-      const percent = Math.round((this.closedIssuesCount / this.totalIssuesCount) * 100);
+      const percent = Math.round((this.issueCounts.closed / this.issueCounts.total) * 100);
       return Number.isNaN(percent) ? 0 : percent;
     },
-    allIssueStats() {
-      return this.milestones.map(m => m.issueStats || {});
+    issueCounts() {
+      return this.milestones
+        .map((m) => m.issueStats || {})
+        .reduce(
+          (acc, current) => {
+            acc.total += current.total || 0;
+            acc.closed += current.closed || 0;
+
+            return acc;
+          },
+          {
+            total: 0,
+            closed: 0,
+          },
+        );
     },
-    openIssuesCount() {
-      return this.allIssueStats.map(stats => stats.opened || 0).reduce(sumReducer);
+    showMergeRequestStats() {
+      return this.milestones.some((m) => m.mrStats);
     },
-    closedIssuesCount() {
-      return this.allIssueStats.map(stats => stats.closed || 0).reduce(sumReducer);
-    },
-    totalIssuesCount() {
-      return this.openIssuesCount + this.closedIssuesCount;
+    mergeRequestCounts() {
+      return this.milestones
+        .map((m) => m.mrStats || {})
+        .reduce(
+          (acc, current) => {
+            acc.total += current.total || 0;
+            acc.merged += current.merged || 0;
+            acc.closed += current.closed || 0;
+
+            return acc;
+          },
+          {
+            total: 0,
+            merged: 0,
+            closed: 0,
+          },
+        );
     },
     milestoneLabelText() {
       return n__('Milestone', 'Milestones', this.milestones.length);
-    },
-    issueCountsText() {
-      return sprintf(__('Open: %{open} • Closed: %{closed}'), {
-        open: this.openIssuesCount,
-        closed: this.closedIssuesCount,
-      });
     },
     milestonesToDisplay() {
       return this.showAllMilestones
@@ -90,32 +132,34 @@ export default {
 };
 </script>
 <template>
-  <div class="release-block-milestone-info d-flex align-items-start flex-wrap">
+  <div class="release-block-milestone-info gl-display-flex gl-flex-wrap">
     <div
       v-gl-tooltip
-      class="milestone-progress-bar-container js-milestone-progress-bar-container d-flex flex-column align-items-start flex-shrink-1 mr-4 mb-3"
+      class="milestone-progress-bar-container js-milestone-progress-bar-container gl-display-flex gl-flex-direction-column gl-mr-6 gl-mb-5"
       :title="__('Closed issues')"
     >
-      <span class="mb-2">{{ percentCompleteText }}</span>
-      <span class="w-100">
-        <gl-progress-bar :value="closedIssuesCount" :max="totalIssuesCount" variant="success" />
+      <span class="gl-mb-3">{{ percentCompleteText }}</span>
+      <span class="gl-w-full">
+        <gl-progress-bar :value="issueCounts.closed" :max="issueCounts.total" variant="success" />
       </span>
     </div>
-    <div class="d-flex flex-column align-items-start mr-4 mb-3 js-milestone-list-container">
-      <span class="mb-1">{{ milestoneLabelText }}</span>
-      <div class="d-flex flex-wrap align-items-end">
+    <div
+      class="gl-display-flex gl-flex-direction-column gl-mr-6 gl-mb-5 js-milestone-list-container"
+    >
+      <span class="gl-mb-2">{{ milestoneLabelText }}</span>
+      <div class="gl-display-flex gl-flex-wrap gl-align-items-flex-end">
         <template v-for="(milestone, index) in milestonesToDisplay">
           <gl-link
             :key="milestone.id"
             v-gl-tooltip
             :title="milestone.description"
             :href="milestone.webUrl"
-            class="append-right-4"
+            class="gl-mr-2"
           >
             {{ milestone.title }}
           </gl-link>
           <template v-if="shouldRenderBullet(index)">
-            <span :key="'bullet-' + milestone.id" class="append-right-4">&bull;</span>
+            <span :key="'bullet-' + milestone.id" class="gl-mr-2">&bull;</span>
           </template>
           <template v-if="shouldRenderShowMoreLink(index)">
             <gl-button :key="'more-button-' + milestone.id" variant="link" @click="toggleShowAll">
@@ -125,12 +169,24 @@ export default {
         </template>
       </div>
     </div>
-    <div class="d-flex flex-column align-items-start flex-shrink-0 mr-4 mb-3 js-issues-container">
-      <span class="mb-1">
-        {{ __('Issues') }}
-        <gl-badge pill variant="light" class="font-weight-bold">{{ totalIssuesCount }}</gl-badge>
-      </span>
-      {{ issueCountsText }}
-    </div>
+    <issuable-stats
+      :label="__('Issues')"
+      :total="issueCounts.total"
+      :closed="issueCounts.closed"
+      :opened-path="openedIssuesPath"
+      :closed-path="closedIssuesPath"
+      data-testid="issue-stats"
+    />
+    <issuable-stats
+      v-if="showMergeRequestStats"
+      :label="__('Merge requests')"
+      :total="mergeRequestCounts.total"
+      :merged="mergeRequestCounts.merged"
+      :closed="mergeRequestCounts.closed"
+      :opened-path="openedMergeRequestsPath"
+      :merged-path="mergedMergeRequestsPath"
+      :closed-path="closedMergeRequestsPath"
+      data-testid="merge-request-stats"
+    />
   </div>
 </template>

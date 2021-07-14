@@ -2,7 +2,7 @@
 
 require 'spec_helper'
 
-describe GoogleApi::CloudPlatform::Client do
+RSpec.describe GoogleApi::CloudPlatform::Client do
   let(:token) { 'token' }
   let(:client) { described_class.new(token, nil) }
   let(:user_agent_options) { client.instance_eval { user_agent_header } }
@@ -100,7 +100,6 @@ describe GoogleApi::CloudPlatform::Client do
             ]
           },
           master_auth: {
-            username: 'admin',
             client_certificate_config: {
               issue_client_certificate: true
             }

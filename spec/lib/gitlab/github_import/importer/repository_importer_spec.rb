@@ -2,7 +2,7 @@
 
 require 'spec_helper'
 
-describe Gitlab::GithubImport::Importer::RepositoryImporter do
+RSpec.describe Gitlab::GithubImport::Importer::RepositoryImporter do
   let(:repository) { double(:repository) }
   let(:import_state) { double(:import_state) }
   let(:client) { double(:client) }
@@ -11,8 +11,13 @@ describe Gitlab::GithubImport::Importer::RepositoryImporter do
     double(
       :wiki,
       disk_path: 'foo.wiki',
-      full_path: 'group/foo.wiki'
+      full_path: 'group/foo.wiki',
+      repository: wiki_repository
     )
+  end
+
+  let(:wiki_repository) do
+    double(:wiki_repository)
   end
 
   let(:project) do
@@ -200,7 +205,7 @@ describe Gitlab::GithubImport::Importer::RepositoryImporter do
         .with(project.import_url, refmap: Gitlab::GithubImport.refmap, forced: true, remote_name: 'github')
 
       service = double
-      expect(Projects::HousekeepingService)
+      expect(Repositories::HousekeepingService)
         .to receive(:new).with(project, :gc).and_return(service)
       expect(service).to receive(:execute)
 
@@ -221,17 +226,19 @@ describe Gitlab::GithubImport::Importer::RepositoryImporter do
 
   describe '#import_wiki_repository' do
     it 'imports the wiki repository' do
-      expect(importer.gitlab_shell)
+      expect(wiki_repository)
         .to receive(:import_repository)
-        .with('foo', 'foo.wiki', 'foo.wiki.git', 'group/foo.wiki')
+        .with(importer.wiki_url)
+        .and_return(true)
 
       expect(importer.import_wiki_repository).to eq(true)
     end
 
     it 'marks the import as failed and creates an empty repo if an error was raised' do
-      expect(importer.gitlab_shell)
+      expect(wiki_repository)
         .to receive(:import_repository)
-        .and_raise(Gitlab::Shell::Error)
+        .with(importer.wiki_url)
+        .and_raise(Gitlab::Git::CommandError)
 
       expect(importer)
         .to receive(:fail_import)
@@ -254,7 +261,7 @@ describe Gitlab::GithubImport::Importer::RepositoryImporter do
 
   describe '#update_clone_time' do
     it 'sets the timestamp for when the cloning process finished' do
-      Timecop.freeze do
+      freeze_time do
         expect(project)
           .to receive(:update_column)
           .with(:last_repository_updated_at, Time.zone.now)

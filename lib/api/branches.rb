@@ -3,14 +3,22 @@
 require 'mime/types'
 
 module API
-  class Branches < Grape::API
+  class Branches < ::API::Base
     include PaginationParams
 
     BRANCH_ENDPOINT_REQUIREMENTS = API::NAMESPACE_OR_PROJECT_REQUIREMENTS.merge(branch: API::NO_SLASH_URL_PART_REGEX)
 
+    after_validation { content_type "application/json" }
+
+    feature_category :source_code_management
+
     before do
       require_repository_enabled!
       authorize! :download_code, user_project
+    end
+
+    rescue_from Gitlab::Git::Repository::NoRepository do
+      not_found!
     end
 
     helpers do
@@ -30,23 +38,42 @@ module API
       params do
         use :pagination
         use :filter_params
+
+        optional :page_token, type: String, desc: 'Name of branch to start the paginaition from'
       end
       get ':id/repository/branches' do
-        user_project.preload_protected_branches
+        ff_enabled = Feature.enabled?(:api_caching_rate_limit_branches, user_project, default_enabled: :yaml)
 
-        repository = user_project.repository
+        cache_action_if(ff_enabled, [user_project, :branches, current_user, declared_params], expires_in: 30.seconds) do
+          user_project.preload_protected_branches
 
-        branches = BranchesFinder.new(repository, declared_params(include_missing: false)).execute
-        branches = paginate(::Kaminari.paginate_array(branches))
-        merged_branch_names = repository.merged_branch_names(branches.map(&:name))
+          repository = user_project.repository
 
-        present(
-          branches,
-          with: Entities::Branch,
-          current_user: current_user,
-          project: user_project,
-          merged_branch_names: merged_branch_names
-        )
+          branches_finder = BranchesFinder.new(repository, declared_params(include_missing: false))
+          branches = Gitlab::Pagination::GitalyKeysetPager.new(self, user_project).paginate(branches_finder)
+
+          merged_branch_names = repository.merged_branch_names(branches.map(&:name))
+
+          if Feature.enabled?(:api_caching_branches, user_project, type: :development, default_enabled: :yaml)
+            present_cached(
+              branches,
+              with: Entities::Branch,
+              current_user: current_user,
+              project: user_project,
+              merged_branch_names: merged_branch_names,
+              expires_in: 10.minutes,
+              cache_context: -> (branch) { [current_user&.cache_key, merged_branch_names.include?(branch.name)] }
+            )
+          else
+            present(
+              branches,
+              with: Entities::Branch,
+              current_user: current_user,
+              project: user_project,
+              merged_branch_names: merged_branch_names
+            )
+          end
+        end
       end
 
       resource ':id/repository/branches/:branch', requirements: BRANCH_ENDPOINT_REQUIREMENTS do

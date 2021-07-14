@@ -1,6 +1,6 @@
 <script>
-import { mapActions, mapState, mapGetters } from 'vuex';
 import { GlTooltipDirective } from '@gitlab/ui';
+import { mapActions, mapState, mapGetters } from 'vuex';
 
 export default {
   directives: {
@@ -64,9 +64,10 @@ export default {
         :disabled="disabled"
         type="radio"
         name="commit-action"
+        data-qa-selector="commit_type_radio"
         @change="updateCommitAction($event.target.value)"
       />
-      <span class="prepend-left-10">
+      <span class="gl-ml-3">
         <span v-if="label" class="ide-option-label"> {{ label }} </span> <slot v-else></slot>
       </span>
     </label>
@@ -74,6 +75,7 @@ export default {
       <input
         :placeholder="placeholderBranchName"
         :value="newBranchName"
+        data-testid="ide-new-branch-name"
         type="text"
         class="form-control monospace"
         @input="updateBranchName($event.target.value)"

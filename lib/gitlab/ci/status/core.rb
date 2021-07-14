@@ -3,13 +3,15 @@
 module Gitlab
   module Ci
     module Status
-      # Base abstract class fore core status
+      # Base abstract class for core status
       #
       class Core
         include Gitlab::Routing
         include Gitlab::Allowable
 
         attr_reader :subject, :user
+
+        delegate :cache_key, to: :subject
 
         def initialize(subject, user)
           @subject = subject

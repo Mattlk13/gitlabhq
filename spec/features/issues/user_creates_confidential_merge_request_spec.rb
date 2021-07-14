@@ -2,7 +2,7 @@
 
 require 'spec_helper'
 
-describe 'User creates confidential merge request on issue page', :js do
+RSpec.describe 'User creates confidential merge request on issue page', :js do
   include ProjectForksHelper
 
   let(:user) { create(:user) }
@@ -38,7 +38,7 @@ describe 'User creates confidential merge request on issue page', :js do
     let(:forked_project) { fork_project(project, user, repository: true) }
 
     before do
-      forked_project.update(visibility: Gitlab::VisibilityLevel::PRIVATE)
+      forked_project.update!(visibility: Gitlab::VisibilityLevel::PRIVATE)
       visit_confidential_issue
     end
 

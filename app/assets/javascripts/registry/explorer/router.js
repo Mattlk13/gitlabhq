@@ -1,13 +1,12 @@
 import Vue from 'vue';
 import VueRouter from 'vue-router';
-import { s__ } from '~/locale';
-import List from './pages/list.vue';
+import { CONTAINER_REGISTRY_TITLE } from './constants/index';
 import Details from './pages/details.vue';
-import { decodeAndParse } from './utils';
+import List from './pages/list.vue';
 
 Vue.use(VueRouter);
 
-export default function createRouter(base, store) {
+export default function createRouter(base, breadCrumbState) {
   const router = new VueRouter({
     base,
     mode: 'history',
@@ -17,12 +16,8 @@ export default function createRouter(base, store) {
         path: '/',
         component: List,
         meta: {
-          nameGenerator: () => s__('ContainerRegistry|Container Registry'),
+          nameGenerator: () => CONTAINER_REGISTRY_TITLE,
           root: true,
-        },
-        beforeEnter: (to, from, next) => {
-          store.dispatch('requestImagesList');
-          next();
         },
       },
       {
@@ -30,11 +25,7 @@ export default function createRouter(base, store) {
         path: '/:id',
         component: Details,
         meta: {
-          nameGenerator: route => decodeAndParse(route.params.id).name,
-        },
-        beforeEnter: (to, from, next) => {
-          store.dispatch('requestTagsList', { params: to.params.id });
-          next();
+          nameGenerator: () => breadCrumbState.name,
         },
       },
     ],

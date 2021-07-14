@@ -13,7 +13,7 @@ namespace :gitlab do
 
         print "#{user.name} (#{user.ldap_identity.extern_uid}) ..."
 
-        if Gitlab::Auth::LDAP::Access.allowed?(user)
+        if Gitlab::Auth::Ldap::Access.allowed?(user)
           puts " [OK]".color(:green)
         else
           if block_flag
@@ -56,12 +56,45 @@ namespace :gitlab do
     task orphan_job_artifact_files: :gitlab_environment do
       warn_user_is_not_gitlab
 
-      cleaner = Gitlab::Cleanup::OrphanJobArtifactFiles.new(limit: limit, dry_run: dry_run?, niceness: niceness, logger: logger)
+      cleaner = Gitlab::Cleanup::OrphanJobArtifactFiles.new(dry_run: dry_run?, niceness: niceness, logger: logger)
       cleaner.run!
 
       if dry_run?
         logger.info "To clean up these files run this command with DRY_RUN=false".color(:yellow)
       end
+    end
+
+    desc 'GitLab | Cleanup | Clean orphan LFS file references'
+    task orphan_lfs_file_references: :gitlab_environment do
+      warn_user_is_not_gitlab
+
+      project = find_project
+
+      unless project
+        logger.info "Specify the project with PROJECT_ID={number} or PROJECT_PATH={namespace/project-name}".color(:red)
+        exit
+      end
+
+      cleaner = Gitlab::Cleanup::OrphanLfsFileReferences.new(
+        project,
+        dry_run: dry_run?,
+        logger: logger
+      )
+
+      cleaner.run!
+
+      if dry_run?
+        logger.info "To clean up these files run this command with DRY_RUN=false".color(:yellow)
+      end
+    end
+
+    desc 'GitLab | Cleanup | Clean orphan LFS files'
+    task orphan_lfs_files: :gitlab_environment do
+      warn_user_is_not_gitlab
+
+      number_of_removed_files = RemoveUnreferencedLfsObjectsWorker.new.perform
+
+      logger.info "Removed unreferenced LFS files: #{number_of_removed_files}".color(:green)
     end
 
     namespace :sessions do
@@ -128,12 +161,16 @@ namespace :gitlab do
       ENV['DEBUG'].present?
     end
 
-    def limit
-      ENV['LIMIT']&.to_i
-    end
-
     def niceness
       ENV['NICENESS'].presence
+    end
+
+    def find_project
+      if ENV['PROJECT_ID']
+        Project.find_by_id(ENV['PROJECT_ID']&.to_i)
+      elsif ENV['PROJECT_PATH']
+        Project.find_by_full_path(ENV['PROJECT_PATH'])
+      end
     end
 
     # rubocop:disable Gitlab/RailsLogger
@@ -141,7 +178,7 @@ namespace :gitlab do
       return @logger if defined?(@logger)
 
       @logger = if Rails.env.development? || Rails.env.production?
-                  Logger.new(STDOUT).tap do |stdout_logger|
+                  Logger.new($stdout).tap do |stdout_logger|
                     stdout_logger.extend(ActiveSupport::Logger.broadcast(Rails.logger))
                     stdout_logger.level = debug? ? Logger::DEBUG : Logger::INFO
                   end

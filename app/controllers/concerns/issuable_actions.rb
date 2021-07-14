@@ -3,27 +3,12 @@
 module IssuableActions
   extend ActiveSupport::Concern
   include Gitlab::Utils::StrongMemoize
+  include Gitlab::Cache::Helpers
 
   included do
     before_action :authorize_destroy_issuable!, only: :destroy
     before_action :check_destroy_confirmation!, only: :destroy
     before_action :authorize_admin_issuable!, only: :bulk_update
-    before_action only: :show do
-      push_frontend_feature_flag(:scoped_labels, default_enabled: true)
-    end
-  end
-
-  def permitted_keys
-    [
-      :issuable_ids,
-      :assignee_id,
-      :milestone_id,
-      :state_event,
-      :subscription_event,
-      label_ids: [],
-      add_label_ids: [],
-      remove_label_ids: []
-    ]
   end
 
   def show
@@ -77,7 +62,7 @@ module IssuableActions
   end
 
   def destroy
-    Issuable::DestroyService.new(issuable.project, current_user).execute(issuable)
+    Issuable::DestroyService.new(project: issuable.project, current_user: current_user).execute(issuable)
 
     name = issuable.human_class_name
     flash[:notice] = "The #{name} was successfully deleted."
@@ -120,9 +105,13 @@ module IssuableActions
 
   def bulk_update
     result = Issuable::BulkUpdateService.new(parent, current_user, bulk_update_params).execute(resource_name)
-    quantity = result[:count]
 
-    render json: { notice: "#{quantity} #{resource_name.pluralize(quantity)} updated" }
+    if result.success?
+      quantity = result.payload[:count]
+      render json: { notice: "#{quantity} #{resource_name.pluralize(quantity)} updated" }
+    elsif result.error?
+      render json: { errors: result.message }, status: result.http_status
+    end
   end
 
   # rubocop:disable CodeReuse/ActiveRecord
@@ -141,7 +130,11 @@ module IssuableActions
 
     discussions = Discussion.build_collection(notes, issuable)
 
-    render json: discussion_serializer.represent(discussions, context: self)
+    if issuable.is_a?(MergeRequest) && Feature.enabled?(:merge_request_discussion_cache, issuable.target_project, default_enabled: :yaml)
+      render_cached(discussions, with: discussion_serializer, context: self)
+    else
+      render json: discussion_serializer.represent(discussions, context: self)
+    end
   end
   # rubocop:enable CodeReuse/ActiveRecord
 
@@ -203,13 +196,13 @@ module IssuableActions
 
   def authorize_destroy_issuable!
     unless can?(current_user, :"destroy_#{issuable.to_ability_name}", issuable)
-      return access_denied!
+      access_denied!
     end
   end
 
   def authorize_admin_issuable!
     unless can?(current_user, :"admin_#{resource_name}", parent)
-      return access_denied!
+      access_denied!
     end
   end
 
@@ -218,10 +211,21 @@ module IssuableActions
   end
 
   def bulk_update_params
-    permitted_keys_array = permitted_keys.dup
-    permitted_keys_array << { assignee_ids: [] }
+    params.require(:update).permit(bulk_update_permitted_keys)
+  end
 
-    params.require(:update).permit(permitted_keys_array)
+  def bulk_update_permitted_keys
+    [
+      :issuable_ids,
+      :assignee_id,
+      :milestone_id,
+      :sprint_id,
+      :state_event,
+      :subscription_event,
+      assignee_ids: [],
+      add_label_ids: [],
+      remove_label_ids: []
+    ]
   end
 
   def resource_name
@@ -260,4 +264,4 @@ module IssuableActions
   # rubocop:enable Gitlab/ModuleWithInstanceVariables
 end
 
-IssuableActions.prepend_if_ee('EE::IssuableActions')
+IssuableActions.prepend_mod_with('IssuableActions')

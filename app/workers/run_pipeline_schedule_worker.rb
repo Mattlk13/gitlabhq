@@ -2,6 +2,8 @@
 
 class RunPipelineScheduleWorker # rubocop:disable Scalability/IdempotentWorker
   include ApplicationWorker
+
+  sidekiq_options retry: 3
   include PipelineQueue
 
   queue_namespace :pipeline_creation
@@ -25,17 +27,16 @@ class RunPipelineScheduleWorker # rubocop:disable Scalability/IdempotentWorker
       .execute!(:schedule, ignore_skip_ci: true, save_on_errors: false, schedule: schedule)
   rescue Ci::CreatePipelineService::CreateError
     # no-op. This is a user operation error such as corrupted .gitlab-ci.yml.
-  rescue => e
+  rescue StandardError => e
     error(schedule, e)
   end
 
   private
 
-  # rubocop:disable Gitlab/RailsLogger
   def error(schedule, error)
     failed_creation_counter.increment
 
-    Rails.logger.error "Failed to create a scheduled pipeline. " \
+    Gitlab::AppLogger.error "Failed to create a scheduled pipeline. " \
                        "schedule_id: #{schedule.id} message: #{error.message}"
 
     Gitlab::ErrorTracking
@@ -43,7 +44,6 @@ class RunPipelineScheduleWorker # rubocop:disable Scalability/IdempotentWorker
                        issue_url: 'https://gitlab.com/gitlab-org/gitlab-foss/issues/41231',
                        schedule_id: schedule.id)
   end
-  # rubocop:enable Gitlab/RailsLogger
 
   def failed_creation_counter
     @failed_creation_counter ||=

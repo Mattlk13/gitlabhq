@@ -27,15 +27,18 @@ included_attributes:
 
 excluded_attributes:
   group:
-    - :id
     - :owner_id
-    - :parent_id
     - :created_at
     - :updated_at
     - :runners_token
     - :runners_token_encrypted
     - :saml_discovery_token
     - :visibility_level
+    - :trial_ends_on
+    - :shared_runners_minute_limit
+    - :extra_shared_runners_minutes_limit
+  epics:
+    - :state_id
 
 methods:
   labels:
@@ -50,8 +53,12 @@ methods:
     - :action
   lists:
     - :list_type
+  epics:
+    - :state
 
 preloads:
+
+export_reorders:
 
 # EE specific relationships and settings to include. All of this will be merged
 # into the previous structures if EE is used.
@@ -63,11 +70,14 @@ ee:
         - :award_emoji
         - events:
           - :push_event_payload
+        - label_links:
+          - :label
         - notes:
           - :author
           - :award_emoji
           - events:
             - :push_event_payload
+          - :system_note_metadata
       - boards:
         - :board_assignee
         - :milestone

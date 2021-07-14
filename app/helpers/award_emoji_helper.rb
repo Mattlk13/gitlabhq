@@ -12,9 +12,9 @@ module AwardEmojiHelper
         toggle_award_emoji_project_note_path(@project, awardable.id)
       end
     else
-      url_for([:toggle_award_emoji, @project.namespace.becomes(Namespace), @project, awardable])
+      url_for([:toggle_award_emoji, @project, awardable])
     end
   end
 end
 
-AwardEmojiHelper.prepend_if_ee('EE::AwardEmojiHelper')
+AwardEmojiHelper.prepend_mod_with('AwardEmojiHelper')

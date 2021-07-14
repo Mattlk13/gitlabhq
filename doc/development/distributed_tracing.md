@@ -1,6 +1,12 @@
-# Distributed Tracing - development guidelines
+---
+stage: Monitor
+group: Monitor
+info: To determine the technical writer assigned to the Stage/Group associated with this page, see https://about.gitlab.com/handbook/engineering/ux/technical-writing/#assignments
+---
 
-GitLab is instrumented for distributed tracing.
+# Distributed Tracing - development guidelines **(FREE)**
+
+GitLab is instrumented for distributed tracing. Distributed Tracing in GitLab is currently considered **experimental**, as it has not yet been tested at scale on GitLab.com.
 
 According to [Open Tracing](https://opentracing.io/docs/overview/what-is-tracing/):
 
@@ -8,7 +14,7 @@ According to [Open Tracing](https://opentracing.io/docs/overview/what-is-tracing
 > monitor applications, especially those built using a microservices architecture. Distributed
 > tracing helps to pinpoint where failures occur and what causes poor performance.
 
-Distributed tracing is especially helpful in understanding the lifecycle of a request as it passes
+Distributed tracing is especially helpful in understanding the life cycle of a request as it passes
 through the different components of the GitLab application. At present, Workhorse, Rails, Sidekiq,
 and Gitaly support tracing instrumentation.
 
@@ -16,12 +22,44 @@ Distributed tracing adds minimal overhead when disabled, but imposes only small 
 enabled and is therefore capable in any environment, including production. For this reason, it can
 be useful in diagnosing production issues, particularly performance problems.
 
+## Using Correlation IDs to investigate distributed requests
+
+The GitLab application passes correlation IDs between the various components in a request. A
+correlation ID is a token, unique to a single request, used to correlate a single request between
+different GitLab subsystems (for example, Rails, Workhorse). Since correlation IDs are included in
+log output, Engineers can use the correlation ID to correlate logs from different subsystems and
+better understand the end-to-end path of a request through the system. When a request traverses
+process boundaries, the correlation ID is injected into the outgoing request. This enables
+the propagation of the correlation ID to each downstream subsystem.
+
+Correlation IDs are normally generated in the Rails application in response to
+certain web requests. Some user facing systems don't generate correlation IDs in
+response to user requests (for example, Git pushes over SSH).
+
+### Developer guidelines for working with correlation IDs
+
+When integrating tracing into a new system, developers should avoid making
+certain assumptions about correlation IDs. The following guidelines apply to
+all subsystems at GitLab:
+
+- Correlation IDs are always optional.
+  - Never have non-tracing features depend on the existence of a correlation ID
+    from an upstream system.
+- Correlation IDs are always free text.
+  - Correlation IDs should never be used to pass context (for example, a username or an IP address).
+  - Correlation IDs should never be _parsed_, or manipulated in other ways (for example, split).
+
+The [LabKit library](https://gitlab.com/gitlab-org/labkit) provides a standardized interface for working with GitLab
+correlation IDs in the Go programming language. LabKit can be used as a
+reference implementation for developers working with tracing and correlation IDs
+on non-Go GitLab subsystems.
+
 ## Enabling distributed tracing
 
 GitLab uses the `GITLAB_TRACING` environment variable to configure distributed tracing. The same
 configuration is used for all components (e.g., Workhorse, Rails, etc).
 
-When `GITLAB_TRACING` is not set, the application will not be instrumented, meaning that there is
+When `GITLAB_TRACING` is not set, the application isn't instrumented, meaning that there is
 no overhead at all.
 
 To enable `GITLAB_TRACING`, a valid _"configuration-string"_ value should be set, with a URL-like
@@ -34,7 +72,7 @@ GITLAB_TRACING=opentracing://<driver>?<param_name>=<param_value>&<param_name_2>=
 In this example, we have the following hypothetical values:
 
 - `driver`: the driver. [GitLab supports
-  `jaeger`](../user/project/operations/tracing.md). In future, other
+  `jaeger`](../operations/tracing.md). In future, other
   tracing implementations may also be supported.
 - `param_name`, `param_value`: these are driver specific configuration values. Configuration
   parameters for Jaeger are documented [further on in this
@@ -51,13 +89,11 @@ The easiest way to access tracing from a GDK environment is through the
 [performance-bar](../administration/monitoring/performance/performance_bar.md). This can be shown
 by typing `p` `b` in the browser window.
 
-![Jaeger Search UI](img/distributed_tracing_performance_bar.png)
-
 Once the performance bar is enabled, click on the **Trace** link in the performance bar to go to
 the Jaeger UI.
 
-The Jaeger search UI will return a query for the `Correlation-ID` of the current request. Normally,
-this search should return a single trace result. Clicking this result will show the detail of the
+The Jaeger search UI returns a query for the `Correlation-ID` of the current request. Normally,
+this search should return a single trace result. Clicking this result shows the detail of the
 trace in a hierarchical time-line.
 
 ![Jaeger Search UI](img/distributed_tracing_jaeger_ui.png)
@@ -116,10 +152,10 @@ This should start the process with the default listening ports.
 
 ### 2. Configure the `GITLAB_TRACING` environment variable
 
-Once you have Jaeger running, you'll need to configure the `GITLAB_TRACING` variable with the
+Once you have Jaeger running, configure the `GITLAB_TRACING` variable with the
 appropriate configuration string.
 
-**TL;DR:** If you are running everything on the same host, use the following value:
+If you're running everything on the same host, use the following value:
 
 ```shell
 export GITLAB_TRACING="opentracing://jaeger?http_endpoint=http%3A%2F%2Flocalhost%3A14268%2Fapi%2Ftraces&sampler=const&sampler_param=1"
@@ -140,17 +176,18 @@ This configuration string uses the Jaeger driver `opentracing://jaeger` with the
 | `udp_endpoint` | `localhost:6831` | This is the default. Configures Jaeger to send trace information to the UDP listener on port `6831` using compact thrift protocol. Note that we've experienced some issues with the [Jaeger Client for Ruby](https://github.com/salemove/jaeger-client-ruby) when using this protocol. |
 | `sampler` | `probabalistic` | Configures Jaeger to use a probabilistic random sampler. The rate of samples is configured by the `sampler_param` value. |
 | `sampler_param` | `0.01` | Use a ratio of `0.01` to configure the `probabalistic` sampler to randomly sample _1%_ of traces. |
+| `service_name` | `api` | Override the service name used by the Jaeger backend. This parameter takes precedence over the application-supplied value. |
 
-NOTE: **Note:**
+NOTE:
 The same `GITLAB_TRACING` value should to be configured in the environment
 variables for all GitLab processes, including Workhorse, Gitaly, Rails, and Sidekiq.
 
 ### 3. Start the GitLab application
 
-Once the `GITLAB_TRACING` environment variable is exported to all GitLab services, start the
+After the `GITLAB_TRACING` environment variable is exported to all GitLab services, start the
 application.
 
-When `GITLAB_TRACING` is configured properly, the application will log this on startup:
+When `GITLAB_TRACING` is configured properly, the application logs this on startup:
 
 ```shell
 13:41:53 gitlab-workhorse.1      | 2019/02/12 13:41:53 Tracing enabled
@@ -159,7 +196,7 @@ When `GITLAB_TRACING` is configured properly, the application will log this on s
 ...
 ```
 
-If `GITLAB_TRACING` is not configured correctly, this will also be logged:
+If `GITLAB_TRACING` is not configured correctly, this issue is logged:
 
 ```shell
 13:43:45 gitaly.1                | 2019/02/12 13:43:45 skipping tracing configuration step: tracer: unable to load driver mytracer
@@ -167,7 +204,7 @@ If `GITLAB_TRACING` is not configured correctly, this will also be logged:
 
 By default, GitLab ships with the Jaeger tracer, but other tracers can be included at compile time.
 Details of how this can be done are included in the [LabKit tracing
-documentation](https://godoc.org/gitlab.com/gitlab-org/labkit/tracing).
+documentation](https://pkg.go.dev/gitlab.com/gitlab-org/labkit/tracing).
 
 If no log messages about tracing are emitted, the `GITLAB_TRACING` environment variable is likely
 not set.
@@ -176,6 +213,6 @@ not set.
 
 By default, the Jaeger search UI is available at <http://localhost:16686/search>.
 
-TIP: **Tip:**
-Don't forget that you will need to generate traces by using the application before
+NOTE:
+Don't forget that you must generate traces by using the application before
 they appear in the Jaeger UI.

@@ -3,27 +3,14 @@
 module Gitlab
   module Diff
     class HighlightCache
-      include Gitlab::Metrics::Methods
+      include Gitlab::Utils::Gzip
       include Gitlab::Utils::StrongMemoize
 
       EXPIRATION = 1.week
-      VERSION = 1
+      VERSION = 2
 
       delegate :diffable,     to: :@diff_collection
       delegate :diff_options, to: :@diff_collection
-
-      define_histogram :gitlab_redis_diff_caching_memory_usage_bytes do
-        docstring 'Redis diff caching memory usage by key'
-        buckets [100, 1000, 10000, 100000, 1000000, 10000000]
-      end
-
-      define_counter :gitlab_redis_diff_caching_hit do
-        docstring 'Redis diff caching hits'
-      end
-
-      define_counter :gitlab_redis_diff_caching_miss do
-        docstring 'Redis diff caching misses'
-      end
 
       def initialize(diff_collection)
         @diff_collection = diff_collection
@@ -33,10 +20,27 @@ module Gitlab
       # - Assigns DiffFile#highlighted_diff_lines for cached files
       #
       def decorate(diff_file)
-        if content = read_file(diff_file)
-          diff_file.highlighted_diff_lines = content.map do |line|
-            Gitlab::Diff::Line.safe_init_from_hash(line)
-          end
+        content = read_file(diff_file)
+
+        return [] unless content
+
+        # TODO: We could add some kind of flag to #initialize that would allow
+        #   us to force re-caching
+        #   https://gitlab.com/gitlab-org/gitlab/-/issues/263508
+        #
+        if content.empty? && recache_due_to_size?(diff_file)
+          # If the file is missing from the cache and there's reason to believe
+          #   it is uncached due to a size issue around changing the values for
+          #   max patch size, manually populate the hash and then set the value.
+          #
+          new_cache_content = {}
+          new_cache_content[diff_file.file_path] = diff_file.highlighted_diff_lines.map(&:to_hash)
+
+          write_to_redis_hash(new_cache_content)
+
+          set_highlighted_diff_lines(diff_file, read_file(diff_file))
+        else
+          set_highlighted_diff_lines(diff_file, content)
         end
       end
 
@@ -65,11 +69,40 @@ module Gitlab
 
       def key
         strong_memoize(:redis_key) do
-          ['highlighted-diff-files', diffable.cache_key, VERSION, diff_options].join(":")
+          [
+            'highlighted-diff-files',
+            diffable.cache_key,
+            VERSION,
+            diff_options,
+            Feature.enabled?(:use_marker_ranges, diffable.project, default_enabled: :yaml),
+            Feature.enabled?(:diff_line_syntax_highlighting, diffable.project, default_enabled: :yaml)
+          ].join(":")
         end
       end
 
       private
+
+      def set_highlighted_diff_lines(diff_file, content)
+        diff_file.highlighted_diff_lines = content.map do |line|
+          Gitlab::Diff::Line.safe_init_from_hash(line)
+        end
+      end
+
+      def recache_due_to_size?(diff_file)
+        diff_file_class = diff_file.diff.class
+
+        current_patch_safe_limit_bytes = diff_file_class.patch_safe_limit_bytes
+        default_patch_safe_limit_bytes = diff_file_class.patch_safe_limit_bytes(diff_file_class::DEFAULT_MAX_PATCH_BYTES)
+
+        # If the diff is >= than the default limit, but less than the current
+        #   limit, it is likely uncached due to having hit the default limit,
+        #   making it eligible for recalculating.
+        #
+        diff_file.diff.diff_bytesize.between?(
+          default_patch_safe_limit_bytes,
+          current_patch_safe_limit_bytes
+        )
+      end
 
       def cacheable_files
         strong_memoize(:cacheable_files) do
@@ -94,19 +127,45 @@ module Gitlab
         Gitlab::Redis::Cache.with do |redis|
           redis.pipelined do
             hash.each do |diff_file_id, highlighted_diff_lines_hash|
-              redis.hset(key, diff_file_id, highlighted_diff_lines_hash.to_json)
+              redis.hset(
+                key,
+                diff_file_id,
+                gzip_compress(highlighted_diff_lines_hash.to_json)
+              )
             end
 
             # HSETs have to have their expiration date manually updated
             #
             redis.expire(key, EXPIRATION)
           end
+
+          record_memory_usage(fetch_memory_usage(redis, key))
         end
 
         # Subsequent read_file calls would need the latest cache.
         #
         clear_memoization(:cached_content)
         clear_memoization(:cacheable_files)
+      end
+
+      def record_memory_usage(memory_usage)
+        if memory_usage
+          current_transaction&.observe(:gitlab_redis_diff_caching_memory_usage_bytes, memory_usage) do
+            docstring 'Redis diff caching memory usage by key'
+            buckets [100, 1_000, 10_000, 100_000, 1_000_000, 10_000_000]
+          end
+        end
+      end
+
+      def fetch_memory_usage(redis, key)
+        # Redis versions prior to 4.0.0 do not support memory usage reporting
+        #   for a specific key. As of 11-March-2020 we support Redis 3.x, so
+        #   need to account for this. We can remove this check once we
+        #   officially cease supporting versions <4.0.0.
+        #
+        return if Gem::Version.new(redis.info["redis_version"]) < Gem::Version.new("4")
+
+        redis.memory("USAGE", key)
       end
 
       def file_paths
@@ -133,7 +192,7 @@ module Gitlab
         end
 
         results.map! do |result|
-          JSON.parse(result, symbolize_names: true) unless result.nil?
+          Gitlab::Json.parse(gzip_decompress(result), symbolize_names: true) unless result.nil?
         end
 
         file_paths.zip(results).to_h
@@ -149,6 +208,10 @@ module Gitlab
         #   reference.
         #
         @diff_collection.raw_diff_files
+      end
+
+      def current_transaction
+        ::Gitlab::Metrics::Transaction.current
       end
     end
   end

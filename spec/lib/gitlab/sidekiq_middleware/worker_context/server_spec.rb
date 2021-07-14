@@ -2,7 +2,7 @@
 
 require 'spec_helper'
 
-describe Gitlab::SidekiqMiddleware::WorkerContext::Server do
+RSpec.describe Gitlab::SidekiqMiddleware::WorkerContext::Server do
   let(:worker_class) do
     Class.new do
       def self.name
@@ -14,10 +14,11 @@ describe Gitlab::SidekiqMiddleware::WorkerContext::Server do
 
       include ApplicationWorker
 
+      feature_category :foo
       worker_context user: nil
 
       def perform(identifier, *args)
-        self.class.contexts.merge!(identifier => Labkit::Context.current.to_h)
+        self.class.contexts.merge!(identifier => Gitlab::ApplicationContext.current)
       end
     end
   end
@@ -41,18 +42,9 @@ describe Gitlab::SidekiqMiddleware::WorkerContext::Server do
   end
 
   around do |example|
-    Sidekiq::Testing.inline! { example.run }
-  end
-
-  before(:context) do
-    Sidekiq::Testing.server_middleware do |chain|
+    with_sidekiq_server_middleware do |chain|
       chain.add described_class
-    end
-  end
-
-  after(:context) do
-    Sidekiq::Testing.server_middleware do |chain|
-      chain.remove described_class
+      Sidekiq::Testing.inline! { example.run }
     end
   end
 
@@ -63,6 +55,12 @@ describe Gitlab::SidekiqMiddleware::WorkerContext::Server do
       end
 
       expect(TestWorker.contexts['identifier'].keys).not_to include('meta.user')
+    end
+
+    it 'takes the feature category from the worker' do
+      TestWorker.perform_async('identifier', 1)
+
+      expect(TestWorker.contexts['identifier']).to include('meta.feature_category' => 'foo')
     end
 
     it "doesn't fail for unknown workers" do

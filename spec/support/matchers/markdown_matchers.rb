@@ -174,6 +174,15 @@ module MarkdownMatchers
     end
   end
 
+  # AlertReferenceFilter
+  matcher :reference_alerts do
+    set_default_markdown_messages
+
+    match do |actual|
+      expect(actual).to have_selector('a.gfm.gfm-alert', count: 5)
+    end
+  end
+
   # TaskListFilter
   matcher :parse_task_lists do
     set_default_markdown_messages
@@ -237,6 +246,33 @@ module MarkdownMatchers
       end
     end
   end
+
+  # MermaidFilter
+  matcher :parse_mermaid do
+    set_default_markdown_messages
+
+    match do |actual|
+      expect(actual).to have_selector('code.js-render-mermaid')
+    end
+  end
+
+  # PLantumlFilter
+  matcher :parse_plantuml do
+    set_default_markdown_messages
+
+    match do |actual|
+      expect(actual).to have_link(href: 'http://localhost:8080/png/U9npoazIqBLJ24uiIbImKl18pSd9vm80EtS5lW00')
+    end
+  end
+
+  # KrokiFilter
+  matcher :parse_kroki do
+    set_default_markdown_messages
+
+    match do |actual|
+      expect(actual).to have_link(href: 'http://localhost:8000/nomnoml/svg/eNqLDsgsSixJrUmtTHXOL80rsVLwzCupKUrMTNHQtC7IzMlJTE_V0KzhUlCITkpNLEqJ1dWNLkgsKsoviUUSs7KLTssvzVHIzS8tyYjligUAMhEd0g==')
+    end
+  end
 end
 
 # Monkeypatch the matcher DSL so that we can reduce some noisy duplication for
@@ -255,4 +291,4 @@ module RSpec::Matchers::DSL::Macros
   end
 end
 
-MarkdownMatchers.prepend_if_ee('EE::MarkdownMatchers')
+MarkdownMatchers.prepend_mod_with('MarkdownMatchers')

@@ -20,7 +20,7 @@ module Gitlab
         case ambiguous_param
         when String
           if ambiguous_param.present?
-            ensure_hash(JSON.parse(ambiguous_param))
+            ensure_hash(Gitlab::Json.parse(ambiguous_param))
           else
             {}
           end
@@ -32,7 +32,7 @@ module Gitlab
           raise Invalid, "Unexpected parameter: #{ambiguous_param}"
         end
       rescue JSON::ParserError => e
-        raise Invalid.new(e)
+        raise Invalid, e
       end
     end
   end

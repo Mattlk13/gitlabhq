@@ -1,10 +1,12 @@
 # frozen_string_literal: true
 
 module API
-  class Namespaces < Grape::API
+  class Namespaces < ::API::Base
     include PaginationParams
 
     before { authenticate! }
+
+    feature_category :subgroups
 
     helpers do
       params :optional_list_params_ee do
@@ -17,7 +19,7 @@ module API
       end
     end
 
-    prepend_if_ee('EE::API::Namespaces') # rubocop: disable Cop/InjectEnterpriseEditionModule
+    prepend_mod_with('API::Namespaces') # rubocop: disable Cop/InjectEnterpriseEditionModule
 
     resource :namespaces do
       desc 'Get a namespaces list' do
@@ -32,7 +34,9 @@ module API
       get do
         namespaces = current_user.admin ? Namespace.all : current_user.namespaces
 
-        namespaces = namespaces.include_gitlab_subscription if Gitlab.ee?
+        namespaces = namespaces.include_route
+
+        namespaces = namespaces.include_gitlab_subscription_with_hosted_plan if Gitlab.ee?
 
         namespaces = namespaces.search(params[:search]) if params[:search].present?
 
@@ -51,6 +55,23 @@ module API
         user_namespace = find_namespace!(params[:id])
 
         present user_namespace, with: Entities::Namespace, current_user: current_user
+      end
+
+      desc 'Get existence of a namespace including alternative suggestions' do
+        success Entities::NamespaceExistence
+      end
+      params do
+        requires :namespace, type: String, desc: "Namespace's path"
+        optional :parent_id, type: Integer, desc: "The ID of the parent namespace. If no ID is specified, only top-level namespaces are considered."
+      end
+      get ':namespace/exists', requirements: API::NAMESPACE_OR_PROJECT_REQUIREMENTS do
+        namespace_path = params[:namespace]
+
+        exists = Namespace.by_parent(params[:parent_id]).filter_by_path(namespace_path).exists?
+        suggestions = exists ? [Namespace.clean_path(namespace_path)] : []
+
+        present :exists, exists
+        present :suggests, suggestions
       end
     end
   end

@@ -2,7 +2,7 @@
 
 require 'spec_helper'
 
-describe 'Admin > Users > Impersonation Tokens', :js do
+RSpec.describe 'Admin > Users > Impersonation Tokens', :js do
   let(:admin) { create(:admin) }
   let!(:user) { create(:user) }
 
@@ -20,6 +20,7 @@ describe 'Admin > Users > Impersonation Tokens', :js do
 
   before do
     sign_in(admin)
+    gitlab_enable_admin_mode_sign_in(admin)
   end
 
   describe "token creation" do
@@ -27,10 +28,10 @@ describe 'Admin > Users > Impersonation Tokens', :js do
       name = 'Hello World'
 
       visit admin_user_impersonation_tokens_path(user_id: user.username)
-      fill_in "Name", with: name
+      fill_in "Token name", with: name
 
       # Set date to 1st of next month
-      find_field("Expires at").click
+      find_field("Expiration date").click
       find(".pika-next").click
       click_on "1"
 
@@ -70,16 +71,16 @@ describe 'Admin > Users > Impersonation Tokens', :js do
       accept_confirm { click_on "Revoke" }
 
       expect(page).to have_selector(".settings-message")
-      expect(no_personal_access_tokens_message).to have_text("This user has no active Impersonation Tokens.")
+      expect(no_personal_access_tokens_message).to have_text("This user has no active impersonation tokens.")
     end
 
     it "removes expired tokens from 'active' section" do
-      impersonation_token.update(expires_at: 5.days.ago)
+      impersonation_token.update!(expires_at: 5.days.ago)
 
       visit admin_user_impersonation_tokens_path(user_id: user.username)
 
       expect(page).to have_selector(".settings-message")
-      expect(no_personal_access_tokens_message).to have_text("This user has no active Impersonation Tokens.")
+      expect(no_personal_access_tokens_message).to have_text("This user has no active impersonation tokens.")
     end
   end
 end

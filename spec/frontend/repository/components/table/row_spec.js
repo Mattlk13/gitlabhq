@@ -1,10 +1,9 @@
+import { GlBadge, GlLink, GlIcon } from '@gitlab/ui';
 import { shallowMount, RouterLinkStub } from '@vue/test-utils';
-import { GlBadge, GlLink, GlLoadingIcon } from '@gitlab/ui';
-import { visitUrl } from '~/lib/utils/url_utility';
+import { createMockDirective, getBinding } from 'helpers/vue_mock_directive';
 import TableRow from '~/repository/components/table/row.vue';
-import Icon from '~/vue_shared/components/icon.vue';
-
-jest.mock('~/lib/utils/url_utility');
+import FileIcon from '~/vue_shared/components/file_icon.vue';
+import { FILE_SYMLINK_MODE } from '~/vue_shared/constants';
 
 let vm;
 let $router;
@@ -20,6 +19,13 @@ function factory(propsData = {}) {
       name: propsData.path,
       projectPath: 'gitlab-org/gitlab-ce',
       url: `https://test.com`,
+      totalEntries: 10,
+    },
+    directives: {
+      GlHoverLoad: createMockDirective(),
+    },
+    provide: {
+      glFeatures: { refactorBlobViewer: true },
     },
     mocks: {
       $router,
@@ -29,10 +35,12 @@ function factory(propsData = {}) {
     },
   });
 
-  vm.setData({ ref: 'master' });
+  vm.setData({ escapedRef: 'main' });
 }
 
 describe('Repository table row component', () => {
+  const findRouterLink = () => vm.find(RouterLinkStub);
+
   afterEach(() => {
     vm.destroy();
   });
@@ -44,6 +52,21 @@ describe('Repository table row component', () => {
       path: 'test',
       type: 'file',
       currentPath: '/',
+    });
+
+    return vm.vm.$nextTick().then(() => {
+      expect(vm.element).toMatchSnapshot();
+    });
+  });
+
+  it('renders a symlink table row', () => {
+    factory({
+      id: '1',
+      sha: '123',
+      path: 'test',
+      type: 'blob',
+      currentPath: '/',
+      mode: FILE_SYMLINK_MODE,
     });
 
     return vm.vm.$nextTick().then(() => {
@@ -65,10 +88,25 @@ describe('Repository table row component', () => {
     });
   });
 
+  it('renders a gl-hover-load directive', () => {
+    factory({
+      id: '1',
+      sha: '123',
+      path: 'test',
+      type: 'blob',
+      currentPath: '/',
+    });
+
+    const hoverLoadDirective = getBinding(findRouterLink().element, 'gl-hover-load');
+
+    expect(hoverLoadDirective).not.toBeUndefined();
+    expect(hoverLoadDirective.value).toBeInstanceOf(Function);
+  });
+
   it.each`
     type        | component         | componentName
     ${'tree'}   | ${RouterLinkStub} | ${'RouterLink'}
-    ${'file'}   | ${'a'}            | ${'hyperlink'}
+    ${'blob'}   | ${RouterLinkStub} | ${'RouterLink'}
     ${'commit'} | ${'a'}            | ${'hyperlink'}
   `('renders a $componentName for type $type', ({ type, component }) => {
     factory({
@@ -81,31 +119,6 @@ describe('Repository table row component', () => {
 
     return vm.vm.$nextTick().then(() => {
       expect(vm.find(component).exists()).toBe(true);
-    });
-  });
-
-  it.each`
-    type        | pushes
-    ${'tree'}   | ${true}
-    ${'file'}   | ${false}
-    ${'commit'} | ${false}
-  `('pushes new router if type $type is tree', ({ type, pushes }) => {
-    factory({
-      id: '1',
-      sha: '123',
-      path: 'test',
-      type,
-      currentPath: '/',
-    });
-
-    return vm.vm.$nextTick().then(() => {
-      vm.trigger('click');
-
-      if (pushes) {
-        expect($router.push).toHaveBeenCalledWith({ path: '/-/tree/master/test' });
-      } else {
-        expect($router.push).not.toHaveBeenCalled();
-      }
     });
   });
 
@@ -124,12 +137,12 @@ describe('Repository table row component', () => {
 
     return vm.vm.$nextTick().then(() => {
       expect(vm.find({ ref: 'link' }).props('to')).toEqual({
-        path: `/-/tree/master/${encodeURIComponent(path)}`,
+        path: `/-/tree/main/${encodeURIComponent(path)}`,
       });
     });
   });
 
-  it('pushes new route for directory with hash', () => {
+  it('renders link for directory with hash', () => {
     factory({
       id: '1',
       sha: '123',
@@ -139,36 +152,7 @@ describe('Repository table row component', () => {
     });
 
     return vm.vm.$nextTick().then(() => {
-      vm.trigger('click');
-
-      expect($router.push).toHaveBeenCalledWith({ path: '/-/tree/master/test%23' });
-    });
-  });
-
-  it.each`
-    type        | pushes
-    ${'tree'}   | ${true}
-    ${'file'}   | ${false}
-    ${'commit'} | ${false}
-  `('calls visitUrl if $type is not tree', ({ type, pushes }) => {
-    factory({
-      id: '1',
-      sha: '123',
-      path: 'test',
-      type,
-      currentPath: '/',
-    });
-
-    return vm.vm.$nextTick().then(() => {
-      vm.trigger('click');
-
-      if (pushes) {
-        expect(visitUrl).not.toHaveBeenCalled();
-      } else {
-        const [url, external] = visitUrl.mock.calls[0];
-        expect(url).toBe('https://test.com');
-        expect(external).toBeFalsy();
-      }
+      expect(vm.find('.tree-item-link').props('to')).toEqual({ path: '/-/tree/main/test%23' });
     });
   });
 
@@ -245,7 +229,8 @@ describe('Repository table row component', () => {
     vm.setData({ commit: { lockLabel: 'Locked by Root', committedDate: '2019-01-01' } });
 
     return vm.vm.$nextTick().then(() => {
-      expect(vm.find(Icon).exists()).toBe(true);
+      expect(vm.find(GlIcon).exists()).toBe(true);
+      expect(vm.find(GlIcon).props('name')).toBe('lock');
     });
   });
 
@@ -259,6 +244,6 @@ describe('Repository table row component', () => {
       loadingPath: 'test',
     });
 
-    expect(vm.find(GlLoadingIcon).exists()).toBe(true);
+    expect(vm.find(FileIcon).props('loading')).toBe(true);
   });
 });

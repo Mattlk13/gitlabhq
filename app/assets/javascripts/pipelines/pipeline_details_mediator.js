@@ -1,9 +1,9 @@
 import Visibility from 'visibilityjs';
-import PipelineStore from './stores/pipeline_store';
-import Flash from '../flash';
+import createFlash from '~/flash';
 import Poll from '../lib/utils/poll';
 import { __ } from '../locale';
 import PipelineService from './services/pipeline_service';
+import PipelineStore from './stores/pipeline_store';
 
 export default class pipelinesMediator {
   constructor(options = {}) {
@@ -47,7 +47,9 @@ export default class pipelinesMediator {
 
   errorCallback() {
     this.state.isLoading = false;
-    Flash(__('An error occurred while fetching the pipeline.'));
+    createFlash({
+      message: __('An error occurred while fetching the pipeline.'),
+    });
   }
 
   refreshPipeline() {
@@ -55,7 +57,7 @@ export default class pipelinesMediator {
 
     return this.service
       .getPipeline()
-      .then(response => this.successCallback(response))
+      .then((response) => this.successCallback(response))
       .catch(() => this.errorCallback())
       .finally(() =>
         this.poll.restart(

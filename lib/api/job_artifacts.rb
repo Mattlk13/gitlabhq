@@ -1,8 +1,10 @@
 # frozen_string_literal: true
 
 module API
-  class JobArtifacts < Grape::API
+  class JobArtifacts < ::API::Base
     before { authenticate_non_get! }
+
+    feature_category :build_artifacts
 
     # EE::API::JobArtifacts would override the following helpers
     helpers do
@@ -11,7 +13,7 @@ module API
       end
     end
 
-    prepend_if_ee('EE::API::JobArtifacts') # rubocop: disable Cop/InjectEnterpriseEditionModule
+    prepend_mod_with('API::JobArtifacts') # rubocop: disable Cop/InjectEnterpriseEditionModule
 
     params do
       requires :id, type: String, desc: 'The ID of a project'
@@ -30,6 +32,7 @@ module API
         authorize_download_artifacts!
 
         latest_build = user_project.latest_successful_build_for_ref!(params[:job], params[:ref_name])
+        authorize_read_job_artifacts!(latest_build)
 
         present_carrierwave_file!(latest_build.artifacts_file)
       end
@@ -42,19 +45,21 @@ module API
         requires :job, type: String, desc: 'The name for the job'
         requires :artifact_path, type: String, desc: 'Artifact path'
       end
+      route_setting :authentication, job_token_allowed: true
       get ':id/jobs/artifacts/:ref_name/raw/*artifact_path',
           format: false,
           requirements: { ref_name: /.+/ } do
         authorize_download_artifacts!
 
         build = user_project.latest_successful_build_for_ref!(params[:job], params[:ref_name])
+        authorize_read_job_artifacts!(build)
 
         path = Gitlab::Ci::Build::Artifacts::Path
                  .new(params[:artifact_path])
 
         bad_request! unless path.valid?
 
-        send_artifacts_entry(build, path)
+        send_artifacts_entry(build.artifacts_file, path)
       end
 
       desc 'Download the artifacts archive from a job' do
@@ -68,6 +73,7 @@ module API
         authorize_download_artifacts!
 
         build = find_build!(params[:job_id])
+        authorize_read_job_artifacts!(build)
 
         present_carrierwave_file!(build.artifacts_file)
       end
@@ -79,22 +85,25 @@ module API
         requires :job_id, type: Integer, desc: 'The ID of a job'
         requires :artifact_path, type: String, desc: 'Artifact path'
       end
+      route_setting :authentication, job_token_allowed: true
       get ':id/jobs/:job_id/artifacts/*artifact_path', format: false do
-        authorize_read_builds!
+        authorize_download_artifacts!
 
         build = find_build!(params[:job_id])
-        not_found! unless build.artifacts?
+        authorize_read_job_artifacts!(build)
+
+        not_found! unless build.available_artifacts?
 
         path = Gitlab::Ci::Build::Artifacts::Path
           .new(params[:artifact_path])
 
         bad_request! unless path.valid?
 
-        send_artifacts_entry(build, path)
+        send_artifacts_entry(build.artifacts_file, path)
       end
 
       desc 'Keep the artifacts to prevent them from being deleted' do
-        success Entities::Job
+        success ::API::Entities::Ci::Job
       end
       params do
         requires :job_id, type: Integer, desc: 'The ID of a job'
@@ -109,7 +118,7 @@ module API
         build.keep_artifacts!
 
         status 200
-        present build, with: Entities::Job
+        present build, with: ::API::Entities::Ci::Job
       end
 
       desc 'Delete the artifacts files from a job' do

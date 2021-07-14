@@ -2,23 +2,30 @@
 
 require 'spec_helper'
 
-describe Groups::GroupMembersController do
+RSpec.describe Groups::GroupMembersController do
   include ExternalAuthorizationServiceHelpers
 
-  let(:user) { create(:user) }
-  let(:group) { create(:group, :public) }
-  let(:membership) { create(:group_member, group: group) }
+  let_it_be(:user) { create(:user) }
+  let_it_be(:group, reload: true) { create(:group, :public) }
+
+  before do
+    travel_to DateTime.new(2019, 4, 1)
+  end
+
+  after do
+    travel_back
+  end
 
   describe 'GET index' do
-    it 'renders index with 200 status code' do
+    it 'renders index with 200 status code', :aggregate_failures do
       get :index, params: { group_id: group }
 
       expect(response).to have_gitlab_http_status(:ok)
       expect(response).to render_template(:index)
     end
 
-    context 'user with owner access' do
-      let!(:invited) { create_list(:group_member, 3, :invited, group: group) }
+    context 'when user can manage members' do
+      let_it_be(:invited) { create_list(:group_member, 3, :invited, group: group) }
 
       before do
         group.add_owner(user)
@@ -56,9 +63,22 @@ describe Groups::GroupMembersController do
       end
     end
 
+    context 'when user cannot manage members' do
+      before do
+        sign_in(user)
+      end
+
+      it 'does not assign invited members or skip_groups', :aggregate_failures do
+        get :index, params: { group_id: group }
+
+        expect(assigns(:invited_members)).to be_nil
+        expect(assigns(:skip_groups)).to be_nil
+      end
+    end
+
     context 'when user has owner access to subgroup' do
-      let(:nested_group) { create(:group, parent: group) }
-      let(:nested_group_user) { create(:user) }
+      let_it_be(:nested_group) { create(:group, parent: group) }
+      let_it_be(:nested_group_user) { create(:user) }
 
       before do
         group.add_owner(user)
@@ -87,7 +107,7 @@ describe Groups::GroupMembersController do
   end
 
   describe 'POST create' do
-    let(:group_user) { create(:user) }
+    let_it_be(:group_user) { create(:user) }
 
     before do
       sign_in(user)
@@ -98,7 +118,7 @@ describe Groups::GroupMembersController do
         group.add_developer(user)
       end
 
-      it 'returns 403' do
+      it 'returns 403', :aggregate_failures do
         post :create, params: {
                         group_id: group,
                         user_ids: group_user.id,
@@ -115,55 +135,185 @@ describe Groups::GroupMembersController do
         group.add_owner(user)
       end
 
-      it 'adds user to members' do
+      it 'adds user to members', :aggregate_failures, :snowplow do
         post :create, params: {
                         group_id: group,
                         user_ids: group_user.id,
                         access_level: Gitlab::Access::GUEST
                       }
 
-        expect(response).to set_flash.to 'Users were successfully added.'
+        expect(controller).to set_flash.to 'Users were successfully added.'
         expect(response).to redirect_to(group_group_members_path(group))
         expect(group.users).to include group_user
+        expect_snowplow_event(
+          category: 'Members::CreateService',
+          action: 'create_member',
+          label: 'group-members-page',
+          property: 'existing_user',
+          user: user
+        )
       end
 
-      it 'adds no user to members' do
+      it 'adds no user to members', :aggregate_failures do
         post :create, params: {
                         group_id: group,
                         user_ids: '',
                         access_level: Gitlab::Access::GUEST
                       }
 
-        expect(response).to set_flash.to 'No users specified.'
+        expect(controller).to set_flash.to 'No users specified.'
         expect(response).to redirect_to(group_group_members_path(group))
         expect(group.users).not_to include group_user
+      end
+    end
+
+    context 'access expiry date' do
+      before do
+        group.add_owner(user)
+      end
+
+      subject do
+        post :create, params: {
+                        group_id: group,
+                        user_ids: group_user.id,
+                        access_level: Gitlab::Access::GUEST,
+                        expires_at: expires_at
+                      }
+      end
+
+      context 'when set to a date in the past' do
+        let(:expires_at) { 2.days.ago }
+
+        it 'does not add user to members', :aggregate_failures do
+          subject
+
+          expect(flash[:alert]).to include('Expires at cannot be a date in the past')
+          expect(response).to redirect_to(group_group_members_path(group))
+          expect(group.users).not_to include group_user
+        end
+      end
+
+      context 'when set to a date in the future' do
+        let(:expires_at) { 5.days.from_now }
+
+        it 'adds user to members', :aggregate_failures do
+          subject
+
+          expect(controller).to set_flash.to 'Users were successfully added.'
+          expect(response).to redirect_to(group_group_members_path(group))
+          expect(group.users).to include group_user
+        end
       end
     end
   end
 
   describe 'PUT update' do
-    let(:requester) { create(:group_member, :access_request, group: group) }
+    let_it_be(:requester) { create(:group_member, :access_request, group: group) }
 
     before do
       group.add_owner(user)
       sign_in(user)
     end
 
-    Gitlab::Access.options.each do |label, value|
-      it "can change the access level to #{label}" do
-        put :update, params: {
-          group_member: { access_level: value },
-          group_id: group,
-          id: requester
-        }, xhr: true
+    context 'access level' do
+      Gitlab::Access.options.each do |label, value|
+        it "can change the access level to #{label}" do
+          put :update, params: {
+            group_member: { access_level: value },
+            group_id: group,
+            id: requester
+          }, xhr: true
 
-        expect(requester.reload.human_access).to eq(label)
+          expect(requester.reload.human_access).to eq(label)
+        end
+      end
+    end
+
+    context 'access expiry date' do
+      subject do
+        put :update, xhr: true, params: {
+                                          group_member: {
+                                            expires_at: expires_at
+                                          },
+                                          group_id: group,
+                                          id: requester
+                                        }
+      end
+
+      context 'when set to a date in the past' do
+        let(:expires_at) { 2.days.ago }
+
+        it 'does not update the member' do
+          subject
+
+          expect(requester.reload.expires_at).not_to eq(expires_at.to_date)
+        end
+
+        it 'returns error status' do
+          subject
+
+          expect(response).to have_gitlab_http_status(:unprocessable_entity)
+        end
+
+        it 'returns error message' do
+          subject
+
+          expect(json_response).to eq({ 'message' => 'Expires at cannot be a date in the past' })
+        end
+      end
+
+      context 'when set to a date in the future' do
+        let(:expires_at) { 5.days.from_now }
+
+        it 'updates the member' do
+          subject
+
+          expect(requester.reload.expires_at).to eq(expires_at.to_date)
+        end
+      end
+    end
+
+    context 'expiration date' do
+      let(:expiry_date) { 1.month.from_now.to_date }
+
+      before do
+        travel_to Time.now.utc.beginning_of_day
+
+        put(
+          :update,
+          params: {
+            group_member: { expires_at: expiry_date },
+            group_id: group,
+            id: requester
+          },
+          format: :json
+        )
+      end
+
+      context 'when `expires_at` is set' do
+        it 'returns correct json response' do
+          expect(json_response).to eq({
+            "expires_in" => "about 1 month",
+            "expires_soon" => false,
+            "expires_at_formatted" => expiry_date.to_time.in_time_zone.to_s(:medium)
+          })
+        end
+      end
+
+      context 'when `expires_at` is not set' do
+        let(:expiry_date) { nil }
+
+        it 'returns empty json response' do
+          expect(json_response).to be_empty
+        end
       end
     end
   end
 
   describe 'DELETE destroy' do
-    let(:member) { create(:group_member, :developer, group: group) }
+    let_it_be(:sub_group) { create(:group, parent: group) }
+    let_it_be(:member) { create(:group_member, :developer, group: group) }
+    let_it_be(:sub_member) { create(:group_member, :developer, group: sub_group, user: member.user) }
 
     before do
       sign_in(user)
@@ -183,7 +333,7 @@ describe Groups::GroupMembersController do
           group.add_developer(user)
         end
 
-        it 'returns 403' do
+        it 'returns 403', :aggregate_failures do
           delete :destroy, params: { group_id: group, id: member }
 
           expect(response).to have_gitlab_http_status(:forbidden)
@@ -196,15 +346,25 @@ describe Groups::GroupMembersController do
           group.add_owner(user)
         end
 
-        it '[HTML] removes user from members' do
+        it '[HTML] removes user from members', :aggregate_failures do
           delete :destroy, params: { group_id: group, id: member }
 
-          expect(response).to set_flash.to 'User was successfully removed from group and any subresources.'
+          expect(controller).to set_flash.to 'User was successfully removed from group.'
           expect(response).to redirect_to(group_group_members_path(group))
           expect(group.members).not_to include member
+          expect(sub_group.members).to include sub_member
         end
 
-        it '[JS] removes user from members' do
+        it '[HTML] removes user from members including subgroups and projects', :aggregate_failures do
+          delete :destroy, params: { group_id: group, id: member, remove_sub_memberships: true }
+
+          expect(controller).to set_flash.to 'User was successfully removed from group and any subgroups and projects.'
+          expect(response).to redirect_to(group_group_members_path(group))
+          expect(group.members).not_to include member
+          expect(sub_group.members).not_to include sub_member
+        end
+
+        it '[JS] removes user from members', :aggregate_failures do
           delete :destroy, params: { group_id: group, id: member }, xhr: true
 
           expect(response).to be_successful
@@ -233,15 +393,15 @@ describe Groups::GroupMembersController do
           group.add_developer(user)
         end
 
-        it 'removes user from members' do
+        it 'removes user from members', :aggregate_failures do
           delete :leave, params: { group_id: group }
 
-          expect(response).to set_flash.to "You left the \"#{group.name}\" group."
+          expect(controller).to set_flash.to "You left the \"#{group.name}\" group."
           expect(response).to redirect_to(dashboard_groups_path)
           expect(group.users).not_to include user
         end
 
-        it 'supports json request' do
+        it 'supports json request', :aggregate_failures do
           delete :leave, params: { group_id: group }, format: :json
 
           expect(response).to have_gitlab_http_status(:ok)
@@ -262,14 +422,16 @@ describe Groups::GroupMembersController do
       end
 
       context 'and is a requester' do
+        let(:group) { create(:group, :public) }
+
         before do
           group.request_access(user)
         end
 
-        it 'removes user from members' do
+        it 'removes user from members', :aggregate_failures do
           delete :leave, params: { group_id: group }
 
-          expect(response).to set_flash.to 'Your access request to the group has been withdrawn.'
+          expect(controller).to set_flash.to 'Your access request to the group has been withdrawn.'
           expect(response).to redirect_to(group_path(group))
           expect(group.requesters).to be_empty
           expect(group.users).not_to include user
@@ -283,10 +445,10 @@ describe Groups::GroupMembersController do
       sign_in(user)
     end
 
-    it 'creates a new GroupMember that is not a team member' do
+    it 'creates a new GroupMember that is not a team member', :aggregate_failures do
       post :request_access, params: { group_id: group }
 
-      expect(response).to set_flash.to 'Your request for access has been queued for review.'
+      expect(controller).to set_flash.to 'Your request for access has been queued for review.'
       expect(response).to redirect_to(group_path(group))
       expect(group.requesters.exists?(user_id: user)).to be_truthy
       expect(group.users).not_to include user
@@ -294,7 +456,7 @@ describe Groups::GroupMembersController do
   end
 
   describe 'POST approve_access_request' do
-    let(:member) { create(:group_member, :access_request, group: group) }
+    let_it_be(:member) { create(:group_member, :access_request, group: group) }
 
     before do
       sign_in(user)
@@ -314,7 +476,7 @@ describe Groups::GroupMembersController do
           group.add_developer(user)
         end
 
-        it 'returns 403' do
+        it 'returns 403', :aggregate_failures do
           post :approve_access_request, params: { group_id: group, id: member }
 
           expect(response).to have_gitlab_http_status(:forbidden)
@@ -327,7 +489,7 @@ describe Groups::GroupMembersController do
           group.add_owner(user)
         end
 
-        it 'adds user to members' do
+        it 'adds user to members', :aggregate_failures do
           post :approve_access_request, params: { group_id: group, id: member }
 
           expect(response).to redirect_to(group_group_members_path(group))
@@ -338,6 +500,8 @@ describe Groups::GroupMembersController do
   end
 
   context 'with external authorization enabled' do
+    let_it_be(:membership) { create(:group_member, group: group) }
+
     before do
       enable_external_authorization_service_check
       group.add_owner(user)
@@ -368,7 +532,7 @@ describe Groups::GroupMembersController do
               group_id: group,
               id: membership
             },
-            format: :js
+            format: :json
 
         expect(response).to have_gitlab_http_status(:ok)
       end

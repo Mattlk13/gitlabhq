@@ -5,12 +5,22 @@ class Admin::UsersController < Admin::ApplicationController
 
   before_action :user, except: [:index, :new, :create]
   before_action :check_impersonation_availability, only: :impersonate
+  before_action :ensure_destroy_prerequisites_met, only: [:destroy]
+  before_action :check_ban_user_feature_flag, only: [:ban]
+
+  feature_category :users
+
+  PAGINATION_WITH_COUNT_LIMIT = 1000
 
   def index
+    return redirect_to admin_cohorts_path if params[:tab] == 'cohorts'
+
     @users = User.filter_items(params[:filter]).order_name_asc
     @users = @users.search_with_secondary_emails(params[:search_query]) if params[:search_query].present?
+    @users = users_with_included_associations(@users)
     @users = @users.sort_by_attribute(@sort = params[:sort])
     @users = @users.page(params[:page])
+    @users = @users.without_count if paginate_without_count?
   end
 
   def show
@@ -58,6 +68,26 @@ class Admin::UsersController < Admin::ApplicationController
     end
   end
 
+  def approve
+    result = Users::ApproveService.new(current_user).execute(user)
+
+    if result[:status] == :success
+      redirect_back_or_admin_user(notice: _("Successfully approved"))
+    else
+      redirect_back_or_admin_user(alert: result[:message])
+    end
+  end
+
+  def reject
+    result = Users::RejectService.new(current_user).execute(user)
+
+    if result[:status] == :success
+      redirect_to admin_users_path, status: :found, notice: _("You've rejected %{user}" % { user: user.name })
+    else
+      redirect_back_or_admin_user(alert: result[:message])
+    end
+  end
+
   def activate
     return redirect_back_or_admin_user(notice: _("Error occurred. A blocked user must be unblocked to be activated")) if user.blocked?
 
@@ -68,6 +98,7 @@ class Admin::UsersController < Admin::ApplicationController
   def deactivate
     return redirect_back_or_admin_user(notice: _("Error occurred. A blocked user cannot be deactivated")) if user.blocked?
     return redirect_back_or_admin_user(notice: _("Successfully deactivated")) if user.deactivated?
+    return redirect_back_or_admin_user(notice: _("Internal users cannot be deactivated")) if user.internal?
     return redirect_back_or_admin_user(notice: _("The user you are trying to deactivate has been active in the past %{minimum_inactive_days} days and cannot be deactivated") % { minimum_inactive_days: ::User::MINIMUM_INACTIVE_DAYS }) unless user.can_be_deactivated?
 
     user.deactivate
@@ -77,7 +108,7 @@ class Admin::UsersController < Admin::ApplicationController
   def block
     result = Users::BlockService.new(current_user).execute(user)
 
-    if result[:status] = :success
+    if result[:status] == :success
       redirect_back_or_admin_user(notice: _("Successfully blocked"))
     else
       redirect_back_or_admin_user(alert: _("Error occurred. User was not blocked"))
@@ -91,6 +122,24 @@ class Admin::UsersController < Admin::ApplicationController
       redirect_back_or_admin_user(notice: _("Successfully unblocked"))
     else
       redirect_back_or_admin_user(alert: _("Error occurred. User was not unblocked"))
+    end
+  end
+
+  def ban
+    result = Users::BanService.new(current_user).execute(user)
+
+    if result[:status] == :success
+      redirect_back_or_admin_user(notice: _("Successfully banned"))
+    else
+      redirect_back_or_admin_user(alert: _("Error occurred. User was not banned"))
+    end
+  end
+
+  def unban
+    if update_user { |user| user.activate }
+      redirect_back_or_admin_user(notice: _("Successfully unbanned"))
+    else
+      redirect_back_or_admin_user(alert: _("Error occurred. User was not unbanned"))
     end
   end
 
@@ -111,10 +160,14 @@ class Admin::UsersController < Admin::ApplicationController
   end
 
   def disable_two_factor
-    update_user { |user| user.disable_two_factor! }
+    result = TwoFactor::DestroyService.new(current_user, user: user).execute
 
-    redirect_to admin_user_path(user),
-      notice: _('Two-factor Authentication has been disabled for this user')
+    if result[:status] == :success
+      redirect_to admin_user_path(user),
+        notice: _('Two-factor authentication has been disabled for this user')
+    else
+      redirect_to admin_user_path(user), alert: result[:message]
+    end
   end
 
   def create
@@ -145,14 +198,18 @@ class Admin::UsersController < Admin::ApplicationController
         password_confirmation: params[:user][:password_confirmation]
       }
 
-      password_params[:password_expires_at] = Time.now unless changing_own_password?
+      password_params[:password_expires_at] = Time.current if admin_making_changes_for_another_user?
 
       user_params_with_pass.merge!(password_params)
     end
 
+    cc_validation_params = process_credit_card_validation_params(user_params_with_pass.delete(:credit_card_validation_attributes))
+    user_params_with_pass.merge!(cc_validation_params)
+
     respond_to do |format|
       result = Users::UpdateService.new(current_user, user_params_with_pass.merge(user: user)).execute do |user|
         user.skip_reconfirmation!
+        user.send_only_admin_changed_your_password_notification! if admin_making_changes_for_another_user?
       end
 
       if result[:status] == :success
@@ -162,13 +219,13 @@ class Admin::UsersController < Admin::ApplicationController
         # restore username to keep form action url.
         user.username = params[:id]
         format.html { render "edit" }
-        format.json { render json: [result[:message]], status: result[:status] }
+        format.json { render json: [result[:message]], status: :internal_server_error }
       end
     end
   end
 
   def destroy
-    user.delete_async(deleted_by: current_user, params: params.permit(:hard_delete))
+    user.delete_async(deleted_by: current_user, params: destroy_params)
 
     respond_to do |format|
       format.html { redirect_to admin_users_path, status: :found, notice: _("The user is being deleted.") }
@@ -193,8 +250,57 @@ class Admin::UsersController < Admin::ApplicationController
 
   protected
 
-  def changing_own_password?
-    user == current_user
+  def process_credit_card_validation_params(cc_validation_params)
+    return unless cc_validation_params && cc_validation_params[:credit_card_validated_at]
+
+    cc_validation = cc_validation_params[:credit_card_validated_at]
+
+    if cc_validation == "1" && !user.credit_card_validated_at
+      {
+        credit_card_validation_attributes: {
+          credit_card_validated_at: Time.zone.now
+        }
+      }
+
+    elsif cc_validation == "0" && user.credit_card_validated_at
+      {
+        credit_card_validation_attributes: {
+          _destroy: true
+        }
+      }
+    end
+  end
+
+  def paginate_without_count?
+    counts = Gitlab::Database::Count.approximate_counts([User])
+
+    counts[User] > PAGINATION_WITH_COUNT_LIMIT
+  end
+
+  def users_with_included_associations(users)
+    users.includes(:authorized_projects) # rubocop: disable CodeReuse/ActiveRecord
+  end
+
+  def admin_making_changes_for_another_user?
+    user != current_user
+  end
+
+  def destroy_params
+    params.permit(:hard_delete)
+  end
+
+  def ensure_destroy_prerequisites_met
+    return if hard_delete?
+
+    if user.solo_owned_groups.present?
+      message = s_('AdminUsers|You must transfer ownership or delete the groups owned by this user before you can delete their account')
+
+      redirect_to admin_user_path(user), status: :see_other, alert: message
+    end
+  end
+
+  def hard_delete?
+    destroy_params[:hard_delete]
   end
 
   def user
@@ -241,7 +347,9 @@ class Admin::UsersController < Admin::ApplicationController
       :theme_id,
       :twitter,
       :username,
-      :website_url
+      :website_url,
+      :note,
+      credit_card_validation_attributes: [:credit_card_validated_at]
     ]
   end
 
@@ -255,9 +363,13 @@ class Admin::UsersController < Admin::ApplicationController
     access_denied! unless Gitlab.config.gitlab.impersonation_enabled
   end
 
+  def check_ban_user_feature_flag
+    access_denied! unless Feature.enabled?(:ban_user_feature_flag)
+  end
+
   def log_impersonation_event
     Gitlab::AppLogger.info(_("User %{current_user_username} has started impersonating %{username}") % { current_user_username: current_user.username, username: user.username })
   end
 end
 
-Admin::UsersController.prepend_if_ee('EE::Admin::UsersController')
+Admin::UsersController.prepend_mod_with('Admin::UsersController')

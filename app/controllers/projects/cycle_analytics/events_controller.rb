@@ -4,11 +4,14 @@ module Projects
   module CycleAnalytics
     class EventsController < Projects::ApplicationController
       include CycleAnalyticsParams
+      include GracefulTimeoutHandling
 
       before_action :authorize_read_cycle_analytics!
       before_action :authorize_read_build!, only: [:test, :staging]
       before_action :authorize_read_issue!, only: [:issue, :production]
       before_action :authorize_read_merge_request!, only: [:code, :review]
+
+      feature_category :planning_analytics
 
       def issue
         render_events(cycle_analytics[:issue].events)
@@ -50,7 +53,7 @@ module Projects
       end
 
       def cycle_analytics
-        @cycle_analytics ||= ::CycleAnalytics::ProjectLevel.new(project, options: options(cycle_analytics_project_params))
+        @cycle_analytics ||= ::Analytics::CycleAnalytics::ProjectLevel.new(project: project, options: options(cycle_analytics_project_params))
       end
     end
   end

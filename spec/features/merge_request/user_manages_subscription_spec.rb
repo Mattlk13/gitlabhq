@@ -2,7 +2,7 @@
 
 require 'spec_helper'
 
-describe 'User manages subscription', :js do
+RSpec.describe 'User manages subscription', :js do
   let(:project) { create(:project, :public, :repository) }
   let(:merge_request) { create(:merge_request, source_project: project, target_project: project) }
   let(:user) { create(:user) }
@@ -15,7 +15,9 @@ describe 'User manages subscription', :js do
   end
 
   it 'toggles subscription' do
-    page.within('.js-issuable-subscribe-button') do
+    page.within('[data-testid="subscription-toggle"]') do
+      wait_for_requests
+
       expect(page).to have_css 'button:not(.is-checked)'
       find('button:not(.is-checked)').click
 

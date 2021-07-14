@@ -1,8 +1,10 @@
 import { mount } from '@vue/test-utils';
+import { cloneDeep } from 'lodash';
 import { format } from 'timeago.js';
+import DeleteComponent from '~/environments/components/environment_delete.vue';
 import EnvironmentItem from '~/environments/components/environment_item.vue';
 import PinComponent from '~/environments/components/environment_pin.vue';
-
+import { differenceInMilliseconds } from '~/lib/utils/datetime_utility';
 import { environment, folder, tableData } from './mock_data';
 
 describe('Environment item', () => {
@@ -29,6 +31,11 @@ describe('Environment item', () => {
   });
 
   const findAutoStop = () => wrapper.find('.js-auto-stop');
+  const findUpcomingDeployment = () => wrapper.find('[data-testid="upcoming-deployment"]');
+  const findUpcomingDeploymentContent = () =>
+    wrapper.find('[data-testid="upcoming-deployment-content"]');
+  const findUpcomingDeploymentStatusLink = () =>
+    wrapper.find('[data-testid="upcoming-deployment-status-link"]');
 
   afterEach(() => {
     wrapper.destroy();
@@ -52,6 +59,10 @@ describe('Environment item', () => {
         const formattedDate = format(environment.last_deployment.deployed_at);
 
         expect(wrapper.find('.environment-created-date-timeago').text()).toContain(formattedDate);
+      });
+
+      it('should not render the delete button', () => {
+        expect(wrapper.find(DeleteComponent).exists()).toBe(false);
       });
 
       describe('With user information', () => {
@@ -82,6 +93,72 @@ describe('Environment item', () => {
         });
       });
 
+      describe('When the envionment has an upcoming deployment', () => {
+        describe('When the upcoming deployment has a deployable', () => {
+          it('should render the build ID and user', () => {
+            expect(findUpcomingDeploymentContent().text()).toMatchInterpolatedText(
+              '#27 by upcoming-username',
+            );
+          });
+
+          it('should render a status icon with a link and tooltip', () => {
+            expect(findUpcomingDeploymentStatusLink().exists()).toBe(true);
+
+            expect(findUpcomingDeploymentStatusLink().attributes().href).toBe(
+              '/root/environment-test/-/jobs/892',
+            );
+
+            expect(findUpcomingDeploymentStatusLink().attributes().title).toBe(
+              'Deployment running',
+            );
+          });
+        });
+
+        describe('When the deployment does not have a deployable', () => {
+          beforeEach(() => {
+            const environmentWithoutDeployable = cloneDeep(environment);
+            delete environmentWithoutDeployable.upcoming_deployment.deployable;
+
+            factory({
+              propsData: {
+                model: environmentWithoutDeployable,
+                canReadEnvironment: true,
+                tableData,
+              },
+            });
+          });
+
+          it('should still renders the build ID and user', () => {
+            expect(findUpcomingDeploymentContent().text()).toMatchInterpolatedText(
+              '#27 by upcoming-username',
+            );
+          });
+
+          it('should not render the status icon', () => {
+            expect(findUpcomingDeploymentStatusLink().exists()).toBe(false);
+          });
+        });
+      });
+
+      describe('Without upcoming deployment', () => {
+        beforeEach(() => {
+          const environmentWithoutUpcomingDeployment = cloneDeep(environment);
+          delete environmentWithoutUpcomingDeployment.upcoming_deployment;
+
+          factory({
+            propsData: {
+              model: environmentWithoutUpcomingDeployment,
+              canReadEnvironment: true,
+              tableData,
+            },
+          });
+        });
+
+        it('should not render anything in the upcoming deployment column', () => {
+          expect(findUpcomingDeploymentContent().exists()).toBe(false);
+        });
+      });
+
       describe('Without auto-stop date', () => {
         beforeEach(() => {
           factory({
@@ -98,7 +175,7 @@ describe('Environment item', () => {
           expect(findAutoStop().exists()).toBe(false);
         });
 
-        it('should not render the suto-stop button', () => {
+        it('should not render the auto-stop button', () => {
           expect(wrapper.find(PinComponent).exists()).toBe(false);
         });
       });
@@ -130,7 +207,7 @@ describe('Environment item', () => {
         });
 
         describe('in the past', () => {
-          const pastDate = new Date(Date.now() - 100000);
+          const pastDate = new Date(differenceInMilliseconds(100000));
           beforeEach(() => {
             factory({
               propsData: {
@@ -203,6 +280,39 @@ describe('Environment item', () => {
 
     it('should render the number of children in a badge', () => {
       expect(wrapper.find('.folder-name .badge').text()).toContain(folder.size);
+    });
+
+    it('should not render the "Upcoming deployment" column', () => {
+      expect(findUpcomingDeployment().exists()).toBe(false);
+    });
+
+    it('should set the name cell to be full width', () => {
+      expect(wrapper.find('[data-testid="environment-name-cell"]').classes('section-100')).toBe(
+        true,
+      );
+    });
+
+    it('should hide non-folder properties', () => {
+      expect(wrapper.find('[data-testid="environment-deployment-id-cell"]').exists()).toBe(false);
+      expect(wrapper.find('[data-testid="environment-build-cell"]').exists()).toBe(false);
+    });
+  });
+
+  describe('When environment can be deleted', () => {
+    beforeEach(() => {
+      factory({
+        propsData: {
+          model: {
+            can_delete: true,
+            delete_path: 'http://0.0.0.0:3000/api/v4/projects/8/environments/45',
+          },
+          tableData,
+        },
+      });
+    });
+
+    it('should render the delete button', () => {
+      expect(wrapper.find(DeleteComponent).exists()).toBe(true);
     });
   });
 });

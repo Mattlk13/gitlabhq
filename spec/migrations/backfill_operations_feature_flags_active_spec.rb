@@ -1,18 +1,16 @@
 # frozen_string_literal: true
 
 require 'spec_helper'
-require Rails.root.join('db', 'migrate', '20191213184609_backfill_operations_feature_flags_active.rb')
+require_migration!
 
-describe BackfillOperationsFeatureFlagsActive, :migration do
+RSpec.describe BackfillOperationsFeatureFlagsActive do
   let(:namespaces)   { table(:namespaces) }
   let(:projects)     { table(:projects) }
   let(:flags)        { table(:operations_feature_flags) }
 
   def setup
     namespace = namespaces.create!(name: 'foo', path: 'foo')
-    project = projects.create!(namespace_id: namespace.id)
-
-    project
+    projects.create!(namespace_id: namespace.id)
   end
 
   it 'executes successfully when there are no flags in the table' do

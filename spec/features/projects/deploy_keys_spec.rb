@@ -2,7 +2,7 @@
 
 require 'spec_helper'
 
-describe 'Project deploy keys', :js do
+RSpec.describe 'Project deploy keys', :js do
   let(:user) { create(:user) }
   let(:project) { create(:project_empty_repo) }
 
@@ -19,10 +19,11 @@ describe 'Project deploy keys', :js do
     it 'removes association between project and deploy key' do
       visit project_settings_repository_path(project)
 
-      page.within(find('.deploy-keys')) do
+      page.within(find('.rspec-deploy-keys-settings')) do
         expect(page).to have_selector('.deploy-key', count: 1)
 
-        accept_confirm { find('.ic-remove').click }
+        click_button 'Remove'
+        click_button 'Remove deploy key'
 
         wait_for_requests
 

@@ -9,48 +9,62 @@ module Types
 
       expose_permissions Types::PermissionTypes::Note
 
-      field :id, GraphQL::ID_TYPE, null: false,
-            description: 'ID of the note'
+      implements(Types::ResolvableInterface)
+
+      field :id, ::Types::GlobalIDType[::Note], null: false,
+            description: 'ID of the note.'
 
       field :project, Types::ProjectType,
             null: true,
-            description: 'Project associated with the note',
-            resolve: -> (note, args, context) { Gitlab::Graphql::Loaders::BatchModelLoader.new(Project, note.project_id).find }
+            description: 'Project associated with the note.'
 
       field :author, Types::UserType,
             null: false,
-            description: 'User who wrote this note',
-            resolve: -> (note, args, context) { Gitlab::Graphql::Loaders::BatchModelLoader.new(User, note.author_id).find }
-
-      field :resolved_by, Types::UserType,
-            null: true,
-            description: 'User that resolved the discussion',
-            resolve: -> (note, _args, _context) { Gitlab::Graphql::Loaders::BatchModelLoader.new(User, note.resolved_by_id).find }
+            description: 'User who wrote this note.'
 
       field :system, GraphQL::BOOLEAN_TYPE,
             null: false,
-            description: 'Indicates whether this note was created by the system or by a user'
+            description: 'Indicates whether this note was created by the system or by a user.'
+      field :system_note_icon_name, GraphQL::STRING_TYPE, null: true,
+            description: 'Name of the icon corresponding to a system note.'
 
       field :body, GraphQL::STRING_TYPE,
             null: false,
             method: :note,
-            description: 'Content of the note'
+            description: 'Content of the note.'
 
       markdown_field :body_html, null: true, method: :note
 
       field :created_at, Types::TimeType, null: false,
-            description: 'Timestamp of the note creation'
+            description: 'Timestamp of the note creation.'
       field :updated_at, Types::TimeType, null: false,
-            description: "Timestamp of the note's last activity"
+            description: "Timestamp of the note's last activity."
       field :discussion, Types::Notes::DiscussionType, null: true,
-            description: 'The discussion this note is a part of'
-      field :resolvable, GraphQL::BOOLEAN_TYPE, null: false,
-            description: 'Indicates if this note can be resolved. That is, if it is a resolvable discussion or simply a standalone note',
-            method: :resolvable?
-      field :resolved_at, Types::TimeType, null: true,
-            description: "Timestamp of the note's resolution"
+            description: 'The discussion this note is a part of.'
       field :position, Types::Notes::DiffPositionType, null: true,
-            description: 'The position of this note on a diff'
+            description: 'The position of this note on a diff.'
+      field :confidential, GraphQL::BOOLEAN_TYPE, null: true,
+            description: 'Indicates if this note is confidential.',
+            method: :confidential?
+      field :url, GraphQL::STRING_TYPE,
+            null: true,
+            description: 'URL to view this Note in the Web UI.'
+
+      def url
+        ::Gitlab::UrlBuilder.build(object)
+      end
+
+      def system_note_icon_name
+        SystemNoteHelper.system_note_icon_name(object) if object.system?
+      end
+
+      def project
+        Gitlab::Graphql::Loaders::BatchModelLoader.new(Project, object.project_id).find
+      end
+
+      def author
+        Gitlab::Graphql::Loaders::BatchModelLoader.new(User, object.author_id).find
+      end
     end
   end
 end

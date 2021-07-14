@@ -1,4 +1,10 @@
-# Restoring from backup after a failed upgrade
+---
+stage: Enablement
+group: Distribution
+info: To determine the technical writer assigned to the Stage/Group associated with this page, see https://about.gitlab.com/handbook/engineering/ux/technical-writing/#assignments
+---
+
+# Restoring from backup after a failed upgrade **(FREE SELF)**
 
 Upgrades are usually smooth and restoring from backup is a rare occurrence.
 However, it's important to know how to recover when problems do arise.
@@ -6,13 +12,16 @@ However, it's important to know how to recover when problems do arise.
 ## Roll back to an earlier version and restore a backup
 
 In some cases after a failed upgrade, the fastest solution is to roll back to
-the previous version you were using.
+the previous version you were using. We recommend this path because the failed
+upgrade will likely have made database changes that can not be readily reverted.
 
 First, roll back the code or package. For source installations this involves
 checking out the older version (branch or tag). For Omnibus installations this
-means installing the older .deb or .rpm package. Then, restore from a backup.
+means installing the older
+[`.deb` or `.rpm` package](https://packages.gitlab.com/gitlab). Then, restore from a
+backup.
 Follow the instructions in the
-[Backup and Restore](../raketasks/backup_restore.md#restore)
+[Backup and Restore](../raketasks/backup_restore.md#restore-gitlab)
 documentation.
 
 ## Potential problems on the next upgrade
@@ -28,7 +37,7 @@ may need to manually correct the problem next time you upgrade.
 
 Example error:
 
-```
+```plaintext
 == 20151103134857 CreateLfsObjects: migrating =================================
 -- create_table(:lfs_objects)
 rake aborted!
@@ -45,10 +54,10 @@ need to do.
 
 ### GitLab 8.6+
 
-Pass the version to a database rake task to manually mark the migration as
+Pass the version to a database Rake task to manually mark the migration as
 complete.
 
-```
+```shell
 # Source install
 sudo -u git -H bundle exec rake gitlab:db:mark_migration_complete[20151103134857] RAILS_ENV=production
 
@@ -56,13 +65,13 @@ sudo -u git -H bundle exec rake gitlab:db:mark_migration_complete[20151103134857
 sudo gitlab-rake gitlab:db:mark_migration_complete[20151103134857]
 ```
 
-Once the migration is successfully marked, run the rake `db:migrate` task again.
-You will likely have to repeat this process several times until all failed
+Once the migration is successfully marked, run the Rake `db:migrate` task again.
+You might need to repeat this process several times until all failed
 migrations are marked complete.
 
 ### GitLab < 8.6
 
-```
+```shell
 # Source install
 sudo -u git -H bundle exec rails console -e production
 
@@ -72,11 +81,11 @@ sudo gitlab-rails console
 
 At the Rails console, type the following commands:
 
-```
+```ruby
 ActiveRecord::Base.connection.execute("INSERT INTO schema_migrations (version) VALUES('20151103134857')")
 exit
 ```
 
-Once the migration is successfully marked, run the rake `db:migrate` task again.
-You will likely have to repeat this process several times until all failed
+Once the migration is successfully marked, run the Rake `db:migrate` task again.
+You might need to repeat this process several times until all failed
 migrations are marked complete.

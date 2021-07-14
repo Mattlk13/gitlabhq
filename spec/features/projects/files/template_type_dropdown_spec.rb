@@ -2,7 +2,7 @@
 
 require 'spec_helper'
 
-describe 'Projects > Files > Template type dropdown selector', :js do
+RSpec.describe 'Projects > Files > Template type dropdown selector', :js do
   let(:project) { create(:project, :repository) }
   let(:user) { project.owner }
 
@@ -37,10 +37,6 @@ describe 'Projects > Files > Template type dropdown selector', :js do
     end
 
     it 'displayed' do
-      check_type_selector_display(true)
-    end
-
-    it 'is displayed when input matches' do
       check_type_selector_display(true)
     end
 

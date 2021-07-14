@@ -1,3 +1,9 @@
+---
+stage: Enablement
+group: Database
+info: To determine the technical writer assigned to the Stage/Group associated with this page, see https://about.gitlab.com/handbook/engineering/ux/technical-writing/#assignments
+---
+
 # Adding foreign key constraint to an existing column
 
 Foreign keys help ensure consistency between related database tables. The current database review process **always** encourages you to add [foreign keys](../foreign_keys.md) when creating tables that reference records from other tables.
@@ -52,6 +58,9 @@ emails = Email.where(user_id: 1) # returns emails for the deleted user
 
 Add a `NOT VALID` foreign key constraint to the table, which enforces consistency on the record changes.
 
+[Using the `with_lock_retries` helper method is advised when performing operations on high-traffic tables](../migration_style_guide.md#when-to-use-the-helper-method),
+in this case, if the table or the foreign table is a high-traffic table, we should use the helper method.
+
 In the example above, you'd be still able to update records in the `emails` table. However, when you'd try to update the `user_id` with non-existent value, the constraint causes a database error.
 
 Migration file for adding `NOT VALID` foreign key:
@@ -60,11 +69,9 @@ Migration file for adding `NOT VALID` foreign key:
 class AddNotValidForeignKeyToEmailsUser < ActiveRecord::Migration[5.2]
   include Gitlab::Database::MigrationHelpers
 
-  DOWNTIME = false
-
   def up
     # safe to use: it requires short lock on the table since we don't validate the foreign key
-    add_foreign_key :emails, :users, on_delete: :cascade, validate: false # rubocop:disable Migration/AddConcurrentForeignKey
+    add_foreign_key :emails, :users, on_delete: :cascade, validate: false
   end
 
   def down
@@ -73,7 +80,7 @@ class AddNotValidForeignKeyToEmailsUser < ActiveRecord::Migration[5.2]
 end
 ```
 
-CAUTION: **Caution:**
+WARNING:
 Avoid using the `add_foreign_key` constraint more than once per migration file, unless the source and target tables are identical.
 
 #### Data migration to fix existing records
@@ -88,8 +95,6 @@ Example for cleaning up records in the `emails` table within a database migratio
 class RemoveRecordsWithoutUserFromEmailsTable < ActiveRecord::Migration[5.2]
   include Gitlab::Database::MigrationHelpers
 
-  DOWNTIME = false
-
   disable_ddl_transaction!
 
   class Email < ActiveRecord::Base
@@ -103,7 +108,7 @@ class RemoveRecordsWithoutUserFromEmailsTable < ActiveRecord::Migration[5.2]
   end
 
   def down
-    # Can be a no-op when data inconsistency is not affecting the pre and post deploymnet version of the application.
+    # Can be a no-op when data inconsistency is not affecting the pre and post deployment version of the application.
     # In this case we might have records in the `emails` table where the associated record in the `users` table is not there anymore.
   end
 end
@@ -113,7 +118,8 @@ end
 
 Validating the foreign key will scan the whole table and make sure that each relation is correct.
 
-NOTE: **Note:** When using [background migrations](../background_migrations.md), foreign key validation should happen in the next GitLab release.
+NOTE:
+When using [background migrations](../background_migrations.md), foreign key validation should happen in the next GitLab release.
 
 Migration file for validating the foreign key:
 
@@ -122,8 +128,6 @@ Migration file for validating the foreign key:
 
 class ValidateForeignKeyOnEmailUsers < ActiveRecord::Migration[5.2]
   include Gitlab::Database::MigrationHelpers
-
-  DOWNTIME = false
 
   def up
     validate_foreign_key :emails, :user_id

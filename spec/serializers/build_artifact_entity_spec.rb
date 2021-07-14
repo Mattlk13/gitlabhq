@@ -2,33 +2,39 @@
 
 require 'spec_helper'
 
-describe BuildArtifactEntity do
-  let(:job) { create(:ci_build, :artifacts, name: 'test:job', artifacts_expire_at: 1.hour.from_now) }
+RSpec.describe BuildArtifactEntity do
+  let_it_be(:job) { create(:ci_build) }
+  let_it_be(:artifact) { create(:ci_job_artifact, :codequality, expire_at: 1.hour.from_now, job: job) }
+
+  let(:options) { { request: double } }
 
   let(:entity) do
-    described_class.new(job, request: double)
+    described_class.represent(artifact, options)
   end
 
   describe '#as_json' do
     subject { entity.as_json }
 
     it 'contains job name' do
-      expect(subject[:name]).to eq 'test:job'
+      expect(subject[:name]).to eq "test:codequality"
     end
 
     it 'exposes information about expiration of artifacts' do
       expect(subject).to include(:expired, :expire_at)
     end
 
-    it 'contains paths to the artifacts' do
-      expect(subject[:path])
-        .to include "jobs/#{job.id}/artifacts/download"
+    it 'exposes the artifact download path' do
+      expect(subject[:path]).to include "jobs/#{job.id}/artifacts/download?file_type=codequality"
+    end
 
-      expect(subject[:keep_path])
-        .to include "jobs/#{job.id}/artifacts/keep"
+    context 'when project is specified in options' do
+      let(:options) { super().merge(project: job.project) }
 
-      expect(subject[:browse_path])
-        .to include "jobs/#{job.id}/artifacts/browse"
+      it 'doesnt get a project from the artifact' do
+        expect(artifact).not_to receive(:project)
+
+        subject
+      end
     end
   end
 end

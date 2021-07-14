@@ -3,13 +3,28 @@
 module Projects
   module Settings
     class CiCdController < Projects::ApplicationController
+      include RunnerSetupScripts
+
+      NUMBER_OF_RUNNERS_PER_PAGE = 20
+
+      layout 'project_settings'
       before_action :authorize_admin_pipeline!
       before_action :define_variables
       before_action do
-        push_frontend_feature_flag(:new_variables_ui, @project)
+        push_frontend_feature_flag(:ajax_new_deploy_token, @project)
+        push_frontend_feature_flag(:ci_scoped_job_token, @project, default_enabled: :yaml)
       end
 
+      helper_method :highlight_badge
+
+      feature_category :continuous_integration
+
       def show
+        if Feature.enabled?(:ci_pipeline_triggers_settings_vue_ui, @project)
+          @triggers_json = ::Ci::TriggerSerializer.new.represent(
+            @project.triggers, current_user: current_user, project: @project
+          ).to_json
+        end
       end
 
       def update
@@ -46,17 +61,15 @@ module Projects
         redirect_to namespace_project_settings_ci_cd_path
       end
 
-      def create_deploy_token
-        @new_deploy_token = Projects::DeployTokens::CreateService.new(@project, current_user, deploy_token_params).execute
-
-        if @new_deploy_token.persisted?
-          flash.now[:notice] = s_('DeployTokens|Your new project deploy token has been created.')
-        end
-
-        render 'show'
+      def runner_setup_scripts
+        private_runner_setup_scripts
       end
 
       private
+
+      def highlight_badge(name, content, language = nil)
+        Gitlab::Highlight.highlight(name, content, language: language)
+      end
 
       def update_params
         params.require(:project).permit(*permitted_project_params)
@@ -66,16 +79,12 @@ module Projects
         [
           :runners_token, :builds_enabled, :build_allow_git_fetch,
           :build_timeout_human_readable, :build_coverage_regex, :public_builds,
-          :auto_cancel_pending_pipelines, :ci_config_path,
+          :auto_cancel_pending_pipelines, :ci_config_path, :auto_rollback_enabled,
           auto_devops_attributes: [:id, :domain, :enabled, :deploy_strategy],
-          ci_cd_settings_attributes: [:default_git_depth]
+          ci_cd_settings_attributes: [:default_git_depth, :forward_deployment_enabled]
         ].tap do |list|
           list << :max_artifacts_size if can?(current_user, :update_max_artifacts_size, project)
         end
-      end
-
-      def deploy_token_params
-        params.require(:deploy_token).permit(:name, :expires_at, :read_repository, :read_registry, :username)
       end
 
       def run_autodevops_pipeline(service)
@@ -97,26 +106,26 @@ module Projects
       def define_variables
         define_runners_variables
         define_ci_variables
-        define_deploy_token_variables
         define_triggers_variables
         define_badges_variables
         define_auto_devops_variables
       end
 
       def define_runners_variables
-        @project_runners = @project.runners.ordered
+        @project_runners = @project.runners.ordered.page(params[:project_page]).per(NUMBER_OF_RUNNERS_PER_PAGE).with_tags
 
         @assignable_runners = current_user
           .ci_owned_runners
           .assignable_for(project)
           .ordered
-          .page(params[:page]).per(20)
+          .page(params[:specific_page]).per(NUMBER_OF_RUNNERS_PER_PAGE)
+          .with_tags
 
-        @shared_runners = ::Ci::Runner.instance_type.active
+        @shared_runners = ::Ci::Runner.instance_type.active.with_tags
 
         @shared_runners_count = @shared_runners.count(:all)
 
-        @group_runners = ::Ci::Runner.belonging_to_parent_group_of_project(@project.id)
+        @group_runners = ::Ci::Runner.belonging_to_parent_group_of_project(@project.id).with_tags
       end
 
       def define_ci_variables
@@ -129,15 +138,16 @@ module Projects
       def define_triggers_variables
         @triggers = @project.triggers
           .present(current_user: current_user)
+
         @trigger = ::Ci::Trigger.new
           .present(current_user: current_user)
       end
 
       def define_badges_variables
-        @ref = params[:ref] || @project.default_branch || 'master'
+        @ref = params[:ref] || @project.default_branch_or_main
 
-        @badges = [Gitlab::Badge::Pipeline::Status,
-                   Gitlab::Badge::Coverage::Report]
+        @badges = [Gitlab::Ci::Badge::Pipeline::Status,
+                   Gitlab::Ci::Badge::Coverage::Report]
 
         @badges.map! do |badge|
           badge.new(@project, @ref).metadata
@@ -147,14 +157,8 @@ module Projects
       def define_auto_devops_variables
         @auto_devops = @project.auto_devops || ProjectAutoDevops.new
       end
-
-      def define_deploy_token_variables
-        @deploy_tokens = @project.deploy_tokens.active
-
-        @new_deploy_token = DeployToken.new
-      end
     end
   end
 end
 
-Projects::Settings::CiCdController.prepend_if_ee('EE::Projects::Settings::CiCdController')
+Projects::Settings::CiCdController.prepend_mod_with('Projects::Settings::CiCdController')

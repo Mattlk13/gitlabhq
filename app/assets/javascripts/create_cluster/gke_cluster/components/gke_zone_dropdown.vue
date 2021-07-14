@@ -46,9 +46,7 @@ export default {
       if (!isValidating && this.projectHasBillingEnabled) {
         this.isLoading = true;
 
-        this.fetchZones()
-          .then(this.fetchSuccessHandler)
-          .catch(this.fetchFailureHandler);
+        this.fetchZones().then(this.fetchSuccessHandler).catch(this.fetchFailureHandler);
       }
     },
   },
@@ -86,7 +84,7 @@ export default {
             </li>
           </ul>
         </div>
-        <div class="dropdown-loading"><gl-loading-icon /></div>
+        <div class="dropdown-loading"><gl-loading-icon size="sm" /></div>
       </div>
     </div>
     <span

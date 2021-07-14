@@ -1,26 +1,15 @@
-import $ from 'jquery';
 import { mount } from '@vue/test-utils';
-import { first } from 'underscore';
+import $ from 'jquery';
+import { getJSONFixture } from 'helpers/fixtures';
+import * as commonUtils from '~/lib/utils/common_utils';
+import * as urlUtility from '~/lib/utils/url_utility';
 import EvidenceBlock from '~/releases/components/evidence_block.vue';
 import ReleaseBlock from '~/releases/components/release_block.vue';
 import ReleaseBlockFooter from '~/releases/components/release_block_footer.vue';
+import { BACK_URL_PARAM } from '~/releases/constants';
 import timeagoMixin from '~/vue_shared/mixins/timeago';
-import { release as originalRelease } from '../mock_data';
-import Icon from '~/vue_shared/components/icon.vue';
-import { scrollToElement } from '~/lib/utils/common_utils';
 
-const { convertObjectPropsToCamelCase } = jest.requireActual('~/lib/utils/common_utils');
-
-let mockLocationHash;
-jest.mock('~/lib/utils/url_utility', () => ({
-  __esModule: true,
-  getLocationHash: jest.fn().mockImplementation(() => mockLocationHash),
-}));
-
-jest.mock('~/lib/utils/common_utils', () => ({
-  __esModule: true,
-  scrollToElement: jest.fn(),
-}));
+const originalRelease = getJSONFixture('api/releases/release.json');
 
 describe('Release block', () => {
   let wrapper;
@@ -33,7 +22,6 @@ describe('Release block', () => {
       },
       provide: {
         glFeatures: {
-          releaseIssueSummary: true,
           ...featureFlags,
         },
       },
@@ -47,7 +35,7 @@ describe('Release block', () => {
 
   beforeEach(() => {
     jest.spyOn($.fn, 'renderGFM');
-    release = convertObjectPropsToCamelCase(originalRelease, { deep: true });
+    release = commonUtils.convertObjectPropsToCamelCase(originalRelease, { deep: true });
   });
 
   afterEach(() => {
@@ -58,12 +46,14 @@ describe('Release block', () => {
     beforeEach(() => factory(release));
 
     it("renders the block with an id equal to the release's tag name", () => {
-      expect(wrapper.attributes().id).toBe('v0.3');
+      expect(wrapper.attributes().id).toBe(release.tagName);
     });
 
-    it('renders an edit button that links to the "Edit release" page', () => {
+    it(`renders an edit button that links to the "Edit release" page with a "${BACK_URL_PARAM}" parameter`, () => {
       expect(editButton().exists()).toBe(true);
-      expect(editButton().attributes('href')).toBe(release._links.editUrl);
+      expect(editButton().attributes('href')).toBe(
+        `${release._links.editUrl}?${BACK_URL_PARAM}=${encodeURIComponent(window.location.href)}`,
+      );
     });
 
     it('renders release name', () => {
@@ -79,50 +69,8 @@ describe('Release block', () => {
       expect(wrapper.text()).toContain(timeagoMixin.methods.timeFormatted(release.releasedAt));
     });
 
-    it('renders number of assets provided', () => {
-      expect(wrapper.find('.js-assets-count').text()).toContain(release.assets.count);
-    });
-
-    it('renders dropdown with the sources', () => {
-      expect(wrapper.findAll('.js-sources-dropdown li').length).toEqual(
-        release.assets.sources.length,
-      );
-
-      expect(wrapper.find('.js-sources-dropdown li a').attributes().href).toEqual(
-        first(release.assets.sources).url,
-      );
-
-      expect(wrapper.find('.js-sources-dropdown li a').text()).toContain(
-        first(release.assets.sources).format,
-      );
-    });
-
-    it('renders list with the links provided', () => {
-      expect(wrapper.findAll('.js-assets-list li').length).toEqual(release.assets.links.length);
-
-      expect(wrapper.find('.js-assets-list li a').attributes().href).toEqual(
-        first(release.assets.links).url,
-      );
-
-      expect(wrapper.find('.js-assets-list li a').text()).toContain(
-        first(release.assets.links).name,
-      );
-    });
-
     it('renders author avatar', () => {
       expect(wrapper.find('.user-avatar-link').exists()).toBe(true);
-    });
-
-    describe('external label', () => {
-      it('renders external label when link is external', () => {
-        expect(wrapper.find('.js-assets-list li a').text()).toContain('external source');
-      });
-
-      it('does not render external label when link is not external', () => {
-        expect(wrapper.find('.js-assets-list li:nth-child(2) a').text()).not.toContain(
-          'external source',
-        );
-      });
     });
 
     it('renders the footer', () => {
@@ -150,14 +98,6 @@ describe('Release block', () => {
     });
   });
 
-  it("does not render an edit button if release._links.editUrl isn't a string", () => {
-    delete release._links;
-
-    return factory(release).then(() => {
-      expect(editButton().exists()).toBe(false);
-    });
-  });
-
   it('does not render the milestone list if no milestones are associated to the release', () => {
     delete release.milestones;
 
@@ -182,19 +122,23 @@ describe('Release block', () => {
     });
   });
 
-  describe('evidence block', () => {
-    it('renders the evidence block when the evidence is available and the feature flag is true', () =>
-      factory(release, { releaseEvidenceCollection: true }).then(() =>
-        expect(wrapper.find(EvidenceBlock).exists()).toBe(true),
-      ));
+  it('does not set the ID if tagName is missing', () => {
+    release.tagName = undefined;
 
-    it('does not render the evidence block when the evidence is available but the feature flag is false', () =>
-      factory(release, { releaseEvidenceCollection: true }).then(() =>
-        expect(wrapper.find(EvidenceBlock).exists()).toBe(true),
-      ));
+    return factory(release).then(() => {
+      expect(wrapper.attributes().id).toBeUndefined();
+    });
+  });
+
+  describe('evidence block', () => {
+    it('renders the evidence block when the evidence is available', () => {
+      return factory(release).then(() => {
+        expect(wrapper.find(EvidenceBlock).exists()).toBe(true);
+      });
+    });
 
     it('does not render the evidence block when there is no evidence', () => {
-      release.evidenceSha = null;
+      release.evidences = [];
 
       return factory(release).then(() => {
         expect(wrapper.find(EvidenceBlock).exists()).toBe(false);
@@ -203,37 +147,40 @@ describe('Release block', () => {
   });
 
   describe('anchor scrolling', () => {
+    let locationHash;
+
     beforeEach(() => {
-      scrollToElement.mockClear();
+      commonUtils.scrollToElement = jest.fn();
+      urlUtility.getLocationHash = jest.fn().mockImplementation(() => locationHash);
     });
 
     const hasTargetBlueBackground = () => wrapper.classes('bg-line-target-blue');
 
     it('does not attempt to scroll the page if no anchor tag is included in the URL', () => {
-      mockLocationHash = '';
+      locationHash = '';
       return factory(release).then(() => {
-        expect(scrollToElement).not.toHaveBeenCalled();
+        expect(commonUtils.scrollToElement).not.toHaveBeenCalled();
       });
     });
 
     it("does not attempt to scroll the page if the anchor tag doesn't match the release's tag name", () => {
-      mockLocationHash = 'v0.4';
+      locationHash = 'v0.4';
       return factory(release).then(() => {
-        expect(scrollToElement).not.toHaveBeenCalled();
+        expect(commonUtils.scrollToElement).not.toHaveBeenCalled();
       });
     });
 
     it("attempts to scroll itself into view if the anchor tag matches the release's tag name", () => {
-      mockLocationHash = release.tagName;
+      locationHash = release.tagName;
       return factory(release).then(() => {
-        expect(scrollToElement).toHaveBeenCalledTimes(1);
+        expect(commonUtils.scrollToElement).toHaveBeenCalledTimes(1);
 
-        expect(scrollToElement).toHaveBeenCalledWith(wrapper.element);
+        expect(commonUtils.scrollToElement).toHaveBeenCalledWith(wrapper.element);
       });
     });
 
     it('renders with a light blue background if it is the target of the anchor', () => {
-      mockLocationHash = release.tagName;
+      locationHash = release.tagName;
 
       return factory(release).then(() => {
         expect(hasTargetBlueBackground()).toBe(true);
@@ -241,57 +188,10 @@ describe('Release block', () => {
     });
 
     it('does not render with a light blue background if it is not the target of the anchor', () => {
-      mockLocationHash = '';
+      locationHash = '';
 
       return factory(release).then(() => {
         expect(hasTargetBlueBackground()).toBe(false);
-      });
-    });
-  });
-
-  describe('when the releaseIssueSummary feature flag is disabled', () => {
-    describe('with default props', () => {
-      beforeEach(() => factory(release, { releaseIssueSummary: false }));
-
-      it('renders the milestone icon', () => {
-        expect(
-          milestoneListLabel()
-            .find(Icon)
-            .exists(),
-        ).toBe(true);
-      });
-
-      it('renders the label as "Milestones" if more than one milestone is passed in', () => {
-        expect(
-          milestoneListLabel()
-            .find('.js-label-text')
-            .text(),
-        ).toEqual('Milestones');
-      });
-
-      it('renders a link to the milestone with a tooltip', () => {
-        const milestone = first(release.milestones);
-        const milestoneLink = wrapper.find('.js-milestone-link');
-
-        expect(milestoneLink.exists()).toBe(true);
-
-        expect(milestoneLink.text()).toBe(milestone.title);
-
-        expect(milestoneLink.attributes('href')).toBe(milestone.webUrl);
-
-        expect(milestoneLink.attributes('title')).toBe(milestone.description);
-      });
-    });
-
-    it('renders the label as "Milestone" if only a single milestone is passed in', () => {
-      release.milestones = release.milestones.slice(0, 1);
-
-      return factory(release, { releaseIssueSummary: false }).then(() => {
-        expect(
-          milestoneListLabel()
-            .find('.js-label-text')
-            .text(),
-        ).toEqual('Milestone');
       });
     });
   });

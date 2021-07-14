@@ -2,7 +2,7 @@
 
 require 'spec_helper'
 
-describe Gitlab::Auth::IpRateLimiter, :use_clean_rails_memory_store_caching do
+RSpec.describe Gitlab::Auth::IpRateLimiter, :use_clean_rails_memory_store_caching do
   let(:ip) { '10.2.2.3' }
   let(:whitelist) { ['127.0.0.1'] }
   let(:options) do
@@ -19,6 +19,9 @@ describe Gitlab::Auth::IpRateLimiter, :use_clean_rails_memory_store_caching do
 
   before do
     stub_rack_attack_setting(options)
+    Rack::Attack.reset!
+    Rack::Attack.clear_configuration
+    Gitlab::RackAttack.configure(Rack::Attack)
   end
 
   after do

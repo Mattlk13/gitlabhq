@@ -11,11 +11,11 @@ class Issue::Metrics < ApplicationRecord
 
   def record!
     if issue.milestone_id.present? && self.first_associated_with_milestone_at.blank?
-      self.first_associated_with_milestone_at = Time.now
+      self.first_associated_with_milestone_at = Time.current
     end
 
     if issue_assigned_to_list_label? && self.first_added_to_board_at.blank?
-      self.first_added_to_board_at = Time.now
+      self.first_added_to_board_at = Time.current
     end
 
     self.save
@@ -24,6 +24,10 @@ class Issue::Metrics < ApplicationRecord
   private
 
   def issue_assigned_to_list_label?
-    issue.labels.any? { |label| label.lists.present? }
+    # Avoid another DB lookup when issue.labels are empty by adding a guard clause here
+    # We can't use issue.labels.empty? because that will cause a `Label Exists?` DB lookup
+    return false if issue.labels.length == 0 # rubocop:disable Style/ZeroLengthPredicate
+
+    issue.labels.includes(:lists).any? { |label| label.lists.present? }
   end
 end

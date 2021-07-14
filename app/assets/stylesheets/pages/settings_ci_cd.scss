@@ -5,16 +5,12 @@
   }
 }
 
-.trigger-actions {
-  white-space: nowrap;
-
-  .btn {
-    margin-left: 10px;
-  }
+.trigger-description {
+  max-width: 100px;
 }
 
-.registry-placeholder {
-  min-height: 60px;
+.trigger-actions {
+  white-space: nowrap;
 }
 
 .auto-devops-card {

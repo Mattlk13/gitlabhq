@@ -2,7 +2,7 @@
 
 require 'spec_helper'
 
-describe 'layouts/nav/sidebar/_profile' do
+RSpec.describe 'layouts/nav/sidebar/_profile' do
   let(:user) { create(:user) }
 
   before do
@@ -10,4 +10,5 @@ describe 'layouts/nav/sidebar/_profile' do
   end
 
   it_behaves_like 'has nav sidebar'
+  it_behaves_like 'sidebar includes snowplow attributes', 'render', 'user_side_navigation', 'user_side_navigation'
 end

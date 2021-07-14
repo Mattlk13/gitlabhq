@@ -2,7 +2,7 @@
 
 require 'spec_helper'
 
-describe PagesDomainSslRenewalCronWorker do
+RSpec.describe PagesDomainSslRenewalCronWorker do
   include LetsEncryptHelpers
 
   subject(:worker) { described_class.new }
@@ -13,13 +13,20 @@ describe PagesDomainSslRenewalCronWorker do
 
   describe '#perform' do
     let_it_be(:project) { create :project }
+
     let!(:domain) { create(:pages_domain, project: project, auto_ssl_enabled: false) }
     let!(:domain_with_enabled_auto_ssl) { create(:pages_domain, project: project, auto_ssl_enabled: true) }
     let!(:domain_with_obtained_letsencrypt) do
       create(:pages_domain, :letsencrypt, project: project, auto_ssl_enabled: true)
     end
+
     let!(:domain_without_auto_certificate) do
       create(:pages_domain, :without_certificate, :without_key, project: project, auto_ssl_enabled: true)
+    end
+
+    let!(:domain_with_failed_auto_ssl) do
+      create(:pages_domain, :without_certificate, :without_key, project: project,
+             auto_ssl_enabled: true, auto_ssl_failed: true)
     end
 
     let!(:domain_with_expired_auto_ssl) do
@@ -34,7 +41,8 @@ describe PagesDomainSslRenewalCronWorker do
       end
 
       [domain,
-       domain_with_obtained_letsencrypt].each do |domain|
+       domain_with_obtained_letsencrypt,
+       domain_with_failed_auto_ssl].each do |domain|
         expect(PagesDomainSslRenewalWorker).not_to receive(:perform_async).with(domain.id)
       end
 

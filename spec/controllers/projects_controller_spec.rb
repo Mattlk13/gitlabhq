@@ -2,19 +2,21 @@
 
 require('spec_helper')
 
-describe ProjectsController do
+RSpec.describe ProjectsController do
   include ExternalAuthorizationServiceHelpers
   include ProjectForksHelper
+  using RSpec::Parameterized::TableSyntax
 
-  let(:project) { create(:project) }
-  let(:public_project) { create(:project, :public) }
-  let(:user) { create(:user) }
+  let_it_be(:project, reload: true) { create(:project, :with_export, service_desk_enabled: false) }
+  let_it_be(:public_project) { create(:project, :public) }
+  let_it_be(:user) { create(:user) }
+
   let(:jpg) { fixture_file_upload('spec/fixtures/rails_sample.jpg', 'image/jpg') }
   let(:txt) { fixture_file_upload('spec/fixtures/doc_sample.txt', 'text/plain') }
 
   describe 'GET new' do
     context 'with an authenticated user' do
-      let(:group) { create(:group) }
+      let_it_be(:group) { create(:group) }
 
       before do
         sign_in(user)
@@ -65,11 +67,13 @@ describe ProjectsController do
   end
 
   describe "GET #activity as JSON" do
+    include DesignManagementTestHelpers
     render_views
 
-    let(:project) { create(:project, :public, issues_access_level: ProjectFeature::PRIVATE) }
+    let_it_be(:project) { create(:project, :public, issues_access_level: ProjectFeature::PRIVATE) }
 
     before do
+      enable_design_management
       create(:event, :created, project: project, target: create(:issue))
 
       sign_in(user)
@@ -82,10 +86,31 @@ describe ProjectsController do
         project.add_developer(user)
       end
 
-      it 'returns count' do
+      def get_activity(project)
         get :activity, params: { namespace_id: project.namespace, id: project, format: :json }
+      end
+
+      it 'returns count' do
+        get_activity(project)
 
         expect(json_response['count']).to eq(1)
+      end
+
+      context 'design events are visible' do
+        include DesignManagementTestHelpers
+        let(:other_project) { create(:project, namespace: user.namespace) }
+
+        before do
+          enable_design_management
+          create(:design_event, project: project)
+          request.cookies[:event_filter] = EventFilter::DESIGNS
+        end
+
+        it 'returns correct count' do
+          get_activity(project)
+
+          expect(json_response['count']).to eq(1)
+        end
       end
     end
 
@@ -94,11 +119,6 @@ describe ProjectsController do
         get :activity, params: { namespace_id: project.namespace, id: project, format: :json }
 
         expect(json_response['html']).to eq("\n")
-      end
-
-      it 'filters out invisible event when calculating the count' do
-        get :activity, params: { namespace_id: project.namespace, id: project, format: :json }
-
         expect(json_response['count']).to eq(0)
       end
     end
@@ -135,7 +155,7 @@ describe ProjectsController do
           before do
             setting = user.notification_settings_for(public_project)
             setting.level = :watch
-            setting.save
+            setting.save!
           end
 
           it "shows current notification setting" do
@@ -169,13 +189,13 @@ describe ProjectsController do
           expect(assigns(:issuable_meta_data)).not_to be_nil
         end
 
-        it 'shows customize workflow page if wiki and issues are disabled' do
+        it 'shows activity page if wiki and issues are disabled' do
           project.project_feature.update_attribute(:wiki_access_level, ProjectFeature::DISABLED)
           project.project_feature.update_attribute(:issues_access_level, ProjectFeature::DISABLED)
 
           get :show, params: { namespace_id: project.namespace, id: project }
 
-          expect(response).to render_template("projects/_customize_workflow")
+          expect(response).to render_template("projects/_activity")
         end
 
         it 'shows activity if enabled by user' do
@@ -188,32 +208,32 @@ describe ProjectsController do
       end
     end
 
-    context 'when the storage is not available', :broken_storage do
-      let_it_be(:project) { create(:project, :broken_storage) }
-
-      before do
-        project.add_developer(user)
-        sign_in(user)
-      end
-
-      it 'renders a 503' do
-        get :show, params: { namespace_id: project.namespace, id: project }
-
-        expect(response).to have_gitlab_http_status(:service_unavailable)
-      end
-    end
-
     context "project with empty repo" do
-      let(:empty_project) { create(:project_empty_repo, :public) }
+      let_it_be(:empty_project) { create(:project_empty_repo, :public) }
 
       before do
         sign_in(user)
+
+        allow(controller).to receive(:record_experiment_user)
+      end
+
+      context 'when user can push to default branch', :experiment do
+        let(:user) { empty_project.owner }
+
+        it 'creates an "view_project_show" experiment tracking event' do
+          expect(experiment(:empty_repo_upload)).to track(
+            :view_project_show,
+            property: 'empty'
+          ).on_next_instance
+
+          get :show, params: { namespace_id: empty_project.namespace, id: empty_project }
+        end
       end
 
       User.project_views.keys.each do |project_view|
         context "with #{project_view} view set" do
           before do
-            user.update(project_view: project_view)
+            user.update!(project_view: project_view)
 
             get :show, params: { namespace_id: empty_project.namespace, id: empty_project }
           end
@@ -226,7 +246,7 @@ describe ProjectsController do
     end
 
     context "project with broken repo" do
-      let(:empty_project) { create(:project_broken_repo, :public) }
+      let_it_be(:empty_project) { create(:project_broken_repo, :public) }
 
       before do
         sign_in(user)
@@ -235,7 +255,7 @@ describe ProjectsController do
       User.project_views.keys.each do |project_view|
         context "with #{project_view} view set" do
           before do
-            user.update(project_view: project_view)
+            user.update!(project_view: project_view)
 
             get :show, params: { namespace_id: empty_project.namespace, id: empty_project }
           end
@@ -250,15 +270,20 @@ describe ProjectsController do
     end
 
     context "rendering default project view" do
-      let(:public_project) { create(:project, :public, :repository) }
+      let_it_be(:public_project) { create(:project, :public, :repository) }
 
       render_views
+
+      def get_show
+        get :show, params: { namespace_id: public_project.namespace, id: public_project }
+      end
 
       it "renders the activity view" do
         allow(controller).to receive(:current_user).and_return(user)
         allow(user).to receive(:project_view).and_return('activity')
 
-        get :show, params: { namespace_id: public_project.namespace, id: public_project }
+        get_show
+
         expect(response).to render_template('_activity')
       end
 
@@ -266,7 +291,8 @@ describe ProjectsController do
         allow(controller).to receive(:current_user).and_return(user)
         allow(user).to receive(:project_view).and_return('files')
 
-        get :show, params: { namespace_id: public_project.namespace, id: public_project }
+        get_show
+
         expect(response).to render_template('_files')
       end
 
@@ -274,8 +300,17 @@ describe ProjectsController do
         allow(controller).to receive(:current_user).and_return(user)
         allow(user).to receive(:project_view).and_return('readme')
 
-        get :show, params: { namespace_id: public_project.namespace, id: public_project }
+        get_show
+
         expect(response).to render_template('_readme')
+      end
+
+      it 'does not make Gitaly requests', :request_store, :clean_gitlab_redis_cache do
+        # Warm up to populate repository cache
+        get_show
+        RequestStore.clear!
+
+        expect { get_show }.not_to change { Gitlab::GitalyClient.get_request_count }
       end
     end
 
@@ -294,18 +329,60 @@ describe ProjectsController do
 
         get :show, params: { namespace_id: project.namespace, id: project }
 
-        expect(response.status).to eq 404
+        expect(response).to have_gitlab_http_status(:not_found)
       end
     end
 
-    context "redirection from http://someproject.git" do
-      it 'redirects to project page (format.html)' do
-        project = create(:project, :public)
+    context 'redirection from http://someproject.git' do
+      where(:user_type, :project_visibility, :expected_redirect) do
+        :anonymous | :public   | :redirect_to_project
+        :anonymous | :internal | :redirect_to_signup
+        :anonymous | :private  | :redirect_to_signup
 
-        get :show, params: { namespace_id: project.namespace, id: project }, format: :git
+        :signed_in | :public   | :redirect_to_project
+        :signed_in | :internal | :redirect_to_project
+        :signed_in | :private  | nil
 
-        expect(response).to have_gitlab_http_status(:found)
-        expect(response).to redirect_to(namespace_project_path)
+        :member | :public   | :redirect_to_project
+        :member | :internal | :redirect_to_project
+        :member | :private  | :redirect_to_project
+      end
+
+      with_them do
+        let(:redirect_to_signup) { new_user_session_path }
+        let(:redirect_to_project) { project_path(project) }
+
+        let(:expected_status) { expected_redirect ? :found : :not_found }
+
+        before do
+          project.update!(visibility: project_visibility.to_s)
+          project.team.add_user(user, :guest) if user_type == :member
+          sign_in(user) unless user_type == :anonymous
+        end
+
+        it 'returns the expected status' do
+          get :show, params: { namespace_id: project.namespace, id: project }, format: :git
+
+          expect(response).to have_gitlab_http_status(expected_status)
+          expect(response).to redirect_to(send(expected_redirect)) if expected_status == :found
+        end
+      end
+    end
+
+    context 'when project is moved and git format is requested' do
+      let(:old_path) { project.path + 'old' }
+
+      before do
+        project.redirect_routes.create!(path: "#{project.namespace.full_path}/#{old_path}")
+
+        project.add_developer(user)
+        sign_in(user)
+      end
+
+      it 'redirects to new project path' do
+        get :show, params: { namespace_id: project.namespace, id: old_path }, format: :git
+
+        expect(response).to redirect_to(project_path(project, format: :git))
       end
     end
 
@@ -329,40 +406,10 @@ describe ProjectsController do
           .not_to exceed_query_limit(2).for_query(expected_query)
       end
     end
-
-    context 'lfs_blob_ids instance variable' do
-      let(:project) { create(:project, :public, :repository) }
-
-      before do
-        sign_in(user)
-      end
-
-      context 'with vue tree view enabled' do
-        before do
-          get :show, params: { namespace_id: project.namespace, id: project }
-        end
-
-        it 'is not set' do
-          expect(assigns[:lfs_blob_ids]).to be_nil
-        end
-      end
-
-      context 'with vue tree view disabled' do
-        before do
-          stub_feature_flags(vue_file_list: false)
-
-          get :show, params: { namespace_id: project.namespace, id: project }
-        end
-
-        it 'is set' do
-          expect(assigns[:lfs_blob_ids]).not_to be_nil
-        end
-      end
-    end
   end
 
   describe 'GET edit' do
-    it 'allows an admin user to access the page' do
+    it 'allows an admin user to access the page', :enable_admin_mode do
       sign_in(create(:user, :admin))
 
       get :edit,
@@ -388,9 +435,35 @@ describe ProjectsController do
     end
   end
 
+  describe 'POST create' do
+    let!(:project_params) do
+      {
+        path: 'foo',
+        description: 'bar',
+        namespace_id: user.namespace.id,
+        visibility_level: Gitlab::VisibilityLevel::PUBLIC,
+        initialize_with_readme: 1
+      }
+    end
+
+    before do
+      sign_in(user)
+    end
+
+    it 'tracks a created event for the new_project_readme experiment', :experiment do
+      expect(experiment(:new_project_readme)).to track(
+        :created,
+        property: 'blank',
+        value: 1
+      ).with_context(actor: user).on_next_instance
+
+      post :create, params: { project: project_params }
+    end
+  end
+
   describe 'POST #archive' do
-    let(:group) { create(:group) }
-    let(:project) { create(:project, group: group) }
+    let_it_be(:group) { create(:group) }
+    let_it_be(:project) { create(:project, group: group) }
 
     before do
       sign_in(user)
@@ -437,8 +510,8 @@ describe ProjectsController do
   end
 
   describe 'POST #unarchive' do
-    let(:group) { create(:group) }
-    let(:project) { create(:project, :archived, group: group) }
+    let_it_be(:group) { create(:group) }
+    let_it_be(:project) { create(:project, :archived, group: group) }
 
     before do
       sign_in(user)
@@ -485,16 +558,17 @@ describe ProjectsController do
   end
 
   describe '#housekeeping' do
-    let(:group) { create(:group) }
-    let(:project) { create(:project, group: group) }
-    let(:housekeeping) { Projects::HousekeepingService.new(project) }
+    let_it_be(:group) { create(:group) }
+    let_it_be(:project) { create(:project, group: group) }
+
+    let(:housekeeping) { Repositories::HousekeepingService.new(project) }
 
     context 'when authenticated as owner' do
       before do
         group.add_owner(user)
         sign_in(user)
 
-        allow(Projects::HousekeepingService).to receive(:new).with(project, :gc).and_return(housekeeping)
+        allow(Repositories::HousekeepingService).to receive(:new).with(project, :gc).and_return(housekeeping)
       end
 
       it 'forces a full garbage collection' do
@@ -531,7 +605,7 @@ describe ProjectsController do
     end
   end
 
-  describe "#update" do
+  describe "#update", :enable_admin_mode do
     render_views
 
     let(:admin) { create(:admin) }
@@ -541,26 +615,55 @@ describe ProjectsController do
     end
 
     shared_examples_for 'updating a project' do
+      context 'when there is a conflicting project path' do
+        let(:random_name) { "project-#{SecureRandom.hex(8)}" }
+        let!(:conflict_project) { create(:project, name: random_name, path: random_name, namespace: project.namespace) }
+
+        it 'does not show any references to the conflicting path' do
+          expect { update_project(path: random_name) }.not_to change { project.reload.path }
+
+          expect(response).to have_gitlab_http_status(:ok)
+          expect(response.body).not_to include(random_name)
+        end
+      end
+
       context 'when only renaming a project path' do
-        it "sets the repository to the right path after a rename" do
+        it "doesnt change the disk_path when using hashed storage" do
+          skip unless project.hashed_storage?(:repository)
+
+          hashed_storage_path = ::Storage::Hashed.new(project).disk_path
           original_repository_path = Gitlab::GitalyClient::StorageSettings.allow_disk_access do
             project.repository.path
           end
 
-          expect { update_project path: 'renamed_path' }
-            .to change { project.reload.path }
+          expect { update_project path: 'renamed_path' }.to change { project.reload.path }
           expect(project.path).to include 'renamed_path'
 
           assign_repository_path = Gitlab::GitalyClient::StorageSettings.allow_disk_access do
             assigns(:repository).path
           end
 
-          if project.hashed_storage?(:repository)
-            expect(assign_repository_path).to eq(original_repository_path)
-          else
-            expect(assign_repository_path).to include(project.path)
+          expect(original_repository_path).to include(hashed_storage_path)
+          expect(assign_repository_path).to include(hashed_storage_path)
+        end
+
+        it "upgrades and move project to hashed storage when project was originally legacy" do
+          skip if project.hashed_storage?(:repository)
+
+          hashed_storage_path = Storage::Hashed.new(project).disk_path
+          original_repository_path = Gitlab::GitalyClient::StorageSettings.allow_disk_access do
+            project.repository.path
           end
 
+          expect { update_project path: 'renamed_path' }.to change { project.reload.path }
+          expect(project.path).to include 'renamed_path'
+
+          assign_repository_path = Gitlab::GitalyClient::StorageSettings.allow_disk_access do
+            assigns(:repository).path
+          end
+
+          expect(original_repository_path).not_to include(hashed_storage_path)
+          expect(assign_repository_path).to include(hashed_storage_path)
           expect(response).to have_gitlab_http_status(:found)
         end
       end
@@ -576,7 +679,7 @@ describe ProjectsController do
           expect { update_project path: 'renamed_path' }
             .not_to change { project.reload.path }
 
-          expect(controller).to set_flash.now[:alert].to(s_('UpdateProject|Cannot rename project because it contains container registry tags!'))
+          expect(controller).to set_flash[:alert].to(s_('UpdateProject|Cannot rename project because it contains container registry tags!'))
           expect(response).to have_gitlab_http_status(:ok)
         end
       end
@@ -629,13 +732,13 @@ describe ProjectsController do
     end
 
     context 'hashed storage' do
-      let(:project) { create(:project, :repository) }
+      let_it_be(:project) { create(:project, :repository) }
 
       it_behaves_like 'updating a project'
     end
 
     context 'legacy storage' do
-      let(:project) { create(:project, :repository, :legacy_storage) }
+      let_it_be(:project) { create(:project, :repository, :legacy_storage) }
 
       it_behaves_like 'updating a project'
     end
@@ -670,14 +773,47 @@ describe ProjectsController do
         end
       end
     end
+
+    context 'when updating boolean values on project_settings' do
+      using RSpec::Parameterized::TableSyntax
+
+      where(:boolean_value, :result) do
+        '1'   | true
+        '0'   | false
+        1     | true
+        0     | false
+        true  | true
+        false | false
+      end
+
+      with_them do
+        it 'updates project settings attributes accordingly' do
+          put :update, params: {
+            namespace_id: project.namespace,
+            id: project.path,
+            project: {
+              project_setting_attributes: {
+                show_default_award_emojis: boolean_value,
+                allow_editing_commit_messages: boolean_value
+              }
+            }
+          }
+
+          project.reload
+
+          expect(project.show_default_award_emojis?).to eq(result)
+          expect(project.allow_editing_commit_messages?).to eq(result)
+        end
+      end
+    end
   end
 
-  describe '#transfer' do
+  describe '#transfer', :enable_admin_mode do
     render_views
 
-    let(:project) { create(:project, :repository) }
-    let(:admin) { create(:admin) }
-    let(:new_namespace) { create(:namespace) }
+    let_it_be(:project, reload: true) { create(:project) }
+    let_it_be(:admin) { create(:admin) }
+    let_it_be(:new_namespace) { create(:namespace) }
 
     it 'updates namespace' do
       sign_in(admin)
@@ -720,8 +856,8 @@ describe ProjectsController do
     end
   end
 
-  describe "#destroy" do
-    let(:admin) { create(:admin) }
+  describe "#destroy", :enable_admin_mode do
+    let_it_be(:admin) { create(:admin) }
 
     it "redirects to the dashboard", :sidekiq_might_not_need_inline do
       controller.instance_variable_set(:@project, project)
@@ -901,7 +1037,7 @@ describe ProjectsController do
   end
 
   describe "GET refs" do
-    let(:project) { create(:project, :public, :repository) }
+    let_it_be(:project) { create(:project, :public, :repository) }
 
     it 'gets a list of branches and tags' do
       get :refs, params: { namespace_id: project.namespace, id: project, sort: 'updated_desc' }
@@ -973,7 +1109,8 @@ describe ProjectsController do
     end
 
     context 'state filter on references' do
-      let(:issue) { create(:issue, :closed, project: public_project) }
+      let_it_be(:issue) { create(:issue, :closed, project: public_project) }
+
       let(:merge_request) { create(:merge_request, :closed, target_project: public_project) }
 
       it 'renders JSON body with state filter for issues' do
@@ -1014,6 +1151,32 @@ describe ProjectsController do
 
       it 'renders JSON body with image links expanded' do
         expanded_path = "/#{project_with_repo.full_path}/-/raw/master/files/images/logo-white.png"
+
+        post :preview_markdown, params: preview_markdown_params
+
+        expect(json_response['body']).to include(expanded_path)
+      end
+    end
+
+    context 'when path and ref parameters are provided' do
+      let(:project_with_repo) { create(:project, :repository) }
+      let(:preview_markdown_params) do
+        {
+          namespace_id: project_with_repo.namespace,
+          id: project_with_repo,
+          text: "![](./logo-white.png)\n",
+          ref: 'other_branch',
+          path: 'files/images/README.md'
+        }
+      end
+
+      before do
+        project_with_repo.add_maintainer(user)
+        project_with_repo.repository.create_branch('other_branch')
+      end
+
+      it 'renders JSON body with image links expanded' do
+        expanded_path = "/#{project_with_repo.full_path}/-/raw/other_branch/files/images/logo-white.png"
 
         post :preview_markdown, params: preview_markdown_params
 
@@ -1094,7 +1257,7 @@ describe ProjectsController do
       end
     end
 
-    context 'for a DELETE request' do
+    context 'for a DELETE request', :enable_admin_mode do
       before do
         sign_in(create(:admin))
       end
@@ -1134,16 +1297,16 @@ describe ProjectsController do
 
     shared_examples 'rate limits project export endpoint' do
       before do
-        allow(::Gitlab::ApplicationRateLimiter)
-          .to receive(:throttled?)
-          .and_return(true)
+        allow(Gitlab::ApplicationRateLimiter)
+          .to receive(:increment)
+          .and_return(Gitlab::ApplicationRateLimiter.rate_limits["project_#{action}".to_sym][:threshold].call + 1)
       end
 
       it 'prevents requesting project export' do
-        get action, params: { namespace_id: project.namespace, id: project }
+        post action, params: { namespace_id: project.namespace, id: project }
 
-        expect(flash[:alert]).to eq('This endpoint has been requested too many times. Try again later.')
-        expect(response).to have_gitlab_http_status(:found)
+        expect(response.body).to eq('This endpoint has been requested too many times. Try again later.')
+        expect(response).to have_gitlab_http_status(:too_many_requests)
       end
     end
 
@@ -1152,7 +1315,7 @@ describe ProjectsController do
 
       context 'when project export is enabled' do
         it 'returns 302' do
-          get action, params: { namespace_id: project.namespace, id: project }
+          post action, params: { namespace_id: project.namespace, id: project }
 
           expect(response).to have_gitlab_http_status(:found)
         end
@@ -1164,7 +1327,7 @@ describe ProjectsController do
         end
 
         it 'returns 404' do
-          get action, params: { namespace_id: project.namespace, id: project }
+          post action, params: { namespace_id: project.namespace, id: project }
 
           expect(response).to have_gitlab_http_status(:not_found)
         end
@@ -1175,7 +1338,7 @@ describe ProjectsController do
       end
     end
 
-    describe '#download_export' do
+    describe '#download_export', :clean_gitlab_redis_cache do
       let(:action) { :download_export }
 
       context 'object storage enabled' do
@@ -1183,6 +1346,17 @@ describe ProjectsController do
           it 'returns 302' do
             get action, params: { namespace_id: project.namespace, id: project }
 
+            expect(response).to have_gitlab_http_status(:found)
+          end
+        end
+
+        context 'when project export file is absent' do
+          it 'alerts the user and returns 302' do
+            project.export_file.file.delete
+
+            get action, params: { namespace_id: project.namespace, id: project }
+
+            expect(flash[:alert]).to include('file containing the export is not available yet')
             expect(response).to have_gitlab_http_status(:found)
           end
         end
@@ -1200,7 +1374,26 @@ describe ProjectsController do
         end
 
         context 'when the endpoint receives requests above the limit', :clean_gitlab_redis_cache do
-          include_examples 'rate limits project export endpoint'
+          before do
+            allow(Gitlab::ApplicationRateLimiter)
+              .to receive(:increment)
+              .and_return(Gitlab::ApplicationRateLimiter.rate_limits[:project_download_export][:threshold].call + 1)
+          end
+
+          it 'prevents requesting project export' do
+            post action, params: { namespace_id: project.namespace, id: project }
+
+            expect(response.body).to eq('This endpoint has been requested too many times. Try again later.')
+            expect(response).to have_gitlab_http_status(:too_many_requests)
+          end
+
+          it 'applies correct scope when throttling' do
+            expect(Gitlab::ApplicationRateLimiter)
+              .to receive(:throttled?)
+              .with(:project_download_export, scope: [user, project])
+
+            post action, params: { namespace_id: project.namespace, id: project }
+          end
         end
       end
     end
@@ -1259,7 +1452,7 @@ describe ProjectsController do
   end
 
   context 'private project with token authentication' do
-    let(:private_project) { create(:project, :private) }
+    let_it_be(:private_project) { create(:project, :private) }
 
     it_behaves_like 'authenticates sessionless user', :show, :atom, ignore_incrementing: true do
       before do
@@ -1271,12 +1464,36 @@ describe ProjectsController do
   end
 
   context 'public project with token authentication' do
-    let(:public_project) { create(:project, :public) }
+    let_it_be(:public_project) { create(:project, :public) }
 
     it_behaves_like 'authenticates sessionless user', :show, :atom, public: true do
       before do
         default_params.merge!(id: public_project, namespace_id: public_project.namespace)
       end
+    end
+  end
+
+  context 'GET show.atom' do
+    let_it_be(:public_project) { create(:project, :public) }
+    let_it_be(:event) { create(:event, :commented, project: public_project, target: create(:note, project: public_project)) }
+    let_it_be(:invisible_event) { create(:event, :commented, project: public_project, target: create(:note, :confidential, project: public_project)) }
+
+    it 'filters by calling event.visible_to_user?' do
+      expect(EventCollection).to receive_message_chain(:new, :to_a).and_return([event, invisible_event])
+      expect(event).to receive(:visible_to_user?).and_return(true)
+      expect(invisible_event).to receive(:visible_to_user?).and_return(false)
+
+      get :show, format: :atom, params: { id: public_project, namespace_id: public_project.namespace }
+
+      expect(response).to render_template('xml.atom')
+      expect(assigns(:events)).to eq([event])
+    end
+
+    it 'filters by calling event.visible_to_user?' do
+      get :show, format: :atom, params: { id: public_project, namespace_id: public_project.namespace }
+
+      expect(response).to render_template('xml.atom')
+      expect(assigns(:events)).to eq([event])
     end
   end
 
@@ -1333,7 +1550,79 @@ describe ProjectsController do
     end
   end
 
+  it 'updates Service Desk attributes' do
+    project.add_maintainer(user)
+    sign_in(user)
+    allow(Gitlab::IncomingEmail).to receive(:enabled?) { true }
+    allow(Gitlab::IncomingEmail).to receive(:supports_wildcard?) { true }
+    params = {
+      service_desk_enabled: true
+    }
+
+    put :update,
+        params: {
+          namespace_id: project.namespace,
+          id: project,
+          project: params
+        }
+    project.reload
+
+    expect(response).to have_gitlab_http_status(:found)
+    expect(project.service_desk_enabled).to eq(true)
+  end
+
   def project_moved_message(redirect_route, project)
     "Project '#{redirect_route.path}' was moved to '#{project.full_path}'. Please update any links and bookmarks that may still have the old path."
+  end
+
+  describe 'GET #unfoldered_environment_names' do
+    it 'shows the environment names of a public project to an anonymous user' do
+      create(:environment, project: public_project, name: 'foo')
+
+      get(
+        :unfoldered_environment_names,
+        params: { namespace_id: public_project.namespace, id: public_project, format: :json }
+      )
+
+      expect(response).to have_gitlab_http_status(:ok)
+      expect(json_response).to eq(%w[foo])
+    end
+
+    it 'does not show environment names of a private project to anonymous users' do
+      create(:environment, project: project, name: 'foo')
+
+      get(
+        :unfoldered_environment_names,
+        params: { namespace_id: project.namespace, id: project, format: :json }
+      )
+
+      expect(response).to redirect_to(new_user_session_path)
+    end
+
+    it 'shows environment names of a private project to a project member' do
+      create(:environment, project: project, name: 'foo')
+      project.add_developer(user)
+      sign_in(user)
+
+      get(
+        :unfoldered_environment_names,
+        params: { namespace_id: project.namespace, id: project, format: :json }
+      )
+
+      expect(response).to have_gitlab_http_status(:ok)
+      expect(json_response).to eq(%w[foo])
+    end
+
+    it 'does not show environment names of a private project to a logged-in non-member' do
+      create(:environment, project: project, name: 'foo')
+      sign_in(user)
+
+      get(
+        :unfoldered_environment_names,
+        params: { namespace_id: project.namespace, id: project, format: :json }
+      )
+
+      expect(response).to have_gitlab_http_status(:not_found)
+    end
   end
 end

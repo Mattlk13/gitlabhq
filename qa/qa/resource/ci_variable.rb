@@ -3,13 +3,18 @@
 module QA
   module Resource
     class CiVariable < Base
-      attr_accessor :key, :value, :masked
+      attr_accessor :key, :value, :masked, :protected
 
       attribute :project do
         Project.fabricate! do |resource|
           resource.name = 'project-with-ci-variables'
           resource.description = 'project for adding CI variable test'
         end
+      end
+
+      def initialize
+        @masked = false
+        @protected = false
       end
 
       def fabricate!
@@ -19,9 +24,8 @@ module QA
 
         Page::Project::Settings::CICD.perform do |setting|
           setting.expand_ci_variables do |page|
+            page.click_add_variable
             page.fill_variable(key, value, masked)
-
-            page.save_variables
           end
         end
       end
@@ -50,7 +54,8 @@ module QA
         {
           key: key,
           value: value,
-          masked: masked
+          masked: masked,
+          protected: protected
         }
       end
     end

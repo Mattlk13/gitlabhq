@@ -2,16 +2,17 @@
 
 require 'spec_helper'
 
-describe Gitlab::GithubImport::ImportIssueWorker do
+RSpec.describe Gitlab::GithubImport::ImportIssueWorker do
   let(:worker) { described_class.new }
 
   describe '#import' do
     it 'imports an issue' do
-      project = double(:project, full_path: 'foo/bar')
+      project = double(:project, full_path: 'foo/bar', id: 1)
       client = double(:client)
       importer = double(:importer)
       hash = {
         'iid' => 42,
+        'github_id' => 42,
         'title' => 'My Issue',
         'description' => 'This is my issue',
         'milestone_number' => 4,
@@ -36,7 +37,7 @@ describe Gitlab::GithubImport::ImportIssueWorker do
       expect(importer)
         .to receive(:execute)
 
-      expect(worker.counter)
+      expect(Gitlab::GithubImport::ObjectCounter)
         .to receive(:increment)
         .and_call_original
 

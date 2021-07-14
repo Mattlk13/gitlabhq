@@ -24,8 +24,9 @@ class Repository
 
   attr_accessor :full_path, :shard, :disk_path, :container, :repo_type
 
-  delegate :ref_name_for_sha, to: :raw_repository
-  delegate :bundle_to_disk, to: :raw_repository
+  delegate :lfs_enabled?, to: :container
+
+  delegate_missing_to :raw_repository
 
   CreateTreeError = Class.new(StandardError)
   AmbiguousRefError = Class.new(StandardError)
@@ -38,12 +39,12 @@ class Repository
   #
   # For example, for entry `:commit_count` there's a method called `commit_count` which
   # stores its data in the `commit_count` cache key.
-  CACHED_METHODS = %i(size commit_count rendered_readme readme_path contribution_guide
+  CACHED_METHODS = %i(size commit_count readme_path contribution_guide
                       changelog license_blob license_key gitignore
                       gitlab_ci_yml branch_names tag_names branch_count
                       tag_count avatar exists? root_ref merged_branch_names
-                      has_visible_content? issue_template_names merge_request_template_names
-                      metrics_dashboard_paths xcode_project?).freeze
+                      has_visible_content? issue_template_names_hash merge_request_template_names_hash
+                      user_defined_metrics_dashboard_paths xcode_project? has_ambiguous_refs?).freeze
 
   # Methods that use cache_method but only memoize the value
   MEMOIZED_CACHED_METHODS = %i(license).freeze
@@ -52,16 +53,16 @@ class Repository
   # changed. This Hash maps file types (as returned by Gitlab::FileDetector) to
   # the corresponding methods to call for refreshing caches.
   METHOD_CACHES_FOR_FILE_TYPES = {
-    readme: %i(rendered_readme readme_path),
+    readme: %i(readme_path),
     changelog: :changelog,
     license: %i(license_blob license_key license),
     contributing: :contribution_guide,
     gitignore: :gitignore,
     gitlab_ci: :gitlab_ci_yml,
     avatar: :avatar,
-    issue_template: :issue_template_names,
-    merge_request_template: :merge_request_template_names,
-    metrics_dashboard: :metrics_dashboard_paths,
+    issue_template: :issue_template_names_hash,
+    merge_request_template: :merge_request_template_names_hash,
+    metrics_dashboard: :user_defined_metrics_dashboard_paths,
     xcode_config: :xcode_project?
   }.freeze
 
@@ -149,7 +150,9 @@ class Repository
       before: opts[:before],
       all: !!opts[:all],
       first_parent: !!opts[:first_parent],
-      order: opts[:order]
+      order: opts[:order],
+      literal_pathspec: opts.fetch(:literal_pathspec, true),
+      trailers: opts[:trailers]
     }
 
     commits = Gitlab::Git::Commit.where(options)
@@ -194,6 +197,32 @@ class Repository
   def ambiguous_ref?(ref)
     tag_exists?(ref) && branch_exists?(ref)
   end
+
+  # It's possible for a tag name to be a prefix (including slash) of a branch
+  # name, or vice versa. For instance, a tag named `foo` means we can't create a
+  # tag `foo/bar`, but we _can_ create a branch `foo/bar`.
+  #
+  # If we know a repository has no refs of this type (which is the common case)
+  # then separating refs from paths - as in ExtractsRef - can be faster.
+  #
+  # This method only checks one level deep, so only prefixes that contain no
+  # slashes are considered. If a repository has a tag `foo/bar` and a branch
+  # `foo/bar/baz`, it will return false.
+  def has_ambiguous_refs?
+    return false unless branch_names.present? && tag_names.present?
+
+    with_slash, no_slash = (branch_names + tag_names).partition { |ref| ref.include?('/') }
+
+    return false if with_slash.empty?
+
+    prefixes = no_slash.map { |ref| Regexp.escape(ref) }.join('|')
+    prefix_regex = %r{^(#{prefixes})/}
+
+    with_slash.any? do |ref|
+      prefix_regex.match?(ref)
+    end
+  end
+  cache_method :has_ambiguous_refs?
 
   def expand_ref(ref)
     if tag_exists?(ref)
@@ -259,6 +288,10 @@ class Repository
     false
   end
 
+  def search_branch_names(pattern)
+    redis_set_cache.search('branch_names', pattern) { branch_names }
+  end
+
   def languages
     return [] if empty?
 
@@ -285,14 +318,16 @@ class Repository
   end
 
   def expire_tags_cache
-    expire_method_caches(%i(tag_names tag_count))
+    expire_method_caches(%i(tag_names tag_count has_ambiguous_refs?))
     @tags = nil
+    @tag_names_include = nil
   end
 
   def expire_branches_cache
-    expire_method_caches(%i(branch_names merged_branch_names branch_count has_visible_content?))
+    expire_method_caches(%i(branch_names merged_branch_names branch_count has_visible_content? has_ambiguous_refs?))
     @local_branches = nil
     @branch_exists_memo = nil
+    @branch_names_include = nil
   end
 
   def expire_statistics_caches
@@ -354,10 +389,6 @@ class Repository
 
     expire_method_caches(%i(has_visible_content?))
     raw_repository.expire_has_local_branches_cache
-  end
-
-  def lookup_cache
-    @lookup_cache ||= {}
   end
 
   def expire_exists_cache
@@ -437,15 +468,6 @@ class Repository
     expire_all_method_caches
   end
 
-  # Runs code after a repository has been forked/imported.
-  def after_import
-    expire_content_cache
-
-    return unless repo_type.project?
-
-    DetectRepositoryLanguagesWorker.perform_async(project.id)
-  end
-
   # Runs code after a new commit has been pushed.
   def after_push_commit(branch_name)
     expire_statistics_caches
@@ -473,34 +495,14 @@ class Repository
     expire_branches_cache if expire_cache
   end
 
-  def method_missing(msg, *args, &block)
-    if msg == :lookup && !block_given?
-      lookup_cache[msg] ||= {}
-      lookup_cache[msg][args.join(":")] ||= raw_repository.__send__(msg, *args, &block) # rubocop:disable GitlabSecurity/PublicSend
-    else
-      raw_repository.__send__(msg, *args, &block) # rubocop:disable GitlabSecurity/PublicSend
+  def lookup(sha)
+    strong_memoize("lookup_#{sha}") do
+      raw_repository.lookup(sha)
     end
-  end
-
-  def respond_to_missing?(method, include_private = false)
-    raw_repository.respond_to?(method, include_private) || super
   end
 
   def blob_at(sha, path)
-    blob = Blob.decorate(raw_repository.blob_at(sha, path), container)
-
-    # Don't attempt to return a special result if there is no blob at all
-    return unless blob
-
-    # Don't attempt to return a special result unless we're looking at HEAD
-    return blob unless head_commit&.sha == sha
-
-    case path
-    when head_tree&.readme_path
-      ReadmeBlob.new(blob, self)
-    else
-      blob
-    end
+    Blob.decorate(raw_repository.blob_at(sha, path), container)
   rescue Gitlab::Git::Repository::NoRepository
     nil
   end
@@ -574,38 +576,30 @@ class Repository
   end
   cache_method :avatar
 
-  def issue_template_names
-    Gitlab::Template::IssueTemplate.dropdown_names(project)
+  # store issue_template_names as hash
+  def issue_template_names_hash
+    Gitlab::Template::IssueTemplate.repository_template_names(project)
   end
-  cache_method :issue_template_names, fallback: []
+  cache_method :issue_template_names_hash, fallback: {}
 
-  def merge_request_template_names
-    Gitlab::Template::MergeRequestTemplate.dropdown_names(project)
+  def merge_request_template_names_hash
+    Gitlab::Template::MergeRequestTemplate.repository_template_names(project)
   end
-  cache_method :merge_request_template_names, fallback: []
+  cache_method :merge_request_template_names_hash, fallback: {}
 
-  def metrics_dashboard_paths
-    Gitlab::Metrics::Dashboard::Finder.find_all_paths_from_source(project)
+  def user_defined_metrics_dashboard_paths
+    Gitlab::Metrics::Dashboard::RepoDashboardFinder.list_dashboards(project)
   end
-  cache_method :metrics_dashboard_paths
+  cache_method :user_defined_metrics_dashboard_paths, fallback: []
 
   def readme
     head_tree&.readme
   end
 
   def readme_path
-    readme&.path
+    head_tree&.readme_path
   end
   cache_method :readme_path
-
-  def rendered_readme
-    return unless readme
-
-    context = { project: project }
-
-    MarkupHelper.markup_unsafe(readme.name, readme.data, context)
-  end
-  cache_method :rendered_readme
 
   def contribution_guide
     file_on_head(:contributing)
@@ -685,24 +679,24 @@ class Repository
     end
   end
 
-  def list_last_commits_for_tree(sha, path, offset: 0, limit: 25)
-    commits = raw_repository.list_last_commits_for_tree(sha, path, offset: offset, limit: limit)
+  def list_last_commits_for_tree(sha, path, offset: 0, limit: 25, literal_pathspec: false)
+    commits = raw_repository.list_last_commits_for_tree(sha, path, offset: offset, limit: limit, literal_pathspec: literal_pathspec)
 
     commits.each do |path, commit|
       commits[path] = ::Commit.new(commit, container)
     end
   end
 
-  def last_commit_for_path(sha, path)
-    commit = raw_repository.last_commit_for_path(sha, path)
+  def last_commit_for_path(sha, path, literal_pathspec: false)
+    commit = raw_repository.last_commit_for_path(sha, path, literal_pathspec: literal_pathspec)
     ::Commit.new(commit, container) if commit
   end
 
-  def last_commit_id_for_path(sha, path)
+  def last_commit_id_for_path(sha, path, literal_pathspec: false)
     key = path.blank? ? "last_commit_id_for_path:#{sha}" : "last_commit_id_for_path:#{sha}:#{Digest::SHA1.hexdigest(path)}"
 
     cache.fetch(key) do
-      last_commit_for_path(sha, path)&.id
+      last_commit_for_path(sha, path, literal_pathspec: literal_pathspec)&.id
     end
   end
 
@@ -721,8 +715,8 @@ class Repository
     "#{name}-#{highest_branch_id + 1}"
   end
 
-  def branches_sorted_by(value)
-    raw_repository.local_branches(sort_by: value)
+  def branches_sorted_by(sort_by, pagination_params = nil)
+    raw_repository.local_branches(sort_by: sort_by, pagination_params: pagination_params)
   end
 
   def tags_sorted_by(value)
@@ -833,16 +827,10 @@ class Repository
   def merge(user, source_sha, merge_request, message)
     with_cache_hooks do
       raw_repository.merge(user, source_sha, merge_request.target_branch, message) do |commit_id|
-        merge_request.update(in_progress_merge_commit_sha: commit_id)
+        merge_request.update_and_mark_in_progress_merge_commit_sha(commit_id)
         nil # Return value does not matter.
       end
     end
-  end
-
-  def merge_to_ref(user, source_sha, merge_request, target_ref, message, first_parent_ref)
-    branch = merge_request.target_branch
-
-    raw.merge_to_ref(user, source_sha, branch, target_ref, message, first_parent_ref)
   end
 
   def delete_refs(*ref_names)
@@ -853,14 +841,14 @@ class Repository
     their_commit_id = commit(source)&.id
     raise 'Invalid merge source' if their_commit_id.nil?
 
-    merge_request&.update(in_progress_merge_commit_sha: their_commit_id)
+    merge_request&.update_and_mark_in_progress_merge_commit_sha(their_commit_id)
 
     with_cache_hooks { raw.ff_merge(user, their_commit_id, target_branch) }
   end
 
   def revert(
     user, commit, branch_name, message,
-    start_branch_name: nil, start_project: project)
+    start_branch_name: nil, start_project: project, dry_run: false)
 
     with_cache_hooks do
       raw_repository.revert(
@@ -869,14 +857,15 @@ class Repository
         branch_name: branch_name,
         message: message,
         start_branch_name: start_branch_name,
-        start_repository: start_project.repository.raw_repository
+        start_repository: start_project.repository.raw_repository,
+        dry_run: dry_run
       )
     end
   end
 
   def cherry_pick(
     user, commit, branch_name, message,
-    start_branch_name: nil, start_project: project)
+    start_branch_name: nil, start_project: project, dry_run: false)
 
     with_cache_hooks do
       raw_repository.cherry_pick(
@@ -885,7 +874,8 @@ class Repository
         branch_name: branch_name,
         message: message,
         start_branch_name: start_branch_name,
-        start_repository: start_project.repository.raw_repository
+        start_repository: start_project.repository.raw_repository,
+        dry_run: dry_run
       )
     end
   end
@@ -911,10 +901,8 @@ class Repository
   def merged_branch_names(branch_names = [])
     # Currently we should skip caching if requesting all branch names
     # This is only used in a few places, notably app/services/branches/delete_merged_service.rb,
-    # and it could potentially result in a very large cache/performance issues with the current
-    # implementation.
-    skip_cache = branch_names.empty? || Feature.disabled?(:merged_branch_names_redis_caching, default_enabled: true)
-    return raw_repository.merged_branch_names(branch_names) if skip_cache
+    # and it could potentially result in a very large cache.
+    return raw_repository.merged_branch_names(branch_names) if branch_names.empty?
 
     cache = redis_hash_cache
 
@@ -950,6 +938,8 @@ class Repository
   end
 
   def fetch_as_mirror(url, forced: false, refmap: :all_refs, remote_name: nil, prune: true)
+    return fetch_remote(remote_name, url: url, refmap: refmap, forced: forced, prune: prune) if Feature.enabled?(:fetch_remote_params, project, default_enabled: :yaml)
+
     unless remote_name
       remote_name = "tmp-#{SecureRandom.hex}"
       tmp_remote_name = true
@@ -961,7 +951,6 @@ class Repository
     async_remove_remote(remote_name) if tmp_remote_name
   end
 
-  # rubocop:disable Gitlab/RailsLogger
   def async_remove_remote(remote_name)
     return unless remote_name
     return unless project
@@ -969,14 +958,13 @@ class Repository
     job_id = RepositoryRemoveRemoteWorker.perform_async(project.id, remote_name)
 
     if job_id
-      Rails.logger.info("Remove remote job scheduled for #{project.id} with remote name: #{remote_name} job ID #{job_id}.")
+      Gitlab::AppLogger.info("Remove remote job scheduled for #{project.id} with remote name: #{remote_name} job ID #{job_id}.")
     else
-      Rails.logger.info("Remove remote job failed to create for #{project.id} with remote name #{remote_name}.")
+      Gitlab::AppLogger.info("Remove remote job failed to create for #{project.id} with remote name #{remote_name}.")
     end
 
     job_id
   end
-  # rubocop:enable Gitlab/RailsLogger
 
   def fetch_source_branch!(source_repository, source_branch, local_ref)
     raw_repository.fetch_source_branch!(source_repository.raw_repository, source_branch, local_ref)
@@ -1005,6 +993,18 @@ class Repository
     return [] if empty?
 
     raw_repository.search_files_by_name(query, ref)
+  end
+
+  def search_files_by_wildcard_path(path, ref = 'HEAD')
+    # We need to use RE2 to match Gitaly's regexp engine
+    regexp_string = RE2::Regexp.escape(path)
+
+    anything = '.*?'
+    anything_but_not_slash = '([^\/])*?'
+    regexp_string.gsub!('\*\*', anything)
+    regexp_string.gsub!('\*', anything_but_not_slash)
+
+    raw_repository.search_files_by_regexp("^#{regexp_string}$", ref)
   end
 
   def copy_gitattributes(ref)
@@ -1047,6 +1047,10 @@ class Repository
     blob_data_at(sha, '.lfsconfig')
   end
 
+  def changelog_config(ref = 'HEAD')
+    blob_data_at(ref, Gitlab::Changelog::Config::FILE_PATH)
+  end
+
   def fetch_ref(source_repository, source_ref:, target_ref:)
     raw_repository.fetch_ref(source_repository.raw_repository, source_ref: source_ref, target_ref: target_ref)
   end
@@ -1072,8 +1076,7 @@ class Repository
   end
 
   def squash(user, merge_request, message)
-    raw.squash(user, merge_request.id, branch: merge_request.target_branch,
-                                       start_sha: merge_request.diff_start_sha,
+    raw.squash(user, merge_request.id, start_sha: merge_request.diff_start_sha,
                                        end_sha: merge_request.diff_head_sha,
                                        author: merge_request.author,
                                        message: message)
@@ -1125,11 +1128,18 @@ class Repository
   end
 
   def project
-    if repo_type.snippet?
-      container.project
-    else
+    if container.is_a?(Project)
       container
+    else
+      container.try(:project)
     end
+  end
+
+  # Choose one of the available repository storage options based on a normalized weighted probability.
+  # We should always use the latest settings, to avoid picking a deleted shard.
+  def self.pick_storage_shard(expire: true)
+    Gitlab::CurrentSettings.expire_current_application_settings if expire
+    Gitlab::CurrentSettings.pick_repository_storage
   end
 
   private
@@ -1163,17 +1173,13 @@ class Repository
   end
 
   def tags_sorted_by_committed_date
-    tags.sort_by do |tag|
-      # Annotated tags can point to any object (e.g. a blob), but generally
-      # tags point to a commit. If we don't have a commit, then just default
-      # to putting the tag at the end of the list.
-      target = tag.dereferenced_target
+    # Annotated tags can point to any object (e.g. a blob), but generally
+    # tags point to a commit. If we don't have a commit, then just default
+    # to putting the tag at the end of the list.
+    default = Time.current
 
-      if target
-        target.committed_date
-      else
-        Time.now
-      end
+    tags.sort_by do |tag|
+      tag.dereferenced_target&.committed_date || default
     end
   end
 
@@ -1189,4 +1195,4 @@ class Repository
   end
 end
 
-Repository.prepend_if_ee('EE::Repository')
+Repository.prepend_mod_with('Repository')

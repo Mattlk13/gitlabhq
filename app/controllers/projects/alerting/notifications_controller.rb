@@ -10,11 +10,13 @@ module Projects
 
       prepend_before_action :repository, :project_without_auth
 
+      feature_category :incident_management
+
       def create
         token = extract_alert_manager_token(request)
-        result = notify_service.execute(token)
+        result = notify_service.execute(token, integration)
 
-        head(response_status(result))
+        head result.http_status
       end
 
       private
@@ -29,18 +31,34 @@ module Projects
       end
 
       def notify_service
-        Projects::Alerting::NotifyService
-          .new(project, current_user, notification_payload)
+        notify_service_class.new(project, notification_payload)
       end
 
-      def response_status(result)
-        return :ok if result.success?
+      def notify_service_class
+        # We are tracking the consolidation of these services in
+        # https://gitlab.com/groups/gitlab-org/-/epics/3360
+        # to get rid of this workaround.
+        if Projects::Prometheus::Alerts::NotifyService.processable?(notification_payload)
+          Projects::Prometheus::Alerts::NotifyService
+        else
+          Projects::Alerting::NotifyService
+        end
+      end
 
-        result.http_status
+      def integration
+        AlertManagement::HttpIntegrationsFinder.new(
+          project,
+          endpoint_identifier: endpoint_identifier,
+          active: true
+        ).execute.first
+      end
+
+      def endpoint_identifier
+        params[:endpoint_identifier] || AlertManagement::HttpIntegration::LEGACY_IDENTIFIER
       end
 
       def notification_payload
-        params.permit![:notification]
+        @notification_payload ||= params.permit![:notification]
       end
     end
   end

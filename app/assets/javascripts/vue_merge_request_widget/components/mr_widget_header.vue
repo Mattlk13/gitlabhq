@@ -1,23 +1,40 @@
 <script>
-import _ from 'underscore';
-import { n__, s__, sprintf } from '~/locale';
+import {
+  GlButton,
+  GlDropdown,
+  GlDropdownSectionHeader,
+  GlDropdownItem,
+  GlLink,
+  GlTooltipDirective,
+  GlModalDirective,
+  GlSafeHtmlDirective as SafeHtml,
+  GlSprintf,
+} from '@gitlab/ui';
 import { mergeUrlParams, webIDEUrl } from '~/lib/utils/url_utility';
-import Icon from '~/vue_shared/components/icon.vue';
+import { s__ } from '~/locale';
 import clipboardButton from '~/vue_shared/components/clipboard_button.vue';
-import tooltip from '~/vue_shared/directives/tooltip';
 import TooltipOnTruncate from '~/vue_shared/components/tooltip_on_truncate.vue';
+import MrWidgetHowToMergeModal from './mr_widget_how_to_merge_modal.vue';
 import MrWidgetIcon from './mr_widget_icon.vue';
 
 export default {
   name: 'MRWidgetHeader',
   components: {
-    Icon,
     clipboardButton,
     TooltipOnTruncate,
     MrWidgetIcon,
+    MrWidgetHowToMergeModal,
+    GlButton,
+    GlDropdown,
+    GlDropdownSectionHeader,
+    GlDropdownItem,
+    GlLink,
+    GlSprintf,
   },
   directives: {
-    tooltip,
+    GlTooltip: GlTooltipDirective,
+    GlModalDirective,
+    SafeHtml,
   },
   props: {
     mr: {
@@ -28,19 +45,6 @@ export default {
   computed: {
     shouldShowCommitsBehindText() {
       return this.mr.divergedCommitsCount > 0;
-    },
-    commitsBehindText() {
-      return sprintf(
-        s__(
-          'mrWidget|The source branch is %{commitsBehindLinkStart}%{commitsBehind}%{commitsBehindLinkEnd} the target branch',
-        ),
-        {
-          commitsBehindLinkStart: `<a href="${_.escape(this.mr.targetBranchPath)}">`,
-          commitsBehind: n__('%d commit behind', '%d commits behind', this.mr.divergedCommitsCount),
-          commitsBehindLinkEnd: '</a>',
-        },
-        false,
-      );
     },
     branchNameClipboardData() {
       // This supports code in app/assets/javascripts/copy_to_clipboard.js that
@@ -73,25 +77,29 @@ export default {
           )
         : '';
     },
+    isFork() {
+      return this.mr.sourceProjectFullPath !== this.mr.targetProjectFullPath;
+    },
   },
 };
 </script>
 <template>
-  <div class="d-flex mr-source-target append-bottom-default">
+  <div class="d-flex mr-source-target gl-mb-3">
     <mr-widget-icon name="git-merge" />
     <div class="git-merge-container d-flex">
       <div class="normal">
         <strong>
           {{ s__('mrWidget|Request to merge') }}
           <tooltip-on-truncate
+            v-safe-html="mr.sourceBranchLink"
             :title="mr.sourceBranch"
             truncate-target="child"
             class="label-branch label-truncate js-source-branch"
-            v-html="mr.sourceBranchLink"
           /><clipboard-button
+            data-testid="mr-widget-copy-clipboard"
             :text="branchNameClipboardData"
             :title="__('Copy branch name')"
-            css-class="btn-default btn-transparent btn-clipboard"
+            category="tertiary"
           />
           {{ s__('mrWidget|into') }}
           <tooltip-on-truncate
@@ -102,70 +110,79 @@ export default {
             <a :href="mr.targetBranchTreePath" class="js-target-branch"> {{ mr.targetBranch }} </a>
           </tooltip-on-truncate>
         </strong>
-        <div
-          v-if="shouldShowCommitsBehindText"
-          class="diverged-commits-count"
-          v-html="commitsBehindText"
-        ></div>
+        <div v-if="shouldShowCommitsBehindText" class="diverged-commits-count">
+          <gl-sprintf :message="s__('mrWidget|The source branch is %{link} the target branch')">
+            <template #link>
+              <gl-link :href="mr.targetBranchPath">{{
+                n__('%d commit behind', '%d commits behind', mr.divergedCommitsCount)
+              }}</gl-link>
+            </template>
+          </gl-sprintf>
+        </div>
       </div>
 
       <div class="branch-actions d-flex">
         <template v-if="mr.isOpen">
-          <a
+          <span
             v-if="!mr.sourceBranchRemoved"
-            v-tooltip
-            :href="webIdePath"
+            v-gl-tooltip
             :title="ideButtonTitle"
-            :class="{ disabled: !mr.canPushToSourceBranch }"
-            class="btn btn-default js-web-ide d-none d-md-inline-block append-right-8"
-            data-placement="bottom"
-            tabindex="0"
-            role="button"
+            class="gl-display-none d-md-inline-block gl-mr-3"
+            :tabindex="ideButtonTitle ? 0 : null"
           >
-            {{ s__('mrWidget|Open in Web IDE') }}
-          </a>
-          <button
+            <gl-button
+              :href="webIdePath"
+              :disabled="!mr.canPushToSourceBranch"
+              class="js-web-ide"
+              data-qa-selector="open_in_web_ide_button"
+            >
+              {{ s__('mrWidget|Open in Web IDE') }}
+            </gl-button>
+          </span>
+          <gl-button
+            v-gl-modal-directive="'modal-merge-info'"
             :disabled="mr.sourceBranchRemoved"
-            data-target="#modal_merge_info"
-            data-toggle="modal"
-            class="btn btn-default js-check-out-branch append-right-8"
-            type="button"
+            class="js-check-out-branch gl-mr-3"
           >
             {{ s__('mrWidget|Check out branch') }}
-          </button>
+          </gl-button>
+          <mr-widget-how-to-merge-modal
+            :is-fork="isFork"
+            :can-merge="mr.canMerge"
+            :source-branch="mr.sourceBranch"
+            :source-project="mr.sourceProject"
+            :source-project-path="mr.sourceProjectFullPath"
+            :target-branch="mr.targetBranch"
+            :source-project-default-url="mr.sourceProjectDefaultUrl"
+            :reviewing-docs-path="mr.reviewingDocsPath"
+          />
         </template>
-        <span class="dropdown">
-          <button
-            type="button"
-            class="btn dropdown-toggle qa-dropdown-toggle"
-            data-toggle="dropdown"
-            :aria-label="__('Download as')"
-            aria-haspopup="true"
-            aria-expanded="false"
+        <gl-dropdown
+          v-gl-tooltip
+          :title="__('Download as')"
+          :aria-label="__('Download as')"
+          icon="download"
+          right
+          data-qa-selector="download_dropdown"
+        >
+          <gl-dropdown-section-header>{{ s__('Download as') }}</gl-dropdown-section-header>
+          <gl-dropdown-item
+            :href="mr.emailPatchesPath"
+            class="js-download-email-patches"
+            download
+            data-qa-selector="download_email_patches_menu_item"
           >
-            <icon name="download" /> <i class="fa fa-caret-down" aria-hidden="true"> </i>
-          </button>
-          <ul class="dropdown-menu dropdown-menu-right">
-            <li>
-              <a
-                :href="mr.emailPatchesPath"
-                class="js-download-email-patches qa-download-email-patches"
-                download
-              >
-                {{ s__('mrWidget|Email patches') }}
-              </a>
-            </li>
-            <li>
-              <a
-                :href="mr.plainDiffPath"
-                class="js-download-plain-diff qa-download-plain-diff"
-                download
-              >
-                {{ s__('mrWidget|Plain diff') }}
-              </a>
-            </li>
-          </ul>
-        </span>
+            {{ s__('mrWidget|Email patches') }}
+          </gl-dropdown-item>
+          <gl-dropdown-item
+            :href="mr.plainDiffPath"
+            class="js-download-plain-diff"
+            download
+            data-qa-selector="download_plain_diff_menu_item"
+          >
+            {{ s__('mrWidget|Plain diff') }}
+          </gl-dropdown-item>
+        </gl-dropdown>
       </div>
     </div>
   </div>

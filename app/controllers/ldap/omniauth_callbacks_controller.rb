@@ -4,9 +4,9 @@ class Ldap::OmniauthCallbacksController < OmniauthCallbacksController
   extend ::Gitlab::Utils::Override
 
   def self.define_providers!
-    return unless Gitlab::Auth::LDAP::Config.sign_in_enabled?
+    return unless Gitlab::Auth::Ldap::Config.sign_in_enabled?
 
-    Gitlab::Auth::LDAP::Config.available_servers.each do |server|
+    Gitlab::Auth::Ldap::Config.available_servers.each do |server|
       alias_method server['provider_name'], :ldap
     end
   end
@@ -14,9 +14,13 @@ class Ldap::OmniauthCallbacksController < OmniauthCallbacksController
   # We only find ourselves here
   # if the authentication to LDAP was successful.
   def ldap
-    return unless Gitlab::Auth::LDAP::Config.sign_in_enabled?
+    return unless Gitlab::Auth::Ldap::Config.sign_in_enabled?
 
-    sign_in_user_flow(Gitlab::Auth::LDAP::User)
+    if Gitlab::CurrentSettings.admin_mode
+      return admin_mode_flow(Gitlab::Auth::Ldap::User) if current_user_mode.admin_mode_requested?
+    end
+
+    sign_in_user_flow(Gitlab::Auth::Ldap::User)
   end
 
   define_providers!
@@ -34,4 +38,4 @@ class Ldap::OmniauthCallbacksController < OmniauthCallbacksController
   end
 end
 
-Ldap::OmniauthCallbacksController.prepend_if_ee('EE::Ldap::OmniauthCallbacksController')
+Ldap::OmniauthCallbacksController.prepend_mod_with('Ldap::OmniauthCallbacksController')

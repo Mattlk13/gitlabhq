@@ -2,7 +2,7 @@
 
 require 'spec_helper'
 
-describe Gitlab::ImportExport::ImportFailureService do
+RSpec.describe Gitlab::ImportExport::ImportFailureService do
   let(:importable) { create(:project, :builds_enabled, :issues_disabled, name: 'project', path: 'project') }
   let(:label) { create(:label) }
   let(:subject) { described_class.new(importable) }
@@ -43,7 +43,7 @@ describe Gitlab::ImportExport::ImportFailureService do
       let(:importable) { create(:merge_request) }
 
       it 'raise exception' do
-        expect { subject }.to raise_exception(ActiveRecord::AssociationNotFoundError, "Association named 'import_failures' was not found on MergeRequest; perhaps you misspelled it?")
+        expect { subject }.to raise_exception(ActiveRecord::AssociationNotFoundError, /Association named 'import_failures' was not found on MergeRequest/)
       end
     end
   end

@@ -1,15 +1,18 @@
 ---
+stage: Enablement
+group: Distribution
+info: To determine the technical writer assigned to the Stage/Group associated with this page, see https://about.gitlab.com/handbook/engineering/ux/technical-writing/#assignments
 description: 'Learn how to install a GitLab instance on Google Cloud Platform.'
 type: howto
 ---
 
-# Installing GitLab on Google Cloud Platform
+# Installing GitLab on Google Cloud Platform **(FREE SELF)**
 
-This guide will help you install GitLab on a [Google Cloud Platform (GCP)][gcp] instance.
+This guide will help you install GitLab on a [Google Cloud Platform (GCP)](https://cloud.google.com/) using the official GitLab Linux package. You should customize it to accommodate your needs.
 
-NOTE: **Alternative installation method:**
+NOTE:
 Google provides a whitepaper for [deploying production-ready GitLab on
-Google Kubernetes Engine](https://cloud.google.com/solutions/deploying-production-ready-gitlab-on-gke),
+Google Kubernetes Engine](https://cloud.google.com/architecture/deploying-production-ready-gitlab-on-gke),
 including all steps and external resource configuration. These are an alternative to using a GCP VM, and use
 the [Cloud native GitLab Helm chart](https://docs.gitlab.com/charts/).
 
@@ -19,7 +22,7 @@ There are only two prerequisites in order to install GitLab on GCP:
 
 1. You need to have a Google account.
 1. You need to sign up for the GCP program. If this is your first time, Google
-   gives you [$300 credit for free][freetrial] to consume over a 60-day period.
+   gives you [$300 credit for free](https://console.cloud.google.com/freetrial) to consume over a 60-day period.
 
 Once you have performed those two steps, you can [create a VM](#creating-the-vm).
 
@@ -33,29 +36,29 @@ To deploy GitLab on GCP you first need to create a virtual machine:
    ![Search for GitLab](img/launch_vm.png)
 
 1. On the next page, you can select the type of VM as well as the
-   estimated costs. Provide the name of the instance, desired datacenter, and machine type. Note that GitLab recommends at least 2 vCPU's and 4GB of RAM.
+   estimated costs. Provide the name of the instance, desired data center, and machine type.
+   Note our [hardware requirements for different user base sizes](../requirements.md#hardware-requirements).
 
    ![Launch on Compute Engine](img/vm_details.png)
 
-1. Click **Change** under Boot disk to select the size, type, and desired operating system. GitLab supports a [variety of linux operating systems][req], including Ubuntu and Debian. Click **Select** when finished.
+1. To select the size, type, and desired [operating system](../requirements.md#supported-linux-distributions),
+   click **Change** under `Boot disk`. Click **Select** when finished.
 
-   ![Deploy in progress](img/boot_disk.png)
-
-1. As a last step allow HTTP and HTTPS traffic, then click **Create**. The process will finish in a few seconds.
+1. As a last step allow HTTP and HTTPS traffic, then click **Create**. The process finishes in a few seconds.
 
 ## Installing GitLab
 
-After a few seconds, the instance will be created and available to log in. The next step is to install GitLab onto the instance.
+After a few seconds, the instance is created and available to log in. The next step is to install GitLab onto the instance.
 
 ![Deploy settings](img/vm_created.png)
 
-1. Make a note of the IP address of the instance, as you will need that in a later step.
+1. Make a note of the external IP address of the instance, as you will need that in a later step. <!-- using future tense is okay here -->
 1. Click on the SSH button to connect to the instance.
-1. A new window will appear, with you logged into the instance.
+1. A new window appears, with you logged into the instance.
 
    ![GitLab first sign in](img/ssh_terminal.png)
 
-1. Next, follow the instructions for installing GitLab for the operating system you choose, at <https://about.gitlab.com/install/>. You can use the IP address from the step above, as the hostname.
+1. Next, follow the instructions for installing GitLab for the operating system you choose, at <https://about.gitlab.com/install/>. You can use the external IP address you noted before as the hostname.
 
 1. Congratulations! GitLab is now installed and you can access it via your browser. To finish installation, open the URL in your browser and provide the initial administrator password. The username for this account is `root`.
 
@@ -69,8 +72,8 @@ the first time.
 ### Assigning a static IP
 
 By default, Google assigns an ephemeral IP to your instance. It is strongly
-recommended to assign a static IP if you are going to use GitLab in production
-and use a domain name as we'll see below.
+recommended to assign a static IP if you are using GitLab in production
+and use a domain name as shown below.
 
 Read Google's documentation on how to [promote an ephemeral IP address](https://cloud.google.com/compute/docs/ip-addresses/reserve-static-external-ip-address#promote_ephemeral_ip).
 
@@ -81,31 +84,31 @@ set up DNS to point to the static IP you configured in the previous step,
 here's how you configure GitLab to be aware of the change:
 
 1. SSH into the VM. You can easily use the **SSH** button in the Google console
-   and a new window will pop up.
+   and a new window pops up.
 
    ![SSH button](img/vm_created.png)
 
-   In the future you might want to set up [connecting with an SSH key][ssh]
+   In the future you might want to set up [connecting with an SSH key](https://cloud.google.com/compute/docs/instances/connecting-to-instance)
    instead.
 
-1. Edit the config file of Omnibus GitLab using your favorite text editor:
+1. Edit the configuration file of Omnibus GitLab using your favorite text editor:
 
-   ```
+   ```shell
    sudo vim /etc/gitlab/gitlab.rb
    ```
 
 1. Set the `external_url` value to the domain name you wish GitLab to have
    **without** `https`:
 
-   ```
+   ```ruby
    external_url 'http://gitlab.example.com'
    ```
 
-   We will set up HTTPS in the next step, no need to do this now.
+   We will set up HTTPS in the next step, no need to do this now. <!-- using future tense is okay here -->
 
 1. Reconfigure GitLab for the changes to take effect:
 
-   ```
+   ```shell
    sudo gitlab-ctl reconfigure
    ```
 
@@ -114,13 +117,12 @@ here's how you configure GitLab to be aware of the change:
 ### Configuring HTTPS with the domain name
 
 Although not needed, it's strongly recommended to secure GitLab with a TLS
-certificate. Follow the steps in the [Omnibus documentation][omni-ssl].
+certificate. Follow the steps in the [Omnibus documentation](https://docs.gitlab.com/omnibus/settings/nginx.html#enable-https).
 
 ### Configuring the email SMTP settings
 
-You need to configure the email SMTP settings correctly otherwise GitLab will
-not be able to send notification emails, like comments, and password changes.
-Check the [Omnibus documentation][omni-smtp] how to do so.
+You need to configure the email SMTP settings correctly otherwise GitLab cannot send notification emails, like comments, and password changes.
+Check the [Omnibus documentation](https://docs.gitlab.com/omnibus/settings/smtp.html#smtp-settings) how to do so.
 
 ## Further reading
 
@@ -128,16 +130,9 @@ GitLab can be configured to authenticate with other OAuth providers, LDAP, SAML,
 Kerberos, etc. Here are some documents you might be interested in reading:
 
 - [Omnibus GitLab documentation](https://docs.gitlab.com/omnibus/)
-- [Integration documentation](../../integration/README.md)
+- [Integration documentation](../../integration/index.md)
 - [GitLab Pages configuration](../../administration/pages/index.md)
 - [GitLab Container Registry configuration](../../administration/packages/container_registry.md)
-
-[freetrial]: https://console.cloud.google.com/freetrial "GCP free trial"
-[gcp]: https://cloud.google.com/ "Google Cloud Platform"
-[req]: ../requirements.md "GitLab hardware and software requirements"
-[ssh]: https://cloud.google.com/compute/docs/instances/connecting-to-instance "Connecting to Linux Instances"
-[omni-smtp]: https://docs.gitlab.com/omnibus/settings/smtp.html#smtp-settings "Omnibus GitLab SMTP settings"
-[omni-ssl]: https://docs.gitlab.com/omnibus/settings/nginx.html#enable-https "Omnibus GitLab enable HTTPS"
 
 <!-- ## Troubleshooting
 

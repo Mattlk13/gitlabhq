@@ -2,11 +2,31 @@
 
 require 'spec_helper'
 
-describe 'Dashboard > Activity' do
+RSpec.describe 'Dashboard > Activity' do
   let(:user) { create(:user) }
 
   before do
     sign_in(user)
+  end
+
+  context 'tabs' do
+    it 'shows Your Projects' do
+      visit activity_dashboard_path
+
+      expect(find('.top-area .nav-tabs li.active')).to have_content('Your projects')
+    end
+
+    it 'shows Starred Projects' do
+      visit activity_dashboard_path(filter: 'starred')
+
+      expect(find('.top-area .nav-tabs li.active')).to have_content('Starred projects')
+    end
+
+    it 'shows Followed Projects' do
+      visit activity_dashboard_path(filter: 'followed')
+
+      expect(find('.top-area .nav-tabs li.active')).to have_content('Followed users')
+    end
   end
 
   context 'rss' do

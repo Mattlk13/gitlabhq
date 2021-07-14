@@ -1,49 +1,46 @@
-.row.prepend-top-default.append-bottom-default.triggers-container
+.row.gl-mt-3.gl-mb-3.triggers-container
   .col-lg-12
     .card
       .card-header
-        Manage your project's triggers
+        = _("Manage your project's triggers")
       .card-body
-        = render "projects/triggers/form", btn_text: "Add trigger"
+        = render 'projects/triggers/form', btn_text: _('Add trigger')
         %hr
-        - if @triggers.any?
-          .table-responsive.triggers-list
-            %table.table
-              %thead
-                %th
-                  %strong Token
-                %th
-                  %strong Description
-                %th
-                  %strong Owner
-                %th
-                  %strong Last used
-                %th
-              = render partial: 'projects/triggers/trigger', collection: @triggers, as: :trigger
+        - if Feature.enabled?(:ci_pipeline_triggers_settings_vue_ui, @project)
+          #js-ci-pipeline-triggers-list.triggers-list{ data: { triggers: @triggers_json } }
         - else
-          %p.settings-message.text-center.append-bottom-default
-            No triggers have been created yet. Add one using the form above.
+          - if @triggers.any?
+            .table-responsive.triggers-list
+              %table.table
+                %thead
+                  %th
+                    %strong
+                    = _('Token')
+                  %th
+                    %strong
+                    = _('Description')
+                  %th
+                    %strong
+                    = _('Owner')
+                  %th
+                    %strong
+                    = _('Last used')
+                  %th
+                = render partial: 'projects/triggers/trigger', collection: @triggers, as: :trigger
+          - else
+            %p.settings-message.text-center.gl-mb-3{ data: { testid: 'no_triggers_content' } }
+              = _('No triggers exist yet. Use the form above to create one.')
 
       .card-footer
 
         %p
-          In the following examples, you can see the exact API call you need to
-          make in order to rebuild a specific
-          %code ref
-          (branch or tag) with a trigger token.
-        %p
-          All you need to do is replace the
-          %code TOKEN
-          and
-          %code REF_NAME
-          with the trigger token and the branch or tag name respectively.
-
-        %h5.prepend-top-default
-          Use cURL
+          = _("These examples show how to trigger this project's pipeline for a branch or tag.")
 
         %p.light
-          Copy one of the tokens above, set your branch or tag name, and that
-          reference will be rebuilt.
+          = _('In each example, replace %{code_start}TOKEN%{code_end} with the trigger token you generated and replace %{code_start}REF_NAME%{code_end} with the branch or tag name.').html_safe % { code_start: '<code>'.html_safe, code_end: '</code>'.html_safe }
+
+        %h5.gl-mt-3
+          = _('Use cURL')
 
         %pre
           :plain
@@ -51,40 +48,27 @@
                  -F token=TOKEN \
                  -F ref=REF_NAME \
                  #{builds_trigger_url(@project.id)}
-        %h5.prepend-top-default
-          Use .gitlab-ci.yml
-
-        %p.light
-          In the
-          %code .gitlab-ci.yml
-          of another project, include the following snippet.
-          The project will be rebuilt at the end of the pipeline.
+        %h5.gl-mt-3
+          = _('Use .gitlab-ci.yml')
 
         %pre
           :plain
-            trigger_build:
-              stage: deploy
-              script:
-                - "curl -X POST -F token=TOKEN -F ref=REF_NAME #{builds_trigger_url(@project.id)}"
-        %h5.prepend-top-default
-          Use webhook
-
-        %p.light
-          Add the following webhook to another project for Push and Tag push events.
-          The project will be rebuilt at the corresponding event.
+            script:
+              - "curl -X POST -F token=TOKEN -F ref=REF_NAME #{builds_trigger_url(@project.id)}"
+        %h5.gl-mt-3
+          = _('Use webhook')
 
         %pre
           :plain
-             #{builds_trigger_url(@project.id, ref: 'REF_NAME')}?token=TOKEN
-        %h5.prepend-top-default
-          Pass job variables
+            #{builds_trigger_url(@project.id, ref: 'REF_NAME')}?token=TOKEN
+        %h5.gl-mt-3
+          = _('Pass job variables')
 
         %p.light
-          Add
-          %code variables[VARIABLE]=VALUE
-          to an API request. Variable values can be used to distinguish between triggered pipelines and normal pipelines.
+          = _('To pass variables to the triggered pipeline, add %{code_start}variables[VARIABLE]=VALUE%{code_end} to the API request.').html_safe % { code_start: '<code>'.html_safe, code_end: '</code>'.html_safe }
 
-          With cURL:
+        %p.light
+          = _('cURL:')
 
         %pre
           :plain
@@ -94,8 +78,8 @@
                  -F "variables[RUN_NIGHTLY_BUILD]=true" \
                  #{builds_trigger_url(@project.id)}
         %p.light
-          With webhook:
+          = _('Webhook:')
 
-        %pre.append-bottom-0
+        %pre.gl-mb-0
           :plain
-             #{builds_trigger_url(@project.id, ref: 'REF_NAME')}?token=TOKEN&variables[RUN_NIGHTLY_BUILD]=true
+            #{builds_trigger_url(@project.id, ref: 'REF_NAME')}?token=TOKEN&variables[RUN_NIGHTLY_BUILD]=true

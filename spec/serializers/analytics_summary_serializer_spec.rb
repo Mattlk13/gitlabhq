@@ -2,7 +2,7 @@
 
 require 'spec_helper'
 
-describe AnalyticsSummarySerializer do
+RSpec.describe AnalyticsSummarySerializer do
   subject do
     described_class.new.represent(resource)
   end
@@ -12,7 +12,7 @@ describe AnalyticsSummarySerializer do
 
   let(:resource) do
     Gitlab::CycleAnalytics::Summary::Issue
-      .new(project: double, from: 1.day.ago, current_user: user)
+      .new(project: double, options: { from: 1.day.ago }, current_user: user)
   end
 
   before do
@@ -27,5 +27,22 @@ describe AnalyticsSummarySerializer do
 
   it 'contains important elements of AnalyticsStage' do
     expect(subject).to include(:title, :value)
+  end
+
+  it 'does not include unit' do
+    expect(subject).not_to include(:unit)
+  end
+
+  context 'when representing with unit' do
+    let(:resource) do
+      Gitlab::CycleAnalytics::Summary::DeploymentFrequency
+        .new(deployments: 10, options: { from: 1.day.ago })
+    end
+
+    subject { described_class.new.represent(resource, with_unit: true) }
+
+    it 'contains unit' do
+      expect(subject).to include(:unit)
+    end
   end
 end

@@ -1,13 +1,15 @@
 # frozen_string_literal: true
 
+require 'active_support/deprecation'
 require 'gitlab/qa'
+require 'uri'
 
 module QA
   module Runtime
     module Env
       extend self
 
-      attr_writer :personal_access_token, :ldap_username, :ldap_password
+      attr_writer :personal_access_token, :admin_personal_access_token
 
       ENV_VARIABLES = Gitlab::QA::Runtime::Env::ENV_VARIABLES
 
@@ -15,7 +17,8 @@ module QA
       # supports the given feature
       SUPPORTED_FEATURES = {
         git_protocol_v2: 'QA_CAN_TEST_GIT_PROTOCOL_V2',
-        admin: 'QA_CAN_TEST_ADMIN_FEATURES'
+        admin: 'QA_CAN_TEST_ADMIN_FEATURES',
+        praefect: 'QA_CAN_TEST_PRAEFECT'
       }.freeze
 
       def supported_features
@@ -26,28 +29,50 @@ module QA
         ENV['QA_ADDITIONAL_REPOSITORY_STORAGE']
       end
 
-      def admin_password
-        ENV['GITLAB_ADMIN_PASSWORD']
+      def non_cluster_repository_storage
+        ENV['QA_GITALY_NON_CLUSTER_STORAGE'] || 'gitaly'
       end
 
-      def admin_username
-        ENV['GITLAB_ADMIN_USERNAME']
+      def praefect_repository_storage
+        ENV['QA_PRAEFECT_REPOSITORY_STORAGE']
       end
 
-      def admin_personal_access_token
-        ENV['GITLAB_QA_ADMIN_ACCESS_TOKEN']
+      def ci_job_url
+        ENV['CI_JOB_URL']
+      end
+
+      def ci_job_name
+        ENV['CI_JOB_NAME']
+      end
+
+      def ci_project_name
+        ENV['CI_PROJECT_NAME']
       end
 
       def debug?
         enabled?(ENV['QA_DEBUG'], default: false)
       end
 
+      def generate_allure_report?
+        enabled?(ENV['QA_GENERATE_ALLURE_REPORT'], default: false)
+      end
+
+      def default_branch
+        ENV['QA_DEFAULT_BRANCH'] || 'main'
+      end
+
       def log_destination
         ENV['QA_LOG_PATH'] || $stdout
       end
 
-      # set to 'false' to have Chrome run visibly instead of headless
-      def chrome_headless?
+      # set to 'false' to have the browser run visibly instead of headless
+      def webdriver_headless?
+        if ENV.key?('CHROME_HEADLESS')
+          ActiveSupport::Deprecation.warn("CHROME_HEADLESS is deprecated. Use WEBDRIVER_HEADLESS instead.")
+        end
+
+        return enabled?(ENV['WEBDRIVER_HEADLESS']) unless ENV['WEBDRIVER_HEADLESS'].nil?
+
         enabled?(ENV['CHROME_HEADLESS'])
       end
 
@@ -64,12 +89,28 @@ module QA
         ENV['CI'] || ENV['CI_SERVER']
       end
 
+      def cluster_api_url
+        ENV['CLUSTER_API_URL']
+      end
+
       def qa_cookies
         ENV['QA_COOKIES'] && ENV['QA_COOKIES'].split(';')
       end
 
       def signup_disabled?
         enabled?(ENV['SIGNUP_DISABLED'], default: false)
+      end
+
+      def admin_password
+        ENV['GITLAB_ADMIN_PASSWORD']
+      end
+
+      def admin_username
+        ENV['GITLAB_ADMIN_USERNAME']
+      end
+
+      def admin_personal_access_token
+        @admin_personal_access_token ||= ENV['GITLAB_QA_ADMIN_ACCESS_TOKEN']
       end
 
       # specifies token that can be used for the api
@@ -105,12 +146,20 @@ module QA
         ENV['QA_BROWSER'].nil? ? :chrome : ENV['QA_BROWSER'].to_sym
       end
 
+      def remote_mobile_device_name
+        ENV['QA_REMOTE_MOBILE_DEVICE_NAME']
+      end
+
       def user_username
         ENV['GITLAB_USERNAME']
       end
 
       def user_password
         ENV['GITLAB_PASSWORD']
+      end
+
+      def initial_root_password
+        ENV['GITLAB_INITIAL_ROOT_PASSWORD']
       end
 
       def github_username
@@ -181,6 +230,14 @@ module QA
         ENV['GITLAB_QA_PASSWORD_6']
       end
 
+      def gitlab_qa_2fa_owner_username_1
+        ENV['GITLAB_QA_2FA_OWNER_USERNAME_1'] || 'gitlab-qa-2fa-owner-user1'
+      end
+
+      def gitlab_qa_2fa_owner_password_1
+        ENV['GITLAB_QA_2FA_OWNER_PASSWORD_1']
+      end
+
       def gitlab_qa_1p_email
         ENV['GITLAB_QA_1P_EMAIL']
       end
@@ -197,12 +254,33 @@ module QA
         ENV['GITLAB_QA_1P_GITHUB_UUID']
       end
 
+      def jira_admin_username
+        ENV['JIRA_ADMIN_USERNAME']
+      end
+
+      def jira_admin_password
+        ENV['JIRA_ADMIN_PASSWORD']
+      end
+
+      def jira_hostname
+        ENV['JIRA_HOSTNAME']
+      end
+
+      def cache_namespace_name?
+        enabled?(ENV['CACHE_NAMESPACE_NAME'], default: true)
+      end
+
       def knapsack?
         !!(ENV['KNAPSACK_GENERATE_REPORT'] || ENV['KNAPSACK_REPORT_PATH'] || ENV['KNAPSACK_TEST_FILE_PATTERN'])
       end
 
       def ldap_username
         @ldap_username ||= ENV['GITLAB_LDAP_USERNAME']
+      end
+
+      def ldap_username=(ldap_username)
+        @ldap_username = ldap_username # rubocop:disable Gitlab/ModuleWithInstanceVariables
+        ENV['GITLAB_LDAP_USERNAME'] = ldap_username
       end
 
       def ldap_password
@@ -260,7 +338,7 @@ module QA
       # the feature is supported in the environment under test.
       # All features are supported by default.
       def can_test?(feature)
-        raise ArgumentError, %Q(Unknown feature "#{feature}") unless SUPPORTED_FEATURES.include? feature
+        raise ArgumentError, %(Unknown feature "#{feature}") unless SUPPORTED_FEATURES.include? feature
 
         enabled?(ENV[SUPPORTED_FEATURES[feature]], default: true)
       end
@@ -293,11 +371,38 @@ module QA
         ENV['MAILHOG_HOSTNAME']
       end
 
+      # Get the version of GitLab currently being tested against
+      # @return String Version
+      # @example
+      #   > Env.deploy_version
+      #   #=> 13.3.4-ee.0
+      def deploy_version
+        ENV['DEPLOY_VERSION']
+      end
+
+      def user_agent
+        ENV['GITLAB_QA_USER_AGENT']
+      end
+
+      def geo_environment?
+        QA::Runtime::Scenario.attributes.include?(:geo_secondary_address)
+      end
+
+      def gitlab_agentk_version
+        ENV.fetch('GITLAB_AGENTK_VERSION', 'v13.7.0')
+      end
+
+      def transient_trials
+        ENV.fetch('GITLAB_QA_TRANSIENT_TRIALS', 10).to_i
+      end
+
       private
 
       def remote_grid_credentials
         if remote_grid_username
-          raise ArgumentError, %Q(Please provide an access key for user "#{remote_grid_username}") unless remote_grid_access_key
+          unless remote_grid_access_key
+            raise ArgumentError, %(Please provide an access key for user "#{remote_grid_username}")
+          end
 
           return "#{remote_grid_username}:#{remote_grid_access_key}@"
         end
@@ -314,4 +419,4 @@ module QA
   end
 end
 
-QA::Runtime::Env.extend_if_ee('QA::EE::Runtime::Env')
+QA::Runtime::Env.extend_mod_with('Runtime::Env', namespace: QA)

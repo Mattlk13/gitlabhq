@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-describe QA::Runtime::Env do
+RSpec.describe QA::Runtime::Env do
   include Helpers::StubENV
 
   shared_examples 'boolean method' do |**kwargs|
@@ -54,10 +54,10 @@ describe QA::Runtime::Env do
       default: false
   end
 
-  describe '.chrome_headless?' do
+  describe '.webdriver_headless?' do
     it_behaves_like 'boolean method',
-      method: :chrome_headless?,
-      env_key: 'CHROME_HEADLESS',
+      method: :webdriver_headless?,
+      env_key: 'WEBDRIVER_HEADLESS',
       default: true
   end
 
@@ -232,6 +232,7 @@ describe QA::Runtime::Env do
 
   describe '.require_admin_access_token!' do
     it 'raises ArgumentError if GITLAB_QA_ADMIN_ACCESS_TOKEN is not specified' do
+      described_class.instance_variable_set(:@admin_personal_access_token, nil)
       stub_env('GITLAB_QA_ADMIN_ACCESS_TOKEN', nil)
 
       expect { described_class.require_admin_access_token! }.to raise_error(ArgumentError)
@@ -269,6 +270,12 @@ describe QA::Runtime::Env do
       method: :can_test?,
       param: :admin,
       env_key: 'QA_CAN_TEST_ADMIN_FEATURES',
+      default: true
+
+    it_behaves_like 'boolean method with parameter',
+      method: :can_test?,
+      param: :praefect,
+      env_key: 'QA_CAN_TEST_PRAEFECT',
       default: true
 
     it 'raises ArgumentError if feature is unknown' do

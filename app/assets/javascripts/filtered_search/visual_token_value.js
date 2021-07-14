@@ -1,10 +1,11 @@
-import _ from 'underscore';
+import { escape } from 'lodash';
 import { USER_TOKEN_TYPES } from 'ee_else_ce/filtered_search/constants';
+import * as Emoji from '~/emoji';
 import FilteredSearchContainer from '~/filtered_search/container';
-import FilteredSearchVisualTokens from '~/filtered_search/filtered_search_visual_tokens';
-import AjaxCache from '~/lib/utils/ajax_cache';
 import DropdownUtils from '~/filtered_search/dropdown_utils';
-import Flash from '~/flash';
+import FilteredSearchVisualTokens from '~/filtered_search/filtered_search_visual_tokens';
+import createFlash from '~/flash';
+import AjaxCache from '~/lib/utils/ajax_cache';
 import UsersCache from '~/lib/utils/users_cache';
 import { __ } from '~/locale';
 
@@ -39,7 +40,7 @@ export default class VisualTokenValue {
 
     return (
       UsersCache.retrieve(username)
-        .then(user => {
+        .then((user) => {
           if (!user) {
             return;
           }
@@ -48,7 +49,7 @@ export default class VisualTokenValue {
           tokenValueContainer.dataset.originalValue = tokenValue;
           tokenValueElement.innerHTML = `
           <img class="avatar s20" src="${user.avatar_url}" alt="">
-          ${_.escape(user.name)}
+          ${escape(user.name)}
         `;
           /* eslint-enable no-param-reassign */
         })
@@ -67,9 +68,9 @@ export default class VisualTokenValue {
     );
 
     return AjaxCache.retrieve(labelsEndpointWithParams)
-      .then(labels => {
+      .then((labels) => {
         const matchingLabel = (labels || []).find(
-          label => `~${DropdownUtils.getEscapedText(label.title)}` === tokenValue,
+          (label) => `~${DropdownUtils.getEscapedText(label.title)}` === tokenValue,
         );
 
         if (!matchingLabel) {
@@ -82,7 +83,11 @@ export default class VisualTokenValue {
           matchingLabel.text_color,
         );
       })
-      .catch(() => new Flash(__('An error occurred while fetching label colors.')));
+      .catch(() =>
+        createFlash({
+          message: __('An error occurred while fetching label colors.'),
+        }),
+      );
   }
 
   updateEpicLabel(tokenValueContainer) {
@@ -95,8 +100,8 @@ export default class VisualTokenValue {
     );
 
     return AjaxCache.retrieve(epicsEndpointWithParams)
-      .then(epics => {
-        const matchingEpic = (epics || []).find(epic => epic.id === Number(tokenValue));
+      .then((epics) => {
+        const matchingEpic = (epics || []).find((epic) => epic.id === Number(tokenValue));
 
         if (!matchingEpic) {
           return;
@@ -104,7 +109,11 @@ export default class VisualTokenValue {
 
         VisualTokenValue.replaceEpicTitle(tokenValueContainer, matchingEpic.title, matchingEpic.id);
       })
-      .catch(() => new Flash(__('An error occurred while adding formatted title for epic')));
+      .catch(() =>
+        createFlash({
+          message: __('An error occurred while adding formatted title for epic'),
+        }),
+      );
   }
 
   static replaceEpicTitle(tokenValueContainer, epicTitle, epicId) {
@@ -137,18 +146,13 @@ export default class VisualTokenValue {
     const element = tokenValueElement;
     const value = this.tokenValue;
 
-    return (
-      import(/* webpackChunkName: 'emoji' */ '../emoji')
-        .then(Emoji => {
-          if (!Emoji.isEmojiNameValid(value)) {
-            return;
-          }
+    return Emoji.initEmojiMap().then(() => {
+      if (!Emoji.isEmojiNameValid(value)) {
+        return;
+      }
 
-          container.dataset.originalValue = value;
-          element.innerHTML = Emoji.glEmojiTag(value);
-        })
-        // ignore error and leave emoji name in the search bar
-        .catch(() => {})
-    );
+      container.dataset.originalValue = value;
+      element.innerHTML = Emoji.glEmojiTag(value);
+    });
   }
 }

@@ -1,3 +1,9 @@
+---
+stage: none
+group: unassigned
+info: To determine the technical writer assigned to the Stage/Group associated with this page, see https://about.gitlab.com/handbook/engineering/ux/technical-writing/#assignments
+---
+
 # Guidelines for reusing abstractions
 
 As GitLab has grown, different patterns emerged across the codebase. Service
@@ -127,6 +133,8 @@ Everything in `lib/api`.
 
 Everything that resides in `app/services`.
 
+In Service classes the use of `execute` and `#execute` is preferred over `call` and `#call`.
+
 #### ServiceResponse
 
 Service classes usually have an `execute` method, which can return a
@@ -135,7 +143,7 @@ Service classes usually have an `execute` method, which can return a
 
 In a successful case:
 
-``` ruby
+```ruby
 response = ServiceResponse.success(message: 'Branch was deleted')
 
 response.success? # => true
@@ -146,7 +154,7 @@ response.message # => 'Branch was deleted'
 
 In a failed case:
 
-``` ruby
+```ruby
 response = ServiceResponse.error(message: 'Unsupported operation')
 
 response.success? # => false
@@ -157,7 +165,7 @@ response.message # => 'Unsupported operation'
 
 An additional payload can also be attached:
 
-``` ruby
+```ruby
 response = ServiceResponse.success(payload: { issue: issue })
 
 response.payload[:issue] # => issue

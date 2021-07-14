@@ -3,18 +3,21 @@
 module Ci
   class Bridge < Ci::Processable
     include Ci::Contextable
-    include Ci::PipelineDelegator
     include Ci::Metadatable
     include Importable
     include AfterCommitQueue
-    include HasRef
+    include Ci::HasRef
 
     InvalidBridgeTypeError = Class.new(StandardError)
+    InvalidTransitionError = Class.new(StandardError)
 
     belongs_to :project
     belongs_to :trigger_request
     has_many :sourced_pipelines, class_name: "::Ci::Sources::Pipeline",
                                   foreign_key: :source_job_id
+
+    has_one :sourced_pipeline, class_name: "::Ci::Sources::Pipeline", foreign_key: :source_job_id
+    has_one :downstream_pipeline, through: :sourced_pipeline, source: :pipeline
 
     validates :ref, presence: true
 
@@ -24,12 +27,16 @@ module Ci
     # rubocop:enable Cop/ActiveRecordSerialize
 
     state_machine :status do
-      after_transition created: :pending do |bridge|
+      after_transition [:created, :manual, :waiting_for_resource] => :pending do |bridge|
         next unless bridge.downstream_project
 
         bridge.run_after_commit do
           bridge.schedule_downstream_pipeline!
         end
+      end
+
+      event :pending do
+        transition all => :pending
       end
 
       event :manual do
@@ -39,10 +46,22 @@ module Ci
       event :scheduled do
         transition all => :scheduled
       end
+
+      event :actionize do
+        transition created: :manual
+      end
     end
 
     def self.retry(bridge, current_user)
       raise NotImplementedError
+    end
+
+    def self.with_preloads
+      preload(
+        :metadata,
+        downstream_pipeline: [project: [:route, { namespace: :route }]],
+        project: [:namespace]
+      )
     end
 
     def schedule_downstream_pipeline!
@@ -60,6 +79,10 @@ module Ci
       else
         false
       end
+    end
+
+    def has_downstream_pipeline?
+      sourced_pipelines.exists?
     end
 
     def downstream_pipeline_params
@@ -85,6 +108,10 @@ module Ci
       end
     end
 
+    def parent_pipeline
+      pipeline if triggers_child_pipeline?
+    end
+
     def triggers_child_pipeline?
       yaml_for_downstream.present?
     end
@@ -103,9 +130,23 @@ module Ci
       false
     end
 
-    def action?
-      false
+    def playable?
+      action? && !archived? && manual?
     end
+
+    def action?
+      %w[manual].include?(self.when)
+    end
+
+    # rubocop: disable CodeReuse/ServiceClass
+    # We don't need it but we are taking `job_variables_attributes` parameter
+    # to make it consistent with `Ci::Build#play` method.
+    def play(current_user, job_variables_attributes = nil)
+      Ci::PlayBridgeService
+        .new(project, current_user)
+        .execute(self)
+    end
+    # rubocop: enable CodeReuse/ServiceClass
 
     def artifacts?
       false
@@ -115,7 +156,14 @@ module Ci
       false
     end
 
+    def any_unmet_prerequisites?
+      false
+    end
+
     def expanded_environment_name
+    end
+
+    def persisted_environment
     end
 
     def execute_hooks
@@ -158,6 +206,10 @@ module Ci
       end
     end
 
+    def target_revision_ref
+      downstream_pipeline_params.dig(:target_revision, :ref)
+    end
+
     private
 
     def cross_project_params
@@ -165,9 +217,13 @@ module Ci
         project: downstream_project,
         source: :pipeline,
         target_revision: {
-          ref: target_ref || downstream_project.default_branch
+          ref: target_ref || downstream_project.default_branch,
+          variables_attributes: downstream_variables
         },
-        execute_params: { ignore_skip_ci: true }
+        execute_params: {
+          ignore_skip_ci: true,
+          bridge: self
+        }
       }
     end
 
@@ -182,7 +238,8 @@ module Ci
           checkout_sha: parent_pipeline.sha,
           before: parent_pipeline.before_sha,
           source_sha: parent_pipeline.source_sha,
-          target_sha: parent_pipeline.target_sha
+          target_sha: parent_pipeline.target_sha,
+          variables_attributes: downstream_variables
         },
         execute_params: {
           ignore_skip_ci: true,
@@ -194,4 +251,4 @@ module Ci
   end
 end
 
-::Ci::Bridge.prepend_if_ee('::EE::Ci::Bridge')
+::Ci::Bridge.prepend_mod_with('Ci::Bridge')

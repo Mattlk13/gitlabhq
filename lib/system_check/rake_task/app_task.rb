@@ -31,11 +31,13 @@ module SystemCheck
           SystemCheck::App::GitVersionCheck,
           SystemCheck::App::GitUserDefaultSSHConfigCheck,
           SystemCheck::App::ActiveUsersCheck,
-          SystemCheck::App::AuthorizedKeysPermissionCheck
+          SystemCheck::App::AuthorizedKeysPermissionCheck,
+          SystemCheck::App::HashedStorageEnabledCheck,
+          SystemCheck::App::HashedStorageAllProjectsCheck
         ]
       end
     end
   end
 end
 
-SystemCheck::RakeTask::AppTask.prepend_if_ee('EE::SystemCheck::RakeTask::AppTask')
+SystemCheck::RakeTask::AppTask.prepend_mod_with('SystemCheck::RakeTask::AppTask')

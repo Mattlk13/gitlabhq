@@ -9,12 +9,20 @@ module Gitlab
   module Auth
     module OAuth
       class User
-        prepend_if_ee('::EE::Gitlab::Auth::OAuth::User') # rubocop: disable Cop/InjectEnterpriseEditionModule
+        class << self
+          # rubocop: disable CodeReuse/ActiveRecord
+          def find_by_uid_and_provider(uid, provider)
+            identity = ::Identity.with_extern_uid(provider, uid).take
+
+            identity && identity.user
+          end
+          # rubocop: enable CodeReuse/ActiveRecord
+        end
 
         SignupDisabledError = Class.new(StandardError)
         SigninDisabledForProviderError = Class.new(StandardError)
 
-        attr_accessor :auth_hash, :gl_user
+        attr_reader :auth_hash
 
         def initialize(auth_hash)
           self.auth_hash = auth_hash
@@ -64,6 +72,7 @@ module Gitlab
         def find_user
           user = find_by_uid_and_provider
 
+          user ||= find_by_email if auto_link_user?
           user ||= find_or_build_ldap_user if auto_link_ldap_user?
           user ||= build_new_user if signup_enabled?
 
@@ -106,12 +115,14 @@ module Gitlab
             log.info "Correct LDAP account has been found. identity to user: #{gl_user.username}."
             gl_user.identities.build(provider: ldap_person.provider, extern_uid: ldap_person.dn)
           end
+
+          identity
         end
 
         def find_or_build_ldap_user
           return unless ldap_person
 
-          user = Gitlab::Auth::LDAP::User.find_by_uid_and_provider(ldap_person.dn, ldap_person.provider)
+          user = Gitlab::Auth::Ldap::User.find_by_uid_and_provider(ldap_person.dn, ldap_person.provider)
           if user
             log.info "LDAP account found for user #{user.username}. Building new #{auth_hash.provider} identity."
             return user
@@ -141,8 +152,8 @@ module Gitlab
           return @ldap_person if defined?(@ldap_person)
 
           # Look for a corresponding person with same uid in any of the configured LDAP providers
-          Gitlab::Auth::LDAP::Config.providers.each do |provider|
-            adapter = Gitlab::Auth::LDAP::Adapter.new(provider)
+          Gitlab::Auth::Ldap::Config.providers.each do |provider|
+            adapter = Gitlab::Auth::Ldap::Adapter.new(provider)
             @ldap_person = find_ldap_person(auth_hash, adapter)
             break if @ldap_person
           end
@@ -150,15 +161,16 @@ module Gitlab
         end
 
         def find_ldap_person(auth_hash, adapter)
-          Gitlab::Auth::LDAP::Person.find_by_uid(auth_hash.uid, adapter) ||
-            Gitlab::Auth::LDAP::Person.find_by_email(auth_hash.uid, adapter) ||
-            Gitlab::Auth::LDAP::Person.find_by_dn(auth_hash.uid, adapter)
-        rescue Gitlab::Auth::LDAP::LDAPConnectionError
+          Gitlab::Auth::Ldap::Person.find_by_uid(auth_hash.uid, adapter) ||
+            Gitlab::Auth::Ldap::Person.find_by_email(auth_hash.uid, adapter) ||
+            Gitlab::Auth::Ldap::Person.find_by_email(auth_hash.email, adapter) ||
+            Gitlab::Auth::Ldap::Person.find_by_dn(auth_hash.uid, adapter)
+        rescue Gitlab::Auth::Ldap::LdapConnectionError
           nil
         end
 
         def ldap_config
-          Gitlab::Auth::LDAP::Config.new(ldap_person.provider) if ldap_person
+          Gitlab::Auth::Ldap::Config.new(ldap_person.provider) if ldap_person
         end
 
         def needs_blocking?
@@ -190,16 +202,13 @@ module Gitlab
           @auth_hash = AuthHash.new(auth_hash)
         end
 
-        # rubocop: disable CodeReuse/ActiveRecord
         def find_by_uid_and_provider
-          identity = Identity.with_extern_uid(auth_hash.provider, auth_hash.uid).take
-          identity&.user
+          self.class.find_by_uid_and_provider(auth_hash.uid, auth_hash.provider)
         end
-        # rubocop: enable CodeReuse/ActiveRecord
 
-        def build_new_user
-          user_params = user_attributes.merge(skip_confirmation: true)
-          Users::BuildService.new(nil, user_params).execute(skip_authorization: true)
+        def build_new_user(skip_confirmation: true)
+          user_params = user_attributes.merge(skip_confirmation: skip_confirmation)
+          Users::AuthorizedBuildService.new(nil, user_params).execute
         end
 
         def user_attributes
@@ -232,8 +241,9 @@ module Gitlab
         end
 
         def update_profile
-          clear_user_synced_attributes_metadata
+          return unless gl_user
 
+          clear_user_synced_attributes_metadata
           return unless sync_profile_from_provider? || creating_linked_ldap_user?
 
           metadata = gl_user.build_user_synced_attributes_metadata
@@ -271,7 +281,17 @@ module Gitlab
                                 .disabled_oauth_sign_in_sources
                                 .include?(auth_hash.provider)
         end
+
+        def auto_link_user?
+          auto_link = Gitlab.config.omniauth.auto_link_user
+          return auto_link if [true, false].include?(auto_link)
+
+          auto_link = Array(auto_link)
+          auto_link.include?(auth_hash.provider)
+        end
       end
     end
   end
 end
+
+Gitlab::Auth::OAuth::User.prepend_mod_with('Gitlab::Auth::OAuth::User')

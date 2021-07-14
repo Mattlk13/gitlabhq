@@ -2,7 +2,7 @@
 
 require('spec_helper')
 
-describe Projects::ProtectedBranchesController do
+RSpec.describe Projects::ProtectedBranchesController do
   let(:project) { create(:project, :repository) }
   let(:protected_branch) { create(:protected_branch, project: project) }
   let(:project_params) { { namespace_id: project.namespace.to_param, project_id: project } }
@@ -27,6 +27,7 @@ describe Projects::ProtectedBranchesController do
       { merge_access_levels_attributes: maintainer_access_level,
         push_access_levels_attributes: maintainer_access_level }
     end
+
     let(:create_params) { attributes_for(:protected_branch).merge(access_level_params) }
 
     before do
@@ -41,7 +42,7 @@ describe Projects::ProtectedBranchesController do
 
     context 'when a policy restricts rule deletion' do
       before do
-        policy = instance_double(ProtectedBranchPolicy, can?: false)
+        policy = instance_double(ProtectedBranchPolicy, allowed?: false)
         allow(ProtectedBranchPolicy).to receive(:new).and_return(policy)
       end
 
@@ -69,7 +70,7 @@ describe Projects::ProtectedBranchesController do
 
     context 'when a policy restricts rule deletion' do
       before do
-        policy = instance_double(ProtectedBranchPolicy, can?: false)
+        policy = instance_double(ProtectedBranchPolicy, allowed?: false)
         allow(ProtectedBranchPolicy).to receive(:new).and_return(policy)
       end
 
@@ -96,14 +97,14 @@ describe Projects::ProtectedBranchesController do
 
     context 'when a policy restricts rule deletion' do
       before do
-        policy = instance_double(ProtectedBranchPolicy, can?: false)
+        policy = instance_double(ProtectedBranchPolicy, allowed?: false)
         allow(ProtectedBranchPolicy).to receive(:new).and_return(policy)
       end
 
       it "prevents deletion of the protected branch rule" do
         delete(:destroy, params: base_params)
 
-        expect(response.status).to eq(403)
+        expect(response).to have_gitlab_http_status(:forbidden)
       end
     end
   end

@@ -2,12 +2,13 @@
 
 require 'spec_helper'
 
-describe Gitlab::Ci::Config::External::Processor do
+RSpec.describe Gitlab::Ci::Config::External::Processor do
   include StubRequests
 
   let_it_be(:project) { create(:project, :repository) }
   let_it_be(:another_project) { create(:project, :repository) }
   let_it_be(:user) { create(:user) }
+
   let(:sha) { '12345' }
   let(:context_params) { { project: project, sha: sha, user: user } }
   let(:context) { Gitlab::Ci::Config::External::Context.new(**context_params) }
@@ -24,7 +25,7 @@ describe Gitlab::Ci::Config::External::Processor do
     subject { processor.perform }
 
     context 'when no external files defined' do
-      let(:values) { { image: 'ruby:2.2' } }
+      let(:values) { { image: 'ruby:2.7' } }
 
       it 'returns the same values' do
         expect(processor.perform).to eq(values)
@@ -32,7 +33,7 @@ describe Gitlab::Ci::Config::External::Processor do
     end
 
     context 'when an invalid local file is defined' do
-      let(:values) { { include: '/lib/gitlab/ci/templates/non-existent-file.yml', image: 'ruby:2.2' } }
+      let(:values) { { include: '/lib/gitlab/ci/templates/non-existent-file.yml', image: 'ruby:2.7' } }
 
       it 'raises an error' do
         expect { processor.perform }.to raise_error(
@@ -44,7 +45,7 @@ describe Gitlab::Ci::Config::External::Processor do
 
     context 'when an invalid remote file is defined' do
       let(:remote_file) { 'http://doesntexist.com/.gitlab-ci-1.yml' }
-      let(:values) { { include: remote_file, image: 'ruby:2.2' } }
+      let(:values) { { include: remote_file, image: 'ruby:2.7' } }
 
       before do
         stub_full_request(remote_file).and_raise(SocketError.new('Some HTTP error'))
@@ -60,7 +61,7 @@ describe Gitlab::Ci::Config::External::Processor do
 
     context 'with a valid remote external file is defined' do
       let(:remote_file) { 'https://gitlab.com/gitlab-org/gitlab-foss/blob/1234/.gitlab-ci-1.yml' }
-      let(:values) { { include: remote_file, image: 'ruby:2.2' } }
+      let(:values) { { include: remote_file, image: 'ruby:2.7' } }
       let(:external_file_content) do
         <<-HEREDOC
         before_script:
@@ -94,7 +95,7 @@ describe Gitlab::Ci::Config::External::Processor do
     end
 
     context 'with a valid local external file is defined' do
-      let(:values) { { include: '/lib/gitlab/ci/templates/template.yml', image: 'ruby:2.2' } }
+      let(:values) { { include: '/lib/gitlab/ci/templates/template.yml', image: 'ruby:2.7' } }
       let(:local_file_content) do
         <<-HEREDOC
         before_script:
@@ -128,10 +129,11 @@ describe Gitlab::Ci::Config::External::Processor do
           remote_file
         ]
       end
+
       let(:values) do
         {
           include: external_files,
-          image: 'ruby:2.2'
+          image: 'ruby:2.7'
         }
       end
 
@@ -163,7 +165,7 @@ describe Gitlab::Ci::Config::External::Processor do
     end
 
     context 'when external files are defined but not valid' do
-      let(:values) { { include: '/lib/gitlab/ci/templates/template.yml', image: 'ruby:2.2' } }
+      let(:values) { { include: '/lib/gitlab/ci/templates/template.yml', image: 'ruby:2.7' } }
 
       let(:local_file_content) { 'invalid content file ////' }
 
@@ -185,7 +187,7 @@ describe Gitlab::Ci::Config::External::Processor do
       let(:values) do
         {
           include: remote_file,
-          image: 'ruby:2.2'
+          image: 'ruby:2.7'
         }
       end
 
@@ -198,7 +200,7 @@ describe Gitlab::Ci::Config::External::Processor do
       it 'takes precedence' do
         stub_full_request(remote_file).to_return(body: remote_file_content)
 
-        expect(processor.perform[:image]).to eq('ruby:2.2')
+        expect(processor.perform[:image]).to eq('ruby:2.7')
       end
     end
 
@@ -208,7 +210,7 @@ describe Gitlab::Ci::Config::External::Processor do
           include: [
             { local: '/local/file.yml' }
           ],
-          image: 'ruby:2.2'
+          image: 'ruby:2.7'
         }
       end
 
@@ -299,6 +301,105 @@ describe Gitlab::Ci::Config::External::Processor do
         it 'returns a reportable configuration error' do
           expect { subject }.to raise_error(described_class::IncludeError, /certificate verify failed/)
         end
+      end
+    end
+
+    context 'when a valid project file is defined' do
+      let(:values) do
+        {
+          include: { project: another_project.full_path, file: '/templates/my-build.yml' },
+          image: 'ruby:2.7'
+        }
+      end
+
+      before do
+        another_project.add_developer(user)
+
+        allow_next_instance_of(Repository) do |repository|
+          allow(repository).to receive(:blob_data_at).with(another_project.commit.id, '/templates/my-build.yml') do
+            <<~HEREDOC
+              my_build:
+                script: echo Hello World
+            HEREDOC
+          end
+        end
+      end
+
+      it 'appends the file to the values' do
+        output = processor.perform
+        expect(output.keys).to match_array([:image, :my_build])
+      end
+    end
+
+    context 'when valid project files are defined in a single include' do
+      let(:values) do
+        {
+          include: {
+            project: another_project.full_path,
+            file: ['/templates/my-build.yml', '/templates/my-test.yml']
+          },
+          image: 'ruby:2.7'
+        }
+      end
+
+      before do
+        another_project.add_developer(user)
+
+        allow_next_instance_of(Repository) do |repository|
+          allow(repository).to receive(:blob_data_at).with(another_project.commit.id, '/templates/my-build.yml') do
+            <<~HEREDOC
+              my_build:
+                script: echo Hello World
+            HEREDOC
+          end
+
+          allow(repository).to receive(:blob_data_at).with(another_project.commit.id, '/templates/my-test.yml') do
+            <<~HEREDOC
+              my_test:
+                script: echo Hello World
+            HEREDOC
+          end
+        end
+      end
+
+      it 'appends the file to the values' do
+        output = processor.perform
+        expect(output.keys).to match_array([:image, :my_build, :my_test])
+      end
+    end
+
+    context 'when local file path has wildcard' do
+      let_it_be(:project) { create(:project, :repository) }
+
+      let(:values) do
+        { include: 'myfolder/*.yml', image: 'ruby:2.7' }
+      end
+
+      before do
+        allow_next_instance_of(Repository) do |repository|
+          allow(repository).to receive(:search_files_by_wildcard_path).with('myfolder/*.yml', sha) do
+            ['myfolder/file1.yml', 'myfolder/file2.yml']
+          end
+
+          allow(repository).to receive(:blob_data_at).with(sha, 'myfolder/file1.yml') do
+            <<~HEREDOC
+              my_build:
+                script: echo Hello World
+            HEREDOC
+          end
+
+          allow(repository).to receive(:blob_data_at).with(sha, 'myfolder/file2.yml') do
+            <<~HEREDOC
+              my_test:
+                script: echo Hello World
+            HEREDOC
+          end
+        end
+      end
+
+      it 'fetches the matched files' do
+        output = processor.perform
+        expect(output.keys).to match_array([:image, :my_build, :my_test])
       end
     end
   end

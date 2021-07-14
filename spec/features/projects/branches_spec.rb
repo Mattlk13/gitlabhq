@@ -2,7 +2,7 @@
 
 require 'spec_helper'
 
-describe 'Branches' do
+RSpec.describe 'Branches' do
   let(:user) { create(:user) }
   let(:project) { create(:project, :public, :repository) }
   let(:repository) { project.repository }
@@ -21,11 +21,11 @@ describe 'Branches' do
       before do
         # Add 4 stale branches
         (1..4).reverse_each do |i|
-          Timecop.freeze((threshold + i).ago) { create_file(message: "a commit in stale-#{i}", branch_name: "stale-#{i}") }
+          travel_to((threshold + i.hours).ago) { create_file(message: "a commit in stale-#{i}", branch_name: "stale-#{i}") }
         end
         # Add 6 active branches
         (1..6).each do |i|
-          Timecop.freeze((threshold - i).ago) { create_file(message: "a commit in active-#{i}", branch_name: "active-#{i}") }
+          travel_to((threshold - i.hours).ago) { create_file(message: "a commit in active-#{i}", branch_name: "active-#{i}") }
         end
       end
 
@@ -34,7 +34,7 @@ describe 'Branches' do
           visit project_branches_path(project)
 
           expect(page).to have_content(sorted_branches(repository, count: 5, sort_by: :updated_desc, state: 'active'))
-          expect(page).to have_content(sorted_branches(repository, count: 4, sort_by: :updated_desc, state: 'stale'))
+          expect(page).to have_content(sorted_branches(repository, count: 4, sort_by: :updated_asc, state: 'stale'))
 
           expect(page).to have_link('Show more active branches', href: project_branches_filtered_path(project, state: 'active'))
           expect(page).not_to have_content('Show more stale branches')
@@ -50,10 +50,10 @@ describe 'Branches' do
       end
 
       describe 'Stale branches page' do
-        it 'shows 4 active branches sorted by last updated' do
+        it 'shows 4 stale branches sorted by last updated' do
           visit project_branches_filtered_path(project, state: 'stale')
 
-          expect(page).to have_content(sorted_branches(repository, count: 4, sort_by: :updated_desc, state: 'stale'))
+          expect(page).to have_content(sorted_branches(repository, count: 4, sort_by: :updated_asc, state: 'stale'))
         end
       end
 
@@ -88,8 +88,7 @@ describe 'Branches' do
       it 'shows filtered branches', :js do
         visit project_branches_path(project)
 
-        fill_in 'branch-search', with: 'fix'
-        find('#branch-search').native.send_keys(:enter)
+        search_for_branch('fix')
 
         expect(page).to have_content('fix')
         expect(find('.all-branches')).to have_selector('li', count: 1)
@@ -101,9 +100,10 @@ describe 'Branches' do
         visit project_branches_filtered_path(project, state: 'all')
 
         expect(all('.all-branches').last).to have_selector('li', count: 20)
-        accept_confirm { first('.js-branch-item .btn-remove').click }
 
-        expect(all('.all-branches').last).to have_selector('li', count: 19)
+        delete_branch_and_confirm
+
+        expect(page).to have_content('Branch was deleted')
       end
     end
 
@@ -114,20 +114,24 @@ describe 'Branches' do
         expect(page).to have_content(sorted_branches(repository, count: 20, sort_by: :updated_desc))
       end
 
-      it 'sorts the branches by name' do
+      it 'sorts the branches by name', :js do
         visit project_branches_filtered_path(project, state: 'all')
 
         click_button "Last updated" # Open sorting dropdown
-        click_link "Name"
+        within '[data-testid="branches-dropdown"]' do
+          find('p', text: 'Name').click
+        end
 
         expect(page).to have_content(sorted_branches(repository, count: 20, sort_by: :name))
       end
 
-      it 'sorts the branches by oldest updated' do
+      it 'sorts the branches by oldest updated', :js do
         visit project_branches_filtered_path(project, state: 'all')
 
         click_button "Last updated" # Open sorting dropdown
-        click_link "Oldest updated"
+        within '[data-testid="branches-dropdown"]' do
+          find('p', text: 'Oldest updated').click
+        end
 
         expect(page).to have_content(sorted_branches(repository, count: 20, sort_by: :updated_asc))
       end
@@ -145,8 +149,7 @@ describe 'Branches' do
       it 'shows filtered branches', :js do
         visit project_branches_filtered_path(project, state: 'all')
 
-        fill_in 'branch-search', with: 'fix'
-        find('#branch-search').native.send_keys(:enter)
+        search_for_branch('fix')
 
         expect(page).to have_content('fix')
         expect(find('.all-branches')).to have_selector('li', count: 1)
@@ -157,16 +160,39 @@ describe 'Branches' do
       it 'removes branch after confirmation', :js do
         visit project_branches_filtered_path(project, state: 'all')
 
-        fill_in 'branch-search', with: 'fix'
+        search_for_branch('fix')
 
-        find('#branch-search').native.send_keys(:enter)
+        expect(all('.all-branches').last).to have_selector('li', count: 1)
 
-        expect(page).to have_content('fix')
-        expect(find('.all-branches')).to have_selector('li', count: 1)
-        accept_confirm { find('.js-branch-fix .btn-remove').click }
+        delete_branch_and_confirm
+
+        expect(page).to have_content('Branch was deleted')
+
+        page.refresh
+
+        search_for_branch('fix')
 
         expect(page).not_to have_content('fix')
-        expect(find('.all-branches')).to have_selector('li', count: 0)
+        expect(all('.all-branches').last).to have_selector('li', count: 0)
+      end
+
+      context 'when the delete_branch_confirmation_modals feature flag is disabled' do
+        it 'removes branch after confirmation', :js do
+          stub_feature_flags(delete_branch_confirmation_modals: false)
+
+          visit project_branches_filtered_path(project, state: 'all')
+
+          search_for_branch('fix')
+
+          expect(page).to have_content('fix')
+          expect(find('.all-branches')).to have_selector('li', count: 1)
+          accept_confirm do
+            within('.js-branch-item', match: :first) { click_link(title: 'Delete branch') }
+          end
+
+          expect(page).not_to have_content('fix')
+          expect(find('.all-branches')).to have_selector('li', count: 0)
+        end
       end
     end
 
@@ -231,6 +257,44 @@ describe 'Branches' do
     end
   end
 
+  context 'with one or more pipeline', :js do
+    before do
+      sha = create_file(branch_name: "branch")
+      create(:ci_pipeline,
+        project: project,
+        user: user,
+        ref: "branch",
+        sha: sha,
+        status: :success,
+        created_at: 5.months.ago)
+      visit project_branches_path(project)
+    end
+
+    it 'shows pipeline status when available' do
+      page.within first('.all-branches li') do
+        expect(page).to have_css 'a.ci-status-icon-success'
+      end
+    end
+
+    it 'displays a placeholder when not available' do
+      page.all('.all-branches li') do |li|
+        expect(li).to have_css 'svg.s24'
+      end
+    end
+  end
+
+  context 'with no pipelines', :js do
+    before do
+      visit project_branches_path(project)
+    end
+
+    it 'does not show placeholder or pipeline status' do
+      page.all('.all-branches') do |branches|
+        expect(branches).not_to have_css 'svg.s24'
+      end
+    end
+  end
+
   describe 'comparing branches' do
     before do
       sign_in(user)
@@ -275,5 +339,19 @@ describe 'Branches' do
 
   def create_file(message: 'message', branch_name:)
     repository.create_file(user, generate(:branch), 'content', message: message, branch_name: branch_name)
+  end
+
+  def search_for_branch(name)
+    branch_search = find('input[data-testid="branch-search"]')
+    branch_search.set(name)
+    branch_search.native.send_keys(:enter)
+  end
+
+  def delete_branch_and_confirm
+    find('.js-delete-branch-button', match: :first).click
+
+    within '.modal-footer' do
+      click_button 'Yes, delete branch'
+    end
   end
 end

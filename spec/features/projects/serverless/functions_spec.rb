@@ -2,7 +2,7 @@
 
 require 'spec_helper'
 
-describe 'Functions', :js do
+RSpec.describe 'Functions', :js do
   include KubernetesHelpers
   include ReactiveCachingHelpers
 
@@ -25,7 +25,6 @@ describe 'Functions', :js do
     end
 
     it 'sees an empty state require Knative installation' do
-      expect(page).to have_link('Install Knative')
       expect(page).to have_selector('.empty-state')
     end
   end
@@ -40,7 +39,7 @@ describe 'Functions', :js do
     it_behaves_like "it's missing knative installation"
   end
 
-  context 'when the user has a cluster and knative installed and visits the serverless page' do
+  context 'when the user has a cluster and knative installed and visits the serverless page', :kubeclient do
     let(:cluster) { create(:cluster, :project, :provided_by_gcp, projects: [project]) }
     let(:service) { cluster.platform_kubernetes }
     let(:environment) { create(:environment, project: project) }

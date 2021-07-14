@@ -2,7 +2,7 @@
 
 require 'spec_helper'
 
-describe MergeRequests::CreateFromIssueService do
+RSpec.describe MergeRequests::CreateFromIssueService do
   include ProjectForksHelper
 
   let(:project) { create(:project, :repository) }
@@ -11,8 +11,8 @@ describe MergeRequests::CreateFromIssueService do
   let(:milestone_id) { create(:milestone, project: project).id }
   let(:issue) { create(:issue, project: project, milestone_id: milestone_id) }
   let(:custom_source_branch) { 'custom-source-branch' }
-  let(:service) { described_class.new(project, user, service_params) }
-  let(:service_with_custom_source_branch) { described_class.new(project, user, branch_name: custom_source_branch, **service_params) }
+  let(:service) { described_class.new(project: project, current_user: user, mr_params: service_params) }
+  let(:service_with_custom_source_branch) { described_class.new(project: project, current_user: user, mr_params: { branch_name: custom_source_branch, **service_params }) }
 
   before do
     project.add_developer(user)
@@ -21,14 +21,14 @@ describe MergeRequests::CreateFromIssueService do
   describe '#execute' do
     shared_examples_for 'a service that creates a merge request from an issue' do
       it 'returns an error when user can not create merge request on target project' do
-        result = described_class.new(project, create(:user), service_params).execute
+        result = described_class.new(project: project, current_user: create(:user), mr_params: service_params).execute
 
         expect(result[:status]).to eq(:error)
         expect(result[:message]).to eq('Not allowed to create merge request')
       end
 
       it 'returns an error with invalid issue iid' do
-        result = described_class.new(project, user, issue_iid: -1).execute
+        result = described_class.new(project: project, current_user: user, mr_params: { issue_iid: -1 }).execute
 
         expect(result[:status]).to eq(:error)
         expect(result[:message]).to eq('Invalid issue iid')
@@ -52,6 +52,14 @@ describe MergeRequests::CreateFromIssueService do
         service.execute
       end
 
+      it 'tracks the mr creation when the mr is valid' do
+        expect(Gitlab::UsageDataCounters::MergeRequestActivityUniqueCounter)
+          .to receive(:track_mr_create_from_issue)
+          .with(user: user)
+
+        service.execute
+      end
+
       it 'creates the new_issue_branch system note when the branch could be created but the merge_request cannot be created', :sidekiq_might_not_need_inline do
         expect_next_instance_of(MergeRequest) do |instance|
           expect(instance).to receive(:valid?).at_least(:once).and_return(false)
@@ -62,14 +70,26 @@ describe MergeRequests::CreateFromIssueService do
         service.execute
       end
 
+      it 'does not track the mr creation when the Mr is invalid' do
+        expect_next_instance_of(MergeRequest) do |instance|
+          expect(instance).to receive(:valid?).at_least(:once).and_return(false)
+        end
+
+        expect(Gitlab::UsageDataCounters::MergeRequestActivityUniqueCounter)
+          .not_to receive(:track_mr_create_from_issue)
+
+        service.execute
+      end
+
       it 'creates a merge request', :sidekiq_might_not_need_inline do
         expect { service.execute }.to change(target_project.merge_requests, :count).by(1)
       end
 
-      it 'sets the merge request author to current user', :sidekiq_might_not_need_inline do
+      it 'sets the merge request author to current user and assigns them', :sidekiq_might_not_need_inline do
         result = service.execute
 
         expect(result[:merge_request].author).to eq(user)
+        expect(result[:merge_request].assignees).to eq([user])
       end
 
       it 'sets the merge request source branch to the new issue branch', :sidekiq_might_not_need_inline do
@@ -103,7 +123,7 @@ describe MergeRequests::CreateFromIssueService do
       end
 
       context 'when ref branch is set', :sidekiq_might_not_need_inline do
-        subject { described_class.new(project, user, ref: 'feature', **service_params).execute }
+        subject { described_class.new(project: project, current_user: user, mr_params: { ref: 'feature', **service_params }).execute }
 
         it 'sets the merge request source branch to the new issue branch' do
           expect(subject[:merge_request].source_branch).to eq(issue.to_branch_name)
@@ -114,7 +134,7 @@ describe MergeRequests::CreateFromIssueService do
         end
 
         context 'when the ref is a tag' do
-          subject { described_class.new(project, user, ref: 'v1.0.0', **service_params).execute }
+          subject { described_class.new(project: project, current_user: user, mr_params: { ref: 'v1.0.0', **service_params }).execute }
 
           it 'sets the merge request source branch to the new issue branch' do
             expect(subject[:merge_request].source_branch).to eq(issue.to_branch_name)
@@ -130,7 +150,7 @@ describe MergeRequests::CreateFromIssueService do
         end
 
         context 'when ref branch does not exist' do
-          subject { described_class.new(project, user, ref: 'no-such-branch', **service_params).execute }
+          subject { described_class.new(project: project, current_user: user, mr_params: { ref: 'no-such-branch', **service_params }).execute }
 
           it 'creates a merge request' do
             expect { subject }.to change(target_project.merge_requests, :count).by(1)
@@ -154,7 +174,7 @@ describe MergeRequests::CreateFromIssueService do
 
         result = service.execute
 
-        expect(result[:merge_request].label_ids).to eq(label_ids)
+        expect(result[:merge_request].label_ids).to match_array(label_ids)
       end
 
       it "inherits milestones" do
@@ -163,10 +183,10 @@ describe MergeRequests::CreateFromIssueService do
         expect(result[:merge_request].milestone_id).to eq(milestone_id)
       end
 
-      it 'sets the merge request title to: "WIP: Resolves "$issue-title"' do
+      it 'sets the merge request title to: "Draft: Resolves "$issue-title"' do
         result = service.execute
 
-        expect(result[:merge_request].title).to eq("WIP: Resolve \"#{issue.title}\"")
+        expect(result[:merge_request].title).to eq("Draft: Resolve \"#{issue.title}\"")
       end
     end
 
@@ -193,10 +213,10 @@ describe MergeRequests::CreateFromIssueService do
 
         it_behaves_like 'a service that creates a merge request from an issue'
 
-        it 'sets the merge request title to: "WIP: $issue-branch-name', :sidekiq_might_not_need_inline do
+        it 'sets the merge request title to: "Draft: $issue-branch-name', :sidekiq_might_not_need_inline do
           result = service.execute
 
-          expect(result[:merge_request].title).to eq("WIP: #{issue.to_branch_name.titleize.humanize}")
+          expect(result[:merge_request].title).to eq("Draft: #{issue.to_branch_name.titleize.humanize}")
         end
       end
     end

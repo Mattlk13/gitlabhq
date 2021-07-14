@@ -1,16 +1,28 @@
 <script>
+import {
+  GlButtonGroup,
+  GlButton,
+  GlDropdown,
+  GlFormCheckbox,
+  GlTooltipDirective,
+} from '@gitlab/ui';
 import { mapActions, mapGetters, mapState } from 'vuex';
-import { GlButton } from '@gitlab/ui';
-import Icon from '~/vue_shared/components/icon.vue';
+import { SETTINGS_DROPDOWN } from '../i18n';
 
 export default {
+  i18n: SETTINGS_DROPDOWN,
+  directives: {
+    GlTooltip: GlTooltipDirective,
+  },
   components: {
+    GlButtonGroup,
     GlButton,
-    Icon,
+    GlDropdown,
+    GlFormCheckbox,
   },
   computed: {
     ...mapGetters('diffs', ['isInlineView', 'isParallelView']),
-    ...mapState('diffs', ['renderTreeList', 'showWhitespace']),
+    ...mapState('diffs', ['renderTreeList', 'showWhitespace', 'viewDiffsFileByFile']),
   },
   methods: {
     ...mapActions('diffs', [
@@ -18,75 +30,87 @@ export default {
       'setParallelDiffViewType',
       'setRenderTreeList',
       'setShowWhitespace',
+      'setFileByFile',
     ]),
+    toggleFileByFile() {
+      this.setFileByFile({ fileByFile: !this.viewDiffsFileByFile });
+    },
+    toggleWhitespace(updatedSetting) {
+      this.setShowWhitespace({ showWhitespace: updatedSetting });
+    },
   },
 };
 </script>
 
 <template>
-  <div class="dropdown">
-    <button
-      type="button"
-      class="btn btn-default js-show-diff-settings"
-      data-toggle="dropdown"
-      data-display="static"
-    >
-      <icon name="settings" /> <icon name="chevron-down" />
-    </button>
-    <div class="dropdown-menu dropdown-menu-right p-2 pt-3 pb-3">
-      <div>
-        <span class="bold d-block mb-1">{{ __('File browser') }}</span>
-        <div class="btn-group d-flex">
-          <gl-button
-            :class="{ active: !renderTreeList }"
-            class="w-100 js-list-view"
-            @click="setRenderTreeList(false)"
-          >
-            {{ __('List view') }}
-          </gl-button>
-          <gl-button
-            :class="{ active: renderTreeList }"
-            class="w-100 js-tree-view"
-            @click="setRenderTreeList(true)"
-          >
-            {{ __('Tree view') }}
-          </gl-button>
-        </div>
-      </div>
-      <div class="mt-2">
-        <span class="bold d-block mb-1">{{ __('Compare changes') }}</span>
-        <div class="btn-group d-flex js-diff-view-buttons">
-          <gl-button
-            id="inline-diff-btn"
-            :class="{ active: isInlineView }"
-            class="w-100 js-inline-diff-button"
-            data-view-type="inline"
-            @click="setInlineDiffViewType"
-          >
-            {{ __('Inline') }}
-          </gl-button>
-          <gl-button
-            id="parallel-diff-btn"
-            :class="{ active: isParallelView }"
-            class="w-100 js-parallel-diff-button"
-            data-view-type="parallel"
-            @click="setParallelDiffViewType"
-          >
-            {{ __('Side-by-side') }}
-          </gl-button>
-        </div>
-      </div>
-      <div class="mt-2">
-        <label class="mb-0">
-          <input
-            id="show-whitespace"
-            type="checkbox"
-            :checked="showWhitespace"
-            @change="setShowWhitespace({ showWhitespace: $event.target.checked, pushState: true })"
-          />
-          {{ __('Show whitespace changes') }}
-        </label>
-      </div>
+  <gl-dropdown
+    v-gl-tooltip
+    icon="settings"
+    :title="$options.i18n.preferences"
+    :text="$options.i18n.preferences"
+    :text-sr-only="true"
+    :aria-label="$options.i18n.preferences"
+    :header-text="$options.i18n.preferences"
+    toggle-class="js-show-diff-settings"
+    right
+  >
+    <div class="gl-px-3">
+      <span class="gl-font-weight-bold gl-display-block gl-mb-2">{{ __('File browser') }}</span>
+      <gl-button-group class="gl-display-flex">
+        <gl-button
+          :class="{ selected: !renderTreeList }"
+          class="gl-w-half js-list-view"
+          @click="setRenderTreeList(false)"
+        >
+          {{ __('List view') }}
+        </gl-button>
+        <gl-button
+          :class="{ selected: renderTreeList }"
+          class="gl-w-half js-tree-view"
+          @click="setRenderTreeList(true)"
+        >
+          {{ __('Tree view') }}
+        </gl-button>
+      </gl-button-group>
     </div>
-  </div>
+    <div class="gl-mt-3 gl-px-3">
+      <span class="gl-font-weight-bold gl-display-block gl-mb-2">{{ __('Compare changes') }}</span>
+      <gl-button-group class="gl-display-flex js-diff-view-buttons">
+        <gl-button
+          id="inline-diff-btn"
+          :class="{ selected: isInlineView }"
+          class="gl-w-half js-inline-diff-button"
+          data-view-type="inline"
+          @click="setInlineDiffViewType"
+        >
+          {{ __('Inline') }}
+        </gl-button>
+        <gl-button
+          id="parallel-diff-btn"
+          :class="{ selected: isParallelView }"
+          class="gl-w-half js-parallel-diff-button"
+          data-view-type="parallel"
+          @click="setParallelDiffViewType"
+        >
+          {{ __('Side-by-side') }}
+        </gl-button>
+      </gl-button-group>
+    </div>
+    <gl-form-checkbox
+      data-testid="show-whitespace"
+      class="gl-mt-3 gl-ml-3"
+      :checked="showWhitespace"
+      @input="toggleWhitespace"
+    >
+      {{ $options.i18n.whitespace }}
+    </gl-form-checkbox>
+    <gl-form-checkbox
+      data-testid="file-by-file"
+      class="gl-ml-3 gl-mb-0"
+      :checked="viewDiffsFileByFile"
+      @input="toggleFileByFile"
+    >
+      {{ $options.i18n.fileByFile }}
+    </gl-form-checkbox>
+  </gl-dropdown>
 </template>

@@ -2,14 +2,16 @@
 
 require 'spec_helper'
 
-describe Gitlab::Metrics::Samplers::PumaSampler do
-  subject { described_class.new(5) }
+RSpec.describe Gitlab::Metrics::Samplers::PumaSampler do
+  subject { described_class.new }
 
   let(:null_metric) { double('null_metric', set: nil, observe: nil) }
 
   before do
     allow(Gitlab::Metrics::NullMetric).to receive(:instance).and_return(null_metric)
   end
+
+  it_behaves_like 'metrics sampler', 'PUMA_SAMPLER'
 
   describe '#sample' do
     before do

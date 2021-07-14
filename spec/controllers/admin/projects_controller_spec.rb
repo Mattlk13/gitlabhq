@@ -2,7 +2,7 @@
 
 require 'spec_helper'
 
-describe Admin::ProjectsController do
+RSpec.describe Admin::ProjectsController do
   let!(:project) { create(:project, :public) }
 
   before do
@@ -22,6 +22,18 @@ describe Admin::ProjectsController do
       get :index, params: { visibility_level: [Gitlab::VisibilityLevel::INTERNAL] }
 
       expect(response.body).not_to match(project.name)
+    end
+
+    it 'retrieves archived and non archived corrupted projects when last_repository_check_failed is true' do
+      archived_corrupted_project = create(:project, :public, :archived, :last_repository_check_failed, name: 'CorruptedArchived', path: 'A')
+      corrupted_project = create(:project, :public, :last_repository_check_failed, name: 'CorruptedOnly', path: 'C')
+
+      get :index, params: { last_repository_check_failed: true }
+
+      expect(response).to have_gitlab_http_status(:ok)
+      expect(response.body).not_to match(project.name)
+      expect(response.body).to match(archived_corrupted_project.name)
+      expect(response.body).to match(corrupted_project.name)
     end
 
     it 'does not respond with projects pending deletion' do
@@ -63,6 +75,36 @@ describe Admin::ProjectsController do
 
       expect(response).to have_gitlab_http_status(:ok)
       expect(response.body).to match(project.name)
+    end
+  end
+
+  describe 'PUT /projects/transfer/:id' do
+    let_it_be(:project, reload: true) { create(:project) }
+    let_it_be(:new_namespace) { create(:namespace) }
+
+    it 'updates namespace' do
+      put :transfer, params: { namespace_id: project.namespace.path, new_namespace_id: new_namespace.id, id: project.path }
+
+      project.reload
+
+      expect(project.namespace).to eq(new_namespace)
+      expect(response).to have_gitlab_http_status(:redirect)
+      expect(response).to redirect_to(admin_project_path(project))
+    end
+
+    context 'when project transfer fails' do
+      it 'flashes error' do
+        old_namespace = project.namespace
+
+        put :transfer, params: { namespace_id: old_namespace.path, new_namespace_id: nil, id: project.path }
+
+        project.reload
+
+        expect(project.namespace).to eq(old_namespace)
+        expect(response).to have_gitlab_http_status(:redirect)
+        expect(response).to redirect_to(admin_project_path(project))
+        expect(flash[:alert]).to eq s_('TransferProject|Please select a new namespace for your project.')
+      end
     end
   end
 end

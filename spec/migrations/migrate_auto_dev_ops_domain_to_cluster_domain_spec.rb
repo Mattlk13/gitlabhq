@@ -1,9 +1,9 @@
 # frozen_string_literal: true
 
 require 'spec_helper'
-require Rails.root.join('db', 'post_migrate', '20190204115450_migrate_auto_dev_ops_domain_to_cluster_domain.rb')
+require_migration!
 
-describe MigrateAutoDevOpsDomainToClusterDomain, :migration do
+RSpec.describe MigrateAutoDevOpsDomainToClusterDomain do
   include MigrationHelpers::ClusterHelpers
 
   let(:migration) { described_class.new }
@@ -80,7 +80,7 @@ describe MigrateAutoDevOpsDomainToClusterDomain, :migration do
     cluster_projects.each do |cluster_project|
       specific_domain = "#{cluster_project.id}-#{domain}" if domain
 
-      project_auto_devops_table.create(
+      project_auto_devops_table.create!(
         project_id: cluster_project.project_id,
         enabled: true,
         domain: specific_domain
@@ -89,11 +89,11 @@ describe MigrateAutoDevOpsDomainToClusterDomain, :migration do
   end
 
   def find_cluster_project(project_id)
-    cluster_projects_table.where(project_id: project_id).first
+    cluster_projects_table.find_by(project_id: project_id)
   end
 
   def find_cluster(cluster_id)
-    clusters_table.where(id: cluster_id).first
+    clusters_table.find_by(id: cluster_id)
   end
 
   def project_auto_devops_with_domain

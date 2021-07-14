@@ -2,9 +2,10 @@
 
 require('spec_helper')
 
-describe Projects::Settings::CiCdController do
+RSpec.describe Projects::Settings::CiCdController do
   let_it_be(:user) { create(:user) }
   let_it_be(:project_auto_devops) { create(:project_auto_devops) }
+
   let(:project) { project_auto_devops.project }
 
   before do
@@ -13,6 +14,10 @@ describe Projects::Settings::CiCdController do
   end
 
   describe 'GET show' do
+    let_it_be(:parent_group) { create(:group) }
+    let_it_be(:group) { create(:group, parent: parent_group) }
+    let_it_be(:other_project) { create(:project, group: group) }
+
     it 'renders show with 200 status code' do
       get :show, params: { namespace_id: project.namespace, project_id: project }
 
@@ -21,12 +26,9 @@ describe Projects::Settings::CiCdController do
     end
 
     context 'with group runners' do
-      let(:parent_group) { create(:group) }
-      let(:group) { create(:group, parent: parent_group) }
-      let(:group_runner) { create(:ci_runner, :group, groups: [group]) }
-      let(:other_project) { create(:project, group: group) }
-      let!(:project_runner) { create(:ci_runner, :project, projects: [other_project]) }
-      let!(:shared_runner) { create(:ci_runner, :instance) }
+      let_it_be(:group_runner) { create(:ci_runner, :group, groups: [group]) }
+      let_it_be(:project_runner) { create(:ci_runner, :project, projects: [other_project]) }
+      let_it_be(:shared_runner) { create(:ci_runner, :instance) }
 
       it 'sets assignable project runners only' do
         group.add_maintainer(user)
@@ -34,6 +36,33 @@ describe Projects::Settings::CiCdController do
         get :show, params: { namespace_id: project.namespace, project_id: project }
 
         expect(assigns(:assignable_runners)).to contain_exactly(project_runner)
+      end
+    end
+
+    context 'prevents N+1 queries for tags' do
+      render_views
+
+      def show
+        get :show, params: { namespace_id: project.namespace, project_id: project }
+      end
+
+      it 'has the same number of queries with one tag or with many tags', :request_store do
+        group.add_maintainer(user)
+
+        show # warmup
+
+        # with one tag
+        create(:ci_runner, :instance, tag_list: %w(shared_runner))
+        create(:ci_runner, :project, projects: [other_project], tag_list: %w(project_runner))
+        create(:ci_runner, :group, groups: [group], tag_list: %w(group_runner))
+        control = ActiveRecord::QueryRecorder.new { show }
+
+        # with several tags
+        create(:ci_runner, :instance, tag_list: %w(shared_runner tag2 tag3))
+        create(:ci_runner, :project, projects: [other_project], tag_list: %w(project_runner tag2 tag3))
+        create(:ci_runner, :group, groups: [group], tag_list: %w(group_runner tag2 tag3))
+
+        expect { show }.not_to exceed_query_limit(control)
       end
     end
   end
@@ -133,7 +162,9 @@ describe Projects::Settings::CiCdController do
 
         context 'when the project repository is empty' do
           it 'sets a notice flash' do
-            expect(subject).to set_flash[:notice]
+            subject
+
+            expect(controller).to set_flash[:notice]
           end
 
           it 'does not queue a CreatePipelineWorker' do
@@ -149,13 +180,23 @@ describe Projects::Settings::CiCdController do
           it 'displays a toast message' do
             allow(CreatePipelineWorker).to receive(:perform_async).with(project.id, user.id, project.default_branch, :web, any_args)
 
-            expect(subject).to set_flash[:toast]
+            subject
+
+            expect(controller).to set_flash[:toast]
           end
 
           it 'queues a CreatePipelineWorker' do
             expect(CreatePipelineWorker).to receive(:perform_async).with(project.id, user.id, project.default_branch, :web, any_args)
 
             subject
+          end
+
+          it 'creates a pipeline', :sidekiq_inline do
+            project.repository.create_file(user, 'Gemfile', 'Gemfile contents',
+                                           message: 'Add Gemfile',
+                                           branch_name: 'master')
+
+            expect { subject }.to change { Ci::Pipeline.count }.by(1)
           end
         end
       end
@@ -202,7 +243,9 @@ describe Projects::Settings::CiCdController do
         let(:params) { { build_timeout_human_readable: '5m' } }
 
         it 'set specified timeout' do
-          expect(subject).to set_flash[:alert]
+          subject
+
+          expect(controller).to set_flash[:alert]
           expect(response).to redirect_to(namespace_project_settings_ci_cd_path)
         end
       end
@@ -222,6 +265,21 @@ describe Projects::Settings::CiCdController do
         end
       end
 
+      context 'when forward_deployment_enabled is not specified' do
+        let(:params) { { ci_cd_settings_attributes: { forward_deployment_enabled: false } } }
+
+        before do
+          project.ci_cd_settings.update!(forward_deployment_enabled: nil)
+        end
+
+        it 'sets forward deployment enabled' do
+          subject
+
+          project.reload
+          expect(project.ci_forward_deployment_enabled).to eq(false)
+        end
+      end
+
       context 'when max_artifacts_size is specified' do
         let(:params) { { max_artifacts_size: 10 } }
 
@@ -237,22 +295,42 @@ describe Projects::Settings::CiCdController do
         context 'and user is an admin' do
           let(:user) { create(:admin)  }
 
-          it 'sets max_artifacts_size' do
-            subject
+          context 'with admin mode disabled' do
+            it 'does not set max_artifacts_size' do
+              subject
 
-            project.reload
-            expect(project.max_artifacts_size).to eq(10)
+              project.reload
+              expect(project.max_artifacts_size).to be_nil
+            end
+          end
+
+          context 'with admin mode enabled', :enable_admin_mode do
+            it 'sets max_artifacts_size' do
+              subject
+
+              project.reload
+              expect(project.max_artifacts_size).to eq(10)
+            end
           end
         end
       end
     end
   end
 
-  describe 'POST create_deploy_token' do
-    it_behaves_like 'a created deploy token' do
-      let(:entity) { project }
-      let(:create_entity_params) { { namespace_id: project.namespace, project_id: project } }
-      let(:deploy_token_type) { DeployToken.deploy_token_types[:project_type] }
+  describe 'GET #runner_setup_scripts' do
+    it 'renders the setup scripts' do
+      get :runner_setup_scripts, params: { os: 'linux', arch: 'amd64', namespace_id: project.namespace, project_id: project }
+
+      expect(response).to have_gitlab_http_status(:ok)
+      expect(json_response).to have_key("install")
+      expect(json_response).to have_key("register")
+    end
+
+    it 'renders errors if they occur' do
+      get :runner_setup_scripts, params: { os: 'foo', arch: 'bar', namespace_id: project.namespace, project_id: project }
+
+      expect(response).to have_gitlab_http_status(:bad_request)
+      expect(json_response).to have_key("errors")
     end
   end
 end

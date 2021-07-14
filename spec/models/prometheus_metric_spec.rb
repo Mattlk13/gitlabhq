@@ -2,7 +2,9 @@
 
 require 'spec_helper'
 
-describe PrometheusMetric do
+RSpec.describe PrometheusMetric do
+  using RSpec::Parameterized::TableSyntax
+
   subject { build(:prometheus_metric) }
 
   it_behaves_like 'having unique enum values'
@@ -11,10 +13,9 @@ describe PrometheusMetric do
   it { is_expected.to validate_presence_of(:title) }
   it { is_expected.to validate_presence_of(:query) }
   it { is_expected.to validate_presence_of(:group) }
+  it { is_expected.to validate_uniqueness_of(:identifier).scoped_to(:project_id).allow_nil }
 
   describe 'common metrics' do
-    using RSpec::Parameterized::TableSyntax
-
     where(:common, :with_project, :result) do
       false | true | true
       false | false | false
@@ -33,8 +34,6 @@ describe PrometheusMetric do
   end
 
   describe '#query_series' do
-    using RSpec::Parameterized::TableSyntax
-
     where(:legend, :type) do
       'Some other legend' | NilClass
       'Status Code'       | Array
@@ -71,8 +70,6 @@ describe PrometheusMetric do
   end
 
   describe '#priority' do
-    using RSpec::Parameterized::TableSyntax
-
     where(:group, :priority) do
       :nginx_ingress_vts | 10
       :nginx_ingress     | 10
@@ -96,8 +93,6 @@ describe PrometheusMetric do
   end
 
   describe '#required_metrics' do
-    using RSpec::Parameterized::TableSyntax
-
     where(:group, :required_metrics) do
       :nginx_ingress_vts | %w(nginx_upstream_responses_total nginx_upstream_response_msecs_avg)
       :nginx_ingress     | %w(nginx_ingress_controller_requests nginx_ingress_controller_ingress_upstream_latency_seconds_sum)
@@ -135,10 +130,6 @@ describe PrometheusMetric do
 
     it 'queryable metric has no required_metric' do
       expect(subject.to_query_metric.required_metrics).to eq([])
-    end
-
-    it 'queryable metric has weight 0' do
-      expect(subject.to_query_metric.weight).to eq(0)
     end
 
     it 'queryable metrics has query description' do

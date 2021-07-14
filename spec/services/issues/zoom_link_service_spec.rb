@@ -2,12 +2,12 @@
 
 require 'spec_helper'
 
-describe Issues::ZoomLinkService do
+RSpec.describe Issues::ZoomLinkService do
   let_it_be(:user) { create(:user) }
   let_it_be(:issue) { create(:issue) }
 
   let(:project) { issue.project }
-  let(:service) { described_class.new(issue, user) }
+  let(:service) { described_class.new(project: project, current_user: user, params: { issue: issue }) }
   let(:zoom_link) { 'https://zoom.us/j/123456789' }
 
   before do
@@ -46,10 +46,18 @@ describe Issues::ZoomLinkService do
         expect(ZoomMeeting.canonical_meeting_url(issue)).to eq(zoom_link)
       end
 
-      it 'tracks the add event' do
-        expect(Gitlab::Tracking).to receive(:event)
-          .with('IncidentManagement::ZoomIntegration', 'add_zoom_meeting', label: 'Issue ID', value: issue.id)
+      it 'tracks the add event', :snowplow do
         result
+
+        expect_snowplow_event(
+          category: 'IncidentManagement::ZoomIntegration',
+          action: 'add_zoom_meeting',
+          label: 'Issue ID',
+          value: issue.id,
+          user: user,
+          project: project,
+          namespace: project.namespace
+        )
       end
 
       it 'creates a zoom_link_added notification' do
@@ -81,6 +89,13 @@ describe Issues::ZoomLinkService do
         end
 
         include_examples 'can add meeting'
+
+        context 'issue is incident type' do
+          let(:issue) { create(:incident) }
+          let(:current_user) { user }
+
+          it_behaves_like 'an incident management tracked event', :incident_management_incident_zoom_meeting
+        end
 
         context 'with insufficient issue update permissions' do
           include_context 'insufficient issue update permissions'
@@ -173,10 +188,18 @@ describe Issues::ZoomLinkService do
         expect(ZoomMeeting.canonical_meeting_url(issue)).to eq(nil)
       end
 
-      it 'tracks the remove event' do
-        expect(Gitlab::Tracking).to receive(:event)
-        .with('IncidentManagement::ZoomIntegration', 'remove_zoom_meeting', label: 'Issue ID', value: issue.id)
+      it 'tracks the remove event', :snowplow do
         result
+
+        expect_snowplow_event(
+          category: 'IncidentManagement::ZoomIntegration',
+          action: 'remove_zoom_meeting',
+          label: 'Issue ID',
+          value: issue.id,
+          user: user,
+          project: project,
+          namespace: project.namespace
+        )
       end
     end
 

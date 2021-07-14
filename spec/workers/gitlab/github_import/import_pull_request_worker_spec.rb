@@ -2,16 +2,17 @@
 
 require 'spec_helper'
 
-describe Gitlab::GithubImport::ImportPullRequestWorker do
+RSpec.describe Gitlab::GithubImport::ImportPullRequestWorker do
   let(:worker) { described_class.new }
 
   describe '#import' do
     it 'imports a pull request' do
-      project = double(:project, full_path: 'foo/bar')
+      project = double(:project, full_path: 'foo/bar', id: 1)
       client = double(:client)
       importer = double(:importer)
       hash = {
         'iid' => 42,
+        'github_id' => 42,
         'title' => 'My Pull Request',
         'description' => 'This is my pull request',
         'source_branch' => 'my-feature',
@@ -42,7 +43,7 @@ describe Gitlab::GithubImport::ImportPullRequestWorker do
       expect(importer)
         .to receive(:execute)
 
-      expect(worker.counter)
+      expect(Gitlab::GithubImport::ObjectCounter)
         .to receive(:increment)
         .and_call_original
 

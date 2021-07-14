@@ -2,15 +2,15 @@
 
 require 'spec_helper'
 
-describe Ci::CreatePipelineService do
+RSpec.describe Ci::CreatePipelineService do
   context 'cache' do
-    let(:user)     { create(:admin) }
+    let(:project)  { create(:project, :custom_repo, files: files) }
+    let(:user)     { project.owner }
     let(:ref)      { 'refs/heads/master' }
     let(:source)   { :push }
     let(:service)  { described_class.new(project, user, { ref: ref }) }
     let(:pipeline) { service.execute(source) }
     let(:job)      { pipeline.builds.find_by(name: 'job') }
-    let(:project)  { create(:project, :custom_repo, files: files) }
 
     before do
       stub_ci_pipeline_yaml_file(config)
@@ -33,10 +33,11 @@ describe Ci::CreatePipelineService do
 
       it 'uses the provided key' do
         expected = {
-          'key'       => 'a-key',
-          'paths'     => ['logs/', 'binaries/'],
-          'policy'    => 'pull-push',
-          'untracked' => true
+          key: 'a-key',
+          paths: ['logs/', 'binaries/'],
+          policy: 'pull-push',
+          untracked: true,
+          when: 'on_success'
         }
 
         expect(pipeline).to be_persisted
@@ -65,9 +66,10 @@ describe Ci::CreatePipelineService do
 
         it 'builds a cache key' do
           expected = {
-            'key'       => /[a-f0-9]{40}/,
-            'paths'     => ['logs/'],
-            'policy'    => 'pull-push'
+            key: /[a-f0-9]{40}/,
+            paths: ['logs/'],
+            policy: 'pull-push',
+            when: 'on_success'
           }
 
           expect(pipeline).to be_persisted
@@ -80,9 +82,10 @@ describe Ci::CreatePipelineService do
 
         it 'uses default cache key' do
           expected = {
-            'key'       => /default/,
-            'paths'     => ['logs/'],
-            'policy'    => 'pull-push'
+            key: /default/,
+            paths: ['logs/'],
+            policy: 'pull-push',
+            when: 'on_success'
           }
 
           expect(pipeline).to be_persisted
@@ -112,9 +115,10 @@ describe Ci::CreatePipelineService do
 
         it 'builds a cache key' do
           expected = {
-            'key'       => /\$ENV_VAR-[a-f0-9]{40}/,
-            'paths'     => ['logs/'],
-            'policy'    => 'pull-push'
+            key: /\$ENV_VAR-[a-f0-9]{40}/,
+            paths: ['logs/'],
+            policy: 'pull-push',
+            when: 'on_success'
           }
 
           expect(pipeline).to be_persisted
@@ -127,9 +131,10 @@ describe Ci::CreatePipelineService do
 
         it 'uses default cache key' do
           expected = {
-            'key'       => /\$ENV_VAR-default/,
-            'paths'     => ['logs/'],
-            'policy'    => 'pull-push'
+            key: /\$ENV_VAR-default/,
+            paths: ['logs/'],
+            policy: 'pull-push',
+            when: 'on_success'
           }
 
           expect(pipeline).to be_persisted

@@ -1,9 +1,9 @@
 # frozen_string_literal: true
 
 require 'spec_helper'
-require Rails.root.join('db', 'post_migrate', '20190827102026_migrate_code_owner_approval_status_to_protected_branches_in_batches.rb')
+require_migration!
 
-describe MigrateCodeOwnerApprovalStatusToProtectedBranchesInBatches, :migration do
+RSpec.describe MigrateCodeOwnerApprovalStatusToProtectedBranchesInBatches do
   let(:namespaces)         { table(:namespaces) }
   let(:projects)           { table(:projects) }
   let(:protected_branches) { table(:protected_branches) }

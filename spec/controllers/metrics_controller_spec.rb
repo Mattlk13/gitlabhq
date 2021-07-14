@@ -2,7 +2,7 @@
 
 require 'spec_helper'
 
-describe MetricsController, :request_store do
+RSpec.describe MetricsController, :request_store do
   include StubENV
 
   let(:metrics_multiproc_dir) { @metrics_multiproc_dir }
@@ -28,12 +28,42 @@ describe MetricsController, :request_store do
     end
   end
 
+  shared_examples_for 'protected metrics endpoint' do |examples|
+    context 'accessed from whitelisted ip' do
+      before do
+        allow(Gitlab::RequestContext.instance).to receive(:client_ip).and_return(whitelisted_ip)
+      end
+
+      it_behaves_like examples
+    end
+
+    context 'accessed from ip in whitelisted range' do
+      before do
+        allow(Gitlab::RequestContext.instance).to receive(:client_ip).and_return(ip_in_whitelisted_range)
+      end
+
+      it_behaves_like examples
+    end
+
+    context 'accessed from not whitelisted ip' do
+      before do
+        allow(Gitlab::RequestContext.instance).to receive(:client_ip).and_return(not_whitelisted_ip)
+      end
+
+      it 'returns the expected error response' do
+        get :index
+
+        expect(response).to have_gitlab_http_status(:not_found)
+      end
+    end
+  end
+
   describe '#index' do
-    shared_examples_for 'endpoint providing metrics' do
+    shared_examples_for 'providing metrics' do
       it 'returns prometheus metrics' do
         get :index
 
-        expect(response.status).to eq(200)
+        expect(response).to have_gitlab_http_status(:ok)
         expect(response.body).to match(/^prometheus_counter 1$/)
       end
 
@@ -45,38 +75,41 @@ describe MetricsController, :request_store do
         it 'returns proper response' do
           get :index
 
-          expect(response.status).to eq(200)
+          expect(response).to have_gitlab_http_status(:ok)
           expect(response.body).to eq("# Metrics are disabled, see: http://test.host/help/administration/monitoring/prometheus/gitlab_metrics#gitlab-prometheus-metrics\n")
         end
       end
     end
 
-    context 'accessed from whitelisted ip' do
-      before do
-        allow(Gitlab::RequestContext.instance).to receive(:client_ip).and_return(whitelisted_ip)
+    include_examples 'protected metrics endpoint', 'providing metrics'
+  end
+
+  describe '#system' do
+    shared_examples_for 'providing system stats' do
+      let(:summary) do
+        {
+          version: 'ruby-3.0-patch1',
+          memory_rss: 1024
+        }
       end
 
-      it_behaves_like 'endpoint providing metrics'
-    end
+      it 'renders system stats JSON' do
+        expect(Prometheus::PidProvider).to receive(:worker_id).and_return('worker-0')
+        expect(Gitlab::Metrics::System).to receive(:summary).and_return(summary)
 
-    context 'accessed from ip in whitelisted range' do
-      before do
-        allow(Gitlab::RequestContext.instance).to receive(:client_ip).and_return(ip_in_whitelisted_range)
-      end
+        get :system
 
-      it_behaves_like 'endpoint providing metrics'
-    end
-
-    context 'accessed from not whitelisted ip' do
-      before do
-        allow(Gitlab::RequestContext.instance).to receive(:client_ip).and_return(not_whitelisted_ip)
-      end
-
-      it 'returns the expected error response' do
-        get :index
-
-        expect(response.status).to eq(404)
+        expect(response).to have_gitlab_http_status(:ok)
+        expect(response_json['version']).to eq('ruby-3.0-patch1')
+        expect(response_json['worker_id']).to eq('worker-0')
+        expect(response_json['memory_rss']).to eq(1024)
       end
     end
+
+    include_examples 'protected metrics endpoint', 'providing system stats'
+  end
+
+  def response_json
+    Gitlab::Json.parse(response.body)
   end
 end

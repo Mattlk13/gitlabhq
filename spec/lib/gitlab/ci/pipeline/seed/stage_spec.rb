@@ -2,10 +2,11 @@
 
 require 'spec_helper'
 
-describe Gitlab::Ci::Pipeline::Seed::Stage do
+RSpec.describe Gitlab::Ci::Pipeline::Seed::Stage do
   let(:project) { create(:project, :repository) }
   let(:pipeline) { create(:ci_empty_pipeline, project: project) }
   let(:previous_stages) { [] }
+  let(:seed_context) { double(pipeline: pipeline, root_variables: []) }
 
   let(:attributes) do
     { name: 'test',
@@ -16,7 +17,7 @@ describe Gitlab::Ci::Pipeline::Seed::Stage do
   end
 
   subject do
-    described_class.new(pipeline, attributes, previous_stages)
+    described_class.new(seed_context, attributes, previous_stages)
   end
 
   describe '#size' do

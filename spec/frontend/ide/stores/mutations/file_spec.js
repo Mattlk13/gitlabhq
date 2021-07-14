@@ -1,6 +1,5 @@
-import mutations from '~/ide/stores/mutations/file';
 import { createStore } from '~/ide/stores';
-import { FILE_VIEW_MODE_PREVIEW } from '~/ide/constants';
+import mutations from '~/ide/stores/mutations/file';
 import { file } from '../../helpers';
 
 describe('IDE store file mutations', () => {
@@ -39,20 +38,34 @@ describe('IDE store file mutations', () => {
   });
 
   describe('TOGGLE_FILE_OPEN', () => {
-    beforeEach(() => {
-      mutations.TOGGLE_FILE_OPEN(localState, localFile.path);
-    });
-
     it('adds into opened files', () => {
+      mutations.TOGGLE_FILE_OPEN(localState, localFile.path);
+
       expect(localFile.opened).toBeTruthy();
       expect(localState.openFiles.length).toBe(1);
     });
 
-    it('removes from opened files', () => {
+    describe('if already open', () => {
+      it('removes from opened files', () => {
+        mutations.TOGGLE_FILE_OPEN(localState, localFile.path);
+        mutations.TOGGLE_FILE_OPEN(localState, localFile.path);
+
+        expect(localFile.opened).toBeFalsy();
+        expect(localState.openFiles.length).toBe(0);
+      });
+    });
+
+    it.each`
+      entry                                | loading
+      ${{ opened: false }}                 | ${true}
+      ${{ opened: false, tempFile: true }} | ${false}
+      ${{ opened: true }}                  | ${false}
+    `('for state: $entry, sets loading=$loading', ({ entry, loading }) => {
+      Object.assign(localFile, entry);
+
       mutations.TOGGLE_FILE_OPEN(localState, localFile.path);
 
-      expect(localFile.opened).toBeFalsy();
-      expect(localState.openFiles.length).toBe(0);
+      expect(localFile.loading).toBe(loading);
     });
   });
 
@@ -60,22 +73,12 @@ describe('IDE store file mutations', () => {
     it('sets extra file data', () => {
       mutations.SET_FILE_DATA(localState, {
         data: {
-          blame_path: 'blame',
-          commits_path: 'commits',
-          permalink: 'permalink',
           raw_path: 'raw',
-          binary: true,
-          render_error: 'render_error',
         },
         file: localFile,
       });
 
-      expect(localFile.blamePath).toBe('blame');
-      expect(localFile.commitsPath).toBe('commits');
-      expect(localFile.permalink).toBe('permalink');
       expect(localFile.rawPath).toBe('raw');
-      expect(localFile.binary).toBeTruthy();
-      expect(localFile.renderError).toBe('render_error');
       expect(localFile.raw).toBeNull();
       expect(localFile.baseRaw).toBeNull();
     });
@@ -125,7 +128,7 @@ describe('IDE store file mutations', () => {
         localState.changedFiles[0],
         localState.openFiles[0],
         localFile,
-      ].forEach(f => {
+      ].forEach((f) => {
         expect(f).toEqual(
           expect.objectContaining({
             path,
@@ -139,7 +142,7 @@ describe('IDE store file mutations', () => {
   });
 
   describe('SET_FILE_RAW_DATA', () => {
-    const callMutationForFile = f => {
+    const callMutationForFile = (f) => {
       mutations.SET_FILE_RAW_DATA(localState, {
         file: f,
         raw: 'testing',
@@ -316,8 +319,8 @@ describe('IDE store file mutations', () => {
       localFile.content = 'test';
       localFile.changed = true;
       localState.currentProjectId = 'gitlab-ce';
-      localState.currentBranchId = 'master';
-      localState.trees['gitlab-ce/master'] = {
+      localState.currentBranchId = 'main';
+      localState.trees['gitlab-ce/main'] = {
         tree: [],
       };
     });
@@ -334,7 +337,7 @@ describe('IDE store file mutations', () => {
 
       mutations.DISCARD_FILE_CHANGES(localState, localFile.path);
 
-      expect(localState.trees['gitlab-ce/master'].tree).toEqual([{ ...localFile, deleted: false }]);
+      expect(localState.trees['gitlab-ce/main'].tree).toEqual([{ ...localFile, deleted: false }]);
     });
 
     it('adds to parent tree if deleted', () => {
@@ -356,14 +359,6 @@ describe('IDE store file mutations', () => {
 
       expect(localState.changedFiles.length).toBe(1);
     });
-
-    it('bursts unused seal', () => {
-      expect(localState.unusedSeal).toBe(true);
-
-      mutations.ADD_FILE_TO_CHANGED(localState, localFile.path);
-
-      expect(localState.unusedSeal).toBe(false);
-    });
   });
 
   describe('REMOVE_FILE_FROM_CHANGED', () => {
@@ -373,14 +368,6 @@ describe('IDE store file mutations', () => {
       mutations.REMOVE_FILE_FROM_CHANGED(localState, localFile.path);
 
       expect(localState.changedFiles.length).toBe(0);
-    });
-
-    it('bursts unused seal', () => {
-      expect(localState.unusedSeal).toBe(true);
-
-      mutations.REMOVE_FILE_FROM_CHANGED(localState, localFile.path);
-
-      expect(localState.unusedSeal).toBe(false);
     });
   });
 
@@ -533,19 +520,6 @@ describe('IDE store file mutations', () => {
     },
   );
 
-  describe('STAGE_CHANGE', () => {
-    it('bursts unused seal', () => {
-      expect(localState.unusedSeal).toBe(true);
-
-      mutations.STAGE_CHANGE(localState, {
-        path: localFile.path,
-        diffInfo: localStore.getters.getDiffInfo(localFile.path),
-      });
-
-      expect(localState.unusedSeal).toBe(false);
-    });
-  });
-
   describe('TOGGLE_FILE_CHANGED', () => {
     it('updates file changed status', () => {
       mutations.TOGGLE_FILE_CHANGED(localState, {
@@ -554,17 +528,6 @@ describe('IDE store file mutations', () => {
       });
 
       expect(localFile.changed).toBeTruthy();
-    });
-  });
-
-  describe('SET_FILE_VIEWMODE', () => {
-    it('updates file view mode', () => {
-      mutations.SET_FILE_VIEWMODE(localState, {
-        file: localFile,
-        viewMode: FILE_VIEW_MODE_PREVIEW,
-      });
-
-      expect(localFile.viewMode).toBe(FILE_VIEW_MODE_PREVIEW);
     });
   });
 

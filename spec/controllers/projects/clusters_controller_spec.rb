@@ -2,7 +2,7 @@
 
 require 'spec_helper'
 
-describe Projects::ClustersController do
+RSpec.describe Projects::ClustersController do
   include AccessMatchersForController
   include GoogleApi::CloudPlatformHelpers
   include KubernetesHelpers
@@ -23,11 +23,10 @@ describe Projects::ClustersController do
 
     describe 'functionality' do
       context 'when project has one or more clusters' do
-        let(:project) { create(:project) }
         let!(:enabled_cluster) { create(:cluster, :provided_by_gcp, projects: [project]) }
         let!(:disabled_cluster) { create(:cluster, :disabled, :provided_by_gcp, :production_environment, projects: [project]) }
 
-        it 'lists available clusters' do
+        it 'lists available clusters and renders html' do
           go
 
           expect(response).to have_gitlab_http_status(:ok)
@@ -35,26 +34,50 @@ describe Projects::ClustersController do
           expect(assigns(:clusters)).to match_array([enabled_cluster, disabled_cluster])
         end
 
+        it 'lists available clusters with json serializer' do
+          go(format: :json)
+
+          expect(response).to have_gitlab_http_status(:ok)
+          expect(response).to match_response_schema('cluster_list')
+        end
+
+        it 'sets the polling interval header for json requests' do
+          go(format: :json)
+
+          expect(response).to have_gitlab_http_status(:ok)
+          expect(response.headers['Poll-Interval']).to eq("10000")
+        end
+
         context 'when page is specified' do
           let(:last_page) { project.clusters.page.total_pages }
+          let(:total_count) { project.clusters.page.total_count }
 
           before do
-            allow(Clusters::Cluster).to receive(:paginates_per).and_return(1)
-            create_list(:cluster, 2, :provided_by_gcp, :production_environment, projects: [project])
+            create_list(:cluster, 30, :provided_by_gcp, :production_environment, projects: [project])
           end
 
           it 'redirects to the page' do
+            expect(last_page).to be > 1
+
             go(page: last_page)
 
             expect(response).to have_gitlab_http_status(:ok)
             expect(assigns(:clusters).current_page).to eq(last_page)
           end
+
+          it 'displays cluster list for associated page' do
+            expect(last_page).to be > 1
+
+            go(page: last_page, format: :json)
+
+            expect(response).to have_gitlab_http_status(:ok)
+            expect(response.headers['X-Page'].to_i).to eq(last_page)
+            expect(response.headers['X-Total'].to_i).to eq(total_count)
+          end
         end
       end
 
       context 'when project does not have a cluster' do
-        let(:project) { create(:project) }
-
         it 'returns an empty state page' do
           go
 
@@ -68,7 +91,14 @@ describe Projects::ClustersController do
     describe 'security' do
       let(:cluster) { create(:cluster, :provided_by_gcp, projects: [project]) }
 
-      it { expect { go }.to be_allowed_for(:admin) }
+      it 'is allowed for admin when admin mode enabled', :enable_admin_mode do
+        expect { go }.to be_allowed_for(:admin)
+      end
+
+      it 'is disabled for admin when admin mode disabled' do
+        expect { go }.to be_denied_for(:admin)
+      end
+
       it { expect { go }.to be_allowed_for(:owner).of(project) }
       it { expect { go }.to be_allowed_for(:maintainer).of(project) }
       it { expect { go }.to be_denied_for(:developer).of(project) }
@@ -153,8 +183,15 @@ describe Projects::ClustersController do
       end
     end
 
+    include_examples 'GET new cluster shared examples'
+
     describe 'security' do
-      it { expect { go }.to be_allowed_for(:admin) }
+      it 'is allowed for admin when admin mode enabled', :enable_admin_mode do
+        expect { go }.to be_allowed_for(:admin)
+      end
+      it 'is disabled for admin when admin mode disabled' do
+        expect { go }.to be_denied_for(:admin)
+      end
       it { expect { go }.to be_allowed_for(:owner).of(project) }
       it { expect { go }.to be_allowed_for(:maintainer).of(project) }
       it { expect { go }.to be_denied_for(:developer).of(project) }
@@ -165,6 +202,48 @@ describe Projects::ClustersController do
     end
   end
 
+  describe 'GET #prometheus_proxy' do
+    let(:proxyable) do
+      create(:cluster, :provided_by_gcp, projects: [project])
+    end
+
+    it_behaves_like 'metrics dashboard prometheus api proxy' do
+      let(:proxyable_params) do
+        {
+          id: proxyable.id.to_s,
+          namespace_id: project.namespace.full_path,
+          project_id: project.name
+        }
+      end
+
+      context 'with anonymous user' do
+        let(:prometheus_body) { nil }
+
+        before do
+          sign_out(user)
+        end
+
+        it 'redirects to signin page' do
+          get :prometheus_proxy, params: prometheus_proxy_params
+
+          expect(response).to redirect_to(new_user_session_path)
+        end
+      end
+    end
+  end
+
+  it_behaves_like 'GET #metrics_dashboard for dashboard', 'Cluster health' do
+    let(:cluster) { create(:cluster, :provided_by_gcp, projects: [project]) }
+
+    let(:metrics_dashboard_req_params) do
+      {
+        id: cluster.id,
+        namespace_id: project.namespace.full_path,
+        project_id: project.name
+      }
+    end
+  end
+
   describe 'POST create for new cluster' do
     let(:legacy_abac_param) { 'true' }
     let(:params) do
@@ -172,6 +251,7 @@ describe Projects::ClustersController do
         cluster: {
           name: 'new-cluster',
           managed: '1',
+          namespace_per_environment: '0',
           provider_gcp_attributes: {
             gcp_project_id: 'gcp-project-12345',
             legacy_abac: legacy_abac_param
@@ -199,6 +279,7 @@ describe Projects::ClustersController do
           expect(project.clusters.first).to be_kubernetes
           expect(project.clusters.first.provider_gcp).to be_legacy_abac
           expect(project.clusters.first.managed?).to be_truthy
+          expect(project.clusters.first.namespace_per_environment?).to be_falsy
         end
 
         context 'when legacy_abac param is false' do
@@ -243,7 +324,12 @@ describe Projects::ClustersController do
         allow(WaitForClusterCreationWorker).to receive(:perform_in).and_return(nil)
       end
 
-      it { expect { go }.to be_allowed_for(:admin) }
+      it 'is allowed for admin when admin mode enabled', :enable_admin_mode do
+        expect { go }.to be_allowed_for(:admin)
+      end
+      it 'is disabled for admin when admin mode disabled' do
+        expect { go }.to be_denied_for(:admin)
+      end
       it { expect { go }.to be_allowed_for(:owner).of(project) }
       it { expect { go }.to be_allowed_for(:maintainer).of(project) }
       it { expect { go }.to be_denied_for(:developer).of(project) }
@@ -285,6 +371,7 @@ describe Projects::ClustersController do
 
           expect(project.clusters.first).to be_user
           expect(project.clusters.first).to be_kubernetes
+          expect(project.clusters.first).to be_namespace_per_environment
         end
       end
 
@@ -316,6 +403,7 @@ describe Projects::ClustersController do
           expect(cluster).to be_user
           expect(cluster).to be_kubernetes
           expect(cluster).to be_platform_kubernetes_rbac
+          expect(cluster).to be_namespace_per_environment
         end
       end
 
@@ -349,7 +437,12 @@ describe Projects::ClustersController do
         stub_kubeclient_get_namespace('https://kubernetes.example.com', namespace: 'my-namespace')
       end
 
-      it { expect { go }.to be_allowed_for(:admin) }
+      it 'is allowed for admin when admin mode enabled', :enable_admin_mode do
+        expect { go }.to be_allowed_for(:admin)
+      end
+      it 'is disabled for admin when admin mode disabled' do
+        expect { go }.to be_denied_for(:admin)
+      end
       it { expect { go }.to be_allowed_for(:owner).of(project) }
       it { expect { go }.to be_allowed_for(:maintainer).of(project) }
       it { expect { go }.to be_denied_for(:developer).of(project) }
@@ -390,7 +483,7 @@ describe Projects::ClustersController do
 
       cluster = project.clusters.first
 
-      expect(response.status).to eq(201)
+      expect(response).to have_gitlab_http_status(:created)
       expect(response.location).to eq(project_cluster_path(project, cluster))
       expect(cluster).to be_aws
       expect(cluster).to be_kubernetes
@@ -406,8 +499,8 @@ describe Projects::ClustersController do
       it 'does not create a cluster' do
         expect { post_create_aws }.not_to change { Clusters::Cluster.count }
 
-        expect(response.status).to eq(422)
-        expect(response.content_type).to eq('application/json')
+        expect(response).to have_gitlab_http_status(:unprocessable_entity)
+        expect(response.media_type).to eq('application/json')
         expect(response.body).to include('is invalid')
       end
     end
@@ -417,7 +510,12 @@ describe Projects::ClustersController do
         allow(WaitForClusterCreationWorker).to receive(:perform_in)
       end
 
-      it { expect { post_create_aws }.to be_allowed_for(:admin) }
+      it 'is allowed for admin when admin mode enabled', :enable_admin_mode do
+        expect { post_create_aws }.to be_allowed_for(:admin)
+      end
+      it 'is disabled for admin when admin mode disabled' do
+        expect { post_create_aws }.to be_denied_for(:admin)
+      end
       it { expect { post_create_aws }.to be_allowed_for(:owner).of(project) }
       it { expect { post_create_aws }.to be_allowed_for(:maintainer).of(project) }
       it { expect { post_create_aws }.to be_denied_for(:developer).of(project) }
@@ -429,14 +527,13 @@ describe Projects::ClustersController do
   end
 
   describe 'POST authorize AWS role for EKS cluster' do
-    let(:role_arn) { 'arn:aws:iam::123456789012:role/role-name' }
-    let(:role_external_id) { '12345' }
+    let!(:role) { create(:aws_role, user: user) }
 
+    let(:role_arn) { 'arn:new-role' }
     let(:params) do
       {
         cluster: {
-          role_arn: role_arn,
-          role_external_id: role_external_id
+          role_arn: role_arn
         }
       }
     end
@@ -450,29 +547,38 @@ describe Projects::ClustersController do
         .and_return(double(execute: double))
     end
 
-    it 'creates an Aws::Role record' do
-      expect { go }.to change { Aws::Role.count }
+    it 'updates the associated role with the supplied ARN' do
+      go
 
-      expect(response.status).to eq 200
-
-      role = Aws::Role.last
-      expect(role.user).to eq user
-      expect(role.role_arn).to eq role_arn
-      expect(role.role_external_id).to eq role_external_id
+      expect(response).to have_gitlab_http_status(:ok)
+      expect(role.reload.role_arn).to eq(role_arn)
     end
 
-    context 'role cannot be created' do
+    context 'supplied role is invalid' do
       let(:role_arn) { 'invalid-role' }
 
-      it 'does not create a record' do
-        expect { go }.not_to change { Aws::Role.count }
+      it 'does not update the associated role' do
+        expect { go }.not_to change { role.role_arn }
 
-        expect(response.status).to eq 422
+        expect(response).to have_gitlab_http_status(:unprocessable_entity)
       end
     end
 
     describe 'security' do
-      it { expect { go }.to be_allowed_for(:admin) }
+      before do
+        allow_next_instance_of(Clusters::Aws::AuthorizeRoleService) do |service|
+          response = double(status: :ok, body: double)
+
+          allow(service).to receive(:execute).and_return(response)
+        end
+      end
+
+      it 'is allowed for admin when admin mode enabled', :enable_admin_mode do
+        expect { go }.to be_allowed_for(:admin)
+      end
+      it 'is disabled for admin when admin mode disabled' do
+        expect { go }.to be_denied_for(:admin)
+      end
       it { expect { go }.to be_allowed_for(:owner).of(project) }
       it { expect { go }.to be_allowed_for(:maintainer).of(project) }
       it { expect { go }.to be_denied_for(:developer).of(project) }
@@ -504,7 +610,12 @@ describe Projects::ClustersController do
     end
 
     describe 'security' do
-      it { expect { go }.to be_allowed_for(:admin) }
+      it 'is allowed for admin when admin mode enabled', :enable_admin_mode do
+        expect { go }.to be_allowed_for(:admin)
+      end
+      it 'is disabled for admin when admin mode disabled' do
+        expect { go }.to be_denied_for(:admin)
+      end
       it { expect { go }.to be_allowed_for(:owner).of(project) }
       it { expect { go }.to be_allowed_for(:maintainer).of(project) }
       it { expect { go }.to be_denied_for(:developer).of(project) }
@@ -544,7 +655,12 @@ describe Projects::ClustersController do
     end
 
     describe 'security' do
-      it { expect { go }.to be_allowed_for(:admin) }
+      it 'is allowed for admin when admin mode enabled', :enable_admin_mode do
+        expect { go }.to be_allowed_for(:admin)
+      end
+      it 'is disabled for admin when admin mode disabled' do
+        expect { go }.to be_denied_for(:admin)
+      end
       it { expect { go }.to be_allowed_for(:owner).of(project) }
       it { expect { go }.to be_allowed_for(:maintainer).of(project) }
       it { expect { go }.to be_denied_for(:developer).of(project) }
@@ -558,26 +674,41 @@ describe Projects::ClustersController do
   describe 'GET show' do
     let(:cluster) { create(:cluster, :provided_by_gcp, projects: [project]) }
 
-    def go
+    def go(tab: nil)
       get :show,
         params: {
           namespace_id: project.namespace,
           project_id: project,
-          id: cluster
+          id: cluster,
+          tab: tab
         }
     end
 
     describe 'functionality' do
+      render_views
+
       it "renders view" do
         go
 
         expect(response).to have_gitlab_http_status(:ok)
         expect(assigns(:cluster)).to eq(cluster)
       end
+
+      it 'renders integration tab view' do
+        go(tab: 'integrations')
+
+        expect(response).to render_template('clusters/clusters/_integrations')
+        expect(response).to have_gitlab_http_status(:ok)
+      end
     end
 
     describe 'security' do
-      it { expect { go }.to be_allowed_for(:admin) }
+      it 'is allowed for admin when admin mode enabled', :enable_admin_mode do
+        expect { go }.to be_allowed_for(:admin)
+      end
+      it 'is disabled for admin when admin mode disabled' do
+        expect { go }.to be_denied_for(:admin)
+      end
       it { expect { go }.to be_allowed_for(:owner).of(project) }
       it { expect { go }.to be_allowed_for(:maintainer).of(project) }
       it { expect { go }.to be_denied_for(:developer).of(project) }
@@ -609,6 +740,7 @@ describe Projects::ClustersController do
           enabled: false,
           name: 'my-new-cluster-name',
           managed: false,
+          namespace_per_environment: false,
           platform_kubernetes_attributes: {
             namespace: 'my-namespace'
           }
@@ -625,6 +757,7 @@ describe Projects::ClustersController do
       expect(cluster.enabled).to be_falsey
       expect(cluster.name).to eq('my-new-cluster-name')
       expect(cluster).not_to be_managed
+      expect(cluster).not_to be_namespace_per_environment
       expect(cluster.platform_kubernetes.namespace).to eq('my-namespace')
     end
 
@@ -680,7 +813,12 @@ describe Projects::ClustersController do
     describe 'security' do
       let_it_be(:cluster) { create(:cluster, :provided_by_gcp, projects: [project]) }
 
-      it { expect { go }.to be_allowed_for(:admin) }
+      it 'is allowed for admin when admin mode enabled', :enable_admin_mode do
+        expect { go }.to be_allowed_for(:admin)
+      end
+      it 'is disabled for admin when admin mode disabled' do
+        expect { go }.to be_denied_for(:admin)
+      end
       it { expect { go }.to be_allowed_for(:owner).of(project) }
       it { expect { go }.to be_allowed_for(:maintainer).of(project) }
       it { expect { go }.to be_denied_for(:developer).of(project) }
@@ -749,7 +887,12 @@ describe Projects::ClustersController do
     describe 'security' do
       let_it_be(:cluster) { create(:cluster, :provided_by_gcp, :production_environment, projects: [project]) }
 
-      it { expect { go }.to be_allowed_for(:admin) }
+      it 'is allowed for admin when admin mode enabled', :enable_admin_mode do
+        expect { go }.to be_allowed_for(:admin)
+      end
+      it 'is disabled for admin when admin mode disabled' do
+        expect { go }.to be_denied_for(:admin)
+      end
       it { expect { go }.to be_allowed_for(:owner).of(project) }
       it { expect { go }.to be_allowed_for(:maintainer).of(project) }
       it { expect { go }.to be_denied_for(:developer).of(project) }

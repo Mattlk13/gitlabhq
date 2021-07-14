@@ -3,9 +3,10 @@
 require 'spec_helper'
 require 'mime/types'
 
-describe API::Repositories do
+RSpec.describe API::Repositories do
   include RepoHelpers
   include WorkhorseHelpers
+  include ProjectForksHelper
 
   let(:user) { create(:user) }
   let(:guest) { create(:user).tap { |u| create(:project_member, :guest, user: u, project: project) } }
@@ -19,7 +20,7 @@ describe API::Repositories do
       it 'returns the repository tree' do
         get api(route, current_user)
 
-        expect(response).to have_gitlab_http_status(200)
+        expect(response).to have_gitlab_http_status(:ok)
         expect(response).to include_pagination_headers
         expect(json_response).to be_an Array
 
@@ -48,7 +49,7 @@ describe API::Repositories do
         it 'returns recursive project paths tree' do
           get api("#{route}?recursive=1", current_user)
 
-          expect(response.status).to eq(200)
+          expect(response).to have_gitlab_http_status(:ok)
           expect(json_response).to be_an Array
           expect(response).to include_pagination_headers
           expect(json_response[4]['name']).to eq('html')
@@ -108,7 +109,7 @@ describe API::Repositories do
       it 'returns blob attributes as json' do
         get api(route, current_user)
 
-        expect(response).to have_gitlab_http_status(200)
+        expect(response).to have_gitlab_http_status(:ok)
         expect(json_response['size']).to eq(111)
         expect(json_response['encoding']).to eq("base64")
         expect(Base64.decode64(json_response['content']).lines.first).to eq("class Commit\n")
@@ -117,7 +118,7 @@ describe API::Repositories do
 
       context 'when sha does not exist' do
         it_behaves_like '404 response' do
-          let(:request) { get api(route.sub(sample_blob.oid, '123456'), current_user) }
+          let(:request) { get api(route.sub(sample_blob.oid, 'abcd9876'), current_user) }
           let(:message) { '404 Blob Not Found' }
         end
       end
@@ -167,7 +168,7 @@ describe API::Repositories do
 
         get api(route, current_user)
 
-        expect(response).to have_gitlab_http_status(200)
+        expect(response).to have_gitlab_http_status(:ok)
         expect(headers[Gitlab::Workhorse::DETECT_HEADER]).to eq "true"
       end
 
@@ -177,9 +178,17 @@ describe API::Repositories do
         expect(headers['Content-Disposition']).to eq 'inline'
       end
 
+      it 'defines an uncached header response' do
+        get api(route, current_user)
+
+        expect(response.headers["Cache-Control"]).to eq("max-age=0, private, must-revalidate, no-store, no-cache")
+        expect(response.headers["Pragma"]).to eq("no-cache")
+        expect(response.headers["Expires"]).to eq("Fri, 01 Jan 1990 00:00:00 GMT")
+      end
+
       context 'when sha does not exist' do
         it_behaves_like '404 response' do
-          let(:request) { get api(route.sub(sample_blob.oid, '123456'), current_user) }
+          let(:request) { get api(route.sub(sample_blob.oid, 'abcd9876'), current_user) }
           let(:message) { '404 Blob Not Found' }
         end
       end
@@ -221,7 +230,8 @@ describe API::Repositories do
   end
 
   describe "GET /projects/:id/repository/archive(.:format)?:sha" do
-    let(:route) { "/projects/#{project.id}/repository/archive" }
+    let(:project_id) { CGI.escape(project.full_path) }
+    let(:route) { "/projects/#{project_id}/repository/archive" }
 
     before do
       allow(::Gitlab::ApplicationRateLimiter).to receive(:throttled?).and_return(false)
@@ -231,7 +241,7 @@ describe API::Repositories do
       it 'returns the repository archive' do
         get api(route, current_user)
 
-        expect(response).to have_gitlab_http_status(200)
+        expect(response).to have_gitlab_http_status(:ok)
 
         type, params = workhorse_send_data
 
@@ -240,9 +250,9 @@ describe API::Repositories do
       end
 
       it 'returns the repository archive archive.zip' do
-        get api("/projects/#{project.id}/repository/archive.zip", user)
+        get api("/projects/#{project_id}/repository/archive.zip", user)
 
-        expect(response).to have_gitlab_http_status(200)
+        expect(response).to have_gitlab_http_status(:ok)
 
         type, params = workhorse_send_data
 
@@ -251,9 +261,9 @@ describe API::Repositories do
       end
 
       it 'returns the repository archive archive.tar.bz2' do
-        get api("/projects/#{project.id}/repository/archive.tar.bz2", user)
+        get api("/projects/#{project_id}/repository/archive.tar.bz2", user)
 
-        expect(response).to have_gitlab_http_status(200)
+        expect(response).to have_gitlab_http_status(:ok)
 
         type, params = workhorse_send_data
 
@@ -271,15 +281,34 @@ describe API::Repositories do
       it 'rate limits user when thresholds hit' do
         allow(::Gitlab::ApplicationRateLimiter).to receive(:throttled?).and_return(true)
 
-        get api("/projects/#{project.id}/repository/archive.tar.bz2", user)
+        get api("/projects/#{project_id}/repository/archive.tar.bz2", user)
 
         expect(response).to have_gitlab_http_status(:too_many_requests)
+      end
+
+      context "when hotlinking detection is enabled" do
+        before do
+          stub_feature_flags(repository_archive_hotlinking_interception: true)
+        end
+
+        it_behaves_like "hotlink interceptor" do
+          let(:http_request) do
+            get api(route, current_user), headers: headers
+          end
+        end
       end
     end
 
     context 'when unauthenticated', 'and project is public' do
       it_behaves_like 'repository archive' do
         let(:project) { create(:project, :public, :repository) }
+        let(:current_user) { nil }
+      end
+    end
+
+    context 'when unauthenticated and project path has dots' do
+      it_behaves_like 'repository archive' do
+        let(:project) { create(:project, :public, :repository, path: 'path.with.dot') }
         let(:current_user) { nil }
       end
     end
@@ -314,7 +343,7 @@ describe API::Repositories do
         }).and_call_original
         get api(route, current_user), params: { from: 'master', to: 'feature' }
 
-        expect(response).to have_gitlab_http_status(200)
+        expect(response).to have_gitlab_http_status(:ok)
         expect(json_response['commits']).to be_present
         expect(json_response['diffs']).to be_present
       end
@@ -325,7 +354,7 @@ describe API::Repositories do
         }).and_call_original
         get api(route, current_user), params: { from: 'master', to: 'feature', straight: false }
 
-        expect(response).to have_gitlab_http_status(200)
+        expect(response).to have_gitlab_http_status(:ok)
         expect(json_response['commits']).to be_present
         expect(json_response['diffs']).to be_present
       end
@@ -336,7 +365,7 @@ describe API::Repositories do
         }).and_call_original
         get api(route, current_user), params: { from: 'master', to: 'feature', straight: true }
 
-        expect(response).to have_gitlab_http_status(200)
+        expect(response).to have_gitlab_http_status(:ok)
         expect(json_response['commits']).to be_present
         expect(json_response['diffs']).to be_present
       end
@@ -344,7 +373,7 @@ describe API::Repositories do
       it "compares tags" do
         get api(route, current_user), params: { from: 'v1.0.0', to: 'v1.1.0' }
 
-        expect(response).to have_gitlab_http_status(200)
+        expect(response).to have_gitlab_http_status(:ok)
         expect(json_response['commits']).to be_present
         expect(json_response['diffs']).to be_present
       end
@@ -352,7 +381,7 @@ describe API::Repositories do
       it "compares commits" do
         get api(route, current_user), params: { from: sample_commit.id, to: sample_commit.parent_id }
 
-        expect(response).to have_gitlab_http_status(200)
+        expect(response).to have_gitlab_http_status(:ok)
         expect(json_response['commits']).to be_empty
         expect(json_response['diffs']).to be_empty
         expect(json_response['compare_same_ref']).to be_falsey
@@ -361,7 +390,29 @@ describe API::Repositories do
       it "compares commits in reverse order" do
         get api(route, current_user), params: { from: sample_commit.parent_id, to: sample_commit.id }
 
-        expect(response).to have_gitlab_http_status(200)
+        expect(response).to have_gitlab_http_status(:ok)
+        expect(json_response['commits']).to be_present
+        expect(json_response['diffs']).to be_present
+      end
+
+      it "compare commits between different projects with non-forked relation" do
+        public_project = create(:project, :repository, :public)
+
+        get api(route, current_user), params: { from: sample_commit.parent_id, to: sample_commit.id, from_project_id: public_project.id }
+
+        expect(response).to have_gitlab_http_status(:bad_request)
+      end
+
+      it "compare commits between different projects" do
+        group = create(:group)
+        group.add_owner(current_user)
+
+        forked_project = fork_project(project, current_user, repository: true, namespace: group)
+        forked_project.repository.create_ref('refs/heads/improve/awesome', 'refs/heads/improve/more-awesome')
+
+        get api(route, current_user), params: { from: 'improve/awesome', to: 'feature', from_project_id: forked_project.id }
+
+        expect(response).to have_gitlab_http_status(:ok)
         expect(json_response['commits']).to be_present
         expect(json_response['diffs']).to be_present
       end
@@ -369,18 +420,20 @@ describe API::Repositories do
       it "compares same refs" do
         get api(route, current_user), params: { from: 'master', to: 'master' }
 
-        expect(response).to have_gitlab_http_status(200)
+        expect(response).to have_gitlab_http_status(:ok)
         expect(json_response['commits']).to be_empty
         expect(json_response['diffs']).to be_empty
         expect(json_response['compare_same_ref']).to be_truthy
       end
 
       it "returns an empty string when the diff overflows" do
-        stub_const('Gitlab::Git::DiffCollection::DEFAULT_LIMITS', { max_files: 2, max_lines: 2 })
+        allow(Gitlab::Git::DiffCollection)
+          .to receive(:default_limits)
+          .and_return({ max_files: 2, max_lines: 2 })
 
         get api(route, current_user), params: { from: 'master', to: 'feature' }
 
-        expect(response).to have_gitlab_http_status(200)
+        expect(response).to have_gitlab_http_status(:ok)
         expect(json_response['commits']).to be_present
         expect(json_response['diffs']).to be_present
         expect(json_response['diffs'].first['diff']).to be_empty
@@ -389,13 +442,13 @@ describe API::Repositories do
       it "returns a 404 when from ref is unknown" do
         get api(route, current_user), params: { from: 'unknown_ref', to: 'master' }
 
-        expect(response).to have_gitlab_http_status(404)
+        expect(response).to have_gitlab_http_status(:not_found)
       end
 
       it "returns a 404 when to ref is unknown" do
         get api(route, current_user), params: { from: 'master', to: 'unknown_ref' }
 
-        expect(response).to have_gitlab_http_status(404)
+        expect(response).to have_gitlab_http_status(:not_found)
       end
     end
 
@@ -424,6 +477,17 @@ describe API::Repositories do
         let(:request) { get api(route, guest) }
       end
     end
+
+    context 'api_caching_rate_limit_repository_compare is disabled' do
+      before do
+        stub_feature_flags(api_caching_rate_limit_repository_compare: false)
+      end
+
+      it_behaves_like 'repository compare' do
+        let(:project) { create(:project, :public, :repository) }
+        let(:current_user) { nil }
+      end
+    end
   end
 
   describe 'GET /projects/:id/repository/contributors' do
@@ -433,7 +497,7 @@ describe API::Repositories do
       it 'returns valid data' do
         get api(route, current_user)
 
-        expect(response).to have_gitlab_http_status(200)
+        expect(response).to have_gitlab_http_status(:ok)
         expect(response).to include_pagination_headers
         expect(json_response).to be_an Array
 
@@ -450,7 +514,7 @@ describe API::Repositories do
           it 'returns the repository contribuors sorted by commits desc' do
             get api(route, current_user), params: { order_by: 'commits', sort: 'desc' }
 
-            expect(response).to have_gitlab_http_status(200)
+            expect(response).to have_gitlab_http_status(:ok)
             expect(response).to match_response_schema('contributors')
             expect(json_response.first['commits']).to be > json_response.last['commits']
           end
@@ -460,7 +524,7 @@ describe API::Repositories do
           it 'returns the repository contribuors sorted by name asc case insensitive' do
             get api(route, current_user), params: { order_by: 'name', sort: 'asc' }
 
-            expect(response).to have_gitlab_http_status(200)
+            expect(response).to have_gitlab_http_status(:ok)
             expect(response).to match_response_schema('contributors')
             expect(json_response.first['name'].downcase).to be < json_response.last['name'].downcase
           end
@@ -580,6 +644,121 @@ describe API::Repositories do
         expect(response).to have_gitlab_http_status(:bad_request)
         expect(json_response['message']).to eq('Provide at least 2 refs')
       end
+    end
+  end
+
+  describe 'POST /projects/:id/repository/changelog' do
+    it 'generates the changelog for a version' do
+      spy = instance_spy(Repositories::ChangelogService)
+
+      allow(Repositories::ChangelogService)
+        .to receive(:new)
+        .with(
+          project,
+          user,
+          version: '1.0.0',
+          from: 'foo',
+          to: 'bar',
+          date: DateTime.new(2020, 1, 1),
+          branch: 'kittens',
+          trailer: 'Foo',
+          file: 'FOO.md',
+          message: 'Commit message'
+        )
+        .and_return(spy)
+
+      allow(spy).to receive(:execute)
+
+      post(
+        api("/projects/#{project.id}/repository/changelog", user),
+        params: {
+          version: '1.0.0',
+          from: 'foo',
+          to: 'bar',
+          date: '2020-01-01',
+          branch: 'kittens',
+          trailer: 'Foo',
+          file: 'FOO.md',
+          message: 'Commit message'
+        }
+      )
+
+      expect(response).to have_gitlab_http_status(:ok)
+    end
+
+    it 'supports leaving out the from and to attribute' do
+      spy = instance_spy(Repositories::ChangelogService)
+
+      allow(Repositories::ChangelogService)
+        .to receive(:new)
+        .with(
+          project,
+          user,
+          version: '1.0.0',
+          date: DateTime.new(2020, 1, 1),
+          branch: 'kittens',
+          trailer: 'Foo',
+          file: 'FOO.md',
+          message: 'Commit message'
+        )
+        .and_return(spy)
+
+      expect(spy).to receive(:execute)
+
+      post(
+        api("/projects/#{project.id}/repository/changelog", user),
+        params: {
+          version: '1.0.0',
+          date: '2020-01-01',
+          branch: 'kittens',
+          trailer: 'Foo',
+          file: 'FOO.md',
+          message: 'Commit message'
+        }
+      )
+
+      expect(response).to have_gitlab_http_status(:ok)
+    end
+
+    it 'produces an error when generating the changelog fails' do
+      spy = instance_spy(Repositories::ChangelogService)
+
+      allow(Repositories::ChangelogService)
+        .to receive(:new)
+        .with(
+          project,
+          user,
+          version: '1.0.0',
+          from: 'foo',
+          to: 'bar',
+          date: DateTime.new(2020, 1, 1),
+          branch: 'kittens',
+          trailer: 'Foo',
+          file: 'FOO.md',
+          message: 'Commit message'
+        )
+        .and_return(spy)
+
+      allow(spy)
+        .to receive(:execute)
+        .and_raise(Gitlab::Changelog::Error.new('oops'))
+
+      post(
+        api("/projects/#{project.id}/repository/changelog", user),
+        params: {
+          version: '1.0.0',
+          from: 'foo',
+          to: 'bar',
+          date: '2020-01-01',
+          branch: 'kittens',
+          trailer: 'Foo',
+          file: 'FOO.md',
+          message: 'Commit message'
+        }
+      )
+
+      expect(response).to have_gitlab_http_status(:unprocessable_entity)
+      expect(json_response['message']).to eq('Failed to generate the changelog: oops')
     end
   end
 end

@@ -1,16 +1,24 @@
 ---
+stage: none
+group: unassigned
+info: To determine the technical writer assigned to the Stage/Group associated with this page, see https://about.gitlab.com/handbook/engineering/ux/technical-writing/#assignments
 type: reference
 ---
 
-# Third party offers **(CORE ONLY)**
+# Third-party offers **(FREE SELF)**
 
-> [Introduced](https://gitlab.com/gitlab-org/gitlab-foss/-/merge_requests/20379) in [GitLab Core](https://about.gitlab.com/pricing/) 11.1.
+> [Introduced](https://gitlab.com/gitlab-org/gitlab-foss/-/merge_requests/20379) in GitLab Free 11.1.
 
 Within GitLab, we inform users of available third-party offers they might find valuable in order
 to enhance the development of their projects. An example is the Google Cloud Platform free credit
 for using [Google Kubernetes Engine](https://cloud.google.com/kubernetes-engine/).
 
-The display of third-party offers can be toggled in the **Admin Area > Settings** page.
+To toggle the display of third-party offers:
+
+1. On the top bar, select **Menu >** **{admin}** **Admin**.
+1. On the left sidebar, select **Settings**, and expand **Third-party offers**.
+1. Select **Do not display offers from third parties**.
+1. Select **Save changes**.
 
 <!-- ## Troubleshooting
 

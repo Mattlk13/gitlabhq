@@ -1,6 +1,6 @@
-import { shallowMount } from '@vue/test-utils';
-import CollapsedAssignee from '~/sidebar/components/assignees/collapsed_assignee.vue';
+import { mount } from '@vue/test-utils';
 import AssigneeAvatar from '~/sidebar/components/assignees/assignee_avatar.vue';
+import CollapsedAssignee from '~/sidebar/components/assignees/collapsed_assignee.vue';
 import userDataMock from '../../user_data_mock';
 
 const TEST_USER = userDataMock();
@@ -16,7 +16,7 @@ describe('CollapsedAssignee assignee component', () => {
       ...props,
     };
 
-    wrapper = shallowMount(CollapsedAssignee, {
+    wrapper = mount(CollapsedAssignee, {
       propsData,
     });
   }
@@ -28,12 +28,7 @@ describe('CollapsedAssignee assignee component', () => {
   it('has author name', () => {
     createComponent();
 
-    expect(
-      wrapper
-        .find('.author')
-        .text()
-        .trim(),
-    ).toEqual(TEST_USER.name);
+    expect(wrapper.find('.author').text().trim()).toEqual(TEST_USER.name);
   });
 
   it('has assignee avatar', () => {

@@ -1,12 +1,16 @@
 ---
+stage: Create
+group: Source Code
+info: "To determine the technical writer assigned to the Stage/Group associated with this page, see https://about.gitlab.com/handbook/engineering/ux/technical-writing/#assignments"
+type: reference
 description: "Set and configure Git protocol v2"
 ---
 
-# Configuring Git Protocol v2
+# Configuring Git Protocol v2 **(FREE)**
 
-> - [Introduced](https://gitlab.com/gitlab-org/gitlab-foss/issues/46555) in GitLab 11.4.
-> - [Temporarily disabled](https://gitlab.com/gitlab-org/gitlab-foss/issues/55769) in GitLab 11.5.8, 11.6.6, 11.7.1, and 11.8+.
-> - [Re-enabled](https://gitlab.com/gitlab-org/gitlab/issues/27828) in GitLab 12.8.
+> - [Introduced](https://gitlab.com/gitlab-org/gitlab-foss/-/issues/46555) in GitLab 11.4.
+> - [Temporarily disabled](https://gitlab.com/gitlab-org/gitlab-foss/-/issues/55769) in GitLab 11.5.8, 11.6.6, 11.7.1, and 11.8+.
+> - [Re-enabled](https://gitlab.com/gitlab-org/gitlab/-/issues/27828) in GitLab 12.8.
 
 Git protocol v2 improves the v1 wire protocol in several ways and is
 enabled by default in GitLab for HTTP requests. In order to enable SSH,
@@ -24,21 +28,25 @@ From the server side, if we want to configure SSH we need to set the `sshd`
 server to accept the `GIT_PROTOCOL` environment.
 
 In installations using [GitLab Helm Charts](https://docs.gitlab.com/charts/)
-and [All-in-one docker image](https://docs.gitlab.com/omnibus/docker/), the SSH
-service is already configured to accept the `GIT_PROTOCOL` environment and users
+and [All-in-one Docker image](https://docs.gitlab.com/omnibus/docker/), the SSH
+service is already configured to accept the `GIT_PROTOCOL` environment. Users
 need not do anything more.
 
-For Omnibus GitLab and installations from source, you have to manually update
-the SSH configuration of your server by adding the line below to the `/etc/ssh/sshd_config` file:
+For Omnibus GitLab and installations from source, update
+the SSH configuration of your server manually by adding this line to the `/etc/ssh/sshd_config` file:
 
 ```plaintext
 AcceptEnv GIT_PROTOCOL
 ```
 
-Once configured, restart the SSH daemon. In Ubuntu, run:
+Once configured, restart the SSH daemon for the change to take effect:
 
 ```shell
-sudo service ssh restart
+# CentOS 6 / RHEL 6
+sudo service sshd restart
+
+# All other supported distributions
+sudo systemctl restart ssh
 ```
 
 ## Instructions
@@ -91,7 +99,7 @@ $ GIT_TRACE_PACKET=1 git -c protocol.version=2 ls-remote https://your-gitlab-ins
 Verify Git v2 is used by the client:
 
 ```shell
-GIT_SSH_COMMAND="ssh -v" git -c protocol.version=2 ls-remote ssh://your-gitlab-instance.com:group/repo.git 2>&1 |grep GIT_PROTOCOL
+GIT_SSH_COMMAND="ssh -v" git -c protocol.version=2 ls-remote ssh://git@your-gitlab-instance.com/group/repo.git 2>&1 |grep GIT_PROTOCOL
 ```
 
 You should see that the `GIT_PROTOCOL` environment variable is sent:
@@ -111,6 +119,8 @@ production environment, you can use the following Prometheus query:
 ```prometheus
 sum(rate(gitaly_git_protocol_requests_total[1m])) by (grpc_method,git_protocol,grpc_service)
 ```
+
+<!-- This link sporadically returns a 503 during automated link checking but is correct -->
 
 You can view what Git protocol versions are being used on GitLab.com at
 <https://dashboards.gitlab.com/d/pqlQq0xik/git-protocol-versions>.

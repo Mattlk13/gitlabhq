@@ -2,7 +2,7 @@
 
 require 'spec_helper'
 
-describe Gitlab::TimeTrackingFormatter do
+RSpec.describe Gitlab::TimeTrackingFormatter do
   describe '#parse' do
     subject { described_class.parse(duration_string) }
 
@@ -46,6 +46,12 @@ describe Gitlab::TimeTrackingFormatter do
       end
 
       it { expect(subject).to eq('1w 1d 1h 40m') }
+    end
+
+    context 'handles negative time input' do
+      let(:num_seconds) { -178_800 }
+
+      it { expect(subject).to eq('-1w 1d 1h 40m') }
     end
   end
 end

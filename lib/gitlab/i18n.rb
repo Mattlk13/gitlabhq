@@ -5,29 +5,73 @@ module Gitlab
     extend self
 
     AVAILABLE_LANGUAGES = {
+      'bg' => 'Bulgarian - български',
+      'cs_CZ' => 'Czech - čeština',
+      'de' => 'German - Deutsch',
       'en' => 'English',
-      'es' => 'Español',
-      'gl_ES' => 'Galego',
-      'de' => 'Deutsch',
-      'fr' => 'Français',
-      'pt_BR' => 'Português (Brasil)',
-      'zh_CN' => '简体中文',
-      'zh_HK' => '繁體中文 (香港)',
-      'zh_TW' => '繁體中文 (臺灣)',
-      'bg' => 'български',
-      'ru' => 'Русский',
-      'eo' => 'Esperanto',
-      'it' => 'Italiano',
-      'uk' => 'Українська',
-      'ja' => '日本語',
-      'ko' => '한국어',
-      'nl_NL' => 'Nederlands',
-      'tr_TR' => 'Türkçe',
-      'id_ID' => 'Bahasa Indonesia',
+      'eo' => 'Esperanto - esperanto',
+      'es' => 'Spanish - español',
       'fil_PH' => 'Filipino',
-      'pl_PL' => 'Polski',
-      'cs_CZ' => 'Čeština'
+      'fr' => 'French - français',
+      'gl_ES' => 'Galician - galego',
+      'id_ID' => 'Indonesian - Bahasa Indonesia',
+      'it' => 'Italian - italiano',
+      'ja' => 'Japanese - 日本語',
+      'ko' => 'Korean - 한국어',
+      'nl_NL' => 'Dutch - Nederlands',
+      'pl_PL' => 'Polish - polski',
+      'pt_BR' => 'Portuguese (Brazil) - português (Brasil)',
+      'ru' => 'Russian - Русский',
+      'tr_TR' => 'Turkish - Türkçe',
+      'uk' => 'Ukrainian - українська',
+      'zh_CN' => 'Chinese, Simplified - 简体中文',
+      'zh_HK' => 'Chinese, Traditional (Hong Kong) - 繁體中文 (香港)',
+      'zh_TW' => 'Chinese, Traditional (Taiwan) - 繁體中文 (台灣)'
     }.freeze
+    private_constant :AVAILABLE_LANGUAGES
+
+    # Languages with less then MINIMUM_TRANSLATION_LEVEL% of available translations will not
+    # be available in the UI.
+    # https://gitlab.com/gitlab-org/gitlab/-/issues/221012
+    MINIMUM_TRANSLATION_LEVEL = 2
+
+    # Currently monthly updated manually by ~group::import PM.
+    # https://gitlab.com/gitlab-org/gitlab/-/issues/18923
+    TRANSLATION_LEVELS = {
+      'bg' => 1,
+      'cs_CZ' => 1,
+      'de' => 17,
+      'en' => 100,
+      'eo' => 1,
+      'es' => 38,
+      'fil_PH' => 1,
+      'fr' => 12,
+      'gl_ES' => 1,
+      'id_ID' => 0,
+      'it' => 2,
+      'ja' => 42,
+      'ko' => 13,
+      'nl_NL' => 1,
+      'pl_PL' => 5,
+      'pt_BR' => 21,
+      'ru' => 29,
+      'tr_TR' => 16,
+      'uk' => 41,
+      'zh_CN' => 67,
+      'zh_HK' => 2,
+      'zh_TW' => 3
+    }.freeze
+    private_constant :TRANSLATION_LEVELS
+
+    def selectable_locales
+      AVAILABLE_LANGUAGES.reject do |code, _name|
+        percentage_translated_for(code) < MINIMUM_TRANSLATION_LEVEL
+      end
+    end
+
+    def percentage_translated_for(code)
+      TRANSLATION_LEVELS.fetch(code, 0)
+    end
 
     def available_locales
       AVAILABLE_LANGUAGES.keys

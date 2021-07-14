@@ -26,17 +26,18 @@ module TimeTrackable
   # rubocop:disable Gitlab/ModuleWithInstanceVariables
   def spend_time(options)
     @time_spent = options[:duration]
+    @time_spent_note_id = options[:note_id]
     @time_spent_user = User.find(options[:user_id])
     @spent_at = options[:spent_at]
     @original_total_time_spent = nil
 
     return if @time_spent == 0
 
-    if @time_spent == :reset
-      reset_spent_time
-    else
-      add_or_subtract_spent_time
-    end
+    @timelog = if @time_spent == :reset
+                 reset_spent_time
+               else
+                 add_or_subtract_spent_time
+               end
   end
   alias_method :spend_time=, :spend_time
   # rubocop:enable Gitlab/ModuleWithInstanceVariables
@@ -47,6 +48,14 @@ module TimeTrackable
 
   def human_total_time_spent
     Gitlab::TimeTrackingFormatter.output(total_time_spent)
+  end
+
+  def time_change
+    @timelog&.time_spent.to_i # rubocop:disable Gitlab/ModuleWithInstanceVariables
+  end
+
+  def human_time_change
+    Gitlab::TimeTrackingFormatter.output(time_change)
   end
 
   def human_time_estimate
@@ -67,6 +76,7 @@ module TimeTrackable
   def add_or_subtract_spent_time
     timelogs.new(
       time_spent: time_spent,
+      note_id: @time_spent_note_id,
       user: @time_spent_user,
       spent_at: @spent_at
     )
@@ -77,7 +87,7 @@ module TimeTrackable
     return if time_spent.nil? || time_spent == :reset
 
     if time_spent < 0 && (time_spent.abs > original_total_time_spent)
-      errors.add(:time_spent, 'Time to subtract exceeds the total time spent')
+      errors.add(:base, _('Time to subtract exceeds the total time spent'))
     end
   end
 

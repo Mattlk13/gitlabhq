@@ -1,37 +1,9 @@
 ---
-comments: false
+redirect_to: '../../../topics/git/git_add.md'
+remove_date: '2021-08-13'
 ---
 
-# Git Add
+This document was moved to [another location](../../../topics/git/git_add.md).
 
-Adds content to the index or staging area.
-
-- Adds a list of file:
-
-  ```shell
-  git add <files>
-  ```
-
-- Adds all files including deleted ones:
-
-  ```shell
-  git add -A
-  ```
-
-- Add all text files in current dir:
-
-  ```shell
-  git add *.txt
-  ```
-
-- Add all text file in the project:
-
-  ```shell
-  git add "*.txt*"
-  ```
-
-- Adds all files in directory:
-
-  ```shell
-  git add views/layouts/
-  ```
+<!-- This redirect file can be deleted after <2021-08-13>. -->
+<!-- Before deletion, see: https://docs.gitlab.com/ee/development/documentation/#move-or-rename-a-page -->

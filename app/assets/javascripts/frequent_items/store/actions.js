@@ -1,7 +1,8 @@
-import Api from '~/api';
 import AccessorUtilities from '~/lib/utils/accessor';
-import * as types from './mutation_types';
+import { isLoggedIn } from '~/lib/utils/common_utils';
+import { getGroups, getProjects } from '~/rest_api';
 import { getTopFrequentItems } from '../utils';
+import * as types from './mutation_types';
 
 export const setNamespace = ({ commit }, namespace) => {
   commit(types.SET_NAMESPACE, namespace);
@@ -51,15 +52,19 @@ export const fetchSearchedItems = ({ state, dispatch }, searchQuery) => {
   const params = {
     simple: true,
     per_page: 20,
-    membership: Boolean(gon.current_user_id),
+    membership: isLoggedIn(),
   };
 
+  let searchFunction;
   if (state.namespace === 'projects') {
+    searchFunction = getProjects;
     params.order_by = 'last_activity_at';
+  } else {
+    searchFunction = getGroups;
   }
 
-  return Api[state.namespace](searchQuery, params)
-    .then(results => {
+  return searchFunction(searchQuery, params)
+    .then((results) => {
       dispatch('receiveSearchedItemsSuccess', results);
     })
     .catch(() => {
@@ -76,6 +81,3 @@ export const setSearchQuery = ({ commit, dispatch }, query) => {
     dispatch('fetchFrequentItems');
   }
 };
-
-// prevent babel-plugin-rewire from generating an invalid default during karma tests
-export default () => {};

@@ -1,15 +1,21 @@
+import { identity } from 'lodash';
 import Vue from 'vue';
 import { mapActions } from 'vuex';
-import _ from 'underscore';
+import { DEFAULT_BRANCH } from '~/ide/constants';
+import PerformancePlugin from '~/performance/vue_performance_plugin';
 import Translate from '~/vue_shared/translate';
-import ide from './components/ide.vue';
-import store from './stores';
-import router from './ide_router';
 import { parseBoolean } from '../lib/utils/common_utils';
 import { resetServiceWorkersPublicPath } from '../lib/utils/webpack';
+import ide from './components/ide.vue';
+import { createRouter } from './ide_router';
 import { DEFAULT_THEME } from './lib/themes';
+import { createStore } from './stores';
 
 Vue.use(Translate);
+
+Vue.use(PerformancePlugin, {
+  components: ['FileTree'],
+});
 
 /**
  * Function that receives the default store and returns an extended one.
@@ -31,7 +37,9 @@ Vue.use(Translate);
 export function initIde(el, options = {}) {
   if (!el) return null;
 
-  const { rootComponent = ide, extendStore = _.identity } = options;
+  const { rootComponent = ide, extendStore = identity } = options;
+  const store = createStore();
+  const router = createRouter(store, el.dataset.defaultBranch || DEFAULT_BRANCH);
 
   return new Vue({
     el,
@@ -46,17 +54,23 @@ export function initIde(el, options = {}) {
         promotionSvgPath: el.dataset.promotionSvgPath,
       });
       this.setLinks({
-        ciHelpPagePath: el.dataset.ciHelpPagePath,
         webIDEHelpPagePath: el.dataset.webIdeHelpPagePath,
+        forkInfo: el.dataset.forkInfo ? JSON.parse(el.dataset.forkInfo) : null,
       });
-      this.setInitialData({
+      this.init({
         clientsidePreviewEnabled: parseBoolean(el.dataset.clientsidePreviewEnabled),
         renderWhitespaceInCode: parseBoolean(el.dataset.renderWhitespaceInCode),
         editorTheme: window.gon?.user_color_scheme || DEFAULT_THEME,
+        codesandboxBundlerUrl: el.dataset.codesandboxBundlerUrl,
+        environmentsGuidanceAlertDismissed: !parseBoolean(el.dataset.enableEnvironmentsGuidance),
       });
     },
+    beforeDestroy() {
+      // This helps tests do Singleton cleanups which we don't really have responsibility to know about here.
+      this.$emit('destroy');
+    },
     methods: {
-      ...mapActions(['setEmptyStateSvgs', 'setLinks', 'setInitialData']),
+      ...mapActions(['setEmptyStateSvgs', 'setLinks', 'init']),
     },
     render(createElement) {
       return createElement(rootComponent);
@@ -70,11 +84,9 @@ export function initIde(el, options = {}) {
  * @param {Objects} options - Extra options for the IDE (Used by EE).
  */
 export function startIde(options) {
-  document.addEventListener('DOMContentLoaded', () => {
-    const ideElement = document.getElementById('ide');
-    if (ideElement) {
-      resetServiceWorkersPublicPath();
-      initIde(ideElement, options);
-    }
-  });
+  const ideElement = document.getElementById('ide');
+  if (ideElement) {
+    resetServiceWorkersPublicPath();
+    initIde(ideElement, options);
+  }
 }

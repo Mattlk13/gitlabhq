@@ -10,6 +10,8 @@ class Projects::MirrorsController < Projects::ApplicationController
 
   layout "project_settings"
 
+  feature_category :source_code_management
+
   def show
     redirect_to_repository_settings(project, anchor: 'js-push-remote-settings')
   end
@@ -67,7 +69,7 @@ class Projects::MirrorsController < Projects::ApplicationController
   end
 
   def check_mirror_available!
-    Gitlab::CurrentSettings.current_application_settings.mirror_available || current_user&.admin?
+    render_404 unless can?(current_user, :admin_remote_mirror, project)
   end
 
   def mirror_params_attributes
@@ -77,6 +79,7 @@ class Projects::MirrorsController < Projects::ApplicationController
         id
         enabled
         only_protected_branches
+        keep_divergent_refs
         auth_method
         password
         ssh_known_hosts
@@ -91,4 +94,4 @@ class Projects::MirrorsController < Projects::ApplicationController
   end
 end
 
-Projects::MirrorsController.prepend_if_ee('EE::Projects::MirrorsController')
+Projects::MirrorsController.prepend_mod_with('Projects::MirrorsController')

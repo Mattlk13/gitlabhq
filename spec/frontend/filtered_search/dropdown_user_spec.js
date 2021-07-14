@@ -1,4 +1,7 @@
 import DropdownUtils from '~/filtered_search/dropdown_utils';
+// TODO: Moving this line up throws an error about `FilteredSearchDropdown`
+// being undefined in test. See gitlab-org/gitlab#321476 for more info.
+// eslint-disable-next-line import/order
 import DropdownUser from '~/filtered_search/dropdown_user';
 import FilteredSearchTokenizer from '~/filtered_search/filtered_search_tokenizer';
 import IssuableFilteredTokenKeys from '~/filtered_search/issuable_filtered_search_token_keys';
@@ -48,13 +51,13 @@ describe('Dropdown User', () => {
       };
       const dropdown = new DropdownUser();
 
-      expect(dropdown.config.AjaxFilter.endpoint).toBe('/autocomplete/users.json');
+      expect(dropdown.config.AjaxFilter.endpoint).toBe('/-/autocomplete/users.json');
     });
 
     it('should return endpoint when relative_url_root is undefined', () => {
       const dropdown = new DropdownUser();
 
-      expect(dropdown.config.AjaxFilter.endpoint).toBe('/autocomplete/users.json');
+      expect(dropdown.config.AjaxFilter.endpoint).toBe('/-/autocomplete/users.json');
     });
 
     it('should return endpoint with relative url when available', () => {
@@ -63,7 +66,9 @@ describe('Dropdown User', () => {
       };
       const dropdown = new DropdownUser();
 
-      expect(dropdown.config.AjaxFilter.endpoint).toBe('/gitlab_directory/autocomplete/users.json');
+      expect(dropdown.config.AjaxFilter.endpoint).toBe(
+        '/gitlab_directory/-/autocomplete/users.json',
+      );
     });
 
     afterEach(() => {
@@ -73,7 +78,6 @@ describe('Dropdown User', () => {
 
   describe('hideCurrentUser', () => {
     const fixtureTemplate = 'issues/issue_list.html';
-    preloadFixtures(fixtureTemplate);
 
     let dropdown;
     let authorFilterDropdownElement;

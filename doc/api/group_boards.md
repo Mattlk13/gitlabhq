@@ -1,13 +1,19 @@
-# Group Issue Boards API
+---
+stage: Plan
+group: Project Management
+info: To determine the technical writer assigned to the Stage/Group associated with this page, see https://about.gitlab.com/handbook/engineering/ux/technical-writing/#assignments
+---
 
-Every API call to group boards must be authenticated.
+# Group issue boards API **(FREE)**
+
+Every API call to [group issue boards](../user/project/issue_board.md#group-issue-boards) must be authenticated.
 
 If a user is not a member of a group and the group is private, a `GET`
-request will result in `404` status code.
+request results in `404` status code.
 
 ## List all group issue boards in a group
 
-Lists Issue Boards in the given group.
+Lists issue boards in the given group.
 
 ```plaintext
 GET /groups/:id/boards
@@ -15,10 +21,10 @@ GET /groups/:id/boards
 
 | Attribute | Type | Required | Description |
 | --------- | ---- | -------- | ----------- |
-| `id` | integer/string | yes | The ID or [URL-encoded path of the group](README.md#namespaced-path-encoding) owned by the authenticated user |
+| `id` | integer/string | yes | The ID or [URL-encoded path of the group](index.md#namespaced-path-encoding) owned by the authenticated user |
 
 ```shell
-curl --header "PRIVATE-TOKEN: <your_access_token>" https://gitlab.example.com/api/v4/groups/5/boards
+curl --header "PRIVATE-TOKEN: <your_access_token>" "https://gitlab.example.com/api/v4/groups/5/boards"
 ```
 
 Example response:
@@ -27,14 +33,14 @@ Example response:
 [
   {
     "id": 1,
-    "name:": "group issue board",
+    "name": "group issue board",
     "group": {
       "id": 5,
       "name": "Documentcloud",
       "web_url": "http://example.com/groups/documentcloud"
     },
     "milestone":   {
-      "id": 12
+      "id": 12,
       "title": "10.0"
     },
     "lists" : [
@@ -70,7 +76,7 @@ Example response:
 ]
 ```
 
-Users on GitLab [Premium, Silver, or higher](https://about.gitlab.com/pricing/) will see
+Users on GitLab [Premium or higher](https://about.gitlab.com/pricing/) see
 different parameters, due to the ability to have multiple group boards.
 
 Example response:
@@ -79,14 +85,14 @@ Example response:
 [
   {
     "id": 1,
-    "name:": "group issue board",
+    "name": "group issue board",
     "group": {
       "id": 5,
       "name": "Documentcloud",
       "web_url": "http://example.com/groups/documentcloud"
     },
     "milestone":   {
-      "id": 12
+      "id": 12,
       "title": "10.0"
     },
     "lists" : [
@@ -132,11 +138,11 @@ GET /groups/:id/boards/:board_id
 
 | Attribute | Type | Required | Description |
 | --------- | ---- | -------- | ----------- |
-| `id` | integer/string | yes | The ID or [URL-encoded path of the group](README.md#namespaced-path-encoding) owned by the authenticated user |
+| `id` | integer/string | yes | The ID or [URL-encoded path of the group](index.md#namespaced-path-encoding) owned by the authenticated user |
 | `board_id` | integer | yes | The ID of a board |
 
 ```shell
-curl --header "PRIVATE-TOKEN: <your_access_token>" https://gitlab.example.com/api/v4/groups/5/boards/1
+curl --header "PRIVATE-TOKEN: <your_access_token>" "https://gitlab.example.com/api/v4/groups/5/boards/1"
 ```
 
 Example response:
@@ -144,14 +150,14 @@ Example response:
 ```json
   {
     "id": 1,
-    "name:": "group issue board",
+    "name": "group issue board",
     "group": {
       "id": 5,
       "name": "Documentcloud",
       "web_url": "http://example.com/groups/documentcloud"
     },
     "milestone":   {
-      "id": 12
+      "id": 12,
       "title": "10.0"
     },
     "lists" : [
@@ -186,22 +192,22 @@ Example response:
   }
 ```
 
-Users on GitLab [Premium, Silver, or higher](https://about.gitlab.com/pricing/) will see
-different parameters, due to the ability to have multiple group issue boards.s
+Users on GitLab [Premium or higher](https://about.gitlab.com/pricing/) see
+different parameters, due to the ability to have multiple group issue boards.
 
 Example response:
 
 ```json
   {
     "id": 1,
-    "name:": "group issue board",
+    "name": "group issue board",
     "group": {
       "id": 5,
       "name": "Documentcloud",
       "web_url": "http://example.com/groups/documentcloud"
     },
     "milestone":   {
-      "id": 12
+      "id": 12,
       "title": "10.0"
     },
     "lists" : [
@@ -246,11 +252,11 @@ POST /groups/:id/boards
 
 | Attribute | Type | Required | Description |
 | --------- | ---- | -------- | ----------- |
-| `id` | integer/string | yes | The ID or [URL-encoded path of the group](README.md#namespaced-path-encoding) owned by the authenticated user |
+| `id` | integer/string | yes | The ID or [URL-encoded path of the group](index.md#namespaced-path-encoding) owned by the authenticated user |
 | `name` | string | yes | The name of the new board |
 
 ```shell
-curl --request POST --header "PRIVATE-TOKEN: <your_access_token>" https://gitlab.example.com/api/v4/groups/5/boards?name=newboard
+curl --request POST --header "PRIVATE-TOKEN: <your_access_token>" "https://gitlab.example.com/api/v4/groups/5/boards?name=newboard"
 ```
 
 Example response:
@@ -259,48 +265,21 @@ Example response:
   {
     "id": 1,
     "name": "newboard",
+    "project": null,
+    "lists" : [],
     "group": {
       "id": 5,
       "name": "Documentcloud",
       "web_url": "http://example.com/groups/documentcloud"
     },
-    "milestone":   {
-      "id": 12
-      "title": "10.0"
-    },
-    "lists" : [
-      {
-        "id" : 1,
-        "label" : {
-          "name" : "Testing",
-          "color" : "#F0AD4E",
-          "description" : null
-        },
-        "position" : 1
-      },
-      {
-        "id" : 2,
-        "label" : {
-          "name" : "Ready",
-          "color" : "#FF0000",
-          "description" : null
-        },
-        "position" : 2
-      },
-      {
-        "id" : 3,
-        "label" : {
-          "name" : "Production",
-          "color" : "#FF5F00",
-          "description" : null
-        },
-        "position" : 3
-      }
-    ]
+    "milestone": null,
+    "assignee" : null,
+    "labels" : [],
+    "weight" : null
   }
 ```
 
-## Update a group issue board **(PREMIUM)**
+## Update a group issue board
 
 > [Introduced](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/5954) in GitLab 11.1.
 
@@ -310,18 +289,20 @@ Updates a Group Issue Board.
 PUT /groups/:id/boards/:board_id
 ```
 
-| Attribute           | Type           | Required | Description |
-| ------------------- | -------------- | -------- | ----------- |
-| `id`                | integer/string | yes      | The ID or [URL-encoded path of the group](README.md#namespaced-path-encoding) owned by the authenticated user |
-| `board_id`          | integer        | yes      | The ID of a board |
-| `name`              | string         | no       | The new name of the board |
-| `assignee_id`       | integer        | no       | The assignee the board should be scoped to |
-| `milestone_id`      | integer        | no       | The milestone the board should be scoped to |
-| `labels`            | string         | no       | Comma-separated list of label names which the board should be scoped to |
-| `weight`            | integer        | no       | The weight range from 0 to 9, to which the board should be scoped to |
+| Attribute                    | Type           | Required | Description |
+| ---------------------------- | -------------- | -------- | ----------- |
+| `id`                         | integer/string | yes      | The ID or [URL-encoded path of the group](index.md#namespaced-path-encoding) owned by the authenticated user |
+| `board_id`                   | integer        | yes      | The ID of a board |
+| `name`                       | string         | no       | The new name of the board |
+| `hide_backlog_list`          | boolean        | no       | Hide the Open list |
+| `hide_closed_list`           | boolean        | no       | Hide the Closed list |
+| `assignee_id` **(PREMIUM)**  | integer        | no       | The assignee the board should be scoped to |
+| `milestone_id` **(PREMIUM)** | integer        | no       | The milestone the board should be scoped to |
+| `labels` **(PREMIUM)**       | string         | no       | Comma-separated list of label names which the board should be scoped to |
+| `weight` **(PREMIUM)**       | integer        | no       | The weight range from 0 to 9, to which the board should be scoped to |
 
 ```shell
-curl --request PUT --header "PRIVATE-TOKEN: <your_access_token>" https://gitlab.example.com/api/v4/groups/5/boards/1?name=new_name&milestone_id=44&assignee_id=1&labels=GroupLabel&weight=4
+curl --request PUT --header "PRIVATE-TOKEN: <your_access_token>" "https://gitlab.example.com/api/v4/groups/5/boards/1?name=new_name&milestone_id=44&assignee_id=1&labels=GroupLabel&weight=4"
 ```
 
 Example response:
@@ -378,11 +359,11 @@ DELETE /groups/:id/boards/:board_id
 
 | Attribute | Type | Required | Description |
 | --------- | ---- | -------- | ----------- |
-| `id` | integer/string | yes | The ID or [URL-encoded path of the group](README.md#namespaced-path-encoding) owned by the authenticated user |
+| `id` | integer/string | yes | The ID or [URL-encoded path of the group](index.md#namespaced-path-encoding) owned by the authenticated user |
 | `board_id` | integer | yes | The ID of a board |
 
 ```shell
-curl --request DELETE --header "PRIVATE-TOKEN: <your_access_token>" https://gitlab.example.com/api/v4/groups/5/boards/1
+curl --request DELETE --header "PRIVATE-TOKEN: <your_access_token>" "https://gitlab.example.com/api/v4/groups/5/boards/1"
 ```
 
 ## List group issue board lists
@@ -396,11 +377,11 @@ GET /groups/:id/boards/:board_id/lists
 
 | Attribute | Type | Required | Description |
 | --------- | ---- | -------- | ----------- |
-| `id` | integer/string | yes | The ID or [URL-encoded path of the group](README.md#namespaced-path-encoding) owned by the authenticated user |
+| `id` | integer/string | yes | The ID or [URL-encoded path of the group](index.md#namespaced-path-encoding) owned by the authenticated user |
 | `board_id` | integer | yes | The ID of a board |
 
 ```shell
-curl --header "PRIVATE-TOKEN: <your_access_token>" https://gitlab.example.com/api/v4/groups/5/boards/1/lists
+curl --header "PRIVATE-TOKEN: <your_access_token>" "https://gitlab.example.com/api/v4/groups/5/boards/1/lists"
 ```
 
 Example response:
@@ -447,12 +428,12 @@ GET /groups/:id/boards/:board_id/lists/:list_id
 
 | Attribute | Type | Required | Description |
 | --------- | ---- | -------- | ----------- |
-| `id` | integer/string | yes | The ID or [URL-encoded path of the group](README.md#namespaced-path-encoding) owned by the authenticated user |
+| `id` | integer/string | yes | The ID or [URL-encoded path of the group](index.md#namespaced-path-encoding) owned by the authenticated user |
 | `board_id` | integer | yes | The ID of a board |
 | `list_id` | integer | yes | The ID of a board's list |
 
 ```shell
-curl --header "PRIVATE-TOKEN: <your_access_token>" https://gitlab.example.com/api/v4/groups/5/boards/1/lists/1
+curl --header "PRIVATE-TOKEN: <your_access_token>" "https://gitlab.example.com/api/v4/groups/5/boards/1/lists/1"
 ```
 
 Example response:
@@ -479,12 +460,12 @@ POST /groups/:id/boards/:board_id/lists
 
 | Attribute | Type | Required | Description |
 | --------- | ---- | -------- | ----------- |
-| `id` | integer/string | yes | The ID or [URL-encoded path of the group](README.md#namespaced-path-encoding) owned by the authenticated user |
+| `id` | integer/string | yes | The ID or [URL-encoded path of the group](index.md#namespaced-path-encoding) owned by the authenticated user |
 | `board_id` | integer | yes | The ID of a board |
 | `label_id` | integer | yes | The ID of a label |
 
 ```shell
-curl --request POST --header "PRIVATE-TOKEN: <your_access_token>" https://gitlab.example.com/api/v4/groups/4/boards/12/lists?milestone_id=7
+curl --request POST --header "PRIVATE-TOKEN: <your_access_token>" "https://gitlab.example.com/api/v4/groups/4/boards/12/lists?milestone_id=7"
 ```
 
 Example response:
@@ -520,13 +501,13 @@ PUT /groups/:id/boards/:board_id/lists/:list_id
 
 | Attribute | Type | Required | Description |
 | --------- | ---- | -------- | ----------- |
-| `id`            | integer/string | yes | The ID or [URL-encoded path of the group](README.md#namespaced-path-encoding) owned by the authenticated user |
+| `id`            | integer/string | yes | The ID or [URL-encoded path of the group](index.md#namespaced-path-encoding) owned by the authenticated user |
 | `board_id` | integer | yes | The ID of a board |
 | `list_id` | integer | yes | The ID of a board's list |
 | `position` | integer | yes | The position of the list |
 
 ```shell
-curl --request PUT --header "PRIVATE-TOKEN: <your_access_token>" https://gitlab.example.com/api/v4/group/5/boards/1/lists/1?position=2
+curl --request PUT --header "PRIVATE-TOKEN: <your_access_token>" "https://gitlab.example.com/api/v4/group/5/boards/1/lists/1?position=2"
 ```
 
 Example response:
@@ -545,7 +526,7 @@ Example response:
 
 ## Delete a group issue board list
 
-Only for admins and group owners. Deletes the board list in question.
+Only for administrators and group owners. Deletes the board list in question.
 
 ```plaintext
 DELETE /groups/:id/boards/:board_id/lists/:list_id
@@ -553,10 +534,10 @@ DELETE /groups/:id/boards/:board_id/lists/:list_id
 
 | Attribute | Type | Required | Description |
 | --------- | ---- | -------- | ----------- |
-| `id` | integer/string | yes | The ID or [URL-encoded path of the group](README.md#namespaced-path-encoding) owned by the authenticated user |
+| `id` | integer/string | yes | The ID or [URL-encoded path of the group](index.md#namespaced-path-encoding) owned by the authenticated user |
 | `board_id` | integer | yes | The ID of a board |
 | `list_id` | integer | yes | The ID of a board's list |
 
 ```shell
-curl --request DELETE --header "PRIVATE-TOKEN: <your_access_token>" https://gitlab.example.com/api/v4/groups/5/boards/1/lists/1
+curl --request DELETE --header "PRIVATE-TOKEN: <your_access_token>" "https://gitlab.example.com/api/v4/groups/5/boards/1/lists/1"
 ```

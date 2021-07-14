@@ -1,15 +1,13 @@
 <script>
+import filesQuery from 'shared_queries/repository/files.query.graphql';
 import createFlash from '~/flash';
 import { __ } from '../../locale';
-import FileTable from './table/index.vue';
+import { TREE_PAGE_SIZE, TREE_INITIAL_FETCH_COUNT, TREE_PAGE_LIMIT } from '../constants';
 import getRefMixin from '../mixins/get_ref';
-import getFiles from '../queries/getFiles.query.graphql';
-import getProjectPath from '../queries/getProjectPath.query.graphql';
-import getVueFileListLfsBadge from '../queries/getVueFileListLfsBadge.query.graphql';
-import FilePreview from './preview/index.vue';
+import projectPathQuery from '../queries/project_path.query.graphql';
 import { readmeFile } from '../utils/readme';
-
-const PAGE_SIZE = 100;
+import FilePreview from './preview/index.vue';
+import FileTable from './table/index.vue';
 
 export default {
   components: {
@@ -19,10 +17,7 @@ export default {
   mixins: [getRefMixin],
   apollo: {
     projectPath: {
-      query: getProjectPath,
-    },
-    vueFileListLfsBadge: {
-      query: getVueFileListLfsBadge,
+      query: projectPathQuery,
     },
   },
   props: {
@@ -41,18 +36,35 @@ export default {
     return {
       projectPath: '',
       nextPageCursor: '',
+      pagesLoaded: 1,
       entries: {
         trees: [],
         submodules: [],
         blobs: [],
       },
       isLoadingFiles: false,
-      vueFileListLfsBadge: false,
+      isOverLimit: false,
+      clickedShowMore: false,
+      fetchCounter: 0,
     };
   },
   computed: {
+    pageSize() {
+      // we want to exponentially increase the page size to reduce the load on the frontend
+      const exponentialSize = (TREE_PAGE_SIZE / TREE_INITIAL_FETCH_COUNT) * (this.fetchCounter + 1);
+      return exponentialSize < TREE_PAGE_SIZE ? exponentialSize : TREE_PAGE_SIZE;
+    },
+    totalEntries() {
+      return Object.values(this.entries).flat().length;
+    },
     readme() {
       return readmeFile(this.entries.blobs);
+    },
+    pageLimitReached() {
+      return this.totalEntries / this.pagesLoaded >= TREE_PAGE_LIMIT;
+    },
+    hasShowMore() {
+      return !this.clickedShowMore && this.pageLimitReached;
     },
   },
 
@@ -71,23 +83,23 @@ export default {
   },
   methods: {
     fetchFiles() {
+      const originalPath = this.path || '/';
       this.isLoadingFiles = true;
 
       return this.$apollo
         .query({
-          query: getFiles,
+          query: filesQuery,
           variables: {
             projectPath: this.projectPath,
             ref: this.ref,
-            path: this.path || '/',
+            path: originalPath,
             nextPageCursor: this.nextPageCursor,
-            pageSize: PAGE_SIZE,
-            vueLfsEnabled: this.vueFileListLfsBadge,
+            pageSize: this.pageSize,
           },
         })
         .then(({ data }) => {
           if (data.errors) throw data.errors;
-          if (!data?.project?.repository) return;
+          if (!data?.project?.repository || originalPath !== (this.path || '/')) return;
 
           const pageInfo = this.hasNextPage(data.project.repository.tree);
 
@@ -102,11 +114,17 @@ export default {
 
           if (pageInfo?.hasNextPage) {
             this.nextPageCursor = pageInfo.endCursor;
-            this.fetchFiles();
+            this.fetchCounter += 1;
+            if (!this.pageLimitReached || this.clickedShowMore) {
+              this.fetchFiles();
+              this.clickedShowMore = false;
+            }
           }
         })
-        .catch(error => {
-          createFlash(__('An error occurred while fetching folder content.'));
+        .catch((error) => {
+          createFlash({
+            message: __('An error occurred while fetching folder content.'),
+          });
           throw error;
         });
     },
@@ -117,6 +135,11 @@ export default {
       return []
         .concat(data.trees.pageInfo, data.submodules.pageInfo, data.blobs.pageInfo)
         .find(({ hasNextPage }) => hasNextPage);
+    },
+    handleShowMore() {
+      this.clickedShowMore = true;
+      this.pagesLoaded += 1;
+      this.fetchFiles();
     },
   },
 };
@@ -129,6 +152,8 @@ export default {
       :entries="entries"
       :is-loading="isLoadingFiles"
       :loading-path="loadingPath"
+      :has-more="hasShowMore"
+      @showMore="handleShowMore"
     />
     <file-preview v-if="readme" :blob="readme" />
   </div>

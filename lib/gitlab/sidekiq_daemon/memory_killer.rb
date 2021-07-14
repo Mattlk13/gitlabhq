@@ -73,7 +73,7 @@ module Gitlab
           begin
             sleep(CHECK_INTERVAL_SECONDS)
             restart_sidekiq unless rss_within_range?
-          rescue => e
+          rescue StandardError => e
             log_exception(e, __method__)
           rescue Exception => e # rubocop:disable Lint/RescueException
             log_exception(e, __method__ )
@@ -230,8 +230,10 @@ module Gitlab
       end
 
       def rss_increase_by_jobs
-        Gitlab::SidekiqDaemon::Monitor.instance.jobs.sum do |job| # rubocop:disable CodeReuse/ActiveRecord
-          rss_increase_by_job(job)
+        Gitlab::SidekiqDaemon::Monitor.instance.jobs_mutex.synchronize do
+          Gitlab::SidekiqDaemon::Monitor.instance.jobs.sum do |job|
+            rss_increase_by_job(job)
+          end
         end
       end
 
@@ -239,7 +241,7 @@ module Gitlab
         memory_growth_kb = get_job_options(job, 'memory_killer_memory_growth_kb', 0).to_i
         max_memory_growth_kb = get_job_options(job, 'memory_killer_max_memory_growth_kb', DEFAULT_MAX_MEMORY_GROWTH_KB).to_i
 
-        return 0 if memory_growth_kb.zero?
+        return 0 if memory_growth_kb == 0
 
         time_elapsed = [Gitlab::Metrics::System.monotonic_time - job[:started_at], 0].max
         [memory_growth_kb * time_elapsed, max_memory_growth_kb].min
@@ -247,7 +249,7 @@ module Gitlab
 
       def get_job_options(job, key, default)
         job[:worker_class].sidekiq_options.fetch(key, default)
-      rescue
+      rescue StandardError
         default
       end
 

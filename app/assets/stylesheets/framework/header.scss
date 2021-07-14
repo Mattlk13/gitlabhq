@@ -1,10 +1,11 @@
+$top-nav-hover-bg: var(--indigo-900-alpha-008, $indigo-900-alpha-008) !important;
+
 .navbar-gitlab {
   padding: 0 16px;
-  z-index: 1000;
+  z-index: $header-zindex;
   margin-bottom: 0;
   min-height: $header-height;
   border: 0;
-  border-bottom: 1px solid $border-color;
   position: fixed;
   top: 0;
   left: 0;
@@ -18,7 +19,7 @@
       width: 55px;
       height: 14px;
       margin: 0;
-      fill: $white-light;
+      fill: $white;
     }
   }
 
@@ -95,7 +96,7 @@
 
     .dropdown.open {
       > a {
-        border-bottom-color: $white-light;
+        border-bottom-color: $white;
       }
     }
 
@@ -105,7 +106,7 @@
 
     &.menu-expanded {
       @include media-breakpoint-down(xs) {
-        .title-container {
+        .hide-when-menu-expanded {
           display: none;
         }
 
@@ -172,7 +173,7 @@
       }
 
       li {
-        .badge.badge-pill {
+        .badge.badge-pill:not(.merge-request-badge) {
           box-shadow: none;
           font-weight: $gl-font-weight-bold;
         }
@@ -203,18 +204,6 @@
             margin-right: 0;
           }
         }
-
-        &:hover,
-        &:focus {
-          text-decoration: none;
-          outline: 0;
-          opacity: 1;
-          color: $white-light;
-
-          &.header-user-dropdown-toggle .header-user-avatar {
-            border-color: $white-light;
-          }
-        }
       }
 
       .header-new-dropdown-toggle {
@@ -224,20 +213,19 @@
       .impersonated-user,
       .impersonated-user:hover {
         margin-right: 1px;
-        background-color: $white-light;
+        background-color: $white;
         border-top-right-radius: 0;
         border-bottom-right-radius: 0;
       }
 
       .impersonation-btn,
       .impersonation-btn:hover {
-        background-color: $white-light;
+        background-color: $white;
         border-top-left-radius: 0;
         border-bottom-left-radius: 0;
 
-        i {
+        svg {
           color: $orange-500;
-          font-size: 20px;
         }
       }
     }
@@ -264,10 +252,11 @@
       &:focus {
         text-decoration: none;
         outline: 0;
-        color: $white-light;
+        color: $white;
       }
     }
 
+    .top-nav-toggle,
     > button {
       background: transparent;
       border: 0;
@@ -397,6 +386,10 @@
       text-overflow: ellipsis;
       flex: 0 1 auto;
     }
+
+    &:last-of-type > .breadcrumbs-list-angle {
+      display: none;
+    }
   }
 }
 
@@ -441,33 +434,33 @@
   margin: 4px 0 4px 2px;
 
   &:hover {
-    background-color: $white-light;
+    background-color: $white;
   }
 }
 
 .title-container,
 .navbar-nav {
-  .badge.badge-pill {
+  .badge.badge-pill:not(.merge-request-badge) {
     position: inherit;
     font-weight: $gl-font-weight-normal;
     margin-left: -6px;
     font-size: 11px;
-    color: $white-light;
+    color: var(--gray-950, $white);
     padding: 0 5px;
     line-height: 12px;
     border-radius: 7px;
     box-shadow: 0 1px 0 rgba($gl-header-color, 0.2);
 
     &.green-badge {
-      background-color: $green-500;
+      background-color: var(--green-400, $green-400);
     }
 
     &.merge-requests-count {
-      background-color: $orange-600;
+      background-color: var(--orange-400, $orange-400);
     }
 
     &.todos-count {
-      background-color: $blue-500;
+      background-color: var(--blue-400, $blue-400);
     }
   }
 
@@ -521,38 +514,20 @@
 .header-user {
   &.show .dropdown-menu {
     margin-top: 4px;
-    color: $gl-text-color;
+    color: var(--gl-text-color, $gl-text-color);
     left: auto;
     max-height: $dropdown-max-height-lg;
 
-    li.current-user {
-      padding: $dropdown-item-padding-y $dropdown-item-padding-x;
-
-      .user-name {
-        display: block;
-      }
-
-      .user-status {
-        margin-right: 0;
-        max-width: 240px;
-        font-size: $gl-font-size-small;
-
-        gl-emoji {
-          font-size: $gl-font-size-small;
-        }
-
-        .user-status-emoji {
-          gl-emoji {
-            font-size: $gl-font-size;
-          }
-        }
-      }
+    .user-status {
+      max-width: 240px;
     }
 
     svg {
       vertical-align: text-top;
     }
 
+    a.upgrade-plan-link gl-emoji,
+    a.ci-minutes-emoji gl-emoji,
     a.trial-link gl-emoji {
       font-size: $gl-font-size;
       vertical-align: baseline;
@@ -567,15 +542,29 @@
   border: 1px solid $gray-normal;
 }
 
-.with-performance-bar .navbar-gitlab {
+.notification-dot {
+  background-color: $orange-300;
+  height: 12px;
+  width: 12px;
+  margin-top: -15px;
+  pointer-events: none;
+  visibility: hidden;
+}
+
+.with-notifications .notification-dot {
+  visibility: visible;
+}
+
+.with-performance-bar .navbar-gitlab,
+.with-performance-bar .fixed-top {
   top: $performance-bar-height;
 }
 
 .navbar-empty {
   justify-content: center;
   height: $header-height;
-  background: $white-light;
-  border-bottom: 1px solid $white-normal;
+  background: $white;
+  border-bottom: 1px solid $gray-100;
 
   .tanuki-logo,
   .brand-header-logo {
@@ -595,7 +584,7 @@
   .no-emoji-placeholder,
   .clear-user-status {
     svg {
-      fill: $gl-text-color-secondary;
+      fill: var(--gray-500, $gray-500);
     }
   }
 
@@ -619,4 +608,84 @@
   }
 
   @include media-breakpoint-down(xs) { margin-right: 3px; }
+}
+
+.toggle-mobile-nav {
+  display: none;
+  background-color: transparent;
+  border: 0;
+  padding: 6px 16px;
+  margin: 0 0 0 -15px;
+  height: 46px;
+  color: $gl-text-color;
+
+  @include media-breakpoint-down(sm) {
+    display: flex;
+    align-items: center;
+
+    i {
+      font-size: 18px;
+    }
+
+    + .breadcrumbs-links {
+      padding-left: $gl-padding;
+      border-left: 1px solid $gl-text-color-quaternary;
+    }
+  }
+}
+
+.top-nav-container-view {
+  .gl-new-dropdown & .gl-search-box-by-type {
+    @include gl-m-0;
+  }
+
+  .frequent-items-list-item-container > a:hover {
+    background-color: $top-nav-hover-bg;
+  }
+}
+
+.top-nav-toggle {
+  .dropdown-icon {
+    @include gl-mr-3;
+  }
+
+  .dropdown-chevron {
+    top: 0;
+  }
+}
+
+.top-nav-menu-item {
+  color: var(--indigo-900, $theme-indigo-900) !important;
+
+  &.active,
+  &:hover {
+    background-color: $top-nav-hover-bg;
+  }
+
+  .gl-icon {
+    color: inherit !important;
+  }
+}
+
+.top-nav-responsive {
+  @include gl-display-none;
+  color: var(--indigo-900, $theme-indigo-900);
+}
+
+.top-nav-responsive-open {
+  .hide-when-top-nav-responsive-open {
+    @include media-breakpoint-down(xs) {
+      display: none !important;
+    }
+  }
+
+  .top-nav-responsive {
+    @include media-breakpoint-down(xs) {
+      @include gl-display-block;
+    }
+  }
+
+  .navbar-gitlab .header-content .title-container {
+    flex: 0;
+  }
 }

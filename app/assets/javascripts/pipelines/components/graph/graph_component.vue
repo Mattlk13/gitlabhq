@@ -1,26 +1,37 @@
 <script>
-import { GlLoadingIcon } from '@gitlab/ui';
-import StageColumnComponent from './stage_column_component.vue';
-import GraphMixin from '../../mixins/graph_component_mixin';
-import GraphWidthMixin from '../../mixins/graph_width_mixin';
+import { reportToSentry } from '../../utils';
+import LinkedGraphWrapper from '../graph_shared/linked_graph_wrapper.vue';
+import LinksLayer from '../graph_shared/links_layer.vue';
+import { generateColumnsFromLayersListMemoized } from '../parsing_utils';
+import { DOWNSTREAM, MAIN, UPSTREAM, ONE_COL_WIDTH, STAGE_VIEW } from './constants';
 import LinkedPipelinesColumn from './linked_pipelines_column.vue';
-import GraphBundleMixin from '../../mixins/graph_pipeline_bundle_mixin';
+import StageColumnComponent from './stage_column_component.vue';
+import { validateConfigPaths } from './utils';
 
 export default {
   name: 'PipelineGraph',
   components: {
-    StageColumnComponent,
-    GlLoadingIcon,
+    LinksLayer,
+    LinkedGraphWrapper,
     LinkedPipelinesColumn,
+    StageColumnComponent,
   },
-  mixins: [GraphMixin, GraphWidthMixin, GraphBundleMixin],
   props: {
-    isLoading: {
-      type: Boolean,
+    configPaths: {
+      type: Object,
       required: true,
+      validator: validateConfigPaths,
     },
     pipeline: {
       type: Object,
+      required: true,
+    },
+    showLinks: {
+      type: Boolean,
+      required: true,
+    },
+    viewType: {
+      type: String,
       required: true,
     },
     isLinkedPipeline: {
@@ -28,181 +39,196 @@ export default {
       required: false,
       default: false,
     },
-    mediator: {
-      type: Object,
-      required: true,
+    pipelineLayers: {
+      type: Array,
+      required: false,
+      default: () => [],
     },
     type: {
       type: String,
       required: false,
-      default: 'main',
+      default: MAIN,
     },
   },
-  upstream: 'upstream',
-  downstream: 'downstream',
+  pipelineTypeConstants: {
+    DOWNSTREAM,
+    UPSTREAM,
+  },
+  CONTAINER_REF: 'PIPELINE_LINKS_CONTAINER_REF',
+  BASE_CONTAINER_ID: 'pipeline-links-container',
   data() {
     return {
-      downstreamMarginTop: null,
+      hoveredJobName: '',
+      hoveredSourceJobName: '',
+      highlightedJobs: [],
+      measurements: {
+        width: 0,
+        height: 0,
+      },
+      pipelineExpanded: {
+        jobName: '',
+        expanded: false,
+      },
     };
   },
   computed: {
-    hasTriggeredBy() {
+    containerId() {
+      return `${this.$options.BASE_CONTAINER_ID}-${this.pipeline.id}`;
+    },
+    downstreamPipelines() {
+      return this.hasDownstreamPipelines ? this.pipeline.downstream : [];
+    },
+    layout() {
+      return this.isStageView
+        ? this.pipeline.stages
+        : generateColumnsFromLayersListMemoized(this.pipeline, this.pipelineLayers);
+    },
+    hasDownstreamPipelines() {
+      return Boolean(this.pipeline?.downstream?.length > 0);
+    },
+    hasUpstreamPipelines() {
+      return Boolean(this.pipeline?.upstream?.length > 0);
+    },
+    isStageView() {
+      return this.viewType === STAGE_VIEW;
+    },
+    metricsConfig() {
+      return {
+        path: this.configPaths.metricsPath,
+        collectMetrics: true,
+      };
+    },
+    showJobLinks() {
+      return !this.isStageView && this.showLinks;
+    },
+    // The show downstream check prevents showing redundant linked columns
+    showDownstreamPipelines() {
       return (
-        this.type !== this.$options.downstream &&
-        this.triggeredByPipelines &&
-        this.pipeline.triggered_by !== null
+        this.hasDownstreamPipelines && this.type !== this.$options.pipelineTypeConstants.UPSTREAM
       );
     },
-    triggeredByPipelines() {
-      return this.pipeline.triggered_by;
-    },
-    hasTriggered() {
+    // The show upstream check prevents showing redundant linked columns
+    showUpstreamPipelines() {
       return (
-        this.type !== this.$options.upstream &&
-        this.triggeredPipelines &&
-        this.pipeline.triggered.length > 0
+        this.hasUpstreamPipelines && this.type !== this.$options.pipelineTypeConstants.DOWNSTREAM
       );
     },
-    triggeredPipelines() {
-      return this.pipeline.triggered;
-    },
-    expandedTriggeredBy() {
-      return (
-        this.pipeline.triggered_by &&
-        Array.isArray(this.pipeline.triggered_by) &&
-        this.pipeline.triggered_by.find(el => el.isExpanded)
-      );
-    },
-    expandedTriggered() {
-      return this.pipeline.triggered && this.pipeline.triggered.find(el => el.isExpanded);
-    },
-    pipelineTypeUpstream() {
-      return this.type !== this.$options.downstream && this.expandedTriggeredBy;
-    },
-    pipelineTypeDownstream() {
-      return this.type !== this.$options.upstream && this.expandedTriggered;
-    },
-    pipelineProjectId() {
-      return this.pipeline.project.id;
+    upstreamPipelines() {
+      return this.hasUpstreamPipelines ? this.pipeline.upstream : [];
     },
   },
+  errorCaptured(err, _vm, info) {
+    reportToSentry(this.$options.name, `error: ${err}, info: ${info}`);
+  },
+  mounted() {
+    this.getMeasurements();
+  },
   methods: {
-    handleClickedDownstream(pipeline, clickedIndex, downstreamNode) {
-      /**
-       * Calculates the margin top of the clicked downstream pipeline by
-       * subtracting the clicked downstream pipelines offsetTop by it's parent's
-       * offsetTop and then subtracting either 15 (if child) or 30 (if not a child)
-       * due to the height of node and stage name margin bottom.
-       */
-      this.downstreamMarginTop = this.calculateMarginTop(
-        downstreamNode,
-        downstreamNode.classList.contains('child-pipeline') ? 15 : 30,
-      );
-
-      this.$emit('onClickTriggered', this.pipeline, pipeline);
+    getMeasurements() {
+      this.measurements = {
+        width: this.$refs[this.containerId].scrollWidth,
+        height: this.$refs[this.containerId].scrollHeight,
+      };
     },
-    calculateMarginTop(downstreamNode, pixelDiff) {
-      return `${downstreamNode.offsetTop - downstreamNode.offsetParent.offsetTop - pixelDiff}px`;
+    onError(payload) {
+      this.$emit('error', payload);
     },
-    hasOnlyOneJob(stage) {
-      return stage.groups.length === 1;
+    setJob(jobName) {
+      this.hoveredJobName = jobName;
     },
-    hasUpstream(index) {
-      return index === 0 && this.hasTriggeredBy;
+    setSourceJob(jobName) {
+      this.hoveredSourceJobName = jobName;
+    },
+    slidePipelineContainer() {
+      this.$refs.mainPipelineContainer.scrollBy({
+        left: ONE_COL_WIDTH,
+        top: 0,
+        behavior: 'smooth',
+      });
+    },
+    togglePipelineExpanded(jobName, expanded) {
+      this.pipelineExpanded = {
+        expanded,
+        jobName: expanded ? jobName : '',
+      };
+    },
+    updateHighlightedJobs(jobs) {
+      this.highlightedJobs = jobs;
     },
   },
 };
 </script>
 <template>
-  <div class="build-content middle-block js-pipeline-graph">
+  <div class="js-pipeline-graph">
     <div
-      class="pipeline-visualization pipeline-graph"
-      :class="{ 'pipeline-tab-content': !isLinkedPipeline }"
+      ref="mainPipelineContainer"
+      class="gl-display-flex gl-position-relative gl-bg-gray-10 gl-white-space-nowrap gl-border-t-solid gl-border-t-1 gl-border-gray-100"
+      :class="{ 'gl-pipeline-min-h gl-py-5 gl-overflow-auto': !isLinkedPipeline }"
     >
-      <div
-        :style="{
-          paddingLeft: `${graphLeftPadding}px`,
-          paddingRight: `${graphRightPadding}px`,
-        }"
-      >
-        <gl-loading-icon v-if="isLoading" class="m-auto" :size="3" />
-
-        <pipeline-graph
-          v-if="pipelineTypeUpstream"
-          type="upstream"
-          class="d-inline-block upstream-pipeline"
-          :class="`js-upstream-pipeline-${expandedTriggeredBy.id}`"
-          :is-loading="false"
-          :pipeline="expandedTriggeredBy"
-          :is-linked-pipeline="true"
-          :mediator="mediator"
-          @onClickTriggeredBy="
-            (parentPipeline, pipeline) => clickTriggeredByPipeline(parentPipeline, pipeline)
-          "
-          @refreshPipelineGraph="requestRefreshPipelineGraph"
-        />
-
-        <linked-pipelines-column
-          v-if="hasTriggeredBy"
-          :linked-pipelines="triggeredByPipelines"
-          :column-title="__('Upstream')"
-          :project-id="pipelineProjectId"
-          graph-position="left"
-          @linkedPipelineClick="
-            linkedPipeline => $emit('onClickTriggeredBy', pipeline, linkedPipeline)
-          "
-        />
-
-        <ul
-          v-if="!isLoading"
-          :class="{
-            'inline js-has-linked-pipelines': hasTriggered || hasTriggeredBy,
-          }"
-          class="stage-column-list align-top"
-        >
-          <stage-column-component
-            v-for="(stage, index) in graph"
-            :key="stage.name"
-            :class="{
-              'has-upstream prepend-left-64': hasUpstream(index),
-              'has-only-one-job': hasOnlyOneJob(stage),
-              'append-right-46': shouldAddRightMargin(index),
-            }"
-            :title="capitalizeStageName(stage.name)"
-            :groups="stage.groups"
-            :stage-connector-class="stageConnectorClass(index, stage)"
-            :is-first-column="isFirstColumn(index)"
-            :has-triggered-by="hasTriggeredBy"
-            :action="stage.status.action"
-            @refreshPipelineGraph="refreshPipelineGraph"
+      <linked-graph-wrapper>
+        <template #upstream>
+          <linked-pipelines-column
+            v-if="showUpstreamPipelines"
+            :config-paths="configPaths"
+            :linked-pipelines="upstreamPipelines"
+            :column-title="__('Upstream')"
+            :show-links="showJobLinks"
+            :type="$options.pipelineTypeConstants.UPSTREAM"
+            :view-type="viewType"
+            @error="onError"
           />
-        </ul>
-
-        <linked-pipelines-column
-          v-if="hasTriggered"
-          :linked-pipelines="triggeredPipelines"
-          :column-title="__('Downstream')"
-          :project-id="pipelineProjectId"
-          graph-position="right"
-          @linkedPipelineClick="handleClickedDownstream"
-        />
-
-        <pipeline-graph
-          v-if="pipelineTypeDownstream"
-          type="downstream"
-          class="d-inline-block"
-          :class="`js-downstream-pipeline-${expandedTriggered.id}`"
-          :is-loading="false"
-          :pipeline="expandedTriggered"
-          :is-linked-pipeline="true"
-          :style="{ 'margin-top': downstreamMarginTop }"
-          :mediator="mediator"
-          @onClickTriggered="
-            (parentPipeline, pipeline) => clickTriggeredPipeline(parentPipeline, pipeline)
-          "
-          @refreshPipelineGraph="requestRefreshPipelineGraph"
-        />
-      </div>
+        </template>
+        <template #main>
+          <div :id="containerId" :ref="containerId">
+            <links-layer
+              :pipeline-data="layout"
+              :pipeline-id="pipeline.id"
+              :container-id="containerId"
+              :container-measurements="measurements"
+              :highlighted-job="hoveredJobName"
+              :metrics-config="metricsConfig"
+              :show-links="showJobLinks"
+              :view-type="viewType"
+              @error="onError"
+              @highlightedJobsChange="updateHighlightedJobs"
+            >
+              <stage-column-component
+                v-for="column in layout"
+                :key="column.id || column.name"
+                :name="column.name"
+                :groups="column.groups"
+                :action="column.status.action"
+                :highlighted-jobs="highlightedJobs"
+                :is-stage-view="isStageView"
+                :job-hovered="hoveredJobName"
+                :source-job-hovered="hoveredSourceJobName"
+                :pipeline-expanded="pipelineExpanded"
+                :pipeline-id="pipeline.id"
+                :user-permissions="pipeline.userPermissions"
+                @refreshPipelineGraph="$emit('refreshPipelineGraph')"
+                @jobHover="setJob"
+                @updateMeasurements="getMeasurements"
+              />
+            </links-layer>
+          </div>
+        </template>
+        <template #downstream>
+          <linked-pipelines-column
+            v-if="showDownstreamPipelines"
+            class="gl-mr-6"
+            :config-paths="configPaths"
+            :linked-pipelines="downstreamPipelines"
+            :column-title="__('Downstream')"
+            :show-links="showJobLinks"
+            :type="$options.pipelineTypeConstants.DOWNSTREAM"
+            :view-type="viewType"
+            @downstreamHovered="setSourceJob"
+            @pipelineExpandToggle="togglePipelineExpanded"
+            @scrollContainer="slidePipelineContainer"
+            @error="onError"
+          />
+        </template>
+      </linked-graph-wrapper>
     </div>
   </div>
 </template>

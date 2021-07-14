@@ -1,11 +1,12 @@
 <script>
-import { GlLoadingIcon } from '@gitlab/ui';
-import { n__ } from '~/locale';
+import { GlLoadingIcon, GlIcon } from '@gitlab/ui';
+import { n__, __ } from '~/locale';
 
 export default {
   name: 'AssigneeTitle',
   components: {
     GlLoadingIcon,
+    GlIcon,
   },
   props: {
     loading: {
@@ -26,28 +27,37 @@ export default {
       required: false,
       default: false,
     },
+    changing: {
+      type: Boolean,
+      required: false,
+      default: false,
+    },
   },
   computed: {
     assigneeTitle() {
       const assignees = this.numberOfAssignees;
       return n__('Assignee', `%d Assignees`, assignees);
     },
+    titleCopy() {
+      return this.changing ? __('Apply') : __('Edit');
+    },
   },
 };
 </script>
 <template>
-  <div class="title hide-collapsed">
+  <div class="hide-collapsed gl-line-height-20 gl-mb-2 gl-text-gray-900">
     {{ assigneeTitle }}
-    <gl-loading-icon v-if="loading" inline class="align-bottom" />
+    <gl-loading-icon v-if="loading" size="sm" inline class="align-bottom" />
     <a
       v-if="editable"
       class="js-sidebar-dropdown-toggle edit-link float-right"
       href="#"
+      data-test-id="edit-link"
       data-track-event="click_edit_button"
       data-track-label="right_sidebar"
       data-track-property="assignee"
     >
-      {{ __('Edit') }}
+      {{ titleCopy }}
     </a>
     <a
       v-if="showToggle"
@@ -56,7 +66,7 @@ export default {
       href="#"
       role="button"
     >
-      <i aria-hidden="true" data-hidden="true" class="fa fa-angle-double-right"></i>
+      <gl-icon data-hidden="true" name="chevron-double-lg-right" :size="12" />
     </a>
   </div>
 </template>

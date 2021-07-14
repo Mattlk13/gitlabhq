@@ -15,9 +15,11 @@ class Snippet < ApplicationRecord
   include FromUnion
   include IgnorableColumns
   include HasRepository
+  include CanMoveRepositoryStorage
+  include AfterCommitQueue
   extend ::Gitlab::Utils::Override
 
-  ignore_column :repository_storage, remove_with: '12.10', remove_after: '2020-03-22'
+  MAX_FILE_COUNT = 10
 
   cache_markdown_field :title, pipeline: :single_line
   cache_markdown_field :description
@@ -42,6 +44,10 @@ class Snippet < ApplicationRecord
   has_many :notes, as: :noteable, dependent: :destroy # rubocop:disable Cop/ActiveRecordDependent
   has_many :user_mentions, class_name: "SnippetUserMention", dependent: :delete_all # rubocop:disable Cop/ActiveRecordDependent
   has_one :snippet_repository, inverse_of: :snippet
+  has_many :repository_storage_moves, class_name: 'Snippets::RepositoryStorageMove', inverse_of: :container
+
+  # We need to add the `dependent` in order to call the after_destroy callback
+  has_one :statistics, class_name: 'SnippetStatistics', dependent: :destroy # rubocop:disable Cop/ActiveRecordDependent
 
   delegate :name, :email, to: :author, prefix: true, allow_nil: true
 
@@ -65,7 +71,7 @@ class Snippet < ApplicationRecord
 
   validates :visibility_level, inclusion: { in: Gitlab::VisibilityLevel.values }
 
-  after_save :store_mentions!, if: :any_mentionable_attributes_changed?
+  after_create :create_statistics
 
   # Scopes
   scope :are_internal, -> { where(visibility_level: Snippet::INTERNAL) }
@@ -75,6 +81,9 @@ class Snippet < ApplicationRecord
   scope :fresh, -> { order("created_at DESC") }
   scope :inc_author, -> { includes(:author) }
   scope :inc_relations_for_view, -> { includes(author: :status) }
+  scope :inc_statistics, -> { includes(:statistics) }
+  scope :with_statistics, -> { joins(:statistics) }
+  scope :inc_projects_namespace_route, -> { includes(project: [:route, :namespace]) }
 
   attr_mentionable :description
 
@@ -101,10 +110,14 @@ class Snippet < ApplicationRecord
     where(project_id: nil)
   end
 
+  def self.only_project_snippets
+    where.not(project_id: nil)
+  end
+
   def self.only_include_projects_visible_to(current_user = nil)
     levels = Gitlab::VisibilityLevel.levels_for_user(current_user)
 
-    joins(:project).where('projects.visibility_level IN (?)', levels)
+    joins(:project).where(projects: { visibility_level: levels })
   end
 
   def self.only_include_projects_with_snippets_enabled(include_private: false)
@@ -160,6 +173,14 @@ class Snippet < ApplicationRecord
     @link_reference_pattern ||= super("snippets", /(?<snippet>\d+)/)
   end
 
+  def self.find_by_id_and_project(id:, project:)
+    Snippet.find_by(id: id, project: project)
+  end
+
+  def self.max_file_limit
+    MAX_FILE_COUNT
+  end
+
   def initialize(attributes = {})
     # We can't use default_value_for because the database has a default
     # value of 0 for visibility_level. If someone attempts to create a
@@ -188,20 +209,17 @@ class Snippet < ApplicationRecord
     end
   end
 
-  def self.content_types
-    [
-      ".rb", ".py", ".pl", ".scala", ".c", ".cpp", ".java",
-      ".haml", ".html", ".sass", ".scss", ".xml", ".php", ".erb",
-      ".js", ".sh", ".coffee", ".yml", ".md"
-    ]
-  end
-
   def blob
     @blob ||= Blob.decorate(SnippetBlob.new(self), self)
   end
 
   def blobs
-    repository.ls_files(repository.root_ref).map { |file| Blob.lazy(self, repository.root_ref, file) }
+    return [] unless repository_exists?
+
+    files = list_files(default_branch)
+    items = files.map { |file| [default_branch, file] }
+
+    repository.blobs_at(items).compact
   end
 
   def hook_attrs
@@ -260,72 +278,110 @@ class Snippet < ApplicationRecord
     super
   end
 
+  override :repository
   def repository
-    @repository ||= Repository.new(full_path, self, shard: repository_storage, disk_path: disk_path, repo_type: Gitlab::GlRepository::SNIPPET)
+    @repository ||= Gitlab::GlRepository::SNIPPET.repository_for(self)
   end
 
+  override :repository_size_checker
+  def repository_size_checker
+    strong_memoize(:repository_size_checker) do
+      ::Gitlab::RepositorySizeChecker.new(
+        current_size_proc: -> { repository.size.megabytes },
+        limit: Gitlab::CurrentSettings.snippet_size_limit,
+        namespace: nil
+      )
+    end
+  end
+
+  override :storage
   def storage
     @storage ||= Storage::Hashed.new(self, prefix: Storage::Hashed::SNIPPET_REPOSITORY_PATH_PREFIX)
   end
 
-  # This is the full_path used to identify the
-  # the snippet repository. It will be used mostly
-  # for logging purposes.
+  # This is the full_path used to identify the the snippet repository.
+  override :full_path
   def full_path
     return unless persisted?
 
     @full_path ||= begin
       components = []
       components << project.full_path if project_id?
-      components << '@snippets'
+      components << 'snippets'
       components << self.id
       components.join('/')
     end
   end
 
+  override :default_branch
+  def default_branch
+    super || Gitlab::DefaultBranch.value(object: project)
+  end
+
   def repository_storage
-    snippet_repository&.shard_name ||
-      Gitlab::CurrentSettings.pick_repository_storage
+    snippet_repository&.shard_name || Repository.pick_storage_shard
+  end
+
+  # Repositories are created with a default branch. This branch
+  # can be different from the default branch set in the platform.
+  # This method changes the `HEAD` file to point to the existing
+  # default branch in case it's different.
+  def change_head_to_default_branch
+    return unless repository.exists?
+    # All snippets must have at least 1 file. Therefore, if
+    # `HEAD` is empty is because it's pointing to the wrong
+    # default branch
+    return unless repository.empty? || list_files('HEAD').empty?
+
+    repository.raw_repository.write_ref('HEAD', "refs/heads/#{default_branch}")
   end
 
   def create_repository
-    return if repository_exists?
+    return if repository_exists? && snippet_repository
 
     repository.create_if_not_exists
-
-    track_snippet_repository if repository_exists?
+    track_snippet_repository(repository.storage)
   end
 
-  def track_snippet_repository
-    repository = snippet_repository || build_snippet_repository
-    repository.update!(shard_name: repository_storage, disk_path: disk_path)
+  def track_snippet_repository(shard)
+    snippet_repo = snippet_repository || build_snippet_repository
+    snippet_repo.update!(shard_name: shard, disk_path: disk_path)
   end
 
   def can_cache_field?(field)
     field != :content || MarkupHelper.gitlab_markdown?(file_name)
   end
 
+  def hexdigest
+    Digest::SHA256.hexdigest("#{title}#{description}#{created_at}#{updated_at}")
+  end
+
+  def file_name_on_repo
+    return if repository.empty?
+
+    list_files(default_branch).first
+  end
+
+  def list_files(ref = nil)
+    return [] if repository.empty?
+
+    repository.ls_files(ref || default_branch)
+  end
+
+  def multiple_files?
+    list_files.size > 1
+  end
+
   class << self
-    # Searches for snippets with a matching title or file name.
+    # Searches for snippets with a matching title, description or file name.
     #
-    # This method uses ILIKE on PostgreSQL and LIKE on MySQL.
+    # This method uses ILIKE on PostgreSQL.
     #
     # query - The search query as a String.
     #
     # Returns an ActiveRecord::Relation.
     def search(query)
-      fuzzy_search(query, [:title, :file_name])
-    end
-
-    # Searches for snippets with matching content.
-    #
-    # This method uses ILIKE on PostgreSQL and LIKE on MySQL.
-    #
-    # query - The search query as a String.
-    #
-    # Returns an ActiveRecord::Relation.
-    def search_code(query)
-      fuzzy_search(query, [:content])
+      fuzzy_search(query, [:title, :description, :file_name])
     end
 
     def parent_class
@@ -334,4 +390,4 @@ class Snippet < ApplicationRecord
   end
 end
 
-Snippet.prepend_if_ee('EE::Snippet')
+Snippet.prepend_mod_with('Snippet')

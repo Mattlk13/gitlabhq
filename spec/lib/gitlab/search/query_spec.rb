@@ -2,7 +2,7 @@
 
 require 'spec_helper'
 
-describe Gitlab::Search::Query do
+RSpec.describe Gitlab::Search::Query do
   let(:query) { 'base filter:wow anotherfilter:noway name:maybe other:mmm leftover' }
   let(:subject) do
     described_class.new(query) do
@@ -36,6 +36,32 @@ describe Gitlab::Search::Query do
 
     it 'does not escape the pipe' do
       expect(subject.term).to eq(query)
+    end
+  end
+
+  context 'with an exclusive filter' do
+    let(:query) { 'something -name:bingo -other:dingo' }
+
+    it 'negates the filter' do
+      expect(subject.filters).to all(include(negated: true))
+    end
+  end
+
+  context 'with filter value in quotes' do
+    let(:query) { '"foo bar" name:"my test script.txt"' }
+
+    it 'does not break the filter value in quotes' do
+      expect(subject.term).to eq('"foo bar"')
+      expect(subject.filters[0]).to include(name: :name, negated: false, value: "MY TEST SCRIPT.TXT")
+    end
+  end
+
+  context 'with extra white spaces between the query words' do
+    let(:query) { ' foo = bar  name:"my test.txt"' }
+
+    it 'removes the extra whitespace between tokens' do
+      expect(subject.term).to eq('foo = bar')
+      expect(subject.filters[0]).to include(name: :name, negated: false, value: "MY TEST.TXT")
     end
   end
 end

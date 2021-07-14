@@ -2,75 +2,139 @@
 
 require 'spec_helper'
 
-describe RegistrationsController do
+RSpec.describe RegistrationsController do
   include TermsHelper
 
   before do
-    stub_feature_flags(invisible_captcha: false)
+    stub_application_setting(require_admin_approval_after_user_signup: false)
   end
 
   describe '#new' do
     subject { get :new }
 
-    context 'with the experimental signup flow enabled and the user is part of the experimental group' do
-      before do
-        stub_experiment(signup_flow: true)
-        stub_experiment_for_user(signup_flow: true)
-      end
-
-      it 'tracks the event with the right parameters' do
-        expect(Gitlab::Tracking).to receive(:event).with(
-          'Growth::Acquisition::Experiment::SignUpFlow',
-          'start',
-          label: anything,
-          property: 'experimental_group'
-        )
-        subject
-      end
-
-      it 'renders new template and sets the resource variable' do
-        expect(subject).to render_template(:new)
-        expect(response).to have_gitlab_http_status(:ok)
-        expect(assigns(:resource)).to be_a(User)
-      end
-    end
-
-    context 'with the experimental signup flow enabled and the user is part of the control group' do
-      before do
-        stub_experiment(signup_flow: true)
-        stub_experiment_for_user(signup_flow: false)
-      end
-
-      it 'does not track the event' do
-        expect(Gitlab::Tracking).not_to receive(:event)
-        subject
-      end
-
-      it 'renders new template and sets the resource variable' do
-        subject
-        expect(response).to have_gitlab_http_status(:found)
-        expect(response).to redirect_to(new_user_session_path(anchor: 'register-pane'))
-      end
+    it 'renders new template and sets the resource variable' do
+      expect(subject).to render_template(:new)
+      expect(response).to have_gitlab_http_status(:ok)
+      expect(assigns(:resource)).to be_a(User)
     end
   end
 
   describe '#create' do
-    let(:base_user_params) { { name: 'new_user', username: 'new_username', email: 'new@user.com', password: 'Any_password' } }
-    let(:user_params) { { user: base_user_params } }
+    let_it_be(:base_user_params) do
+      { first_name: 'first', last_name: 'last', username: 'new_username', email: 'new@user.com', password: 'Any_password' }
+    end
 
-    context 'email confirmation' do
-      around do |example|
-        perform_enqueued_jobs do
-          example.run
+    let_it_be(:user_params) { { user: base_user_params } }
+
+    let(:session_params) { {} }
+
+    subject { post(:create, params: user_params, session: session_params) }
+
+    context '`blocked_pending_approval` state' do
+      context 'when the `require_admin_approval_after_user_signup` setting is turned on' do
+        before do
+          stub_application_setting(require_admin_approval_after_user_signup: true)
+        end
+
+        it 'signs up the user in `blocked_pending_approval` state' do
+          subject
+          created_user = User.find_by(email: 'new@user.com')
+
+          expect(created_user).to be_present
+          expect(created_user.blocked_pending_approval?).to eq(true)
+        end
+
+        it 'does not log in the user after sign up' do
+          subject
+
+          expect(controller.current_user).to be_nil
+        end
+
+        it 'shows flash message after signing up' do
+          subject
+
+          expect(response).to redirect_to(new_user_session_path(anchor: 'login-pane'))
+          expect(flash[:notice])
+            .to eq('You have signed up successfully. However, we could not sign you in because your account is awaiting approval from your GitLab administrator.')
+        end
+
+        it 'emails the access request to approvers' do
+          expect_next_instance_of(NotificationService) do |notification|
+            allow(notification).to receive(:new_instance_access_request).with(User.find_by(email: 'new@user.com'))
+          end
+
+          subject
+        end
+
+        context 'email confirmation' do
+          context 'when `send_user_confirmation_email` is true' do
+            before do
+              stub_application_setting(send_user_confirmation_email: true)
+            end
+
+            it 'does not send a confirmation email' do
+              expect { subject }
+                .not_to have_enqueued_mail(DeviseMailer, :confirmation_instructions)
+            end
+          end
+        end
+
+        context 'audit events' do
+          context 'when not licensed' do
+            before do
+              stub_licensed_features(admin_audit_log: false)
+            end
+
+            it 'does not log any audit event' do
+              expect { subject }.not_to change(AuditEvent, :count)
+            end
+          end
         end
       end
 
+      context 'when the `require_admin_approval_after_user_signup` setting is turned off' do
+        it 'signs up the user in `active` state' do
+          subject
+          created_user = User.find_by(email: 'new@user.com')
+
+          expect(created_user).to be_present
+          expect(created_user.active?).to eq(true)
+        end
+
+        it 'does not show any flash message after signing up' do
+          subject
+
+          expect(flash[:notice]).to be_nil
+        end
+
+        it 'does not email the approvers' do
+          expect(NotificationService).not_to receive(:new)
+
+          subject
+        end
+
+        context 'email confirmation' do
+          context 'when `send_user_confirmation_email` is true' do
+            before do
+              stub_application_setting(send_user_confirmation_email: true)
+            end
+
+            it 'sends a confirmation email' do
+              expect { subject }
+                .to have_enqueued_mail(DeviseMailer, :confirmation_instructions)
+            end
+          end
+        end
+      end
+    end
+
+    context 'email confirmation' do
       context 'when send_user_confirmation_email is false' do
         it 'signs the user in' do
           stub_application_setting(send_user_confirmation_email: false)
 
-          expect { post(:create, params: user_params) }.not_to change { ActionMailer::Base.deliveries.size }
-          expect(subject.current_user).not_to be_nil
+          expect { subject }.not_to have_enqueued_mail(DeviseMailer, :confirmation_instructions)
+          expect(controller.current_user).not_to be_nil
         end
       end
 
@@ -79,29 +143,98 @@ describe RegistrationsController do
           stub_application_setting(send_user_confirmation_email: true)
         end
 
-        context 'when a grace period is active for confirming the email address' do
+        context 'when soft email confirmation is not enabled' do
           before do
-            allow(User).to receive(:allow_unconfirmed_access_for).and_return 2.days
-          end
-
-          it 'sends a confirmation email and redirects to the dashboard' do
-            post(:create, params: user_params)
-
-            expect(ActionMailer::Base.deliveries.last.to.first).to eq(user_params[:user][:email])
-            expect(response).to redirect_to(dashboard_projects_path)
-          end
-        end
-
-        context 'when no grace period is active for confirming the email address' do
-          before do
+            stub_feature_flags(soft_email_confirmation: false)
             allow(User).to receive(:allow_unconfirmed_access_for).and_return 0
           end
 
-          it 'sends a confirmation email and redirects to the almost there page' do
-            post(:create, params: user_params)
+          it 'does not authenticate the user and sends a confirmation email' do
+            expect { subject }.to have_enqueued_mail(DeviseMailer, :confirmation_instructions)
+            expect(controller.current_user).to be_nil
+          end
 
-            expect(ActionMailer::Base.deliveries.last.to.first).to eq(user_params[:user][:email])
-            expect(response).to redirect_to(users_almost_there_path)
+          context 'when registration is triggered from an accepted invite' do
+            context 'when it is part of our invite email experiment', :experiment do
+              let_it_be(:member) { create(:project_member, :invited, invite_email: user_params.dig(:user, :email)) }
+
+              let(:originating_member_id) { member.id }
+              let(:session_params) do
+                {
+                  invite_email: user_params.dig(:user, :email),
+                  originating_member_id: originating_member_id
+                }
+              end
+
+              context 'when member exists from the session key value' do
+                it 'tracks the experiment' do
+                  expect(experiment('members/invite_email')).to track(:accepted)
+                                                                  .with_context(actor: member)
+                                                                  .on_next_instance
+
+                  subject
+                end
+              end
+
+              context 'when member does not exist from the session key value' do
+                let(:originating_member_id) { -1 }
+
+                it 'tracks the experiment' do
+                  expect(experiment('members/invite_email')).not_to track(:accepted)
+
+                  subject
+                end
+              end
+            end
+
+            context 'when invite email matches email used on registration' do
+              let(:session_params) { { invite_email: user_params.dig(:user, :email) } }
+
+              it 'signs the user in without sending a confirmation email', :aggregate_failures do
+                expect { subject }.not_to have_enqueued_mail(DeviseMailer, :confirmation_instructions)
+                expect(controller.current_user).to be_confirmed
+              end
+            end
+
+            context 'when invite email does not match the email used on registration' do
+              let(:session_params) { { invite_email: 'bogus@email.com' } }
+
+              it 'does not authenticate the user and sends a confirmation email', :aggregate_failures do
+                expect { subject }.to have_enqueued_mail(DeviseMailer, :confirmation_instructions)
+                expect(controller.current_user).to be_nil
+              end
+            end
+          end
+        end
+
+        context 'when soft email confirmation is enabled' do
+          before do
+            stub_feature_flags(soft_email_confirmation: true)
+            allow(User).to receive(:allow_unconfirmed_access_for).and_return 2.days
+          end
+
+          it 'authenticates the user and sends a confirmation email' do
+            expect { subject }.to have_enqueued_mail(DeviseMailer, :confirmation_instructions)
+            expect(controller.current_user).to be_present
+            expect(response).to redirect_to(users_sign_up_welcome_path)
+          end
+
+          context 'when invite email matches email used on registration' do
+            let(:session_params) { { invite_email: user_params.dig(:user, :email) } }
+
+            it 'signs the user in without sending a confirmation email', :aggregate_failures do
+              expect { subject }.not_to have_enqueued_mail(DeviseMailer, :confirmation_instructions)
+              expect(controller.current_user).to be_confirmed
+            end
+          end
+
+          context 'when invite email does not match the email used on registration' do
+            let(:session_params) { { invite_email: 'bogus@email.com' } }
+
+            it 'authenticates the user and sends a confirmation email without confirming', :aggregate_failures do
+              expect { subject }.to have_enqueued_mail(DeviseMailer, :confirmation_instructions)
+              expect(controller.current_user).not_to be_confirmed
+            end
           end
         end
       end
@@ -110,7 +243,7 @@ describe RegistrationsController do
         it 'redirects to sign_in' do
           stub_application_setting(signup_enabled: false)
 
-          expect { post(:create, params: user_params) }.not_to change(User, :count)
+          expect { subject }.not_to change(User, :count)
           expect(response).to redirect_to(new_user_session_path)
         end
       end
@@ -131,38 +264,23 @@ describe RegistrationsController do
       it 'displays an error when the reCAPTCHA is not solved' do
         allow_any_instance_of(described_class).to receive(:verify_recaptcha).and_return(false)
 
-        post(:create, params: user_params)
+        subject
 
         expect(response).to render_template(:new)
         expect(flash[:alert]).to eq(_('There was an error with the reCAPTCHA. Please solve the reCAPTCHA again.'))
       end
 
-      it 'redirects to the dashboard when the recaptcha is solved' do
-        post(:create, params: user_params)
+      it 'redirects to the welcome page when the reCAPTCHA is solved' do
+        subject
 
-        expect(flash[:notice]).to eq(I18n.t('devise.registrations.signed_up'))
-      end
-
-      it 'does not require reCAPTCHA if disabled by feature flag' do
-        stub_feature_flags(registrations_recaptcha: false)
-
-        post(:create, params: user_params)
-
-        expect(controller).not_to receive(:verify_recaptcha)
-        expect(flash[:alert]).to be_nil
-        expect(flash[:notice]).to eq(I18n.t('devise.registrations.signed_up'))
+        expect(response).to redirect_to(users_sign_up_welcome_path)
       end
     end
 
     context 'when invisible captcha is enabled' do
       before do
-        stub_feature_flags(invisible_captcha: true)
-        InvisibleCaptcha.timestamp_enabled = true
+        stub_application_setting(invisible_captcha_enabled: true)
         InvisibleCaptcha.timestamp_threshold = treshold
-      end
-
-      after do
-        InvisibleCaptcha.timestamp_enabled = false
       end
 
       let(:treshold) { 4 }
@@ -241,85 +359,60 @@ describe RegistrationsController do
       end
     end
 
-    context 'when terms are enforced' do
-      before do
-        enforce_terms
-      end
-
-      it 'redirects back with a notice when the checkbox was not checked' do
-        post :create, params: user_params
-
-        expect(flash[:alert]).to eq(_('You must accept our Terms of Service and privacy policy in order to register an account'))
-      end
-
-      it 'creates the user with agreement when terms are accepted' do
-        post :create, params: user_params.merge(terms_opt_in: '1')
-
-        expect(subject.current_user).to be_present
-        expect(subject.current_user.terms_accepted?).to be(true)
-      end
-    end
-
-    describe 'tracking data' do
-      context 'with the experimental signup flow enabled and the user is part of the control group' do
+    context 'terms of service' do
+      context 'when terms are enforced' do
         before do
-          stub_experiment(signup_flow: true)
-          stub_experiment_for_user(signup_flow: false)
+          enforce_terms
         end
 
-        it 'tracks the event with the right parameters' do
-          expect(Gitlab::Tracking).to receive(:event).with(
-            'Growth::Acquisition::Experiment::SignUpFlow',
-            'end',
-            label: anything,
-            property: 'control_group'
-          )
-          post :create, params: user_params
+        it 'creates the user with accepted terms' do
+          subject
+
+          expect(controller.current_user).to be_present
+          expect(controller.current_user.terms_accepted?).to be(true)
         end
       end
 
-      context 'with the experimental signup flow enabled and the user is part of the experimental group' do
-        before do
-          stub_experiment(signup_flow: true)
-          stub_experiment_for_user(signup_flow: true)
-        end
+      context 'when terms are not enforced' do
+        it 'creates the user without accepted terms' do
+          subject
 
-        it 'does not track the event' do
-          expect(Gitlab::Tracking).not_to receive(:event)
-          post :create, params: user_params
+          expect(controller.current_user).to be_present
+          expect(controller.current_user.terms_accepted?).to be(false)
         end
       end
     end
 
     it "logs a 'User Created' message" do
-      stub_feature_flags(registrations_recaptcha: false)
-
       expect(Gitlab::AppLogger).to receive(:info).with(/\AUser Created: username=new_username email=new@user.com.+\z/).and_call_original
 
-      post(:create, params: user_params)
+      subject
     end
 
     it 'handles when params are new_user' do
       post(:create, params: { new_user: base_user_params })
 
-      expect(subject.current_user).not_to be_nil
+      expect(controller.current_user).not_to be_nil
     end
 
-    context 'with the experimental signup flow enabled and the user is part of the experimental group' do
-      before do
-        stub_experiment(signup_flow: true)
-        stub_experiment_for_user(signup_flow: true)
+    it 'sets name from first and last name' do
+      post :create, params: { new_user: base_user_params }
+
+      expect(User.last.first_name).to eq(base_user_params[:first_name])
+      expect(User.last.last_name).to eq(base_user_params[:last_name])
+      expect(User.last.name).to eq("#{base_user_params[:first_name]} #{base_user_params[:last_name]}")
+    end
+
+    it 'sets the username and caller_id in the context' do
+      expect(controller).to receive(:create).and_wrap_original do |m, *args|
+        m.call(*args)
+
+        expect(Gitlab::ApplicationContext.current)
+          .to include('meta.user' => base_user_params[:username],
+                      'meta.caller_id' => 'RegistrationsController#create')
       end
 
-      let(:base_user_params) { { first_name: 'First', last_name: 'Last', username: 'new_username', email: 'new@user.com', password: 'Any_password' } }
-
-      it 'sets name from first and last name' do
-        post :create, params: { new_user: base_user_params }
-
-        expect(User.last.first_name).to eq(base_user_params[:first_name])
-        expect(User.last.last_name).to eq(base_user_params[:last_name])
-        expect(User.last.name).to eq("#{base_user_params[:first_name]} #{base_user_params[:last_name]}")
-      end
+      subject
     end
   end
 
@@ -332,7 +425,7 @@ describe RegistrationsController do
 
     def expect_failure(message)
       expect(flash[:alert]).to eq(message)
-      expect(response.status).to eq(303)
+      expect(response).to have_gitlab_http_status(:see_other)
       expect(response).to redirect_to profile_account_path
     end
 
@@ -346,7 +439,7 @@ describe RegistrationsController do
 
     def expect_success
       expect(flash[:notice]).to eq s_('Profiles|Account scheduled for removal.')
-      expect(response.status).to eq(303)
+      expect(response).to have_gitlab_http_status(:see_other)
       expect(response).to redirect_to new_user_session_path
     end
 
@@ -394,55 +487,35 @@ describe RegistrationsController do
         expect_success
       end
     end
-  end
 
-  describe '#update_registration' do
-    before do
-      stub_experiment(signup_flow: true)
-      stub_experiment_for_user(signup_flow: true)
-      sign_in(create(:user))
-    end
+    context 'prerequisites for account deletion' do
+      context 'solo-owned groups' do
+        let(:group) { create(:group) }
 
-    it 'tracks the event with the right parameters' do
-      expect(Gitlab::Tracking).to receive(:event).with(
-        'Growth::Acquisition::Experiment::SignUpFlow',
-        'end',
-        label: anything,
-        property: 'experimental_group'
-      )
-      patch :update_registration, params: { user: { role: 'software_developer', setup_for_company: 'false' } }
-    end
-  end
+        context 'if the user is the sole owner of at least one group' do
+          before do
+            create(:group_member, :owner, group: group, user: user)
+          end
 
-  describe '#welcome' do
-    subject { get :welcome }
+          it 'fails' do
+            delete :destroy, params: { password: '12345678' }
 
-    before do
-      sign_in(create(:user))
-    end
-
-    context 'signup_flow experiment enabled' do
-      before do
-        stub_experiment_for_user(signup_flow: true)
-      end
-
-      it 'renders the devise_experimental_separate_sign_up_flow layout' do
-        expected_layout = Gitlab.ee? ? :checkout : :devise_experimental_separate_sign_up_flow
-
-        expect(subject).to render_template(expected_layout)
+            expect_failure(s_('Profiles|You must transfer ownership or delete groups you are an owner of before you can delete your account'))
+          end
+        end
       end
     end
 
-    context 'signup_flow experiment disabled' do
-      before do
-        stub_experiment_for_user(signup_flow: false)
+    it 'sets the username and caller_id in the context' do
+      expect(controller).to receive(:destroy).and_wrap_original do |m, *args|
+        m.call(*args)
+
+        expect(Gitlab::ApplicationContext.current)
+          .to include('meta.user' => user.username,
+                      'meta.caller_id' => 'RegistrationsController#destroy')
       end
 
-      it 'renders the devise layout' do
-        expected_layout = Gitlab.ee? ? :checkout : :devise
-
-        expect(subject).to render_template(expected_layout)
-      end
+      post :destroy
     end
   end
 end

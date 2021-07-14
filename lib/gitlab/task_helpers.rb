@@ -24,6 +24,8 @@ module Gitlab
     # Returns "yes" the user chose to continue
     # Raises Gitlab::TaskAbortedByUserError if the user chose *not* to continue
     def ask_to_continue
+      return if Gitlab::Utils.to_boolean(ENV['GITLAB_ASSUME_YES'])
+
       answer = prompt("Do you want to continue (yes/no)? ".color(:blue), %w{yes no})
       raise Gitlab::TaskAbortedByUserError unless answer == "yes"
     end
@@ -59,9 +61,21 @@ module Gitlab
     def prompt(message, choices = nil)
       begin
         print(message)
-        answer = STDIN.gets.chomp
+        answer = $stdin.gets.chomp
       end while choices.present? && !choices.include?(answer)
       answer
+    end
+
+    # Prompt the user to input a password
+    #
+    # message - custom message to display before input
+    def prompt_for_password(message = 'Enter password: ')
+      unless $stdin.tty?
+        print(message)
+        return $stdin.gets.chomp
+      end
+
+      $stdin.getpass(message)
     end
 
     # Runs the given command and matches the output against the given pattern
@@ -95,7 +109,7 @@ module Gitlab
     def run_command!(command)
       output, status = Gitlab::Popen.popen(command)
 
-      raise Gitlab::TaskFailedError.new(output) unless status.zero?
+      raise Gitlab::TaskFailedError, output unless status == 0
 
       output
     end
@@ -157,8 +171,8 @@ module Gitlab
       Rails.env.test? ? Rails.root.join('tmp/tests') : Gitlab.config.gitlab.user_home
     end
 
-    def checkout_or_clone_version(version:, repo:, target_dir:)
-      clone_repo(repo, target_dir) unless Dir.exist?(target_dir)
+    def checkout_or_clone_version(version:, repo:, target_dir:, clone_opts: [])
+      clone_repo(repo, target_dir, clone_opts: clone_opts) unless Dir.exist?(target_dir)
       checkout_version(get_version(version), target_dir)
     end
 
@@ -171,8 +185,8 @@ module Gitlab
       "v#{component_version}"
     end
 
-    def clone_repo(repo, target_dir)
-      run_command!(%W[#{Gitlab.config.git.bin_path} clone -- #{repo} #{target_dir}])
+    def clone_repo(repo, target_dir, clone_opts: [])
+      run_command!(%W[#{Gitlab.config.git.bin_path} clone] + clone_opts + %W[-- #{repo} #{target_dir}])
     end
 
     def checkout_version(version, target_dir)

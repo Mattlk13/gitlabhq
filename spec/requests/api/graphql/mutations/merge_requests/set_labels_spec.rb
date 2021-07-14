@@ -2,7 +2,7 @@
 
 require 'spec_helper'
 
-describe 'Setting labels of a merge request' do
+RSpec.describe 'Setting labels of a merge request' do
   include GraphqlHelpers
 
   let(:current_user) { create(:user) }
@@ -52,7 +52,7 @@ describe 'Setting labels of a merge request' do
   end
 
   it 'sets the merge request labels, removing existing ones' do
-    merge_request.update(labels: [label2])
+    merge_request.update!(labels: [label2])
 
     post_graphql_mutation(mutation, current_user: current_user)
 

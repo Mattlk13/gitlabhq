@@ -1,20 +1,26 @@
-# Pipeline triggers API
+---
+stage: Verify
+group: Pipeline Execution
+info: To determine the technical writer assigned to the Stage/Group associated with this page, see https://about.gitlab.com/handbook/engineering/ux/technical-writing/#assignments
+---
 
-You can read more about [triggering pipelines through the API](../ci/triggers/README.md).
+# Pipeline triggers API **(FREE)**
+
+You can read more about [triggering pipelines through the API](../ci/triggers/index.md).
 
 ## List project triggers
 
 Get a list of project's build triggers.
 
-```
+```plaintext
 GET /projects/:id/triggers
 ```
 
 | Attribute | Type    | required | Description         |
 |-----------|---------|----------|---------------------|
-| `id`      | integer/string | yes      | The ID or [URL-encoded path of the project](README.md#namespaced-path-encoding) owned by the authenticated user |
+| `id`      | integer/string | yes      | The ID or [URL-encoded path of the project](index.md#namespaced-path-encoding) owned by the authenticated user |
 
-```
+```shell
 curl --header "PRIVATE-TOKEN: <your_access_token>" "https://gitlab.example.com/api/v4/projects/1/triggers"
 ```
 
@@ -36,16 +42,16 @@ curl --header "PRIVATE-TOKEN: <your_access_token>" "https://gitlab.example.com/a
 
 Get details of project's build trigger.
 
-```
+```plaintext
 GET /projects/:id/triggers/:trigger_id
 ```
 
 | Attribute    | Type    | required | Description              |
 |--------------|---------|----------|--------------------------|
-| `id`         | integer/string | yes      | The ID or [URL-encoded path of the project](README.md#namespaced-path-encoding) owned by the authenticated user      |
-| `trigger_id` | integer | yes      | The trigger id           |
+| `id`         | integer/string | yes      | The ID or [URL-encoded path of the project](index.md#namespaced-path-encoding) owned by the authenticated user      |
+| `trigger_id` | integer | yes      | The trigger ID           |
 
-```
+```shell
 curl --header "PRIVATE-TOKEN: <your_access_token>" "https://gitlab.example.com/api/v4/projects/1/triggers/5"
 ```
 
@@ -65,17 +71,18 @@ curl --header "PRIVATE-TOKEN: <your_access_token>" "https://gitlab.example.com/a
 
 Create a trigger for a project.
 
-```
+```plaintext
 POST /projects/:id/triggers
 ```
 
 | Attribute     | Type    | required | Description              |
 |---------------|---------|----------|--------------------------|
-| `id`          | integer/string | yes      | The ID or [URL-encoded path of the project](README.md#namespaced-path-encoding) owned by the authenticated user      |
+| `id`          | integer/string | yes      | The ID or [URL-encoded path of the project](index.md#namespaced-path-encoding) owned by the authenticated user      |
 | `description` | string  | yes      | The trigger name         |
 
-```
-curl --request POST --header "PRIVATE-TOKEN: <your_access_token>" --form description="my description" "https://gitlab.example.com/api/v4/projects/1/triggers"
+```shell
+curl --request POST --header "PRIVATE-TOKEN: <your_access_token>" \
+     --form description="my description" "https://gitlab.example.com/api/v4/projects/1/triggers"
 ```
 
 ```json
@@ -94,18 +101,19 @@ curl --request POST --header "PRIVATE-TOKEN: <your_access_token>" --form descrip
 
 Update a trigger for a project.
 
-```
+```plaintext
 PUT /projects/:id/triggers/:trigger_id
 ```
 
 | Attribute     | Type    | required | Description              |
 |---------------|---------|----------|--------------------------|
-| `id`          | integer/string | yes      | The ID or [URL-encoded path of the project](README.md#namespaced-path-encoding) owned by the authenticated user      |
-| `trigger_id`  | integer | yes      | The trigger id           |
+| `id`          | integer/string | yes      | The ID or [URL-encoded path of the project](index.md#namespaced-path-encoding) owned by the authenticated user      |
+| `trigger_id`  | integer | yes      | The trigger ID           |
 | `description` | string  | no       | The trigger name         |
 
-```
-curl --request PUT --header "PRIVATE-TOKEN: <your_access_token>" --form description="my description" "https://gitlab.example.com/api/v4/projects/1/triggers/10"
+```shell
+curl --request PUT --header "PRIVATE-TOKEN: <your_access_token>" \
+     --form description="my description" "https://gitlab.example.com/api/v4/projects/1/triggers/10"
 ```
 
 ```json
@@ -124,15 +132,15 @@ curl --request PUT --header "PRIVATE-TOKEN: <your_access_token>" --form descript
 
 Remove a project's build trigger.
 
-```
+```plaintext
 DELETE /projects/:id/triggers/:trigger_id
 ```
 
 | Attribute      | Type    | required | Description              |
 |----------------|---------|----------|--------------------------|
-| `id`           | integer/string | yes      | The ID or [URL-encoded path of the project](README.md#namespaced-path-encoding) owned by the authenticated user      |
-| `trigger_id`   | integer | yes      | The trigger id           |
+| `id`           | integer/string | yes      | The ID or [URL-encoded path of the project](index.md#namespaced-path-encoding) owned by the authenticated user      |
+| `trigger_id`   | integer | yes      | The trigger ID           |
 
-```
+```shell
 curl --request DELETE --header "PRIVATE-TOKEN: <your_access_token>" "https://gitlab.example.com/api/v4/projects/1/triggers/5"
 ```

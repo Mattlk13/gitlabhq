@@ -1,10 +1,12 @@
-# Cluster management project (alpha)
+---
+stage: Configure
+group: Configure
+info: To determine the technical writer assigned to the Stage/Group associated with this page, see https://about.gitlab.com/handbook/engineering/ux/technical-writing/#assignments
+---
 
-CAUTION: **Warning:**
-This is an _alpha_ feature, and it is subject to change at any time without
-prior notice.
+# Cluster management project **(FREE)**
 
-> [Introduced](https://gitlab.com/gitlab-org/gitlab/issues/32810) in GitLab 12.5
+> [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/32810) in GitLab 12.5
 
 A project can be designated as the management project for a cluster.
 A management project can be used to run deployment jobs with
@@ -14,20 +16,20 @@ privileges.
 
 This can be useful for:
 
-- Creating pipelines to install cluster-wide applications into your cluster.
+- Creating pipelines to install cluster-wide applications into your cluster, see [management project template](management_project_template.md) for details.
 - Any jobs that require `cluster-admin` privileges.
 
 ## Permissions
 
-Only the management project will receive `cluster-admin` privileges. All
-other projects will continue to receive [namespace scoped `edit` level privileges](../project/clusters/add_remove_clusters.md#rbac-cluster-resources).
+Only the management project receives `cluster-admin` privileges. All
+other projects continue to receive [namespace scoped `edit` level privileges](../project/clusters/cluster_access.md#rbac-cluster-resources).
 
 Management projects are restricted to the following:
 
 - For project-level clusters, the management project must be in the same
   namespace (or descendants) as the cluster's project.
 - For group-level clusters, the management project must be in the same
-  group (or descendants) as as the cluster's group.
+  group (or descendants) as the cluster's group.
 - For instance-level clusters, there are no such restrictions.
 
 ## Usage
@@ -43,10 +45,11 @@ To use a cluster management project for a cluster:
 To select a cluster management project to use:
 
 1. Navigate to the appropriate configuration page. For a:
-   - [Project-level cluster](../project/clusters/index.md), navigate to your project's
-     **Operations > Kubernetes** page.
-   - [Group-level cluster](../group/clusters/index.md), navigate to your group's **Kubernetes**
+   - [Project-level cluster](../project/clusters/index.md), go to your project's
+     **Infrastructure > Kubernetes clusters** page.
+   - [Group-level cluster](../group/clusters/index.md), go to your group's **Kubernetes**
      page.
+   - [Instance-level cluster](../instance/clusters/index.md), go to **Menu >** **{admin}** **Admin > Kubernetes** page.
 1. Select the project using **Cluster management project field** in the **Advanced settings**
    section.
 
@@ -55,7 +58,7 @@ To select a cluster management project to use:
 ### Configuring your pipeline
 
 After designating a project as the management project for the cluster,
-write a [`.gitlab-ci.yml`](../../ci/yaml/README.md) in that project. For example:
+write a [`.gitlab-ci.yml`](../../ci/yaml/index.md) in that project. For example:
 
 ```yaml
 configure cluster:
@@ -65,10 +68,10 @@ configure cluster:
     name: production
 ```
 
-### Setting the environment scope **(PREMIUM)**
+### Setting the environment scope
 
 [Environment
-scopes](../project/clusters/index.md#setting-the-environment-scope-premium)
+scopes](../project/clusters/multiple_kubernetes_clusters.md#setting-the-environment-scope)
 are usable when associating multiple clusters to the same management
 project.
 
@@ -84,12 +87,12 @@ to a management project:
 | Production  | `production`      |
 
 The following environments set in
-[`.gitlab-ci.yml`](../../ci/yaml/README.md) will deploy to the
+[`.gitlab-ci.yml`](../../ci/yaml/index.md) deploy to the
 Development, Staging, and Production cluster respectively.
 
 ```yaml
 stages:
-- deploy
+  - deploy
 
 configure development cluster:
   stage: deploy

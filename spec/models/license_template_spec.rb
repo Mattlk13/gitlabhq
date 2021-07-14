@@ -2,7 +2,7 @@
 
 require 'spec_helper'
 
-describe LicenseTemplate do
+RSpec.describe LicenseTemplate do
   describe '#content' do
     it 'calls a proc exactly once if provided' do
       content_proc = -> { 'bar' }
@@ -57,6 +57,6 @@ describe LicenseTemplate do
   end
 
   def build_template(content)
-    described_class.new(key: 'foo', name: 'foo', category: :Other, content: content)
+    described_class.new(key: 'foo', name: 'foo', project: nil, category: :Other, content: content)
   end
 end

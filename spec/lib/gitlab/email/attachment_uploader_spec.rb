@@ -2,7 +2,7 @@
 
 require "spec_helper"
 
-describe Gitlab::Email::AttachmentUploader do
+RSpec.describe Gitlab::Email::AttachmentUploader do
   describe "#execute" do
     let(:project) { create(:project) }
     let(:message_raw) { fixture_file("emails/attachment.eml") }
@@ -29,6 +29,31 @@ describe Gitlab::Email::AttachmentUploader do
         expect(image_link).not_to be_nil
         expect(image_link[:alt]).to eq('gitlab_logo')
         expect(image_link[:url]).to include('gitlab_logo.png')
+      end
+    end
+
+    context 'with a signed message with mixed protocol prefix' do
+      let(:message_raw) { fixture_file("emails/valid_reply_signed_smime_mixed_protocol_prefix.eml") }
+
+      it 'uploads all attachments except the signature' do
+        links = described_class.new(message).execute(upload_parent: project, uploader_class: FileUploader)
+
+        expect(links).not_to include(a_hash_including(alt: 'smime.p7s'))
+
+        image_link = links.first
+        expect(image_link).not_to be_nil
+        expect(image_link[:alt]).to eq('gitlab_logo')
+        expect(image_link[:url]).to include('gitlab_logo.png')
+      end
+    end
+
+    context 'with a message with no content type' do
+      let(:message_raw) { fixture_file("emails/no_content_type.eml") }
+
+      it 'uploads all attachments except the signature' do
+        links = described_class.new(message).execute(upload_parent: project, uploader_class: FileUploader)
+
+        expect(links).to eq([])
       end
     end
   end

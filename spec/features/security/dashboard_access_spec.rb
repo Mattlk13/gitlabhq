@@ -2,7 +2,7 @@
 
 require 'spec_helper'
 
-describe "Dashboard access" do
+RSpec.describe "Dashboard access" do
   include AccessMatchers
 
   describe "GET /dashboard" do
@@ -57,7 +57,7 @@ describe "Dashboard access" do
     it { expect(new_group_path).to be_denied_for :visitor }
   end
 
-  describe "GET /profile/groups" do
+  describe "GET /dashboard/groups" do
     subject { dashboard_groups_path }
 
     it { is_expected.to be_allowed_for :admin }

@@ -2,11 +2,12 @@
 
 require 'spec_helper'
 
-describe 'Admin::Hooks' do
+RSpec.describe 'Admin::Hooks' do
   let(:user) { create(:admin) }
 
   before do
     sign_in(user)
+    gitlab_enable_admin_mode_sign_in(user)
   end
 
   describe 'GET /admin/hooks' do

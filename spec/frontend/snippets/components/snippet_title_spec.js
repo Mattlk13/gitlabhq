@@ -1,20 +1,23 @@
-import SnippetTitle from '~/snippets/components/snippet_title.vue';
 import { GlSprintf } from '@gitlab/ui';
 import { shallowMount } from '@vue/test-utils';
+import SnippetDescription from '~/snippets/components/snippet_description_view.vue';
+import SnippetTitle from '~/snippets/components/snippet_title.vue';
 
 describe('Snippet header component', () => {
   let wrapper;
   const title = 'The property of Thor';
   const description = 'Do not touch this hammer';
+  const descriptionHtml = `<h2>${description}</h2>`;
   const snippet = {
     snippet: {
       title,
       description,
+      descriptionHtml,
     },
   };
 
   function createComponent({ props = snippet } = {}) {
-    const defaultProps = Object.assign({}, props);
+    const defaultProps = { ...props };
 
     wrapper = shallowMount(SnippetTitle, {
       propsData: {
@@ -34,8 +37,9 @@ describe('Snippet header component', () => {
 
   it('renders snippets title and description', () => {
     createComponent();
+
     expect(wrapper.text().trim()).toContain(title);
-    expect(wrapper.text().trim()).toContain(description);
+    expect(wrapper.find(SnippetDescription).props('description')).toBe(descriptionHtml);
   });
 
   it('does not render recent changes time stamp if there were no updates', () => {

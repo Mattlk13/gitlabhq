@@ -5,8 +5,13 @@ module Ci
   # Data will be removed after transitioning from running to any state.
   class BuildRunnerSession < ApplicationRecord
     extend Gitlab::Ci::Model
+    include IgnorableColumns
+
+    ignore_columns :build_id_convert_to_bigint, remove_with: '14.1', remove_after: '2021-07-22'
 
     TERMINAL_SUBPROTOCOL = 'terminal.gitlab.com'
+    DEFAULT_SERVICE_NAME = 'build'
+    DEFAULT_PORT_NAME = 'default_port'
 
     self.table_name = 'ci_builds_runner_session'
 
@@ -23,6 +28,17 @@ module Ci
       channel_specification(wss_url, TERMINAL_SUBPROTOCOL)
     end
 
+    def service_specification(service: nil, path: nil, port: nil, subprotocols: nil)
+      return {} unless url.present?
+
+      port = port.presence || DEFAULT_PORT_NAME
+      service = service.presence || DEFAULT_SERVICE_NAME
+      url = "#{self.url}/proxy/#{service}/#{port}/#{path}"
+      subprotocols = subprotocols.presence || ::Ci::BuildRunnerSession::TERMINAL_SUBPROTOCOL
+
+      channel_specification(url, subprotocols)
+    end
+
     private
 
     def channel_specification(url, subprotocol)
@@ -37,5 +53,3 @@ module Ci
     end
   end
 end
-
-Ci::BuildRunnerSession.prepend_if_ee('EE::Ci::BuildRunnerSession')

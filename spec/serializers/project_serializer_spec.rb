@@ -2,8 +2,9 @@
 
 require 'spec_helper'
 
-describe ProjectSerializer do
+RSpec.describe ProjectSerializer do
   let_it_be(:project) { create(:project) }
+
   let(:provider_url) { 'http://provider.com' }
 
   context 'when serializer option is :import' do

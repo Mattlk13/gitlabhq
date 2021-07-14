@@ -16,7 +16,12 @@ export default class EnvironmentsService {
     return axios.post(endpoint, {});
   }
 
-  getFolderContent(folderUrl) {
-    return axios.get(`${folderUrl}.json?per_page=${this.folderResults}`);
+  // eslint-disable-next-line class-methods-use-this
+  deleteAction(endpoint) {
+    return axios.delete(endpoint, {});
+  }
+
+  getFolderContent(folderUrl, scope) {
+    return axios.get(`${folderUrl}.json?per_page=${this.folderResults}&scope=${scope}`);
   }
 }

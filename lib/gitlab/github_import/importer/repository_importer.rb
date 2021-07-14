@@ -4,7 +4,6 @@ module Gitlab
   module GithubImport
     module Importer
       class RepositoryImporter
-        include Gitlab::ShellAdapter
         include Gitlab::Utils::StrongMemoize
 
         attr_reader :project, :client, :wiki_formatter
@@ -57,7 +56,7 @@ module Gitlab
 
           # The initial fetch can bring in lots of loose refs and objects.
           # Running a `git gc` will make importing pull requests faster.
-          Projects::HousekeepingService.new(project, :gc).execute
+          Repositories::HousekeepingService.new(project, :gc).execute
 
           true
         rescue Gitlab::Git::Repository::NoRepository, Gitlab::Shell::Error => e
@@ -65,10 +64,10 @@ module Gitlab
         end
 
         def import_wiki_repository
-          gitlab_shell.import_wiki_repository(project, wiki_formatter)
+          project.wiki.repository.import_repository(wiki_formatter.import_url)
 
           true
-        rescue Gitlab::Shell::Error => e
+        rescue ::Gitlab::Git::CommandError => e
           if e.message !~ /repository not exported/
             project.create_wiki
             fail_import("Failed to import the wiki: #{e.message}")

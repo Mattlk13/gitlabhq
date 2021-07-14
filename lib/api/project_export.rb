@@ -1,16 +1,11 @@
 # frozen_string_literal: true
 
 module API
-  class ProjectExport < Grape::API
-    helpers do
-      def throttled?(action)
-        rate_limiter.throttled?(action, scope: [current_user, action, user_project])
-      end
+  class ProjectExport < ::API::Base
+    helpers Helpers::RateLimiter
 
-      def rate_limiter
-        ::Gitlab::ApplicationRateLimiter
-      end
-    end
+    feature_category :importers
+
     before do
       not_found! unless Gitlab::CurrentSettings.project_export_enabled?
       authorize_admin_project
@@ -32,12 +27,14 @@ module API
         detail 'This feature was introduced in GitLab 10.6.'
       end
       get ':id/export/download' do
-        if throttled?(:project_download_export)
-          render_api_error!({ error: 'This endpoint has been requested too many times. Try again later.' }, 429)
-        end
+        check_rate_limit! :project_download_export, [current_user, user_project]
 
         if user_project.export_file_exists?
-          present_carrierwave_file!(user_project.export_file)
+          if user_project.export_archive_exists?
+            present_carrierwave_file!(user_project.export_file)
+          else
+            render_api_error!('The project export file is not available yet', 404)
+          end
         else
           render_api_error!('404 Not found or has expired', 404)
         end
@@ -54,9 +51,9 @@ module API
         end
       end
       post ':id/export' do
-        if throttled?(:project_export)
-          render_api_error!({ error: 'This endpoint has been requested too many times. Try again later.' }, 429)
-        end
+        check_rate_limit! :project_export, [current_user]
+
+        user_project.remove_exports
 
         project_export_params = declared_params(include_missing: false)
         after_export_params = project_export_params.delete(:upload) || {}
@@ -64,7 +61,7 @@ module API
         export_strategy = if after_export_params[:url].present?
                             params = after_export_params.slice(:url, :http_method).symbolize_keys
 
-                            Gitlab::ImportExport::AfterExportStrategies::WebUploadStrategy.new(params)
+                            Gitlab::ImportExport::AfterExportStrategies::WebUploadStrategy.new(**params)
                           end
 
         if export_strategy&.invalid?

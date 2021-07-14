@@ -10,7 +10,7 @@ module Banzai
     #   :commit
     #   :current_user
     #   :project
-    #   :project_wiki
+    #   :wiki
     #   :ref
     #   :requested_path
     #   :system_note
@@ -53,14 +53,14 @@ module Banzai
 
       def linkable_files?
         strong_memoize(:linkable_files) do
-          context[:project_wiki].nil? && repository.try(:exists?) && !repository.empty?
+          context[:wiki].nil? && repository.try(:exists?) && !repository.empty?
         end
       end
 
       def get_uri_types(paths)
         return {} if paths.empty?
 
-        uri_types = Hash[paths.collect { |name| [name, nil] }]
+        uri_types = paths.to_h { |name| [name, nil] }
 
         get_blob_types(paths).each do |name, type|
           if type == :blob
@@ -80,6 +80,13 @@ module Banzai
         end
 
         Gitlab::GitalyClient::BlobService.new(repository).get_blob_types(revision_paths, 1)
+      rescue GRPC::Unavailable, GRPC::DeadlineExceeded => e
+        # Handle Gitaly connection issues gracefully
+        Gitlab::ErrorTracking.track_exception(e, project_id: project.id)
+        # Return all links as blob types
+        paths.collect do |path|
+          [path, :blob]
+        end
       end
 
       def get_uri(html_attr)
@@ -124,7 +131,7 @@ module Banzai
         path = cleaned_file_path(uri)
         nested_path = relative_file_path(uri)
 
-        file_exists?(nested_path) ? nested_path : path
+        path_exists?(nested_path) ? nested_path : path
       end
 
       def cleaned_file_path(uri)
@@ -183,12 +190,12 @@ module Banzai
         parts.push(path).join('/')
       end
 
-      def file_exists?(path)
-        path.present? && uri_type(path).present?
+      def path_exists?(path)
+        path.present? && @uri_types[path] != :unknown
       end
 
       def uri_type(path)
-        @uri_types[path] == :unknown ? "" : @uri_types[path]
+        @uri_types[path] == :unknown ? :blob : @uri_types[path]
       end
 
       def current_commit

@@ -2,7 +2,7 @@
 
 module Gitlab
   module Checks
-    class PushCheck < BaseChecker
+    class PushCheck < BaseSingleChecker
       def validate!
         logger.log_timed("Checking if you are allowed to push...") do
           unless can_push?
@@ -14,7 +14,7 @@ module Gitlab
       private
 
       def can_push?
-        user_access.can_do_action?(:push_code) ||
+        user_access.can_push_for_ref?(ref) ||
           project.branch_allows_collaboration?(user_access.user, branch_name)
       end
     end

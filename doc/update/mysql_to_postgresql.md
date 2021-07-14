@@ -1,19 +1,21 @@
 ---
-last_updated: 2019-06-18
+stage: Enablement
+group: Database
+info: To determine the technical writer assigned to the Stage/Group associated with this page, see https://about.gitlab.com/handbook/engineering/ux/technical-writing/#assignments
 ---
 
-# Migrating from MySQL to PostgreSQL
+# Migrating from MySQL to PostgreSQL **(FREE SELF)**
 
 This guide documents how to take a working GitLab instance that uses MySQL and
 migrate it to a PostgreSQL database.
 
 ## Requirements
 
-NOTE: **Note:**
+NOTE:
 Support for MySQL was removed in GitLab 12.1. This procedure should be performed
 **before** installing GitLab 12.1.
 
-[pgloader](https://pgloader.io/) 3.4.1+ is required, confirm with `pgloader -V`.
+[pgLoader](https://pgloader.io/) 3.4.1+ is required, confirm with `pgloader -V`.
 
 You can install it directly from your distribution, for example in
 Debian/Ubuntu:
@@ -49,25 +51,25 @@ For other distributions, follow the instructions in PostgreSQL's
 [download page](https://www.postgresql.org/download/) to add their repository
 and then install `pgloader`.
 
-If you are migrating to a Docker based installation, you will need to install
-pgloader within the container as it is not included in the container image.
+If you are migrating to a Docker based installation, you must install
+pgLoader within the container as it is not included in the container image.
 
 1. Start a shell session in the context of the running container:
 
-   ``` bash
+   ```shell
    docker exec -it gitlab bash
    ```
 
-1. Install pgloader:
+1. Install pgLoader:
 
-   ``` bash
+   ```shell
    apt-get update
    apt-get -y install pgloader
    ```
 
 ## Omnibus GitLab installations
 
-For [Omnibus GitLab packages](https://about.gitlab.com/install/), you'll first
+For [Omnibus GitLab packages](https://about.gitlab.com/install/), you first
 need to enable the bundled PostgreSQL:
 
 1. Stop GitLab:
@@ -78,21 +80,21 @@ need to enable the bundled PostgreSQL:
 
 1. Edit `/etc/gitlab/gitlab.rb` to enable bundled PostgreSQL:
 
-   ```
+   ```ruby
    postgresql['enable'] = true
    ```
 
-1. Edit `/etc/gitlab/gitlab.rb` to use the bundled PostgreSQL. Please check
-   all the settings beginning with `db_`, such as `gitlab_rails['db_adapter']`
-   and alike. You could just comment all of them out so that we'll just use
-   the defaults.
+1. Edit `/etc/gitlab/gitlab.rb` to use the bundled PostgreSQL. Review all of the
+   settings beginning with `db_` (such as `gitlab_rails['db_adapter']`). To use
+   the default values, you can comment all of them out.
 
 1. [Reconfigure GitLab](../administration/restart_gitlab.md#omnibus-gitlab-reconfigure)
    for the changes to take effect.
-1. Start Unicorn and PostgreSQL so that we can prepare the schema:
+
+1. Start Puma and PostgreSQL so that we can prepare the schema:
 
    ```shell
-   sudo gitlab-ctl start unicorn
+   sudo gitlab-ctl start puma
    sudo gitlab-ctl start postgresql
    ```
 
@@ -102,21 +104,21 @@ need to enable the bundled PostgreSQL:
    sudo gitlab-rake db:create db:migrate
    ```
 
-1. Stop Unicorn to prevent other database access from interfering with the loading of data:
+1. Stop Puma to prevent other database access from interfering with the loading of data:
 
    ```shell
-   sudo gitlab-ctl stop unicorn
+   sudo gitlab-ctl stop puma
    ```
 
-After these steps, you'll have a fresh PostgreSQL database with up-to-date schema.
+After these steps, you have a fresh PostgreSQL database with up-to-date schema.
 
-Next, we'll use `pgloader` to migrate the data from the old MySQL database to the
+Next, use `pgloader` to migrate the data from the old MySQL database to the
 new PostgreSQL one:
 
 1. Save the following snippet in a `commands.load` file, and edit with your
    MySQL database `username`, `password` and `host`:
 
-   ```
+   ```sql
    LOAD DATABASE
         FROM mysql://username:password@host/gitlabhq_production
         INTO postgresql://gitlab-psql@unix://var/opt/gitlab/postgresql:/gitlabhq_production
@@ -140,10 +142,10 @@ new PostgreSQL one:
    sudo -u gitlab-psql pgloader commands.load
    ```
 
-1. Once the migration finishes, you should see a summary table that looks like
+1. After the migration finishes, you should see a summary table that looks like
    the following:
 
-   ```
+   ```plaintext
                                     table name       read   imported     errors      total time
    -----------------------------------------------  ---------  ---------  ---------  --------------
                                    fetch meta data        119        119          0          0.388s
@@ -176,7 +178,7 @@ You can now verify that everything works as expected by visiting GitLab.
 
 ## Source installations
 
-For installations from source that use MySQL, you'll first need to
+For installations from source that use MySQL, you must first
 [install PostgreSQL and create a database](../install/installation.md#6-database).
 
 After the database is created, go on with the following steps:
@@ -209,15 +211,15 @@ After the database is created, go on with the following steps:
    sudo -u git -H bundle exec rake db:create db:migrate RAILS_ENV=production
    ```
 
-After these steps, you'll have a fresh PostgreSQL database with up-to-date schema.
+After these steps, you have a fresh PostgreSQL database with up-to-date schema.
 
-Next, we'll use `pgloader` to migrate the data from the old MySQL database to the
+Next, use `pgloader` to migrate the data from the old MySQL database to the
 new PostgreSQL one:
 
 1. Save the following snippet in a `commands.load` file, and edit with your
    MySQL `username`, `password` and `host`:
 
-   ```
+   ```sql
    LOAD DATABASE
         FROM mysql://username:password@host/gitlabhq_production
         INTO postgresql://postgres@unix://var/run/postgresql:/gitlabhq_production
@@ -241,10 +243,10 @@ new PostgreSQL one:
    sudo -u postgres pgloader commands.load
    ```
 
-1. Once the migration finishes, you should see a summary table that looks like
+1. After the migration finishes, you should see a summary table that looks like
    the following:
 
-   ```
+   ```plaintext
                                     table name       read   imported     errors      total time
    -----------------------------------------------  ---------  ---------  ---------  --------------
                                    fetch meta data        119        119          0          0.388s
@@ -284,7 +286,7 @@ Sometimes, you might encounter some errors during or after the migration.
 The PostgreSQL user that you use for the migration MUST have **superuser** privileges.
 Otherwise, you may see a similar message to the following:
 
-```
+```plaintext
 debugger invoked on a CL-POSTGRES-ERROR:INSUFFICIENT-PRIVILEGE in thread
     #<THREAD "lparallel" RUNNING {10078A3513}>:
       Database error 42501: permission denied: "RI_ConstraintTrigger_a_20937" is a system trigger

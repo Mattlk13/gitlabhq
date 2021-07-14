@@ -1,4 +1,5 @@
 <script>
+/* eslint-disable vue/no-v-html */
 import { GlPopover } from '@gitlab/ui';
 import { glEmojiTag } from '~/emoji';
 import { n__ } from '~/locale';
@@ -24,7 +25,7 @@ export default {
   },
   computed: {
     requestsWithWarnings() {
-      return this.requests.filter(request => request.hasWarnings);
+      return this.requests.filter((request) => request.hasWarnings);
     },
     warningMessage() {
       return n__(
@@ -45,7 +46,7 @@ export default {
 };
 </script>
 <template>
-  <div id="peek-request-selector" data-qa-selector="request_dropdown">
+  <div id="peek-request-selector" data-qa-selector="request_dropdown" class="view">
     <select v-model="currentRequestId">
       <option
         v-for="request in requests"
@@ -57,12 +58,12 @@ export default {
         <span v-if="request.hasWarnings">(!)</span>
       </option>
     </select>
-    <span v-if="requestsWithWarnings.length">
+    <span v-if="requestsWithWarnings.length" class="gl-cursor-default">
       <span id="performance-bar-request-selector-warning" v-html="glEmojiTag('warning')"></span>
       <gl-popover
+        placement="bottom"
         target="performance-bar-request-selector-warning"
         :content="warningMessage"
-        triggers="hover focus"
       />
     </span>
   </div>

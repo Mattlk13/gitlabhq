@@ -1,29 +1,9 @@
-import { __, s__ } from '~/locale';
-import $ from 'jquery';
-import '~/commons/bootstrap';
+import timezoneMock from 'timezone-mock';
 import * as datetimeUtility from '~/lib/utils/datetime_utility';
+import { __, s__ } from '~/locale';
+import '~/commons/bootstrap';
 
 describe('Date time utils', () => {
-  describe('timeFor', () => {
-    it('returns localize `past due` when in past', () => {
-      const date = new Date();
-      date.setFullYear(date.getFullYear() - 1);
-
-      expect(datetimeUtility.timeFor(date)).toBe(s__('Timeago|Past due'));
-    });
-
-    it('returns localized remaining time when in the future', () => {
-      const date = new Date();
-      date.setFullYear(date.getFullYear() + 1);
-
-      // Add a day to prevent a transient error. If date is even 1 second
-      // short of a full year, timeFor will return '11 months remaining'
-      date.setDate(date.getDate() + 1);
-
-      expect(datetimeUtility.timeFor(date)).toBe(s__('Timeago|1 year remaining'));
-    });
-  });
-
   describe('get localized day name', () => {
     it('should return Sunday', () => {
       const day = datetimeUtility.getDayName(new Date('07/17/2016'));
@@ -68,23 +48,76 @@ describe('Date time utils', () => {
     });
   });
 
+  describe('formatDateAsMonth', () => {
+    it('should format dash cased date properly', () => {
+      const formattedMonth = datetimeUtility.formatDateAsMonth(new Date('2020-06-28'));
+
+      expect(formattedMonth).toBe('Jun');
+    });
+
+    it('should format return the non-abbreviated month', () => {
+      const formattedMonth = datetimeUtility.formatDateAsMonth(new Date('2020-07-28'), {
+        abbreviated: false,
+      });
+
+      expect(formattedMonth).toBe('July');
+    });
+
+    it('should format date with slashes properly', () => {
+      const formattedMonth = datetimeUtility.formatDateAsMonth(new Date('07/23/2016'));
+
+      expect(formattedMonth).toBe('Jul');
+    });
+
+    it('should format ISO date properly', () => {
+      const formattedMonth = datetimeUtility.formatDateAsMonth('2016-07-23T00:00:00.559Z');
+
+      expect(formattedMonth).toBe('Jul');
+    });
+  });
+
   describe('formatDate', () => {
     it('should format date properly', () => {
       const formattedDate = datetimeUtility.formatDate(new Date('07/23/2016'));
 
-      expect(formattedDate).toBe('Jul 23, 2016 12:00am GMT+0000');
+      expect(formattedDate).toBe('Jul 23, 2016 12:00am UTC');
     });
 
     it('should format ISO date properly', () => {
       const formattedDate = datetimeUtility.formatDate('2016-07-23T00:00:00.559Z');
 
-      expect(formattedDate).toBe('Jul 23, 2016 12:00am GMT+0000');
+      expect(formattedDate).toBe('Jul 23, 2016 12:00am UTC');
     });
 
     it('should throw an error if date is invalid', () => {
       expect(() => {
         datetimeUtility.formatDate('2016-07-23 00:00:00 UTC');
       }).toThrow(new Error('Invalid date'));
+    });
+
+    describe('convert local timezone to UTC with utc parameter', () => {
+      const midnightUTC = '2020-07-09';
+      const format = 'mmm d, yyyy';
+
+      beforeEach(() => {
+        timezoneMock.register('US/Pacific');
+      });
+
+      afterEach(() => {
+        timezoneMock.unregister();
+      });
+
+      it('defaults to false', () => {
+        const formattedDate = datetimeUtility.formatDate(midnightUTC, format);
+
+        expect(formattedDate).toBe('Jul 8, 2020');
+      });
+
+      it('converts local time to UTC if utc flag is true', () => {
+        const formattedDate = datetimeUtility.formatDate(midnightUTC, format, true);
+
+        expect(formattedDate).toBe('Jul 9, 2020');
+      });
     });
   });
 
@@ -122,6 +155,30 @@ describe('timeIntervalInWords', () => {
     expect(datetimeUtility.timeIntervalInWords(200)).toEqual(s__('Timeago|3 minutes 20 seconds'));
     expect(datetimeUtility.timeIntervalInWords(6008)).toEqual(s__('Timeago|100 minutes 8 seconds'));
   });
+});
+
+describe('humanizeTimeInterval', () => {
+  it.each`
+    intervalInSeconds | expected
+    ${0}              | ${'0 seconds'}
+    ${1}              | ${'1 second'}
+    ${1.48}           | ${'1.5 seconds'}
+    ${2}              | ${'2 seconds'}
+    ${60}             | ${'1 minute'}
+    ${91}             | ${'1.5 minutes'}
+    ${120}            | ${'2 minutes'}
+    ${3600}           | ${'1 hour'}
+    ${5401}           | ${'1.5 hours'}
+    ${7200}           | ${'2 hours'}
+    ${86400}          | ${'1 day'}
+    ${129601}         | ${'1.5 days'}
+    ${172800}         | ${'2 days'}
+  `(
+    'returns "$expected" when the time interval is $intervalInSeconds seconds',
+    ({ intervalInSeconds, expected }) => {
+      expect(datetimeUtility.humanizeTimeInterval(intervalInSeconds)).toBe(expected);
+    },
+  );
 });
 
 describe('dateInWords', () => {
@@ -474,6 +531,23 @@ describe('getDateInFuture', () => {
   });
 });
 
+describe('isValidDate', () => {
+  it.each`
+    valueToCheck                              | isValid
+    ${new Date()}                             | ${true}
+    ${new Date('December 17, 1995 03:24:00')} | ${true}
+    ${new Date('1995-12-17T03:24:00')}        | ${true}
+    ${new Date('foo')}                        | ${false}
+    ${5}                                      | ${false}
+    ${''}                                     | ${false}
+    ${false}                                  | ${false}
+    ${undefined}                              | ${false}
+    ${null}                                   | ${false}
+  `('returns $expectedReturnValue when called with $dateToCheck', ({ valueToCheck, isValid }) => {
+    expect(datetimeUtility.isValidDate(valueToCheck)).toBe(isValid);
+  });
+});
+
 describe('getDatesInRange', () => {
   it('returns an empty array if 1st or 2nd argument is not a Date object', () => {
     const d1 = new Date('2019-01-01');
@@ -495,7 +569,7 @@ describe('getDatesInRange', () => {
   it('applies mapper function if provided fro each item in range', () => {
     const d1 = new Date('2019-01-01');
     const d2 = new Date('2019-01-31');
-    const formatter = date => date.getDate();
+    const formatter = (date) => date.getDate();
 
     const range = datetimeUtility.getDatesInRange(d1, d2, formatter);
 
@@ -513,27 +587,236 @@ describe('secondsToMilliseconds', () => {
   });
 });
 
-describe('dayAfter', () => {
-  const date = new Date('2019-07-16T00:00:00.000Z');
-
-  it('returns the following date', () => {
-    const nextDay = datetimeUtility.dayAfter(date);
-    const expectedNextDate = new Date('2019-07-17T00:00:00.000Z');
-
-    expect(nextDay).toStrictEqual(expectedNextDate);
-  });
-
-  it('does not modifiy the original date', () => {
-    datetimeUtility.dayAfter(date);
-    expect(date).toStrictEqual(new Date('2019-07-16T00:00:00.000Z'));
-  });
-});
-
 describe('secondsToDays', () => {
   it('converts seconds to days correctly', () => {
     expect(datetimeUtility.secondsToDays(0)).toBe(0);
     expect(datetimeUtility.secondsToDays(90000)).toBe(1);
     expect(datetimeUtility.secondsToDays(270000)).toBe(3);
+  });
+});
+
+describe('date addition/subtraction methods', () => {
+  beforeEach(() => {
+    timezoneMock.register('US/Eastern');
+  });
+
+  afterEach(() => {
+    timezoneMock.unregister();
+  });
+
+  describe('dayAfter', () => {
+    const input = '2019-03-10T00:00:00.000Z';
+    const expectedLocalResult = '2019-03-10T23:00:00.000Z';
+    const expectedUTCResult = '2019-03-11T00:00:00.000Z';
+
+    it.each`
+      inputAsString | options           | expectedAsString
+      ${input}      | ${undefined}      | ${expectedLocalResult}
+      ${input}      | ${{}}             | ${expectedLocalResult}
+      ${input}      | ${{ utc: false }} | ${expectedLocalResult}
+      ${input}      | ${{ utc: true }}  | ${expectedUTCResult}
+    `(
+      'when the provided date is $inputAsString and the options parameter is $options, returns $expectedAsString',
+      ({ inputAsString, options, expectedAsString }) => {
+        const inputDate = new Date(inputAsString);
+        const actual = datetimeUtility.dayAfter(inputDate, options);
+
+        expect(actual.toISOString()).toBe(expectedAsString);
+      },
+    );
+
+    it('does not modifiy the original date', () => {
+      const inputDate = new Date(input);
+      datetimeUtility.dayAfter(inputDate);
+      expect(inputDate.toISOString()).toBe(input);
+    });
+  });
+
+  describe('nDaysAfter', () => {
+    const input = '2019-07-16T00:00:00.000Z';
+
+    it.each`
+      inputAsString | numberOfDays | options           | expectedAsString
+      ${input}      | ${1}         | ${undefined}      | ${'2019-07-17T00:00:00.000Z'}
+      ${input}      | ${-1}        | ${undefined}      | ${'2019-07-15T00:00:00.000Z'}
+      ${input}      | ${0}         | ${undefined}      | ${'2019-07-16T00:00:00.000Z'}
+      ${input}      | ${0.9}       | ${undefined}      | ${'2019-07-16T00:00:00.000Z'}
+      ${input}      | ${120}       | ${undefined}      | ${'2019-11-13T01:00:00.000Z'}
+      ${input}      | ${120}       | ${{}}             | ${'2019-11-13T01:00:00.000Z'}
+      ${input}      | ${120}       | ${{ utc: false }} | ${'2019-11-13T01:00:00.000Z'}
+      ${input}      | ${120}       | ${{ utc: true }}  | ${'2019-11-13T00:00:00.000Z'}
+    `(
+      'when the provided date is $inputAsString, numberOfDays is $numberOfDays, and the options parameter is $options, returns $expectedAsString',
+      ({ inputAsString, numberOfDays, options, expectedAsString }) => {
+        const inputDate = new Date(inputAsString);
+        const actual = datetimeUtility.nDaysAfter(inputDate, numberOfDays, options);
+
+        expect(actual.toISOString()).toBe(expectedAsString);
+      },
+    );
+  });
+
+  describe('nDaysBefore', () => {
+    const input = '2019-07-16T00:00:00.000Z';
+
+    it.each`
+      inputAsString | numberOfDays | options           | expectedAsString
+      ${input}      | ${1}         | ${undefined}      | ${'2019-07-15T00:00:00.000Z'}
+      ${input}      | ${-1}        | ${undefined}      | ${'2019-07-17T00:00:00.000Z'}
+      ${input}      | ${0}         | ${undefined}      | ${'2019-07-16T00:00:00.000Z'}
+      ${input}      | ${0.9}       | ${undefined}      | ${'2019-07-15T00:00:00.000Z'}
+      ${input}      | ${180}       | ${undefined}      | ${'2019-01-17T01:00:00.000Z'}
+      ${input}      | ${180}       | ${{}}             | ${'2019-01-17T01:00:00.000Z'}
+      ${input}      | ${180}       | ${{ utc: false }} | ${'2019-01-17T01:00:00.000Z'}
+      ${input}      | ${180}       | ${{ utc: true }}  | ${'2019-01-17T00:00:00.000Z'}
+    `(
+      'when the provided date is $inputAsString, numberOfDays is $numberOfDays, and the options parameter is $options, returns $expectedAsString',
+      ({ inputAsString, numberOfDays, options, expectedAsString }) => {
+        const inputDate = new Date(inputAsString);
+        const actual = datetimeUtility.nDaysBefore(inputDate, numberOfDays, options);
+
+        expect(actual.toISOString()).toBe(expectedAsString);
+      },
+    );
+  });
+
+  describe('nWeeksAfter', () => {
+    const input = '2021-07-16T00:00:00.000Z';
+
+    it.each`
+      inputAsString | numberOfWeeks | options           | expectedAsString
+      ${input}      | ${1}          | ${undefined}      | ${'2021-07-23T00:00:00.000Z'}
+      ${input}      | ${3}          | ${undefined}      | ${'2021-08-06T00:00:00.000Z'}
+      ${input}      | ${-1}         | ${undefined}      | ${'2021-07-09T00:00:00.000Z'}
+      ${input}      | ${0}          | ${undefined}      | ${'2021-07-16T00:00:00.000Z'}
+      ${input}      | ${0.6}        | ${undefined}      | ${'2021-07-20T00:00:00.000Z'}
+      ${input}      | ${18}         | ${undefined}      | ${'2021-11-19T01:00:00.000Z'}
+      ${input}      | ${18}         | ${{}}             | ${'2021-11-19T01:00:00.000Z'}
+      ${input}      | ${18}         | ${{ utc: false }} | ${'2021-11-19T01:00:00.000Z'}
+      ${input}      | ${18}         | ${{ utc: true }}  | ${'2021-11-19T00:00:00.000Z'}
+    `(
+      'when the provided date is $inputAsString, numberOfWeeks is $numberOfWeeks, and the options parameter is $options, returns $expectedAsString',
+      ({ inputAsString, numberOfWeeks, options, expectedAsString }) => {
+        const inputDate = new Date(inputAsString);
+        const actual = datetimeUtility.nWeeksAfter(inputDate, numberOfWeeks, options);
+
+        expect(actual.toISOString()).toBe(expectedAsString);
+      },
+    );
+  });
+
+  describe('nWeeksBefore', () => {
+    const input = '2021-07-16T00:00:00.000Z';
+
+    it.each`
+      inputAsString | numberOfWeeks | options           | expectedAsString
+      ${input}      | ${1}          | ${undefined}      | ${'2021-07-09T00:00:00.000Z'}
+      ${input}      | ${3}          | ${undefined}      | ${'2021-06-25T00:00:00.000Z'}
+      ${input}      | ${-1}         | ${undefined}      | ${'2021-07-23T00:00:00.000Z'}
+      ${input}      | ${0}          | ${undefined}      | ${'2021-07-16T00:00:00.000Z'}
+      ${input}      | ${0.6}        | ${undefined}      | ${'2021-07-11T00:00:00.000Z'}
+      ${input}      | ${20}         | ${undefined}      | ${'2021-02-26T01:00:00.000Z'}
+      ${input}      | ${20}         | ${{}}             | ${'2021-02-26T01:00:00.000Z'}
+      ${input}      | ${20}         | ${{ utc: false }} | ${'2021-02-26T01:00:00.000Z'}
+      ${input}      | ${20}         | ${{ utc: true }}  | ${'2021-02-26T00:00:00.000Z'}
+    `(
+      'when the provided date is $inputAsString, numberOfWeeks is $numberOfWeeks, and the options parameter is $options, returns $expectedAsString',
+      ({ inputAsString, numberOfWeeks, options, expectedAsString }) => {
+        const inputDate = new Date(inputAsString);
+        const actual = datetimeUtility.nWeeksBefore(inputDate, numberOfWeeks, options);
+
+        expect(actual.toISOString()).toBe(expectedAsString);
+      },
+    );
+  });
+
+  describe('nMonthsAfter', () => {
+    // February has 28 days
+    const feb2019 = '2019-02-15T00:00:00.000Z';
+    // Except in 2020, it had 29 days
+    const feb2020 = '2020-02-15T00:00:00.000Z';
+    // April has 30 days
+    const apr2020 = '2020-04-15T00:00:00.000Z';
+    // May has 31 days
+    const may2020 = '2020-05-15T00:00:00.000Z';
+    // November 1, 2020 was the day Daylight Saving Time ended in 2020 (in the US)
+    const oct2020 = '2020-10-15T00:00:00.000Z';
+
+    it.each`
+      inputAsString | numberOfMonths | options           | expectedAsString
+      ${feb2019}    | ${1}           | ${undefined}      | ${'2019-03-14T23:00:00.000Z'}
+      ${feb2020}    | ${1}           | ${undefined}      | ${'2020-03-14T23:00:00.000Z'}
+      ${apr2020}    | ${1}           | ${undefined}      | ${'2020-05-15T00:00:00.000Z'}
+      ${may2020}    | ${1}           | ${undefined}      | ${'2020-06-15T00:00:00.000Z'}
+      ${may2020}    | ${12}          | ${undefined}      | ${'2021-05-15T00:00:00.000Z'}
+      ${may2020}    | ${-1}          | ${undefined}      | ${'2020-04-15T00:00:00.000Z'}
+      ${may2020}    | ${0}           | ${undefined}      | ${may2020}
+      ${may2020}    | ${0.9}         | ${undefined}      | ${may2020}
+      ${oct2020}    | ${1}           | ${undefined}      | ${'2020-11-15T01:00:00.000Z'}
+      ${oct2020}    | ${1}           | ${{}}             | ${'2020-11-15T01:00:00.000Z'}
+      ${oct2020}    | ${1}           | ${{ utc: false }} | ${'2020-11-15T01:00:00.000Z'}
+      ${oct2020}    | ${1}           | ${{ utc: true }}  | ${'2020-11-15T00:00:00.000Z'}
+    `(
+      'when the provided date is $inputAsString, numberOfMonths is $numberOfMonths, and the options parameter is $options, returns $expectedAsString',
+      ({ inputAsString, numberOfMonths, options, expectedAsString }) => {
+        const inputDate = new Date(inputAsString);
+        const actual = datetimeUtility.nMonthsAfter(inputDate, numberOfMonths, options);
+
+        expect(actual.toISOString()).toBe(expectedAsString);
+      },
+    );
+  });
+
+  describe('nYearsAfter', () => {
+    it.each`
+      date            | numberOfYears | expected
+      ${'2020-07-06'} | ${1}          | ${'2021-07-06'}
+      ${'2020-07-06'} | ${15}         | ${'2035-07-06'}
+    `(
+      'returns $expected for "$numberOfYears year(s) after $date"',
+      ({ date, numberOfYears, expected }) => {
+        expect(datetimeUtility.nYearsAfter(new Date(date), numberOfYears)).toEqual(
+          new Date(expected),
+        );
+      },
+    );
+  });
+
+  describe('nMonthsBefore', () => {
+    // The previous month (February) has 28 days
+    const march2019 = '2019-03-15T00:00:00.000Z';
+    // Except in 2020, it had 29 days
+    const march2020 = '2020-03-15T00:00:00.000Z';
+    // The previous month (April) has 30 days
+    const may2020 = '2020-05-15T00:00:00.000Z';
+    // The previous month (May) has 31 days
+    const june2020 = '2020-06-15T00:00:00.000Z';
+    // November 1, 2020 was the day Daylight Saving Time ended in 2020 (in the US)
+    const nov2020 = '2020-11-15T00:00:00.000Z';
+
+    it.each`
+      inputAsString | numberOfMonths | options           | expectedAsString
+      ${march2019}  | ${1}           | ${undefined}      | ${'2019-02-15T01:00:00.000Z'}
+      ${march2020}  | ${1}           | ${undefined}      | ${'2020-02-15T01:00:00.000Z'}
+      ${may2020}    | ${1}           | ${undefined}      | ${'2020-04-15T00:00:00.000Z'}
+      ${june2020}   | ${1}           | ${undefined}      | ${'2020-05-15T00:00:00.000Z'}
+      ${june2020}   | ${12}          | ${undefined}      | ${'2019-06-15T00:00:00.000Z'}
+      ${june2020}   | ${-1}          | ${undefined}      | ${'2020-07-15T00:00:00.000Z'}
+      ${june2020}   | ${0}           | ${undefined}      | ${june2020}
+      ${june2020}   | ${0.9}         | ${undefined}      | ${'2020-05-15T00:00:00.000Z'}
+      ${nov2020}    | ${1}           | ${undefined}      | ${'2020-10-14T23:00:00.000Z'}
+      ${nov2020}    | ${1}           | ${{}}             | ${'2020-10-14T23:00:00.000Z'}
+      ${nov2020}    | ${1}           | ${{ utc: false }} | ${'2020-10-14T23:00:00.000Z'}
+      ${nov2020}    | ${1}           | ${{ utc: true }}  | ${'2020-10-15T00:00:00.000Z'}
+    `(
+      'when the provided date is $inputAsString, numberOfMonths is $numberOfMonths, and the options parameter is $options, returns $expectedAsString',
+      ({ inputAsString, numberOfMonths, options, expectedAsString }) => {
+        const inputDate = new Date(inputAsString);
+        const actual = datetimeUtility.nMonthsBefore(inputDate, numberOfMonths, options);
+
+        expect(actual.toISOString()).toBe(expectedAsString);
+      },
+    );
   });
 });
 
@@ -566,22 +849,236 @@ describe('approximateDuration', () => {
   });
 });
 
-describe('localTimeAgo', () => {
+describe('differenceInSeconds', () => {
+  const startDateTime = new Date('2019-07-17T00:00:00.000Z');
+
+  it.each`
+    startDate                               | endDate                                 | expected
+    ${startDateTime}                        | ${new Date('2019-07-17T00:00:00.000Z')} | ${0}
+    ${startDateTime}                        | ${new Date('2019-07-17T12:00:00.000Z')} | ${43200}
+    ${startDateTime}                        | ${new Date('2019-07-18T00:00:00.000Z')} | ${86400}
+    ${new Date('2019-07-18T00:00:00.000Z')} | ${startDateTime}                        | ${-86400}
+  `('returns $expected for $endDate - $startDate', ({ startDate, endDate, expected }) => {
+    expect(datetimeUtility.differenceInSeconds(startDate, endDate)).toBe(expected);
+  });
+});
+
+describe('differenceInMonths', () => {
+  const startDateTime = new Date('2019-07-17T00:00:00.000Z');
+
+  it.each`
+    startDate                               | endDate                                 | expected
+    ${startDateTime}                        | ${startDateTime}                        | ${0}
+    ${startDateTime}                        | ${new Date('2019-12-17T12:00:00.000Z')} | ${5}
+    ${startDateTime}                        | ${new Date('2021-02-18T00:00:00.000Z')} | ${19}
+    ${new Date('2021-02-18T00:00:00.000Z')} | ${startDateTime}                        | ${-19}
+  `('returns $expected for $endDate - $startDate', ({ startDate, endDate, expected }) => {
+    expect(datetimeUtility.differenceInMonths(startDate, endDate)).toBe(expected);
+  });
+});
+
+describe('differenceInMilliseconds', () => {
+  const startDateTime = new Date('2019-07-17T00:00:00.000Z');
+
+  it.each`
+    startDate                               | endDate                                           | expected
+    ${startDateTime.getTime()}              | ${new Date('2019-07-17T00:00:00.000Z')}           | ${0}
+    ${startDateTime}                        | ${new Date('2019-07-17T12:00:00.000Z').getTime()} | ${43200000}
+    ${startDateTime}                        | ${new Date('2019-07-18T00:00:00.000Z').getTime()} | ${86400000}
+    ${new Date('2019-07-18T00:00:00.000Z')} | ${startDateTime.getTime()}                        | ${-86400000}
+  `('returns $expected for $endDate - $startDate', ({ startDate, endDate, expected }) => {
+    expect(datetimeUtility.differenceInMilliseconds(startDate, endDate)).toBe(expected);
+  });
+});
+
+describe('dateAtFirstDayOfMonth', () => {
+  const date = new Date('2019-07-16T12:00:00.000Z');
+
+  it('returns the date at the first day of the month', () => {
+    const startDate = datetimeUtility.dateAtFirstDayOfMonth(date);
+    const expectedStartDate = new Date('2019-07-01T12:00:00.000Z');
+
+    expect(startDate).toStrictEqual(expectedStartDate);
+  });
+});
+
+describe('datesMatch', () => {
+  const date = new Date('2019-07-17T00:00:00.000Z');
+
+  it.each`
+    date1   | date2                                   | expected
+    ${date} | ${new Date('2019-07-17T00:00:00.000Z')} | ${true}
+    ${date} | ${new Date('2019-07-17T12:00:00.000Z')} | ${false}
+  `('returns $expected for $date1 matches $date2', ({ date1, date2, expected }) => {
+    expect(datetimeUtility.datesMatch(date1, date2)).toBe(expected);
+  });
+});
+
+describe('format24HourTimeStringFromInt', () => {
+  const expectedFormattedTimes = [
+    [0, '00:00'],
+    [2, '02:00'],
+    [6, '06:00'],
+    [9, '09:00'],
+    [10, '10:00'],
+    [16, '16:00'],
+    [22, '22:00'],
+    [32, ''],
+    [NaN, ''],
+    ['Invalid Int', ''],
+    [null, ''],
+    [undefined, ''],
+  ];
+
+  expectedFormattedTimes.forEach(([timeInt, expectedTimeStringIn24HourNotation]) => {
+    it(`formats ${timeInt} as ${expectedTimeStringIn24HourNotation}`, () => {
+      expect(datetimeUtility.format24HourTimeStringFromInt(timeInt)).toBe(
+        expectedTimeStringIn24HourNotation,
+      );
+    });
+  });
+});
+
+describe('isToday', () => {
+  const today = new Date();
+  it.each`
+    date                                    | expected | negation
+    ${today}                                | ${true}  | ${'is'}
+    ${new Date('2021-01-21T12:00:00.000Z')} | ${false} | ${'is NOT'}
+  `('returns $expected as $date $negation today', ({ date, expected }) => {
+    expect(datetimeUtility.isToday(date)).toBe(expected);
+  });
+});
+
+describe('isInPast', () => {
+  it.each`
+    date                                   | expected
+    ${new Date('2024-12-15')}              | ${false}
+    ${new Date('2020-07-06T00:00')}        | ${false}
+    ${new Date('2020-07-05T23:59:59.999')} | ${true}
+    ${new Date('2020-07-05')}              | ${true}
+    ${new Date('1999-03-21')}              | ${true}
+  `('returns $expected for $date', ({ date, expected }) => {
+    expect(datetimeUtility.isInPast(date)).toBe(expected);
+  });
+});
+
+describe('isInFuture', () => {
+  it.each`
+    date                                   | expected
+    ${new Date('2024-12-15')}              | ${true}
+    ${new Date('2020-07-07T00:00')}        | ${true}
+    ${new Date('2020-07-06T23:59:59.999')} | ${false}
+    ${new Date('2020-07-06')}              | ${false}
+    ${new Date('1999-03-21')}              | ${false}
+  `('returns $expected for $date', ({ date, expected }) => {
+    expect(datetimeUtility.isInFuture(date)).toBe(expected);
+  });
+});
+
+describe('fallsBefore', () => {
+  it.each`
+    dateA                                  | dateB                                  | expected
+    ${new Date('2020-07-06T23:59:59.999')} | ${new Date('2020-07-07T00:00')}        | ${true}
+    ${new Date('2020-07-07T00:00')}        | ${new Date('2020-07-06T23:59:59.999')} | ${false}
+    ${new Date('2020-04-04')}              | ${new Date('2021-10-10')}              | ${true}
+    ${new Date('2021-10-10')}              | ${new Date('2020-04-04')}              | ${false}
+  `('returns $expected for "$dateA falls before $dateB"', ({ dateA, dateB, expected }) => {
+    expect(datetimeUtility.fallsBefore(dateA, dateB)).toBe(expected);
+  });
+});
+
+describe('removeTime', () => {
+  it.each`
+    date                                   | expected
+    ${new Date('2020-07-07')}              | ${new Date('2020-07-07T00:00:00.000')}
+    ${new Date('2020-07-07T00:00:00.001')} | ${new Date('2020-07-07T00:00:00.000')}
+    ${new Date('2020-07-07T23:59:59.999')} | ${new Date('2020-07-07T00:00:00.000')}
+    ${new Date('2020-07-07T12:34:56.789')} | ${new Date('2020-07-07T00:00:00.000')}
+  `('returns $expected for $date', ({ date, expected }) => {
+    expect(datetimeUtility.removeTime(date)).toEqual(expected);
+  });
+});
+
+describe('getTimeRemainingInWords', () => {
+  it.each`
+    date                                   | expected
+    ${new Date('2020-07-06T12:34:56.789')} | ${'0 days remaining'}
+    ${new Date('2020-07-07T12:34:56.789')} | ${'1 day remaining'}
+    ${new Date('2020-07-08T12:34:56.789')} | ${'2 days remaining'}
+    ${new Date('2020-07-12T12:34:56.789')} | ${'6 days remaining'}
+    ${new Date('2020-07-13T12:34:56.789')} | ${'1 week remaining'}
+    ${new Date('2020-07-19T12:34:56.789')} | ${'1 week remaining'}
+    ${new Date('2020-07-20T12:34:56.789')} | ${'2 weeks remaining'}
+    ${new Date('2020-07-27T12:34:56.789')} | ${'3 weeks remaining'}
+    ${new Date('2020-08-03T12:34:56.789')} | ${'4 weeks remaining'}
+    ${new Date('2020-08-05T12:34:56.789')} | ${'4 weeks remaining'}
+    ${new Date('2020-08-06T12:34:56.789')} | ${'1 month remaining'}
+    ${new Date('2020-09-06T12:34:56.789')} | ${'2 months remaining'}
+    ${new Date('2021-06-06T12:34:56.789')} | ${'11 months remaining'}
+    ${new Date('2021-07-06T12:34:56.789')} | ${'1 year remaining'}
+    ${new Date('2022-07-06T12:34:56.789')} | ${'2 years remaining'}
+    ${new Date('2030-07-06T12:34:56.789')} | ${'10 years remaining'}
+    ${new Date('2119-07-06T12:34:56.789')} | ${'99 years remaining'}
+  `('returns $expected for $date', ({ date, expected }) => {
+    expect(datetimeUtility.getTimeRemainingInWords(date)).toEqual(expected);
+  });
+});
+
+describe('getStartOfDay', () => {
   beforeEach(() => {
-    document.body.innerHTML = `<time title="some time" datetime="2020-02-18T22:22:32Z">1 hour ago</time>`;
+    timezoneMock.register('US/Eastern');
+  });
+
+  afterEach(() => {
+    timezoneMock.unregister();
   });
 
   it.each`
-    timeagoArg | title          | dataOriginalTitle
-    ${false}   | ${'some time'} | ${null}
-    ${true}    | ${''}          | ${'Feb 18, 2020 10:22pm GMT+0000'}
-  `('converts $seconds seconds to $approximation', ({ timeagoArg, title, dataOriginalTitle }) => {
-    const element = document.querySelector('time');
-    datetimeUtility.localTimeAgo($(element), timeagoArg);
+    inputAsString                      | options           | expectedAsString
+    ${'2021-01-29T18:08:23.014Z'}      | ${undefined}      | ${'2021-01-29T05:00:00.000Z'}
+    ${'2021-01-29T13:08:23.014-05:00'} | ${undefined}      | ${'2021-01-29T05:00:00.000Z'}
+    ${'2021-01-30T03:08:23.014+09:00'} | ${undefined}      | ${'2021-01-29T05:00:00.000Z'}
+    ${'2021-01-28T18:08:23.014-10:00'} | ${undefined}      | ${'2021-01-28T05:00:00.000Z'}
+    ${'2021-01-28T18:08:23.014-10:00'} | ${{}}             | ${'2021-01-28T05:00:00.000Z'}
+    ${'2021-01-28T18:08:23.014-10:00'} | ${{ utc: false }} | ${'2021-01-28T05:00:00.000Z'}
+    ${'2021-01-28T18:08:23.014-10:00'} | ${{ utc: true }}  | ${'2021-01-29T00:00:00.000Z'}
+  `(
+    'when the provided date is $inputAsString and the options parameter is $options, returns $expectedAsString',
+    ({ inputAsString, options, expectedAsString }) => {
+      const inputDate = new Date(inputAsString);
+      const actual = datetimeUtility.getStartOfDay(inputDate, options);
 
-    jest.runAllTimers();
+      expect(actual.toISOString()).toEqual(expectedAsString);
+    },
+  );
+});
 
-    expect(element.getAttribute('data-original-title')).toBe(dataOriginalTitle);
-    expect(element.getAttribute('title')).toBe(title);
+describe('getStartOfWeek', () => {
+  beforeEach(() => {
+    timezoneMock.register('US/Eastern');
   });
+
+  afterEach(() => {
+    timezoneMock.unregister();
+  });
+
+  it.each`
+    inputAsString                      | options           | expectedAsString
+    ${'2021-01-29T18:08:23.014Z'}      | ${undefined}      | ${'2021-01-25T05:00:00.000Z'}
+    ${'2021-01-29T13:08:23.014-05:00'} | ${undefined}      | ${'2021-01-25T05:00:00.000Z'}
+    ${'2021-01-30T03:08:23.014+09:00'} | ${undefined}      | ${'2021-01-25T05:00:00.000Z'}
+    ${'2021-01-28T18:08:23.014-10:00'} | ${undefined}      | ${'2021-01-25T05:00:00.000Z'}
+    ${'2021-01-28T18:08:23.014-10:00'} | ${{}}             | ${'2021-01-25T05:00:00.000Z'}
+    ${'2021-01-28T18:08:23.014-10:00'} | ${{ utc: false }} | ${'2021-01-25T05:00:00.000Z'}
+    ${'2021-01-28T18:08:23.014-10:00'} | ${{ utc: true }}  | ${'2021-01-26T00:00:00.000Z'}
+  `(
+    'when the provided date is $inputAsString and the options parameter is $options, returns $expectedAsString',
+    ({ inputAsString, options, expectedAsString }) => {
+      const inputDate = new Date(inputAsString);
+      const actual = datetimeUtility.getStartOfWeek(inputDate, options);
+
+      expect(actual.toISOString()).toEqual(expectedAsString);
+    },
+  );
 });

@@ -2,7 +2,7 @@
 
 require 'spec_helper'
 
-describe Deployments::LinkMergeRequestsService do
+RSpec.describe Deployments::LinkMergeRequestsService do
   let(:project) { create(:project, :repository) }
 
   # *   ddd0f15 Merge branch 'po-fix-test-env-path' into 'master'
@@ -25,6 +25,17 @@ describe Deployments::LinkMergeRequestsService do
           create(:environment, environment_type: 'review', name: 'review/foo')
 
         deploy = create(:deployment, :success, environment: environment)
+
+        expect(deploy).not_to receive(:link_merge_requests)
+
+        described_class.new(deploy).execute
+      end
+    end
+
+    context 'when the deployment failed' do
+      it 'does nothing' do
+        environment = create(:environment, name: 'foo')
+        deploy = create(:deployment, :failed, environment: environment)
 
         expect(deploy).not_to receive(:link_merge_requests)
 
@@ -159,53 +170,6 @@ describe Deployments::LinkMergeRequestsService do
       )
 
       expect(deploy.merge_requests).to be_empty
-    end
-
-    context 'when :track_mr_picking feature flag is disabled' do
-      before do
-        stub_feature_flags(track_mr_picking: false)
-      end
-
-      it 'does not link picked merge requests' do
-        environment = create(:environment, project: project)
-        deploy =
-          create(:deployment, :success, project: project, environment: environment)
-
-        picked_mr = create(
-          :merge_request,
-          :merged,
-          merge_commit_sha: '123abc',
-          source_project: project,
-          target_project: project
-        )
-
-        mr1 = create(
-          :merge_request,
-          :merged,
-          merge_commit_sha: mr1_merge_commit_sha,
-          source_project: project,
-          target_project: project
-        )
-
-        # mr1 includes c1c67abba which is a cherry-pick of the fake picked_mr merge request
-        create(:track_mr_picking_note, noteable: picked_mr, project: project, commit_id: 'c1c67abbaf91f624347bb3ae96eabe3a1b742478')
-
-        mr2 = create(
-          :merge_request,
-          :merged,
-          merge_commit_sha: mr2_merge_commit_sha,
-          source_project: project,
-          target_project: project
-        )
-
-        described_class.new(deploy).link_merge_requests_for_range(
-          first_deployment_sha,
-          mr2_merge_commit_sha
-        )
-
-        expect(deploy.merge_requests).to include(mr1, mr2)
-        expect(deploy.merge_requests).not_to include(picked_mr)
-      end
     end
   end
 

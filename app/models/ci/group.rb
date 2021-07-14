@@ -11,27 +11,42 @@ module Ci
     include StaticModel
     include Gitlab::Utils::StrongMemoize
 
-    attr_reader :stage, :name, :jobs
+    attr_reader :project, :stage, :name, :jobs
 
     delegate :size, to: :jobs
 
-    def initialize(stage, name:, jobs:)
+    def initialize(project, stage, name:, jobs:)
+      @project = project
       @stage = stage
       @name = name
       @jobs = jobs
     end
 
+    def ==(other)
+      other.present? && other.is_a?(self.class) &&
+        project == other.project &&
+        stage == other.stage &&
+        name == other.name
+    end
+
     def status
       strong_memoize(:status) do
-        if Feature.enabled?(:ci_composite_status, default_enabled: false)
-          Gitlab::Ci::Status::Composite
-            .new(@jobs)
-            .status
-        else
-          CommitStatus
-            .where(id: @jobs)
-            .legacy_status
-        end
+        status_struct.status
+      end
+    end
+
+    def success?
+      status.to_s == 'success'
+    end
+
+    def has_warnings?
+      status_struct.warnings?
+    end
+
+    def status_struct
+      strong_memoize(:status_struct) do
+        Gitlab::Ci::Status::Composite
+          .new(@jobs, project: project)
       end
     end
 
@@ -44,11 +59,16 @@ module Ci
       end
     end
 
-    def self.fabricate(stage)
-      stage.statuses.ordered.latest
+    # Construct a grouping of statuses for this stage.
+    # We allow the caller to pass in statuses for efficiency (avoiding N+1
+    # queries).
+    def self.fabricate(project, stage, statuses = nil)
+      statuses ||= stage.latest_statuses
+
+      statuses
         .sort_by(&:sortable_name).group_by(&:group_name)
         .map do |group_name, grouped_statuses|
-          self.new(stage, name: group_name, jobs: grouped_statuses)
+          self.new(project, stage, name: group_name, jobs: grouped_statuses)
         end
     end
   end

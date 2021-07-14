@@ -2,7 +2,7 @@
 
 require 'spec_helper'
 
-describe DeployToken do
+RSpec.describe DeployToken do
   subject(:deploy_token) { create(:deploy_token) }
 
   it { is_expected.to have_many :project_deploy_tokens }
@@ -47,7 +47,7 @@ describe DeployToken do
   describe '#ensure_token' do
     it 'ensures a token' do
       deploy_token.token = nil
-      deploy_token.save
+      deploy_token.save!
 
       expect(deploy_token.token).not_to be_empty
     end
@@ -62,7 +62,7 @@ describe DeployToken do
 
     context 'with no scopes' do
       it 'is invalid' do
-        deploy_token = build(:deploy_token, read_repository: false, read_registry: false)
+        deploy_token = build(:deploy_token, read_repository: false, read_registry: false, write_registry: false)
 
         expect(deploy_token).not_to be_valid
         expect(deploy_token.errors[:base].first).to eq("Scopes can't be blank")
@@ -72,14 +72,16 @@ describe DeployToken do
 
   describe '#scopes' do
     context 'with all the scopes' do
+      let_it_be(:deploy_token) { create(:deploy_token, :all_scopes) }
+
       it 'returns scopes assigned to DeployToken' do
-        expect(deploy_token.scopes).to eq([:read_repository, :read_registry])
+        expect(deploy_token.scopes).to eq(DeployToken::AVAILABLE_SCOPES)
       end
     end
 
     context 'with only one scope' do
       it 'returns scopes assigned to DeployToken' do
-        deploy_token = create(:deploy_token, read_registry: false)
+        deploy_token = create(:deploy_token, read_registry: false, write_registry: false)
         expect(deploy_token.scopes).to eq([:read_repository])
       end
     end
@@ -118,6 +120,39 @@ describe DeployToken do
 
       it 'returns true' do
         expect(deploy_token.active?).to be_truthy
+      end
+    end
+  end
+
+  # override the default PolicyActor implementation that always returns false
+  describe "#deactivated?" do
+    context "when it has been revoked" do
+      it 'returns true' do
+        deploy_token.revoke!
+
+        expect(deploy_token.deactivated?).to be_truthy
+      end
+    end
+
+    context "when it hasn't been revoked and is not expired" do
+      it 'returns false' do
+        expect(deploy_token.deactivated?).to be_falsy
+      end
+    end
+
+    context "when it hasn't been revoked and is expired" do
+      it 'returns false' do
+        deploy_token.update_attribute(:expires_at, Date.today - 5.days)
+
+        expect(deploy_token.deactivated?).to be_truthy
+      end
+    end
+
+    context "when it hasn't been revoked and has no expiry" do
+      let(:deploy_token) { create(:deploy_token, expires_at: nil) }
+
+      it 'returns false' do
+        expect(deploy_token.deactivated?).to be_falsy
       end
     end
   end
@@ -207,74 +242,61 @@ describe DeployToken do
 
       context 'and when the token is of group type' do
         let_it_be(:group) { create(:group) }
+
         let(:deploy_token) { create(:deploy_token, :group) }
 
         before do
           deploy_token.groups << group
         end
 
-        context 'and the allow_group_deploy_token feature flag is turned off' do
-          it 'is false' do
-            stub_feature_flags(allow_group_deploy_token: false)
+        context 'and the passed-in project does not belong to any group' do
+          it { is_expected.to be_falsy }
+        end
 
-            is_expected.to be_falsy
+        context 'and the passed-in project belongs to the token group' do
+          it 'is true' do
+            group.projects << project
+
+            is_expected.to be_truthy
           end
         end
 
-        context 'and the allow_group_deploy_token feature flag is turned on' do
+        context 'and the passed-in project belongs to a subgroup' do
+          let(:child_group) { create(:group, parent_id: group.id) }
+          let(:grandchild_group) { create(:group, parent_id: child_group.id) }
+
           before do
-            stub_feature_flags(allow_group_deploy_token: true)
+            grandchild_group.projects << project
           end
 
-          context 'and the passed-in project does not belong to any group' do
-            it { is_expected.to be_falsy }
+          context 'and the token group is an ancestor (grand-parent) of this group' do
+            it { is_expected.to be_truthy }
           end
 
-          context 'and the passed-in project belongs to the token group' do
-            it 'is true' do
-              group.projects << project
-
-              is_expected.to be_truthy
-            end
-          end
-
-          context 'and the passed-in project belongs to a subgroup' do
-            let(:child_group) { create(:group, parent_id: group.id) }
-            let(:grandchild_group) { create(:group, parent_id: child_group.id) }
-
-            before do
-              grandchild_group.projects << project
-            end
-
-            context 'and the token group is an ancestor (grand-parent) of this group' do
-              it { is_expected.to be_truthy }
-            end
-
-            context 'and the token group is not ancestor of this group' do
-              let(:child2_group) { create(:group, parent_id: group.id) }
-
-              it 'is false' do
-                deploy_token.groups = [child2_group]
-
-                is_expected.to be_falsey
-              end
-            end
-          end
-
-          context 'and the passed-in project does not belong to the token group' do
-            it { is_expected.to be_falsy }
-          end
-
-          context 'and the project belongs to a group that is parent of the token group' do
-            let(:super_group) { create(:group) }
-            let(:deploy_token) { create(:deploy_token, :group) }
-            let(:group) { create(:group, parent_id: super_group.id) }
+          context 'and the token group is not ancestor of this group' do
+            let(:child2_group) { create(:group, parent_id: group.id) }
 
             it 'is false' do
-              super_group.projects << project
+              deploy_token.groups = [child2_group]
 
               is_expected.to be_falsey
             end
+          end
+        end
+
+        context 'and the passed-in project does not belong to the token group' do
+          it { is_expected.to be_falsy }
+        end
+
+        context 'and the project belongs to a group that is parent of the token group' do
+          let(:super_group) { create(:group) }
+          let(:deploy_token) { create(:deploy_token, :group) }
+          let(:group) { create(:group, parent_id: super_group.id) }
+
+          it 'is false' do
+            super_group.projects << project
+
+            is_expected.to be_falsey
           end
         end
       end
@@ -348,6 +370,31 @@ describe DeployToken do
     context 'with no gitlab deploy token associated' do
       it 'returns nil' do
         is_expected.to be_nil
+      end
+    end
+  end
+
+  describe '#accessible_projects' do
+    subject { deploy_token.accessible_projects }
+
+    context 'when a deploy token is associated to a project' do
+      let_it_be(:deploy_token) { create(:deploy_token, :project) }
+
+      it 'returns only projects directly associated with the token' do
+        expect(deploy_token).to receive(:projects)
+
+        subject
+      end
+    end
+
+    context 'when a deploy token is associated to a group' do
+      let_it_be(:group) { create(:group) }
+      let_it_be(:deploy_token) { create(:deploy_token, :group, groups: [group]) }
+
+      it 'returns all projects from the group' do
+        expect(group).to receive(:all_projects)
+
+        subject
       end
     end
   end

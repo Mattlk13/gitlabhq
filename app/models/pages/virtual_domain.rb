@@ -17,9 +17,14 @@ module Pages
     end
 
     def lookup_paths
-      projects.map do |project|
+      paths = projects.map do |project|
         project.pages_lookup_path(trim_prefix: trim_prefix, domain: domain)
-      end.sort_by(&:prefix).reverse
+      end
+
+      # TODO: remove in https://gitlab.com/gitlab-org/gitlab/-/issues/328715
+      paths = paths.select(&:source)
+
+      paths.sort_by(&:prefix).reverse
     end
 
     private

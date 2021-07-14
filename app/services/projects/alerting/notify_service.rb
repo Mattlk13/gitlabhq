@@ -2,59 +2,61 @@
 
 module Projects
   module Alerting
-    class NotifyService < BaseService
-      include Gitlab::Utils::StrongMemoize
-      include IncidentManagement::Settings
+    class NotifyService
+      extend ::Gitlab::Utils::Override
+      include ::AlertManagement::AlertProcessing
 
-      def execute(token)
-        return forbidden unless alerts_service_activated?
+      def initialize(project, payload)
+        @project = project
+        @payload = payload
+      end
+
+      def execute(token, integration = nil)
+        @integration = integration
+
+        return bad_request unless valid_payload_size?
+        return forbidden unless active_integration?
         return unauthorized unless valid_token?(token)
 
-        process_incident_issues if process_issues?
-        send_alert_email if send_email?
+        process_alert
+        return bad_request unless alert.persisted?
+
+        complete_post_processing_tasks
 
         ServiceResponse.success
-      rescue Gitlab::Alerting::NotificationPayloadParser::BadPayloadError
-        bad_request
       end
 
       private
 
-      delegate :alerts_service, :alerts_service_activated?, to: :project
+      attr_reader :project, :payload, :integration
 
-      def send_email?
-        incident_management_setting.send_email?
+      def valid_payload_size?
+        Gitlab::Utils::DeepSize.new(payload).valid?
       end
 
-      def process_incident_issues
-        IncidentManagement::ProcessAlertWorker
-          .perform_async(project.id, parsed_payload)
+      override :alert_source
+      def alert_source
+        super || integration&.name || 'Generic Alert Endpoint'
       end
 
-      def send_alert_email
-        notification_service
-          .async
-          .prometheus_alerts_fired(project, [parsed_payload])
-      end
-
-      def parsed_payload
-        Gitlab::Alerting::NotificationPayloadParser.call(params.to_h)
+      def active_integration?
+        integration&.active?
       end
 
       def valid_token?(token)
-        token == alerts_service.token
+        token == integration.token
       end
 
       def bad_request
-        ServiceResponse.error(message: 'Bad Request', http_status: 400)
+        ServiceResponse.error(message: 'Bad Request', http_status: :bad_request)
       end
 
       def unauthorized
-        ServiceResponse.error(message: 'Unauthorized', http_status: 401)
+        ServiceResponse.error(message: 'Unauthorized', http_status: :unauthorized)
       end
 
       def forbidden
-        ServiceResponse.error(message: 'Forbidden', http_status: 403)
+        ServiceResponse.error(message: 'Forbidden', http_status: :forbidden)
       end
     end
   end

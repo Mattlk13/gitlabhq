@@ -9,9 +9,12 @@ module QA
       EventNotFoundError = Class.new(RuntimeError)
 
       module Base
-        def events(action: nil)
+        def events(action: nil, target_type: nil)
+          query = []
+          query << "action=#{CGI.escape(action)}" if action
+          query << "target_type=#{CGI.escape(target_type)}" if target_type
           path = [api_get_events]
-          path << "?action=#{CGI.escape(action)}" if action
+          path << "?#{query.join("&")}" unless query.empty?
           parse_body(api_get_from("#{path.join}"))
         end
 
@@ -19,6 +22,18 @@ module QA
 
         def api_get_events
           "#{api_get_path}/events"
+        end
+
+        def fetch_events
+          events_returned = nil
+          Support::Waiter.wait_until(max_duration: max_wait, raise_on_failure: raise_on_failure) do
+            events_returned = yield
+            events_returned.any?
+          end
+
+          raise EventNotFoundError, "Timed out waiting for events" unless events_returned
+
+          events_returned
         end
 
         def wait_for_event

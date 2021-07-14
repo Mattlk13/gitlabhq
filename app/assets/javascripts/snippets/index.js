@@ -1,34 +1,43 @@
 import Vue from 'vue';
-import Translate from '~/vue_shared/translate';
 import VueApollo from 'vue-apollo';
 import createDefaultClient from '~/lib/graphql';
 
-import SnippetsApp from './components/app.vue';
+import { SNIPPET_LEVELS_MAP, SNIPPET_VISIBILITY_PRIVATE } from '~/snippets/constants';
+import Translate from '~/vue_shared/translate';
 
 Vue.use(VueApollo);
 Vue.use(Translate);
 
-export default () => {
-  const el = document.getElementById('js-snippet-view');
-
+export default function appFactory(el, Component) {
   if (!el) {
     return false;
   }
 
-  const { snippetGid } = el.dataset;
   const apolloProvider = new VueApollo({
-    defaultClient: createDefaultClient(),
+    defaultClient: createDefaultClient({}, { batchMax: 1 }),
   });
+
+  const {
+    visibilityLevels = '[]',
+    selectedLevel,
+    multipleLevelsRestricted,
+    ...restDataset
+  } = el.dataset;
 
   return new Vue({
     el,
     apolloProvider,
+    provide: {
+      visibilityLevels: JSON.parse(visibilityLevels),
+      selectedLevel: SNIPPET_LEVELS_MAP[selectedLevel] ?? SNIPPET_VISIBILITY_PRIVATE,
+      multipleLevelsRestricted: 'multipleLevelsRestricted' in el.dataset,
+    },
     render(createElement) {
-      return createElement(SnippetsApp, {
+      return createElement(Component, {
         props: {
-          snippetGid,
+          ...restDataset,
         },
       });
     },
   });
-};
+}

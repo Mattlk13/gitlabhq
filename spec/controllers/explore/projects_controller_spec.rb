@@ -2,8 +2,10 @@
 
 require 'spec_helper'
 
-describe Explore::ProjectsController do
+RSpec.describe Explore::ProjectsController do
   shared_examples 'explore projects' do
+    let(:expected_default_sort) { 'latest_activity_desc' }
+
     describe 'GET #index.json' do
       render_views
 
@@ -12,6 +14,11 @@ describe Explore::ProjectsController do
       end
 
       it { is_expected.to respond_with(:success) }
+
+      it 'sets a default sort parameter' do
+        expect(controller.params[:sort]).to eq(expected_default_sort)
+        expect(assigns[:sort]).to eq(expected_default_sort)
+      end
     end
 
     describe 'GET #trending.json' do
@@ -22,6 +29,11 @@ describe Explore::ProjectsController do
       end
 
       it { is_expected.to respond_with(:success) }
+
+      it 'sets a default sort parameter' do
+        expect(controller.params[:sort]).to eq(expected_default_sort)
+        expect(assigns[:sort]).to eq(expected_default_sort)
+      end
     end
 
     describe 'GET #starred.json' do
@@ -32,6 +44,11 @@ describe Explore::ProjectsController do
       end
 
       it { is_expected.to respond_with(:success) }
+
+      it 'sets a default sort parameter' do
+        expect(controller.params[:sort]).to eq(expected_default_sort)
+        expect(assigns[:sort]).to eq(expected_default_sort)
+      end
     end
 
     describe 'GET #trending' do
@@ -60,7 +77,7 @@ describe Explore::ProjectsController do
   end
 
   shared_examples "blocks high page numbers" do
-    let(:page_limit) { 200 }
+    let(:page_limit) { described_class::PAGE_LIMIT }
 
     context "page number is too high" do
       [:index, :trending, :starred].each do |endpoint|
@@ -138,6 +155,33 @@ describe Explore::ProjectsController do
     end
   end
 
+  shared_examples 'avoids N+1 queries' do
+    [:index, :trending, :starred].each do |endpoint|
+      describe "GET #{endpoint}" do
+        render_views
+
+        # some N+1 queries still exist
+        it 'avoids N+1 queries' do
+          projects = create_list(:project, 3, :repository, :public)
+          projects.each do |project|
+            pipeline = create(:ci_pipeline, :success, project: project, sha: project.commit.id)
+            create(:commit_status, :success, pipeline: pipeline, ref: pipeline.ref)
+          end
+
+          control = ActiveRecord::QueryRecorder.new { get endpoint }
+
+          new_projects = create_list(:project, 2, :repository, :public)
+          new_projects.each do |project|
+            pipeline = create(:ci_pipeline, :success, project: project, sha: project.commit.id)
+            create(:commit_status, :success, pipeline: pipeline, ref: pipeline.ref)
+          end
+
+          expect { get endpoint }.not_to exceed_query_limit(control).with_threshold(8)
+        end
+      end
+    end
+  end
+
   context 'when user is signed in' do
     let(:user) { create(:user) }
 
@@ -147,6 +191,7 @@ describe Explore::ProjectsController do
 
     include_examples 'explore projects'
     include_examples "blocks high page numbers"
+    include_examples 'avoids N+1 queries'
 
     context 'user preference sorting' do
       let(:project) { create(:project) }
@@ -160,6 +205,7 @@ describe Explore::ProjectsController do
   context 'when user is not signed in' do
     include_examples 'explore projects'
     include_examples "blocks high page numbers"
+    include_examples 'avoids N+1 queries'
 
     context 'user preference sorting' do
       let(:project) { create(:project) }
@@ -169,6 +215,18 @@ describe Explore::ProjectsController do
         expect_any_instance_of(UserPreference).not_to receive(:update)
 
         get :index, params: { sort: sorting_param }
+      end
+    end
+
+    context 'restricted visibility level is public' do
+      before do
+        stub_application_setting(restricted_visibility_levels: [Gitlab::VisibilityLevel::PUBLIC])
+      end
+
+      it 'redirects to login page' do
+        get :index
+
+        expect(response).to redirect_to new_user_session_path
       end
     end
   end

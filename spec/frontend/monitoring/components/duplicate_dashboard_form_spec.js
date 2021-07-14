@@ -1,33 +1,36 @@
 import { mount } from '@vue/test-utils';
+import { nextTick } from 'vue';
 import DuplicateDashboardForm from '~/monitoring/components/duplicate_dashboard_form.vue';
 
 import { dashboardGitResponse } from '../mock_data';
 
+let wrapper;
+
+const createMountedWrapper = (props = {}) => {
+  // Use `mount` to render native input elements
+  wrapper = mount(DuplicateDashboardForm, {
+    propsData: { ...props },
+    // We need to attach to document, so that `document.activeElement` is properly set in jsdom
+    attachTo: document.body,
+  });
+};
+
 describe('DuplicateDashboardForm', () => {
-  let wrapper;
+  const defaultBranch = 'main';
 
-  const defaultBranch = 'master';
-
-  const findByRef = ref => wrapper.find({ ref });
+  const findByRef = (ref) => wrapper.find({ ref });
   const setValue = (ref, val) => {
     findByRef(ref).setValue(val);
   };
-  const setChecked = value => {
-    const input = wrapper.find(`.form-check-input[value="${value}"]`);
+  const setChecked = (value) => {
+    const input = wrapper.find(`.custom-control-input[value="${value}"]`);
     input.element.checked = true;
     input.trigger('click');
     input.trigger('change');
   };
 
   beforeEach(() => {
-    // Use `mount` to render native input elements
-    wrapper = mount(DuplicateDashboardForm, {
-      propsData: {
-        dashboard: dashboardGitResponse[0],
-        defaultBranch,
-      },
-      sync: false,
-    });
+    createMountedWrapper({ dashboard: dashboardGitResponse[0], defaultBranch });
   });
 
   it('renders correctly', () => {
@@ -44,34 +47,34 @@ describe('DuplicateDashboardForm', () => {
   describe('validates the file name', () => {
     const findInvalidFeedback = () => findByRef('fileNameFormGroup').find('.invalid-feedback');
 
-    it('when is empty', () => {
+    it('when is empty', async () => {
       setValue('fileName', '');
-      return wrapper.vm.$nextTick(() => {
-        expect(findByRef('fileNameFormGroup').is('.is-valid')).toBe(true);
-        expect(findInvalidFeedback().exists()).toBe(false);
-      });
+      await nextTick();
+
+      expect(findByRef('fileNameFormGroup').classes()).toContain('is-valid');
+      expect(findInvalidFeedback().exists()).toBe(false);
     });
 
-    it('when is valid', () => {
+    it('when is valid', async () => {
       setValue('fileName', 'my_dashboard.yml');
-      return wrapper.vm.$nextTick(() => {
-        expect(findByRef('fileNameFormGroup').is('.is-valid')).toBe(true);
-        expect(findInvalidFeedback().exists()).toBe(false);
-      });
+      await nextTick();
+
+      expect(findByRef('fileNameFormGroup').classes()).toContain('is-valid');
+      expect(findInvalidFeedback().exists()).toBe(false);
     });
 
-    it('when is not valid', () => {
+    it('when is not valid', async () => {
       setValue('fileName', 'my_dashboard.exe');
-      return wrapper.vm.$nextTick(() => {
-        expect(findByRef('fileNameFormGroup').is('.is-invalid')).toBe(true);
-        expect(findInvalidFeedback().text()).toBeTruthy();
-      });
+      await nextTick();
+
+      expect(findByRef('fileNameFormGroup').classes()).toContain('is-invalid');
+      expect(findInvalidFeedback().text()).toBeTruthy();
     });
   });
 
   describe('emits `change` event', () => {
     const lastChange = () =>
-      wrapper.vm.$nextTick().then(() => {
+      nextTick().then(() => {
         wrapper.find('form').trigger('change');
 
         // Resolves to the last emitted change
@@ -81,7 +84,8 @@ describe('DuplicateDashboardForm', () => {
 
     it('with the inital form values', () => {
       expect(wrapper.emitted().change).toHaveLength(1);
-      expect(lastChange()).resolves.toEqual({
+
+      return expect(lastChange()).resolves.toEqual({
         branch: '',
         commitMessage: expect.any(String),
         dashboard: dashboardGitResponse[0].path,
@@ -92,7 +96,7 @@ describe('DuplicateDashboardForm', () => {
     it('containing an inputted file name', () => {
       setValue('fileName', 'my_dashboard.yml');
 
-      expect(lastChange()).resolves.toMatchObject({
+      return expect(lastChange()).resolves.toMatchObject({
         fileName: 'my_dashboard.yml',
       });
     });
@@ -100,7 +104,7 @@ describe('DuplicateDashboardForm', () => {
     it('containing a default commit message when no message is set', () => {
       setValue('commitMessage', '');
 
-      expect(lastChange()).resolves.toMatchObject({
+      return expect(lastChange()).resolves.toMatchObject({
         commitMessage: expect.stringContaining('Create custom dashboard'),
       });
     });
@@ -108,7 +112,7 @@ describe('DuplicateDashboardForm', () => {
     it('containing an inputted commit message', () => {
       setValue('commitMessage', 'My commit message');
 
-      expect(lastChange()).resolves.toMatchObject({
+      return expect(lastChange()).resolves.toMatchObject({
         commitMessage: expect.stringContaining('My commit message'),
       });
     });
@@ -116,7 +120,7 @@ describe('DuplicateDashboardForm', () => {
     it('containing an inputted branch name', () => {
       setValue('branchName', 'a-new-branch');
 
-      expect(lastChange()).resolves.toMatchObject({
+      return expect(lastChange()).resolves.toMatchObject({
         branch: 'a-new-branch',
       });
     });
@@ -125,22 +129,38 @@ describe('DuplicateDashboardForm', () => {
       setChecked(wrapper.vm.$options.radioVals.DEFAULT);
       setValue('branchName', 'a-new-branch');
 
-      expect(lastChange()).resolves.toMatchObject({
-        branch: defaultBranch,
-      });
-
-      return wrapper.vm.$nextTick(() => {
-        expect(findByRef('branchName').isVisible()).toBe(false);
-      });
+      return Promise.all([
+        expect(lastChange()).resolves.toMatchObject({
+          branch: defaultBranch,
+        }),
+        nextTick(() => {
+          expect(findByRef('branchName').isVisible()).toBe(false);
+        }),
+      ]);
     });
 
-    it('when `new` branch option is chosen, focuses on the branch name input', () => {
+    it('when `new` branch option is chosen, focuses on the branch name input', async () => {
       setChecked(wrapper.vm.$options.radioVals.NEW);
 
-      return wrapper.vm.$nextTick().then(() => {
-        wrapper.find('form').trigger('change');
-        expect(findByRef('branchName').is(':focus')).toBe(true);
-      });
+      await nextTick();
+
+      wrapper.find('form').trigger('change');
+      expect(document.activeElement).toBe(findByRef('branchName').element);
     });
+  });
+});
+
+describe('DuplicateDashboardForm escapes elements', () => {
+  const branchToEscape = "<img/src='x'onerror=alert(document.domain)>";
+
+  beforeEach(() => {
+    createMountedWrapper({ dashboard: dashboardGitResponse[0], defaultBranch: branchToEscape });
+  });
+
+  it('should escape branch name data', () => {
+    const branchOptionHtml = wrapper.vm.branchOptions[0].html;
+    const escapedBranch = '&lt;img/src=&#39;x&#39;onerror=alert(document.domain)&gt';
+
+    expect(branchOptionHtml).toEqual(expect.stringContaining(escapedBranch));
   });
 });

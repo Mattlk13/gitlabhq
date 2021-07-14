@@ -3,10 +3,6 @@
 module Gitlab
   module Database
     module Count
-      class PgClass < ActiveRecord::Base
-        self.table_name = 'pg_class'
-      end
-
       # This strategy counts based on PostgreSQL's statistics in pg_stat_user_tables.
       #
       # Specifically, it relies on the column reltuples in said table. An additional
@@ -72,10 +68,11 @@ module Gitlab
         # @param [Array] table names
         # @returns [Hash] Table name to count mapping (e.g. { 'projects' => 5, 'users' => 100 })
         def get_statistics(table_names, check_statistics: true)
-          time = 1.hour.ago
+          time = 6.hours.ago
 
-          query = PgClass.joins("LEFT JOIN pg_stat_user_tables USING (relname)")
+          query = ::Gitlab::Database::PgClass.joins("LEFT JOIN pg_stat_user_tables ON pg_stat_user_tables.relid = pg_class.oid")
             .where(relname: table_names)
+            .where('schemaname = current_schema()')
             .select('pg_class.relname AS table_name, reltuples::bigint AS estimate')
 
           if check_statistics

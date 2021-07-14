@@ -1,8 +1,11 @@
 ---
+stage: Enablement
+group: Distribution
+info: To determine the technical writer assigned to the Stage/Group associated with this page, see https://about.gitlab.com/handbook/engineering/ux/technical-writing/#assignments
 type: reference
 ---
 
-# Apps for a Testing Environment
+# Apps for a testing environment **(FREE SELF)**
 
 This is the GitLab Support Team's collection of information regarding testing environments,
 for use while troubleshooting. It is listed here for transparency, and it may be useful
@@ -10,13 +13,13 @@ for users with experience with these tools. If you are currently having an issue
 GitLab, you may want to check your [support options](https://about.gitlab.com/support/)
 first, before attempting to use this information.
 
-NOTE: **Note:**
+NOTE:
 This page was initially written for Support Engineers, so some of the links
 are only available internally at GitLab.
 
 ## Docker
 
-The following were tested on docker containers running in the cloud. Support Engineers,
+The following were tested on Docker containers running in the cloud. Support Engineers,
 please see [these docs](https://gitlab.com/gitlab-com/dev-resources/tree/master/dev-resources#running-docker-containers)
 on how to run Docker containers on `dev-resources`. Other setups haven't been tested,
 but contributions are welcome.
@@ -89,7 +92,7 @@ gitlab_rails['omniauth_providers'] = [
 
 #### GroupSAML for GitLab.com
 
-See [the GDK SAML documentation](https://gitlab.com/gitlab-org/gitlab-development-kit/blob/master/doc/howto/saml.md).
+See [the GDK SAML documentation](https://gitlab.com/gitlab-org/gitlab-development-kit/blob/main/doc/howto/saml.md).
 
 ### Elasticsearch
 
@@ -100,8 +103,13 @@ docker run -d --name elasticsearch \
 docker.elastic.co/elasticsearch/elasticsearch:5.5.1
 ```
 
-Then confirm it works in the browser at `curl http://<IP_ADDRESS>:9200/_cat/health`.
+Then confirm it works in the browser at `curl "http://<IP_ADDRESS>:9200/_cat/health"`.
 Elasticsearch's default username is `elastic` and password is `changeme`.
+
+### Kroki
+
+See [our Kroki docs](../integration/kroki.md#docker)
+on running Kroki in Docker.
 
 ### PlantUML
 

@@ -2,7 +2,7 @@
 
 require 'spec_helper'
 
-describe Clusters::Cluster, :use_clean_rails_memory_store_caching do
+RSpec.describe Clusters::Cluster, :use_clean_rails_memory_store_caching do
   include ReactiveCachingHelpers
   include KubernetesHelpers
 
@@ -10,6 +10,7 @@ describe Clusters::Cluster, :use_clean_rails_memory_store_caching do
 
   subject { build(:cluster) }
 
+  it { is_expected.to include_module(HasEnvironmentScope) }
   it { is_expected.to belong_to(:user) }
   it { is_expected.to belong_to(:management_project).class_name('::Project') }
   it { is_expected.to have_many(:cluster_projects) }
@@ -20,6 +21,7 @@ describe Clusters::Cluster, :use_clean_rails_memory_store_caching do
   it { is_expected.to have_one(:provider_gcp) }
   it { is_expected.to have_one(:provider_aws) }
   it { is_expected.to have_one(:platform_kubernetes) }
+  it { is_expected.to have_one(:integration_prometheus) }
   it { is_expected.to have_one(:application_helm) }
   it { is_expected.to have_one(:application_ingress) }
   it { is_expected.to have_one(:application_prometheus) }
@@ -27,6 +29,9 @@ describe Clusters::Cluster, :use_clean_rails_memory_store_caching do
   it { is_expected.to have_many(:kubernetes_namespaces) }
   it { is_expected.to have_one(:cluster_project) }
   it { is_expected.to have_many(:deployment_clusters) }
+  it { is_expected.to have_many(:metrics_dashboard_annotations) }
+  it { is_expected.to have_many(:successful_deployments) }
+  it { is_expected.to have_many(:environments).through(:deployments) }
 
   it { is_expected.to delegate_method(:status).to(:provider) }
   it { is_expected.to delegate_method(:status_reason).to(:provider) }
@@ -36,12 +41,14 @@ describe Clusters::Cluster, :use_clean_rails_memory_store_caching do
   it { is_expected.to delegate_method(:rbac?).to(:platform_kubernetes).with_prefix }
   it { is_expected.to delegate_method(:available?).to(:application_helm).with_prefix }
   it { is_expected.to delegate_method(:available?).to(:application_ingress).with_prefix }
-  it { is_expected.to delegate_method(:available?).to(:application_prometheus).with_prefix }
   it { is_expected.to delegate_method(:available?).to(:application_knative).with_prefix }
+  it { is_expected.to delegate_method(:available?).to(:integration_elastic_stack).with_prefix }
+  it { is_expected.to delegate_method(:available?).to(:integration_prometheus).with_prefix }
   it { is_expected.to delegate_method(:external_ip).to(:application_ingress).with_prefix }
   it { is_expected.to delegate_method(:external_hostname).to(:application_ingress).with_prefix }
 
   it { is_expected.to respond_to :project }
+  it { is_expected.to be_namespace_per_environment }
 
   describe 'applications have inverse_of: :cluster option' do
     let(:cluster) { create(:cluster) }
@@ -155,6 +162,102 @@ describe Clusters::Cluster, :use_clean_rails_memory_store_caching do
     end
   end
 
+  describe '.with_management_project' do
+    subject { described_class.with_management_project }
+
+    context 'cluster has a management project' do
+      let!(:cluster) { create(:cluster, :management_project) }
+
+      it { is_expected.to include(cluster) }
+    end
+
+    context 'cluster does not have a management project' do
+      let!(:cluster) { create(:cluster) }
+
+      it { is_expected.not_to include(cluster) }
+    end
+  end
+
+  describe '.with_application_prometheus' do
+    subject { described_class.with_application_prometheus }
+
+    let!(:cluster) { create(:cluster) }
+
+    context 'cluster has prometheus application' do
+      let!(:application) { create(:clusters_applications_prometheus, :installed, cluster: cluster) }
+
+      it { is_expected.to include(cluster) }
+    end
+
+    context 'cluster does not have prometheus application' do
+      let(:cluster) { create(:cluster) }
+
+      it { is_expected.not_to include(cluster) }
+    end
+  end
+
+  describe '.with_available_elasticstack' do
+    subject { described_class.with_available_elasticstack }
+
+    let_it_be(:cluster) { create(:cluster) }
+
+    context 'cluster has ElasticStack application' do
+      let!(:application) { create(:clusters_applications_elastic_stack, :installed, cluster: cluster) }
+
+      it { is_expected.to include(cluster) }
+    end
+
+    context 'cluster does not have ElasticStack application' do
+      it { is_expected.not_to include(cluster) }
+    end
+  end
+
+  describe '.distinct_with_deployed_environments' do
+    subject { described_class.distinct_with_deployed_environments }
+
+    let_it_be(:cluster) { create(:cluster) }
+
+    context 'cluster has multiple successful deployment with environment' do
+      let!(:environment) { create(:environment) }
+      let!(:deployment) { create(:deployment, :success, cluster: cluster, environment: environment) }
+      let!(:deployment_2) { create(:deployment, :success, cluster: cluster, environment: environment) }
+
+      it { is_expected.to include(cluster) }
+
+      it 'lists only distinct environments' do
+        expect(subject.first.environments.count).to eq(1)
+      end
+    end
+
+    context 'cluster has only failed deployment with environment' do
+      let!(:environment) { create(:environment) }
+      let!(:deployment) { create(:deployment, :failed, cluster: cluster, environment: environment) }
+
+      it { is_expected.not_to include(cluster) }
+    end
+
+    context 'cluster does not have any deployment' do
+      it { is_expected.not_to include(cluster) }
+    end
+  end
+
+  describe '.with_project_http_integrations' do
+    subject { described_class.with_project_http_integrations(project_id) }
+
+    let!(:cluster) { create(:cluster, :project) }
+    let!(:project_id) { cluster.first_project.id }
+
+    context 'project has alert service data' do
+      let!(:integration) { create(:alert_management_http_integration, project: cluster.clusterable) }
+
+      it { is_expected.to include(cluster) }
+    end
+
+    context 'project has no alert service data' do
+      it { is_expected.not_to include(cluster) }
+    end
+  end
+
   describe '.for_project_namespace' do
     subject { described_class.for_project_namespace(namespace_id) }
 
@@ -167,6 +270,79 @@ describe Clusters::Cluster, :use_clean_rails_memory_store_caching do
 
   describe 'validations' do
     subject { cluster.valid? }
+
+    context 'when validates unique_environment_scope' do
+      context 'for a project cluster' do
+        let(:project) { create(:project) }
+
+        before do
+          create(:cluster, projects: [project], environment_scope: 'product/*')
+        end
+
+        context 'when identical environment scope exists in project' do
+          let(:cluster) { build(:cluster, projects: [project], environment_scope: 'product/*') }
+
+          it { is_expected.to be_falsey }
+        end
+
+        context 'when identical environment scope does not exist in project' do
+          let(:cluster) { build(:cluster, projects: [project], environment_scope: '*') }
+
+          it { is_expected.to be_truthy }
+        end
+
+        context 'when identical environment scope exists in different project' do
+          let(:project2) { create(:project) }
+          let(:cluster) { build(:cluster, projects: [project2], environment_scope: 'product/*') }
+
+          it { is_expected.to be_truthy }
+        end
+      end
+
+      context 'for a group cluster' do
+        let(:group) { create(:group) }
+
+        before do
+          create(:cluster, cluster_type: :group_type, groups: [group], environment_scope: 'product/*')
+        end
+
+        context 'when identical environment scope exists in group' do
+          let(:cluster) { build(:cluster, cluster_type: :group_type, groups: [group], environment_scope: 'product/*') }
+
+          it { is_expected.to be_falsey }
+        end
+
+        context 'when identical environment scope does not exist in group' do
+          let(:cluster) { build(:cluster, cluster_type: :group_type, groups: [group], environment_scope: '*') }
+
+          it { is_expected.to be_truthy }
+        end
+
+        context 'when identical environment scope exists in different group' do
+          let(:cluster) { build(:cluster, :group, environment_scope: 'product/*') }
+
+          it { is_expected.to be_truthy }
+        end
+      end
+
+      context 'for an instance cluster' do
+        before do
+          create(:cluster, :instance, environment_scope: 'product/*')
+        end
+
+        context 'identical environment scope exists' do
+          let(:cluster) { build(:cluster, :instance, environment_scope: 'product/*') }
+
+          it { is_expected.to be_falsey }
+        end
+
+        context 'identical environment scope does not exist' do
+          let(:cluster) { build(:cluster, :instance, environment_scope: '*') }
+
+          it { is_expected.to be_truthy }
+        end
+      end
+    end
 
     context 'when validates name' do
       context 'when provided by user' do
@@ -343,6 +519,27 @@ describe Clusters::Cluster, :use_clean_rails_memory_store_caching do
         end
       end
     end
+
+    describe 'helm_major_version can only be 2 or 3' do
+      using RSpec::Parameterized::TableSyntax
+
+      where(:helm_major_version, :expect_valid) do
+        2  | true
+        3  | true
+        4  | false
+        -1 | false
+      end
+
+      with_them do
+        let(:cluster) { build(:cluster, helm_major_version: helm_major_version) }
+
+        it { is_expected.to eq(expect_valid) }
+      end
+    end
+  end
+
+  it 'has default helm_major_version 3' do
+    expect(create(:cluster).helm_major_version).to eq(3)
   end
 
   describe '.ancestor_clusters_for_clusterable' do
@@ -556,34 +753,62 @@ describe Clusters::Cluster, :use_clean_rails_memory_store_caching do
     end
 
     context 'when applications are created' do
-      let!(:helm) { create(:clusters_applications_helm, cluster: cluster) }
-      let!(:ingress) { create(:clusters_applications_ingress, cluster: cluster) }
-      let!(:cert_manager) { create(:clusters_applications_cert_manager, cluster: cluster) }
-      let!(:crossplane) { create(:clusters_applications_crossplane, cluster: cluster) }
-      let!(:prometheus) { create(:clusters_applications_prometheus, cluster: cluster) }
-      let!(:runner) { create(:clusters_applications_runner, cluster: cluster) }
-      let!(:jupyter) { create(:clusters_applications_jupyter, cluster: cluster) }
-      let!(:knative) { create(:clusters_applications_knative, cluster: cluster) }
-      let!(:elastic_stack) { create(:clusters_applications_elastic_stack, cluster: cluster) }
+      let(:cluster) { create(:cluster, :with_all_applications) }
 
-      it 'returns a list of created applications' do
-        is_expected.to contain_exactly(helm, ingress, cert_manager, crossplane, prometheus, runner, jupyter, knative, elastic_stack)
+      it 'returns a list of created applications', :aggregate_failures do
+        is_expected.to have_attributes(size: described_class::APPLICATIONS.size)
+        is_expected.to all(be_kind_of(::Clusters::Concerns::ApplicationCore))
+        is_expected.to all(be_persisted)
+      end
+    end
+  end
+
+  describe '#find_or_build_application' do
+    let_it_be(:cluster, reload: true) { create(:cluster) }
+
+    it 'rejects classes that are not applications' do
+      expect do
+        cluster.find_or_build_application(Project)
+      end.to raise_error(ArgumentError)
+    end
+
+    context 'when none of applications are created' do
+      it 'returns the new application', :aggregate_failures do
+        described_class::APPLICATIONS.values.each do |application_class|
+          application = cluster.find_or_build_application(application_class)
+
+          expect(application).to be_a(application_class)
+          expect(application).not_to be_persisted
+        end
+      end
+    end
+
+    context 'when application is persisted' do
+      let(:cluster) { create(:cluster, :with_all_applications) }
+
+      it 'returns the persisted application', :aggregate_failures do
+        described_class::APPLICATIONS.each_value do |application_class|
+          application = cluster.find_or_build_application(application_class)
+
+          expect(application).to be_kind_of(::Clusters::Concerns::ApplicationCore)
+          expect(application).to be_persisted
+        end
       end
     end
   end
 
   describe '#allow_user_defined_namespace?' do
-    let(:cluster) { create(:cluster, :provided_by_gcp) }
-
     subject { cluster.allow_user_defined_namespace? }
 
     context 'project type cluster' do
       context 'gitlab managed' do
+        let(:cluster) { build(:cluster, :provided_by_gcp) }
+
         it { is_expected.to be_truthy }
       end
 
       context 'not managed' do
-        let(:cluster) { create(:cluster, :provided_by_gcp, managed: false) }
+        let(:cluster) { build(:cluster, :provided_by_gcp, managed: false) }
 
         it { is_expected.to be_truthy }
       end
@@ -591,13 +816,13 @@ describe Clusters::Cluster, :use_clean_rails_memory_store_caching do
 
     context 'group type cluster' do
       context 'gitlab managed' do
-        let(:cluster) { create(:cluster, :provided_by_gcp, :group) }
+        let(:cluster) { build(:cluster, :provided_by_gcp, :group) }
 
         it { is_expected.to be_falsey }
       end
 
       context 'not managed' do
-        let(:cluster) { create(:cluster, :provided_by_gcp, :group, managed: false) }
+        let(:cluster) { build(:cluster, :provided_by_gcp, :group, managed: false) }
 
         it { is_expected.to be_truthy }
       end
@@ -605,13 +830,13 @@ describe Clusters::Cluster, :use_clean_rails_memory_store_caching do
 
     context 'instance type cluster' do
       context 'gitlab managed' do
-        let(:cluster) { create(:cluster, :provided_by_gcp, :instance) }
+        let(:cluster) { build(:cluster, :provided_by_gcp, :instance) }
 
         it { is_expected.to be_falsey }
       end
 
       context 'not managed' do
-        let(:cluster) { create(:cluster, :provided_by_gcp, :instance, managed: false) }
+        let(:cluster) { build(:cluster, :provided_by_gcp, :instance, managed: false) }
 
         it { is_expected.to be_truthy }
       end
@@ -649,18 +874,18 @@ describe Clusters::Cluster, :use_clean_rails_memory_store_caching do
   end
 
   describe '#kube_ingress_domain' do
-    let(:cluster) { create(:cluster, :provided_by_gcp) }
+    let(:cluster) { build(:cluster, :provided_by_gcp) }
 
     subject { cluster.kube_ingress_domain }
 
     context 'with domain set in cluster' do
-      let(:cluster) { create(:cluster, :provided_by_gcp, :with_domain) }
+      let(:cluster) { build(:cluster, :provided_by_gcp, :with_domain) }
 
       it { is_expected.to eq(cluster.domain) }
     end
 
     context 'with no domain on cluster' do
-      let(:cluster) { create(:cluster, :project, :provided_by_gcp) }
+      let(:cluster) { build(:cluster, :project, :provided_by_gcp) }
       let(:project) { cluster.project }
 
       context 'with domain set at instance level' do
@@ -674,59 +899,59 @@ describe Clusters::Cluster, :use_clean_rails_memory_store_caching do
   end
 
   describe '#kubernetes_namespace_for' do
-    let(:cluster) { create(:cluster, :group) }
-    let(:environment) { create(:environment, last_deployable: build) }
-    let(:build) { create(:ci_build) }
+    subject { cluster.kubernetes_namespace_for(environment, deployable: build) }
 
-    subject { cluster.kubernetes_namespace_for(environment) }
+    let(:environment_name) { 'the-environment-name' }
+    let(:environment) { create(:environment, name: environment_name, project: cluster.project, last_deployable: build) }
+    let(:build) { create(:ci_build, environment: environment_name, project: cluster.project) }
+    let(:cluster) { create(:cluster, :project, managed: managed_cluster) }
+    let(:managed_cluster) { true }
+    let(:default_namespace) { Gitlab::Kubernetes::DefaultNamespace.new(cluster, project: cluster.project).from_environment_slug(environment.slug) }
+    let(:build_options) { {} }
 
-    before do
-      expect(Clusters::KubernetesNamespaceFinder).to receive(:new)
-        .with(cluster, project: environment.project, environment_name: environment.name)
-        .and_return(double(execute: persisted_namespace))
-
-      allow(build).to receive(:expanded_kubernetes_namespace)
-        .and_return(ci_configured_namespace)
+    it 'validates the project id' do
+      environment.project_id = build.project_id + 1
+      expect { subject }.to raise_error ArgumentError, 'environment.project_id must match deployable.project_id'
     end
 
-    context 'no persisted namespace exists and namespace is not specified in CI template' do
-      let(:persisted_namespace) { nil }
-      let(:ci_configured_namespace) { nil }
-
-      let(:namespace_generator) { double }
-      let(:default_namespace) { 'a-default-namespace' }
-
-      before do
-        expect(Gitlab::Kubernetes::DefaultNamespace).to receive(:new)
-          .with(cluster, project: environment.project)
-          .and_return(namespace_generator)
-        expect(namespace_generator).to receive(:from_environment_slug)
-          .with(environment.slug)
-          .and_return(default_namespace)
-      end
+    context 'when environment has no last_deployable' do
+      let(:build) { nil }
 
       it { is_expected.to eq default_namespace }
     end
 
-    context 'persisted namespace exists' do
-      let(:persisted_namespace) { create(:cluster_kubernetes_namespace) }
-      let(:ci_configured_namespace) { nil }
+    context 'when cluster is managed' do
+      before do
+        build.options = { environment: { kubernetes: { namespace: 'ci yaml namespace' } } }
+      end
 
-      it { is_expected.to eq persisted_namespace.namespace }
+      it 'returns the cached namespace if present, ignoring CI config' do
+        cached_namespace = create(:cluster_kubernetes_namespace, cluster: cluster, environment: environment, namespace: 'the name', service_account_token: 'some token')
+        expect(subject).to eq cached_namespace.namespace
+      end
+
+      it 'returns the default namespace when no cached namespace, ignoring CI config' do
+        expect(subject).to eq default_namespace
+      end
     end
 
-    context 'namespace is specified in CI template' do
-      let(:persisted_namespace) { nil }
-      let(:ci_configured_namespace) { 'ci-configured-namespace' }
+    context 'when cluster is not managed' do
+      let(:managed_cluster) { false }
 
-      it { is_expected.to eq ci_configured_namespace }
-    end
+      it 'returns the cached namespace if present, regardless of CI config' do
+        cached_namespace = create(:cluster_kubernetes_namespace, cluster: cluster, environment: environment, namespace: 'the name', service_account_token: 'some token')
+        build.options = { environment: { kubernetes: { namespace: 'ci yaml namespace' } } }
+        expect(subject).to eq cached_namespace.namespace
+      end
 
-    context 'persisted namespace exists and namespace is also specifed in CI template' do
-      let(:persisted_namespace) { create(:cluster_kubernetes_namespace) }
-      let(:ci_configured_namespace) { 'ci-configured-namespace' }
+      it 'returns the CI YAML namespace when configured' do
+        build.options = { environment: { kubernetes: { namespace: 'ci yaml namespace' } } }
+        expect(subject).to eq 'ci yaml namespace'
+      end
 
-      it { is_expected.to eq persisted_namespace.namespace }
+      it 'returns the default namespace when no namespace is configured' do
+        expect(subject).to eq default_namespace
+      end
     end
   end
 
@@ -754,7 +979,7 @@ describe Clusters::Cluster, :use_clean_rails_memory_store_caching do
     end
 
     context 'with no domain' do
-      let(:cluster) { create(:cluster, :provided_by_gcp, :project) }
+      let(:cluster) { build(:cluster, :provided_by_gcp, :project) }
 
       it 'returns an empty array' do
         expect(subject.to_hash).to be_empty
@@ -782,7 +1007,7 @@ describe Clusters::Cluster, :use_clean_rails_memory_store_caching do
     subject { cluster.status_name }
 
     context 'the cluster has a provider' do
-      let(:cluster) { create(:cluster, :provided_by_gcp) }
+      let(:cluster) { build(:cluster, :provided_by_gcp) }
       let(:provider_status) { :errored }
 
       before do
@@ -796,7 +1021,6 @@ describe Clusters::Cluster, :use_clean_rails_memory_store_caching do
 
         where(:status_name, :cleanup_status) do
           provider_status  | :cleanup_not_started
-          :cleanup_ongoing | :cleanup_uninstalling_applications
           :cleanup_ongoing | :cleanup_removing_project_namespaces
           :cleanup_ongoing | :cleanup_removing_service_account
           :cleanup_errored | :cleanup_errored
@@ -816,7 +1040,7 @@ describe Clusters::Cluster, :use_clean_rails_memory_store_caching do
     end
 
     context 'there is a cached connection status' do
-      let(:cluster) { create(:cluster, :provided_by_user) }
+      let(:cluster) { build(:cluster, :provided_by_user) }
 
       before do
         allow(cluster).to receive(:connection_status).and_return(:connected)
@@ -826,7 +1050,7 @@ describe Clusters::Cluster, :use_clean_rails_memory_store_caching do
     end
 
     context 'there is no connection status in the cache' do
-      let(:cluster) { create(:cluster, :provided_by_user) }
+      let(:cluster) { build(:cluster, :provided_by_user) }
 
       before do
         allow(cluster).to receive(:connection_status).and_return(nil)
@@ -852,8 +1076,8 @@ describe Clusters::Cluster, :use_clean_rails_memory_store_caching do
     end
 
     describe '#start_cleanup!' do
-      let(:expected_worker_class) { Clusters::Cleanup::AppWorker }
-      let(:to_state) { :cleanup_uninstalling_applications }
+      let(:expected_worker_class) { Clusters::Cleanup::ProjectNamespaceWorker }
+      let(:to_state) { :cleanup_removing_project_namespaces }
 
       subject { cluster.start_cleanup! }
 
@@ -871,9 +1095,9 @@ describe Clusters::Cluster, :use_clean_rails_memory_store_caching do
     end
 
     describe '#make_cleanup_errored!' do
-      NON_ERRORED_STATES = Clusters::Cluster.state_machines[:cleanup_status].states.keys - [:cleanup_errored]
+      non_errored_states = Clusters::Cluster.state_machines[:cleanup_status].states.keys - [:cleanup_errored]
 
-      NON_ERRORED_STATES.each do |state|
+      non_errored_states.each do |state|
         it "transitions cleanup_status from #{state} to cleanup_errored" do
           cluster = create(:cluster, state)
 
@@ -891,25 +1115,13 @@ describe Clusters::Cluster, :use_clean_rails_memory_store_caching do
     end
 
     describe '#continue_cleanup!' do
-      context 'when cleanup_status is cleanup_uninstalling_applications' do
-        let(:expected_worker_class) { Clusters::Cleanup::ProjectNamespaceWorker }
-        let(:from_state) { :cleanup_uninstalling_applications }
-        let(:to_state) { :cleanup_removing_project_namespaces }
+      let(:expected_worker_class) { Clusters::Cleanup::ServiceAccountWorker }
+      let(:from_state) { :cleanup_removing_project_namespaces }
+      let(:to_state) { :cleanup_removing_service_account }
 
-        subject { cluster.continue_cleanup! }
+      subject { cluster.continue_cleanup! }
 
-        it_behaves_like 'cleanup_status transition'
-      end
-
-      context 'when cleanup_status is cleanup_removing_project_namespaces' do
-        let(:expected_worker_class) { Clusters::Cleanup::ServiceAccountWorker }
-        let(:from_state) { :cleanup_removing_project_namespaces }
-        let(:to_state) { :cleanup_removing_service_account }
-
-        subject { cluster.continue_cleanup! }
-
-        it_behaves_like 'cleanup_status transition'
-      end
+      it_behaves_like 'cleanup_status transition'
     end
   end
 
@@ -930,6 +1142,73 @@ describe Clusters::Cluster, :use_clean_rails_memory_store_caching do
     end
   end
 
+  describe '#connection_error' do
+    let(:cluster) { create(:cluster) }
+    let(:error) { :unknown_error }
+
+    subject { cluster.connection_error }
+
+    it { is_expected.to be_nil }
+
+    context 'with a cached status' do
+      before do
+        stub_reactive_cache(cluster, connection_error: error)
+      end
+
+      it { is_expected.to eq(error) }
+    end
+  end
+
+  describe '#node_connection_error' do
+    let(:cluster) { create(:cluster) }
+    let(:error) { :unknown_error }
+
+    subject { cluster.node_connection_error }
+
+    it { is_expected.to be_nil }
+
+    context 'with a cached status' do
+      before do
+        stub_reactive_cache(cluster, node_connection_error: error)
+      end
+
+      it { is_expected.to eq(error) }
+    end
+  end
+
+  describe '#metrics_connection_error' do
+    let(:cluster) { create(:cluster) }
+    let(:error) { :unknown_error }
+
+    subject { cluster.metrics_connection_error }
+
+    it { is_expected.to be_nil }
+
+    context 'with a cached status' do
+      before do
+        stub_reactive_cache(cluster, metrics_connection_error: error)
+      end
+
+      it { is_expected.to eq(error) }
+    end
+  end
+
+  describe '#nodes' do
+    let(:cluster) { create(:cluster) }
+
+    subject { cluster.nodes }
+
+    it { is_expected.to be_nil }
+
+    context 'with a cached status' do
+      before do
+        stub_reactive_cache(cluster, nodes: [kube_node])
+      end
+
+      it { is_expected.to eq([kube_node]) }
+    end
+  end
+
   describe '#calculate_reactive_cache' do
     subject { cluster.calculate_reactive_cache }
 
@@ -938,6 +1217,7 @@ describe Clusters::Cluster, :use_clean_rails_memory_store_caching do
 
       it 'does not populate the cache' do
         expect(cluster).not_to receive(:retrieve_connection_status)
+        expect(cluster).not_to receive(:retrieve_nodes)
 
         is_expected.to be_nil
       end
@@ -945,34 +1225,50 @@ describe Clusters::Cluster, :use_clean_rails_memory_store_caching do
 
     context 'cluster is enabled' do
       let(:cluster) { create(:cluster, :provided_by_user, :group) }
+      let(:gl_k8s_node_double) { double(Gitlab::Kubernetes::Node) }
+      let(:expected_nodes) { {} }
+
+      before do
+        stub_kubeclient_discover(cluster.platform.api_url)
+        allow(Gitlab::Kubernetes::Node).to receive(:new).with(cluster).and_return(gl_k8s_node_double)
+        allow(gl_k8s_node_double).to receive(:all).and_return(expected_nodes)
+      end
 
       context 'connection to the cluster is successful' do
+        let(:expected_nodes) { { nodes: [kube_node.merge(kube_node_metrics)] } }
+        let(:connection_status) { { connection_status: :connected } }
+
         before do
-          stub_kubeclient_discover(cluster.platform.api_url)
+          allow(gl_k8s_node_double).to receive(:all).and_return(expected_nodes)
         end
 
-        it { is_expected.to eq(connection_status: :connected) }
+        it { is_expected.to eq(**connection_status, **expected_nodes) }
       end
 
       context 'cluster cannot be reached' do
+        let(:connection_status) { { connection_status: :unreachable, connection_error: :connection_error } }
+
         before do
           allow(cluster.kubeclient.core_client).to receive(:discover)
             .and_raise(SocketError)
         end
 
-        it { is_expected.to eq(connection_status: :unreachable) }
+        it { is_expected.to eq(**connection_status, **expected_nodes) }
       end
 
       context 'cluster cannot be authenticated to' do
+        let(:connection_status) { { connection_status: :authentication_failure, connection_error: :authentication_error } }
+
         before do
           allow(cluster.kubeclient.core_client).to receive(:discover)
             .and_raise(OpenSSL::X509::CertificateError.new("Certificate error"))
         end
 
-        it { is_expected.to eq(connection_status: :authentication_failure) }
+        it { is_expected.to eq(**connection_status, **expected_nodes) }
       end
 
       describe 'Kubeclient::HttpError' do
+        let(:connection_status) { { connection_status: :authentication_failure, connection_error: :http_error } }
         let(:error_code) { 403 }
         let(:error_message) { "Forbidden" }
 
@@ -981,34 +1277,91 @@ describe Clusters::Cluster, :use_clean_rails_memory_store_caching do
             .and_raise(Kubeclient::HttpError.new(error_code, error_message, nil))
         end
 
-        it { is_expected.to eq(connection_status: :authentication_failure) }
+        it { is_expected.to eq(**connection_status, **expected_nodes) }
 
         context 'generic timeout' do
+          let(:connection_status) { { connection_status: :unreachable, connection_error: :http_error } }
           let(:error_message) { 'Timed out connecting to server'}
 
-          it { is_expected.to eq(connection_status: :unreachable) }
+          it { is_expected.to eq(**connection_status, **expected_nodes) }
         end
 
         context 'gateway timeout' do
+          let(:connection_status) { { connection_status: :unreachable, connection_error: :http_error } }
           let(:error_message) { '504 Gateway Timeout for GET https://kubernetes.example.com/api/v1'}
 
-          it { is_expected.to eq(connection_status: :unreachable) }
+          it { is_expected.to eq(**connection_status, **expected_nodes) }
         end
       end
 
       context 'an uncategorised error is raised' do
+        let(:connection_status) { { connection_status: :unknown_failure, connection_error: :unknown_error } }
+
         before do
           allow(cluster.kubeclient.core_client).to receive(:discover)
             .and_raise(StandardError)
         end
 
-        it { is_expected.to eq(connection_status: :unknown_failure) }
+        it { is_expected.to eq(**connection_status, **expected_nodes) }
 
         it 'notifies Sentry' do
           expect(Gitlab::ErrorTracking).to receive(:track_exception)
             .with(instance_of(StandardError), hash_including(cluster_id: cluster.id))
+            .once
 
           subject
+        end
+      end
+    end
+  end
+
+  describe '#integration_prometheus_available?' do
+    let_it_be_with_reload(:cluster) { create(:cluster, :project) }
+
+    subject { cluster.integration_prometheus_available? }
+
+    it { is_expected.to be_falsey }
+
+    context 'when integration is enabled' do
+      let!(:integration) { create(:clusters_integrations_prometheus, cluster: cluster) }
+
+      it { is_expected.to be_truthy }
+    end
+
+    context 'when integration is disabled' do
+      let!(:integration) { create(:clusters_integrations_prometheus, enabled: false, cluster: cluster) }
+
+      it { is_expected.to be_falsey }
+    end
+  end
+
+  describe '#prometheus_adapter' do
+    let_it_be_with_reload(:cluster) { create(:cluster, :project) }
+
+    it 'returns nothing' do
+      expect(cluster.prometheus_adapter).to be_nil
+    end
+
+    context 'has integration_prometheus' do
+      let_it_be(:integration) { create(:clusters_integrations_prometheus, cluster: cluster) }
+
+      it 'returns the integration' do
+        expect(cluster.prometheus_adapter).to eq(integration)
+      end
+    end
+
+    context 'has application_prometheus' do
+      let_it_be(:application) { create(:clusters_applications_prometheus, :no_helm_installed, cluster: cluster) }
+
+      it 'returns nil' do
+        expect(cluster.prometheus_adapter).to be_nil
+      end
+
+      context 'also has a integration_prometheus' do
+        let_it_be(:integration) { create(:clusters_integrations_prometheus, cluster: cluster) }
+
+        it 'returns the integration' do
+          expect(cluster.prometheus_adapter).to eq(integration)
         end
       end
     end

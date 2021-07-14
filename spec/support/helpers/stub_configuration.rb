@@ -33,8 +33,8 @@ module StubConfiguration
     allow(Gitlab.config).to receive_messages(to_settings(messages))
   end
 
-  def stub_default_url_options(host: "localhost", protocol: "http")
-    url_options = { host: host, protocol: protocol }
+  def stub_default_url_options(host: "localhost", protocol: "http", script_name: nil)
+    url_options = { host: host, protocol: protocol, script_name: script_name }
     allow(Rails.application.routes).to receive(:default_url_options).and_return(url_options)
   end
 
@@ -113,6 +113,20 @@ module StubConfiguration
     allow(Gitlab.config.rack_attack.git_basic_auth).to receive_messages(to_settings(messages))
   end
 
+  def stub_service_desk_email_setting(messages)
+    allow(::Gitlab.config.service_desk_email).to receive_messages(to_settings(messages))
+  end
+
+  def stub_packages_setting(messages)
+    allow(::Gitlab.config.packages).to receive_messages(to_settings(messages))
+  end
+
+  def stub_maintenance_mode_setting(value)
+    allow(Gitlab::CurrentSettings).to receive(:current_application_settings?).and_return(true)
+
+    stub_application_setting(maintenance_mode: value)
+  end
+
   private
 
   # Modifies stubbed messages to also stub possible predicate versions
@@ -149,4 +163,4 @@ end
 require_relative '../../../ee/spec/support/helpers/ee/stub_configuration' if
   Dir.exist?("#{__dir__}/../../../ee")
 
-StubConfiguration.prepend_if_ee('EE::StubConfiguration')
+StubConfiguration.prepend_mod_with('StubConfiguration')

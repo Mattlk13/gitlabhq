@@ -2,7 +2,7 @@
 
 require 'spec_helper'
 
-describe Projects::ForksController do
+RSpec.describe Projects::ForksController do
   let(:user) { create(:user) }
   let(:project) { create(:project, :public, :repository) }
   let(:forked_project) { Projects::ForkService.new(project, user, name: 'Some name').execute }
@@ -71,7 +71,7 @@ describe Projects::ForksController do
 
     context 'when fork is internal' do
       before do
-        forked_project.update(visibility_level: Project::INTERNAL, group: group)
+        forked_project.update!(visibility_level: Project::INTERNAL, group: group)
       end
 
       it 'forks counts are correct' do
@@ -86,7 +86,7 @@ describe Projects::ForksController do
 
     context 'when fork is private' do
       before do
-        forked_project.update(visibility_level: Project::PRIVATE, group: group)
+        forked_project.update!(visibility_level: Project::PRIVATE, group: group)
       end
 
       shared_examples 'forks counts' do
@@ -153,8 +153,11 @@ describe Projects::ForksController do
   end
 
   describe 'GET new' do
-    subject do
+    let(:format) { :html }
+
+    subject(:do_request) do
       get :new,
+          format: format,
           params: {
             namespace_id: project.namespace,
             project_id: project
@@ -162,12 +165,55 @@ describe Projects::ForksController do
     end
 
     context 'when user is signed in' do
-      it 'responds with status 200' do
+      before do
         sign_in(user)
+      end
 
-        subject
+      it 'responds with status 200' do
+        request
 
         expect(response).to have_gitlab_http_status(:ok)
+      end
+
+      context 'when JSON is requested' do
+        let(:format) { :json }
+
+        it 'responds with user namespace + groups' do
+          do_request
+
+          expect(response).to have_gitlab_http_status(:ok)
+          expect(json_response['namespaces'].length).to eq(2)
+          expect(json_response['namespaces'][0]['id']).to eq(user.namespace.id)
+          expect(json_response['namespaces'][1]['id']).to eq(group.id)
+        end
+
+        it 'responds with group only when fork_project_form feature flag is disabled' do
+          stub_feature_flags(fork_project_form: false)
+          do_request
+
+          expect(response).to have_gitlab_http_status(:ok)
+          expect(json_response['namespaces'].length).to eq(1)
+          expect(json_response['namespaces'][0]['id']).to eq(group.id)
+        end
+
+        context 'N+1 queries' do
+          before do
+            create(:fork_network, root_project: project)
+          end
+
+          it 'avoids N+1 queries' do
+            do_request = -> { get :new, format: format, params: { namespace_id: project.namespace, project_id: project } }
+
+            # warm up
+            do_request.call
+
+            control = ActiveRecord::QueryRecorder.new { do_request.call }
+
+            create(:group, :public).add_owner(user)
+
+            expect { do_request.call }.not_to exceed_query_limit(control)
+          end
+        end
       end
     end
 
@@ -191,6 +237,13 @@ describe Projects::ForksController do
         project_id: project,
         namespace_key: user.namespace.id
       }
+    end
+
+    let(:created_project) do
+      Namespace
+        .find_by_id(params[:namespace_key])
+        .projects
+        .find_by_path(params.fetch(:path, project.path))
     end
 
     subject do
@@ -229,6 +282,7 @@ describe Projects::ForksController do
             continue: continue_params
           }
         end
+
         let(:continue_params) do
           {
             to: '/-/ide/project/path',
@@ -241,6 +295,21 @@ describe Projects::ForksController do
 
           expect(response).to have_gitlab_http_status(:found)
           expect(response).to redirect_to(namespace_project_import_path(user.namespace, project, continue: continue_params))
+        end
+      end
+
+      context 'custom attributes set' do
+        let(:params) { super().merge(path: 'something_custom', name: 'Something Custom', description: 'Something Custom', visibility: 'private') }
+
+        it 'creates a project with custom values' do
+          subject
+
+          expect(response).to have_gitlab_http_status(:found)
+          expect(response).to redirect_to(namespace_project_import_path(user.namespace, params[:path]))
+          expect(created_project.path).to eq(params[:path])
+          expect(created_project.name).to eq(params[:name])
+          expect(created_project.description).to eq(params[:description])
+          expect(created_project.visibility).to eq(params[:visibility])
         end
       end
     end

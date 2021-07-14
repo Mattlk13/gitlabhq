@@ -17,6 +17,7 @@ class NotesFinder
   #     target_id: integer
   #     last_fetched_at: time
   #     search: string
+  #     sort: string
   #
   def initialize(current_user, params = {})
     @project = params[:project]
@@ -29,8 +30,7 @@ class NotesFinder
     notes = init_collection
     notes = since_fetch_at(notes)
     notes = notes.with_notes_filter(@params[:notes_filter]) if notes_filter?
-
-    notes.fresh
+    sort(notes)
   end
 
   def target
@@ -148,7 +148,7 @@ class NotesFinder
 
   # Searches for notes matching the given query.
   #
-  # This method uses ILIKE on PostgreSQL and LIKE on MySQL.
+  # This method uses ILIKE on PostgreSQL.
   #
   def search(notes)
     query = @params[:search]
@@ -158,18 +158,29 @@ class NotesFinder
   end
 
   # Notes changed since last fetch
-  # Uses overlapping intervals to avoid worrying about race conditions
   def since_fetch_at(notes)
     return notes unless @params[:last_fetched_at]
 
     # Default to 0 to remain compatible with old clients
-    last_fetched_at = Time.at(@params.fetch(:last_fetched_at, 0).to_i)
-    notes.updated_after(last_fetched_at - FETCH_OVERLAP)
+    last_fetched_at = @params.fetch(:last_fetched_at, Time.at(0))
+
+    # Use overlapping intervals to avoid worrying about race conditions
+    last_fetched_at -= FETCH_OVERLAP
+
+    notes.updated_after(last_fetched_at)
   end
 
   def notes_filter?
     @params[:notes_filter].present?
   end
+
+  def sort(notes)
+    sort = @params[:sort].presence
+
+    return notes.fresh unless sort
+
+    notes.order_by(sort)
+  end
 end
 
-NotesFinder.prepend_if_ee('EE::NotesFinder')
+NotesFinder.prepend_mod_with('NotesFinder')

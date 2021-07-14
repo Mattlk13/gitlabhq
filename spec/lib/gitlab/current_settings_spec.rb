@@ -2,7 +2,7 @@
 
 require 'spec_helper'
 
-describe Gitlab::CurrentSettings do
+RSpec.describe Gitlab::CurrentSettings do
   before do
     stub_env('IN_MEMORY_APPLICATION_SETTINGS', 'false')
   end
@@ -21,6 +21,62 @@ describe Gitlab::CurrentSettings do
       described_class.expire_current_application_settings
 
       expect(ActiveRecord::QueryRecorder.new { described_class.current_application_settings }.count).not_to eq(0)
+    end
+  end
+
+  describe '.signup_limited?' do
+    subject { described_class.signup_limited? }
+
+    context 'when there are allowed domains' do
+      before do
+        create(:application_setting, domain_allowlist: ['www.gitlab.com'])
+      end
+
+      it { is_expected.to be_truthy }
+    end
+
+    context 'when there are email restrictions' do
+      before do
+        create(:application_setting, email_restrictions_enabled: true)
+      end
+
+      it { is_expected.to be_truthy }
+    end
+
+    context 'when the admin has to approve signups' do
+      before do
+        create(:application_setting, require_admin_approval_after_user_signup: true)
+      end
+
+      it { is_expected.to be_truthy }
+    end
+
+    context 'when there are no restrictions' do
+      before do
+        create(:application_setting, domain_allowlist: [], email_restrictions_enabled: false, require_admin_approval_after_user_signup: false)
+      end
+
+      it { is_expected.to be_falsey }
+    end
+  end
+
+  describe '.signup_disabled?' do
+    subject { described_class.signup_disabled? }
+
+    context 'when signup is enabled' do
+      before do
+        create(:application_setting, signup_enabled: true)
+      end
+
+      it { is_expected.to be_falsey }
+    end
+
+    context 'when signup is disabled' do
+      before do
+        create(:application_setting, signup_enabled: false)
+      end
+
+      it { is_expected.to be_truthy }
     end
   end
 
@@ -49,20 +105,16 @@ describe Gitlab::CurrentSettings do
       end
     end
 
-    context 'with DB unavailable' do
-      context 'and settings in cache' do
-        include_context 'with settings in cache'
-
-        it 'fetches the settings from cache without issuing any query' do
-          expect(ActiveRecord::QueryRecorder.new { described_class.current_application_settings }.count).to eq(0)
-        end
+    context 'in a Rake task with DB unavailable' do
+      before do
+        allow(Gitlab::Runtime).to receive(:rake?).and_return(true)
+        # For some reason, `allow(described_class).to receive(:connect_to_db?).and_return(false)` causes issues
+        # during the initialization phase of the test suite, so instead let's mock the internals of it
+        allow(ActiveRecord::Base.connection).to receive(:active?).and_return(false)
       end
 
       context 'and no settings in cache' do
         before do
-          # For some reason, `allow(described_class).to receive(:connect_to_db?).and_return(false)` causes issues
-          # during the initialization phase of the test suite, so instead let's mock the internals of it
-          allow(ActiveRecord::Base.connection).to receive(:active?).and_return(false)
           expect(ApplicationSetting).not_to receive(:current)
         end
 
@@ -117,6 +169,16 @@ describe Gitlab::CurrentSettings do
           expect(settings).to be_a(ApplicationSetting)
           expect(settings).to be_persisted
           expect(settings).to have_attributes(settings_from_defaults)
+        end
+
+        context 'when ApplicationSettings does not have a primary key' do
+          before do
+            allow(ActiveRecord::Base.connection).to receive(:primary_key).with('application_settings').and_return(nil)
+          end
+
+          it 'raises an exception if ApplicationSettings does not have a primary key' do
+            expect { described_class.current_application_settings }.to raise_error(/table is missing a primary key constraint/)
+          end
         end
 
         context 'with pending migrations' do
@@ -185,17 +247,34 @@ describe Gitlab::CurrentSettings do
             expect(described_class.current_application_settings).to eq(:current_settings)
           end
         end
+      end
+    end
+  end
 
-        context 'when the application_settings table does not exist' do
-          it 'returns a FakeApplicationSettings object' do
-            expect(Gitlab::Database)
-              .to receive(:cached_table_exists?)
-              .with('application_settings')
-              .and_return(false)
+  describe '#current_application_settings?', :use_clean_rails_memory_store_caching do
+    before do
+      allow(Gitlab::CurrentSettings).to receive(:current_application_settings?).and_call_original
+    end
 
-            expect(described_class.current_application_settings).to be_a(Gitlab::FakeApplicationSettings)
-          end
-        end
+    it 'returns true when settings exist' do
+      create(:application_setting,
+        home_page_url: 'http://mydomain.com',
+        signup_enabled: false)
+
+      expect(described_class.current_application_settings?).to eq(true)
+    end
+
+    it 'returns false when settings do not exist' do
+      expect(described_class.current_application_settings?).to eq(false)
+    end
+
+    context 'with cache', :request_store do
+      include_context 'with settings in cache'
+
+      it 'returns an in-memory ApplicationSetting object' do
+        expect(ApplicationSetting).not_to receive(:current)
+
+        expect(described_class.current_application_settings?).to eq(true)
       end
     end
   end

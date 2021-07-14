@@ -43,8 +43,9 @@ module API
       end
 
       expose :moved_to_id
+      expose :service_desk_reply_to
     end
   end
 end
 
-API::Entities::Issue.prepend_if_ee('EE::API::Entities::Issue')
+API::Entities::Issue.prepend_mod_with('API::Entities::Issue')

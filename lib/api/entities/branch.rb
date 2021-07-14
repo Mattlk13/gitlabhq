@@ -3,6 +3,8 @@
 module API
   module Entities
     class Branch < Grape::Entity
+      include Gitlab::Routing
+
       expose :name
 
       expose :commit, using: Entities::Commit do |repo_branch, options|
@@ -30,11 +32,15 @@ module API
       end
 
       expose :can_push do |repo_branch, options|
-        Gitlab::UserAccess.new(options[:current_user], project: options[:project]).can_push_to_branch?(repo_branch.name)
+        Gitlab::UserAccess.new(options[:current_user], container: options[:project]).can_push_to_branch?(repo_branch.name)
       end
 
       expose :default do |repo_branch, options|
         options[:project].default_branch == repo_branch.name
+      end
+
+      expose :web_url do |repo_branch|
+        project_tree_url(options[:project], repo_branch.name)
       end
     end
   end

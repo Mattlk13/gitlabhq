@@ -2,7 +2,7 @@
 
 require 'spec_helper'
 
-describe 'Batch diffs', :js do
+RSpec.describe 'Batch diffs', :js do
   include MergeRequestDiffHelpers
   include RepoHelpers
 
@@ -10,26 +10,23 @@ describe 'Batch diffs', :js do
   let(:merge_request) { create(:merge_request, source_project: project, source_branch: 'master', target_branch: 'empty-branch') }
 
   before do
-    stub_feature_flags(single_mr_diff_view: true)
-    stub_feature_flags(diffs_batch_load: true)
-
     sign_in(project.owner)
 
     visit diffs_project_merge_request_path(merge_request.project, merge_request)
     wait_for_requests
 
     # Add discussion to first line of first file
-    click_diff_line(find('.diff-file.file-holder:first-of-type tr.line_holder.new:first-of-type'))
+    click_diff_line(find('.diff-file.file-holder:first-of-type .line_holder .left-side:first-of-type'))
     page.within('.js-discussion-note-form') do
       fill_in('note_note', with: 'First Line Comment')
-      click_button('Comment')
+      click_button('Add comment now')
     end
 
     # Add discussion to first line of last file
-    click_diff_line(find('.diff-file.file-holder:last-of-type tr.line_holder.new:first-of-type'))
+    click_diff_line(find('.diff-file.file-holder:last-of-type .line_holder .left-side:first-of-type'))
     page.within('.js-discussion-note-form') do
       fill_in('note_note', with: 'Last Line Comment')
-      click_button('Comment')
+      click_button('Add comment now')
     end
 
     wait_for_requests
@@ -72,7 +69,8 @@ describe 'Batch diffs', :js do
     end
 
     context 'which is in at least page 2 of the batched pages of diffs' do
-      it 'scrolls to the correct discussion' do
+      it 'scrolls to the correct discussion',
+         quarantine: { issue: 'https://gitlab.com/gitlab-org/gitlab/-/issues/293814' } do
         page.within('.diff-file.file-holder:last-of-type') do
           click_link('just now')
         end

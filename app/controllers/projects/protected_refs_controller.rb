@@ -10,6 +10,8 @@ class Projects::ProtectedRefsController < Projects::ApplicationController
 
   layout "project_settings"
 
+  feature_category :source_code_management
+
   def index
     redirect_to_repository_settings(@project)
   end
@@ -62,8 +64,8 @@ class Projects::ProtectedRefsController < Projects::ApplicationController
   end
 
   def access_level_attributes
-    %i[access_level id]
+    %i[access_level id _destroy deploy_key_id]
   end
 end
 
-Projects::ProtectedRefsController.prepend_if_ee('EE::Projects::ProtectedRefsController')
+Projects::ProtectedRefsController.prepend_mod_with('Projects::ProtectedRefsController')

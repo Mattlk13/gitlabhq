@@ -24,7 +24,7 @@ FactoryBot.define do
     head_sha  { diff_refs&.head_sha }
     start_sha { diff_refs&.start_sha }
 
-    initialize_with { new(attributes) }
+    initialize_with { new(**attributes) }
 
     trait :moved do
       new_path { 'path/to/new.file' }
@@ -34,16 +34,29 @@ FactoryBot.define do
       position_type { 'text' }
       old_line { 10 }
       new_line { 10 }
+      line_range { nil }
 
       trait :added do
         old_line { nil }
+      end
+
+      trait :multi_line do
+        line_range do
+          {
+            start_line_code: Gitlab::Git.diff_line_code(file, 10, 10),
+            end_line_code: Gitlab::Git.diff_line_code(file, 12, 13)
+          }
+        end
       end
     end
 
     factory :image_diff_position do
       position_type { 'image' }
       x { 1 }
-      y { 1 }
+      # Fix:
+      # NoMethodError: undefined method `end_line=' for nil:NilClass
+      # from /usr/lib/ruby/2.6.0/psych/tree_builder.rb:133:in `set_end_location'
+      add_attribute(:y) { 1 }
       width { 10 }
       height { 10 }
     end

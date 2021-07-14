@@ -2,7 +2,7 @@
 
 require 'spec_helper'
 
-describe TrackingHelper do
+RSpec.describe TrackingHelper do
   describe '#tracking_attrs' do
     using RSpec::Parameterized::TableSyntax
 
@@ -10,7 +10,7 @@ describe TrackingHelper do
     let(:results) do
       {
         no_data: {},
-        with_data: { data: { track_label: 'a', track_event: 'b', track_property: 'c' } }
+        with_data: { data: { track_label: 'a', track_action: 'b', track_property: 'c' } }
       }
     end
 

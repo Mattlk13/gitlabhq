@@ -1,4 +1,13 @@
+---
+stage: Enablement
+group: Global Search
+info: To determine the technical writer assigned to the Stage/Group associated with this page, see https://about.gitlab.com/handbook/engineering/ux/technical-writing/#assignments
+---
+
 # Troubleshooting Elasticsearch
+
+To install and configure Elasticsearch, and for common and known issues,
+visit the [administrator documentation](../../integration/elasticsearch.md).
 
 Troubleshooting Elasticsearch requires:
 
@@ -8,7 +17,7 @@ Troubleshooting Elasticsearch requires:
 ## Common terminology
 
 - **Lucene**: A full-text search library written in Java.
-- **Near Realtime (NRT)**: Refers to the slight latency from the time to index a
+- **Near real time (NRT)**: Refers to the slight latency from the time to index a
   document to the time when it becomes searchable.
 - **Cluster**: A collection of one or more nodes that work together to hold all
   the data, providing indexing and search capabilities.
@@ -27,6 +36,7 @@ The type of problem will determine what steps to take. The possible troubleshoot
 - Indexing.
 - Integration.
 - Performance.
+- Advanced Search Migrations.
 
 ### Search Results workflow
 
@@ -43,7 +53,7 @@ graph TD;
   B5 --> |No| B7
   B7 --> B8
   B{Is GitLab using<br>Elasticsearch for<br>searching?}
-  B1[Check Admin Area > Integrations<br>to ensure the settings are correct]
+  B1[From the Admin Area, select<br>Integrations from the left<br>sidebar to ensure the settings<br>are correct.]
   B2[Perform a search via<br>the rails console]
   B3[If all settings are correct<br>and it still doesn't show Elasticsearch<br>doing the searches, escalate<br>to GitLab support.]
   B4[Perform<br>the same search via the<br>Elasticsearch API]
@@ -138,6 +148,30 @@ graph TD;
   F7(Escalate to<br>GitLab support.)
 ```
 
+### Advanced Search Migrations workflow
+
+```mermaid
+graph TD;
+  D --> |No| D1
+  D --> |Yes| D2
+  D2 --> |No| D3
+  D2 --> |Yes| D4
+  D4 --> |No| D5
+  D4 --> |Yes| D6
+  D6 --> |No| D8
+  D6 --> |Yes| D7
+
+  D{Is there a halted migration?}
+  D1[Migrations run in the<br>background and will<br>stop when completed.]
+  D2{Does the elasticsearch.log<br>file contain errors?}
+  D3[This is likely a bug/issue<br>in GitLab and will require<br>deeper investigation. Escalate<br>to GitLab support.]
+  D4{Have the errors<br>been addressed?}
+  D5[Have an Elasticsearch admin<br>review and address<br>the errors.]
+  D6{Has the migration<br>been retried?}
+  D7[This is likely a bug/issue<br>in GitLab and will require<br>deeper investigation. Escalate<br>to GitLab support.]
+  D8[Retry the migration from<br>the Admin > Settings ><br>Advanced Search UI.]
+```
+
 ## Troubleshooting walkthrough
 
 Most Elasticsearch troubleshooting can be broken down into 4 categories:
@@ -146,6 +180,7 @@ Most Elasticsearch troubleshooting can be broken down into 4 categories:
 - [Troubleshooting indexing](#troubleshooting-indexing)
 - [Troubleshooting integration](#troubleshooting-integration)
 - [Troubleshooting performance](#troubleshooting-performance)
+- [Troubleshooting Advanced Search migrations](#troubleshooting-advanced-search-migrations)
 
 Generally speaking, if it does not fall into those four categories, it is either:
 
@@ -161,14 +196,16 @@ Troubleshooting search result issues is rather straight forward on Elasticsearch
 The first step is to confirm GitLab is using Elasticsearch for the search function.
 To do this:
 
-1. Confirm the integration is enabled in **Admin Area > Settings > Integrations**.
-1. Confirm searches utilize Elasticsearch by accessing the rails console
+1. On the top bar, select **Menu >** **{admin}** **Admin**.
+1. On the left sidebar, select **Settings > General**, and then confirm the
+   integration is enabled.
+1. Confirm searches use Elasticsearch by accessing the rails console
    (`sudo gitlab-rails console`) and running the following commands:
 
    ```rails
    u = User.find_by_email('email_of_user_doing_search')
    s = SearchService.new(u, {:search => 'search_term'})
-   pp s.search_objects.class.name
+   pp s.search_objects.class
    ```
 
 The output from the last command is the key here. If it shows:
@@ -182,11 +219,13 @@ The output from the last command is the key here. If it shows:
 
 If all the settings look correct and it is still not using Elasticsearch for the search function, it is best to escalate to GitLab support. This could be a bug/issue.
 
-Moving past that, it is best to attempt the same search using the [Elasticsearch Search API](https://www.elastic.co/guide/en/elasticsearch/reference/current/search-search.html) and compare the results from what you see in GitLab.
+Moving past that, it is best to attempt the same [search via the Rails console](../../integration/elasticsearch.md#i-indexed-all-the-repositories-but-i-cant-get-any-hits-for-my-search-term-in-the-ui)
+or the [Elasticsearch Search API](https://www.elastic.co/guide/en/elasticsearch/reference/current/search-search.html),
+and compare the results from what you see in GitLab.
 
 If the results:
 
-- Sync up, then there is not a technical "issue" per se. Instead, it might be a problem
+- Sync up, then there is not a technical "issue." Instead, it might be a problem
   with the Elasticsearch filters we are using. This can be complicated, so it is best to
   escalate to GitLab support to check these and guide you on the potential on whether or
   not a feature request is needed.
@@ -197,33 +236,33 @@ If the results:
 ### Troubleshooting indexing
 
 Troubleshooting indexing issues can be tricky. It can pretty quickly go to either GitLab
-support or your Elasticsearch admin.
+support or your Elasticsearch administrator.
 
 The best place to start is to determine if the issue is with creating an empty index.
 If it is, check on the Elasticsearch side to determine if the `gitlab-production` (the
 name for the GitLab index) exists. If it exists, manually delete it on the Elasticsearch
 side and attempt to recreate it from the
-[`create_empty_index`](../../integration/elasticsearch.md#gitlab-elasticsearch-rake-tasks)
-rake task.
+[`recreate_index`](../../integration/elasticsearch.md#gitlab-advanced-search-rake-tasks)
+Rake task.
 
 If you still encounter issues, try creating an index manually on the Elasticsearch
 instance. The details of the index aren't important here, as we want to test if indices
 can be made. If the indices:
 
-- Cannot be made, speak with your Elasticsearch admin.
+- Cannot be made, speak with your Elasticsearch administrator.
 - Can be made, Escalate this to GitLab support.
 
 If the issue is not with creating an empty index, the next step is to check for errors
-during the indexing of projects. If errors do occur, they will either stem from the indexing:
+during the indexing of projects. If errors do occur, they stem from either the indexing:
 
 - On the GitLab side. You need to rectify those. If they are not
   something you are familiar with, contact GitLab support for guidance.
-- Within the Elasticsearch instance itself. See if the error is [documented and has a fix](../../integration/elasticsearch.md#troubleshooting). If not, speak with your Elasticsearch admin.
+- Within the Elasticsearch instance itself. See if the error is [documented and has a fix](../../integration/elasticsearch.md#troubleshooting). If not, speak with your Elasticsearch administrator.
 
-If the indexing process does not present errors, you will want to check the status of the indexed projects. You can do this via the following rake tasks:
+If the indexing process does not present errors, check the status of the indexed projects. You can do this via the following Rake tasks:
 
-- [`sudo gitlab-rake gitlab:elastic:index_projects_status`](../../integration/elasticsearch.md#gitlab-elasticsearch-rake-tasks) (shows the overall status)
-- [`sudo gitlab-rake gitlab:elastic:projects_not_indexed`](../../integration/elasticsearch.md#gitlab-elasticsearch-rake-tasks) (shows specific projects that are not indexed)
+- [`sudo gitlab-rake gitlab:elastic:index_projects_status`](../../integration/elasticsearch.md#gitlab-advanced-search-rake-tasks) (shows the overall status)
+- [`sudo gitlab-rake gitlab:elastic:projects_not_indexed`](../../integration/elasticsearch.md#gitlab-advanced-search-rake-tasks) (shows specific projects that are not indexed)
 
 If:
 
@@ -236,7 +275,7 @@ If reindexing the project shows:
 
 - Errors on the GitLab side, escalate those to GitLab support.
 - Elasticsearch errors or doesn't present any errors at all, reach out to your
-  Elasticsearch admin to check the instance.
+  Elasticsearch administrator to check the instance.
 
 ### Troubleshooting integration
 
@@ -249,15 +288,18 @@ If the issue is:
   This is a required package so make sure you install it.
   Go indexer was a beta indexer which can be optionally turned on/off, but in 12.3 it reached stable status and is now the default.
 - Not concerning the Go indexer, it is almost always an
-  Elasticsearch-side issue. This means you should reach out to your Elasticsearch admin
+  Elasticsearch-side issue. This means you should reach out to your Elasticsearch administrator
   regarding the error(s) you are seeing. If you are unsure here, it never hurts to reach
   out to GitLab support.
 
-Beyond that, you will want to review the error. If it is:
+Beyond that, review the error. If it is:
 
 - Specifically from the indexer, this could be a bug/issue and should be escalated to
   GitLab support.
-- An OS issue, you will want to reach out to your systems administrator.
+- An OS issue, you should reach out to your systems administrator.
+- A `Faraday::TimeoutError (execution expired)` error **and** you're using a proxy,
+  [set a custom `gitlab_rails['env']` environment variable, called `no_proxy`](https://docs.gitlab.com/omnibus/settings/environment-variables.html)
+  with the IP address of your Elasticsearch host.
 
 ### Troubleshooting performance
 
@@ -271,7 +313,7 @@ Generally speaking, ensure:
 - The Elasticsearch server have enough RAM and CPU cores.
 - That sharding **is** being used.
 
-Going into some more detail here, if Elasticsearch is running on the same server as GitLab, resource contention is **very** likely to occur. Ideally, Elasticsearch, which requires ample resources, should be running on its own server (maybe coupled with logstash and kibana).
+Going into some more detail here, if Elasticsearch is running on the same server as GitLab, resource contention is **very** likely to occur. Ideally, Elasticsearch, which requires ample resources, should be running on its own server (maybe coupled with Logstash and Kibana).
 
 When it comes to Elasticsearch, RAM is the key resource. Elasticsearch themselves recommend:
 
@@ -316,7 +358,20 @@ learn them, so it is best to escalate/pair with an Elasticsearch expert if you n
 dig further into these.
 
 Feel free to reach out to GitLab support, but this is likely to be something a skilled
-Elasticsearch admin has more experience with.
+Elasticsearch administrator has more experience with.
+
+### Troubleshooting Advanced Search migrations
+
+Troubleshooting Advanced Search migration failures can be difficult and may
+require contacting an Elasticsearch administrator or GitLab Support.
+
+The best place to start while debugging issues with an Advanced Search
+migration is the [`elasticsearch.log` file](../logs.md#elasticsearchlog).
+Migrations log information while a migration is in progress and any
+errors encountered. Apply fixes for any errors found in the log and retry
+the migration.
+
+If you still encounter issues after retrying the migration, reach out to GitLab support.
 
 ## Common issues
 
@@ -327,10 +382,10 @@ feel free to update that page with issues you encounter and solutions.
 
 Setting up Elasticsearch isn't too bad, but it can be a bit finicky and time consuming.
 
-The easiest method is to spin up a docker container with the required version and
+The easiest method is to spin up a Docker container with the required version and
 bind ports 9200/9300 so it can be used.
 
-The following is an example of running a docker container of Elasticsearch v7.2.0:
+The following is an example of running a Docker container of Elasticsearch v7.2.0:
 
 ```shell
 docker pull docker.elastic.co/elasticsearch/elasticsearch:7.2.0
@@ -339,7 +394,7 @@ docker run -p 9200:9200 -p 9300:9300 -e "discovery.type=single-node" docker.elas
 
 From here, you can:
 
-- Grab the IP of the docker container (use `docker inspect <container_id>`)
+- Grab the IP of the Docker container (use `docker inspect <container_id>`)
 - Use `<IP.add.re.ss:9200>` to communicate with it.
 
 This is a quick method to test out Elasticsearch, but by no means is this a

@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-RSpec.shared_examples 'cycle analytics stage' do
+RSpec.shared_examples 'value stream analytics stage' do
   let(:valid_params) do
     {
       name: 'My Stage',
@@ -58,6 +58,19 @@ RSpec.shared_examples 'cycle analytics stage' do
 
       it { expect(stage).not_to be_valid }
     end
+
+    # rubocop: disable Rails/SaveBang
+    describe '.by_value_stream' do
+      it 'finds stages by value stream' do
+        stage1 = create(factory)
+        create(factory) # other stage with different value stream
+
+        result = described_class.by_value_stream(stage1.value_stream)
+
+        expect(result).to eq([stage1])
+      end
+    end
+    # rubocop: enable Rails/SaveBang
   end
 
   describe '#subject_class' do
@@ -111,7 +124,7 @@ RSpec.shared_examples 'cycle analytics stage' do
   end
 end
 
-RSpec.shared_examples 'cycle analytics label based stage' do
+RSpec.shared_examples 'value stream analytics label based stage' do
   context 'when creating label based event' do
     context 'when the label id is not passed' do
       it 'returns validation error when `start_event_label_id` is missing' do

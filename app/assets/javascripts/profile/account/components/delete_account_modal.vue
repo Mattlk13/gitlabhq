@@ -1,11 +1,12 @@
 <script>
-import DeprecatedModal from '~/vue_shared/components/deprecated_modal.vue';
-import { __, s__, sprintf } from '~/locale';
+import { GlModal, GlSprintf } from '@gitlab/ui';
 import csrf from '~/lib/utils/csrf';
+import { __, s__ } from '~/locale';
 
 export default {
   components: {
-    DeprecatedModal,
+    GlModal,
+    GlSprintf,
   },
   props: {
     actionUrl: {
@@ -31,86 +32,98 @@ export default {
     csrfToken() {
       return csrf.token;
     },
-    inputLabel() {
-      let confirmationValue;
-      if (this.confirmWithPassword) {
-        confirmationValue = __('password');
-      } else {
-        confirmationValue = __('username');
-      }
-
-      confirmationValue = `<code>${confirmationValue}</code>`;
-
-      return sprintf(
-        s__('Profiles|Type your %{confirmationValue} to confirm:'),
-        { confirmationValue },
-        false,
-      );
+    confirmationValue() {
+      return this.confirmWithPassword ? __('password') : __('username');
     },
-    text() {
-      return sprintf(
-        s__(`Profiles|
-You are about to permanently delete %{yourAccount}, and all of the issues, merge requests, and groups linked to your account.
-Once you confirm %{deleteAccount}, it cannot be undone or recovered.`),
-        {
-          yourAccount: `<strong>${s__('Profiles|your account')}</strong>`,
-          deleteAccount: `<strong>${s__('Profiles|Delete Account')}</strong>`,
-        },
-        false,
-      );
+    primaryProps() {
+      return {
+        text: s__('Delete account'),
+        attributes: [
+          { variant: 'danger', 'data-qa-selector': 'confirm_delete_account_button' },
+          { category: 'primary' },
+          { disabled: !this.canSubmit },
+        ],
+      };
     },
-  },
-  methods: {
+    cancelProps() {
+      return {
+        text: s__('Cancel'),
+      };
+    },
     canSubmit() {
       if (this.confirmWithPassword) {
         return this.enteredPassword !== '';
       }
-
       return this.enteredUsername === this.username;
     },
+  },
+  methods: {
     onSubmit() {
+      if (!this.canSubmit) {
+        return;
+      }
       this.$refs.form.submit();
     },
+  },
+  i18n: {
+    text: s__(`Profiles|
+You are about to permanently delete %{yourAccount}, and all of the issues, merge requests, and groups linked to your account.
+Once you confirm %{deleteAccount}, it cannot be undone or recovered.`),
+    inputLabel: s__('Profiles|Type your %{confirmationValue} to confirm:'),
   },
 };
 </script>
 
 <template>
-  <deprecated-modal
-    id="delete-account-modal"
-    :title="s__('Profiles|Delete your account?')"
-    :text="text"
-    :primary-button-label="s__('Profiles|Delete account')"
-    :submit-disabled="!canSubmit()"
-    kind="danger"
-    @submit="onSubmit"
+  <gl-modal
+    modal-id="delete-account-modal"
+    title="Profiles"
+    :action-primary="primaryProps"
+    :action-cancel="cancelProps"
+    :ok-disabled="!canSubmit"
+    @primary="onSubmit"
   >
-    <template slot="body" slot-scope="props">
-      <p v-html="props.text"></p>
+    <p>
+      <gl-sprintf :message="$options.i18n.text">
+        <template #yourAccount>
+          <strong>{{ s__('Profiles|your account') }}</strong>
+        </template>
 
-      <form ref="form" :action="actionUrl" method="post">
-        <input type="hidden" name="_method" value="delete" />
-        <input :value="csrfToken" type="hidden" name="authenticity_token" />
+        <template #deleteAccount>
+          <strong>{{ s__('Profiles|Delete account') }}</strong>
+        </template>
+      </gl-sprintf>
+    </p>
 
-        <p id="input-label" v-html="inputLabel"></p>
+    <form ref="form" :action="actionUrl" method="post">
+      <input type="hidden" name="_method" value="delete" />
+      <input :value="csrfToken" type="hidden" name="authenticity_token" />
 
-        <input
-          v-if="confirmWithPassword"
-          v-model="enteredPassword"
-          name="password"
-          class="form-control"
-          type="password"
-          aria-labelledby="input-label"
-        />
-        <input
-          v-else
-          v-model="enteredUsername"
-          name="username"
-          class="form-control"
-          type="text"
-          aria-labelledby="input-label"
-        />
-      </form>
-    </template>
-  </deprecated-modal>
+      <p id="input-label">
+        <gl-sprintf :message="$options.i18n.inputLabel">
+          <template #confirmationValue>
+            <code>{{ confirmationValue }}</code>
+          </template>
+        </gl-sprintf>
+      </p>
+
+      <input
+        v-if="confirmWithPassword"
+        v-model="enteredPassword"
+        name="password"
+        class="form-control"
+        type="password"
+        data-qa-selector="password_confirmation_field"
+        aria-labelledby="input-label"
+      />
+      <input
+        v-else
+        v-model="enteredUsername"
+        name="username"
+        class="form-control"
+        type="text"
+        aria-labelledby="input-label"
+      />
+    </form>
+  </gl-modal>
 </template>

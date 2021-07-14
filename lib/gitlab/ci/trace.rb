@@ -11,11 +11,14 @@ module Gitlab
       LOCK_SLEEP = 0.001.seconds
       WATCH_FLAG_TTL = 10.seconds
 
-      UPDATE_FREQUENCY_DEFAULT = 30.seconds
+      UPDATE_FREQUENCY_DEFAULT = 60.seconds
       UPDATE_FREQUENCY_WHEN_BEING_WATCHED = 3.seconds
+
+      LOAD_BALANCING_STICKING_NAMESPACE = 'ci/build/trace'
 
       ArchiveError = Class.new(StandardError)
       AlreadyArchivedError = Class.new(StandardError)
+      LockedError = Class.new(StandardError)
 
       attr_reader :job
 
@@ -79,7 +82,72 @@ module Gitlab
         job.trace_chunks.any? || current_path.present? || old_trace.present?
       end
 
-      def read
+      def read(&block)
+        read_stream(&block)
+      rescue Errno::ENOENT, ChunkedIO::FailedToGetChunkError
+        job.reset
+        read_stream(&block)
+      end
+
+      def write(mode, &blk)
+        in_write_lock do
+          unsafe_write!(mode, &blk)
+        end
+      end
+
+      def erase_trace_chunks!
+        job.trace_chunks.fast_destroy_all # Destroy chunks of a live trace
+      end
+
+      def erase!
+        ##
+        # Erase the archived trace
+        trace_artifact&.destroy!
+
+        ##
+        # Erase the live trace
+        erase_trace_chunks!
+        FileUtils.rm_f(current_path) if current_path # Remove a trace file of a live trace
+        job.erase_old_trace! if job.has_old_trace? # Remove a trace in database of a live trace
+      ensure
+        @current_path = nil
+      end
+
+      def archive!
+        in_write_lock do
+          unsafe_archive!
+        end
+      end
+
+      def update_interval
+        if being_watched?
+          UPDATE_FREQUENCY_WHEN_BEING_WATCHED
+        else
+          UPDATE_FREQUENCY_DEFAULT
+        end
+      end
+
+      def being_watched!
+        Gitlab::Redis::SharedState.with do |redis|
+          redis.set(being_watched_cache_key, true, ex: WATCH_FLAG_TTL)
+        end
+      end
+
+      def being_watched?
+        Gitlab::Redis::SharedState.with do |redis|
+          redis.exists(being_watched_cache_key)
+        end
+      end
+
+      def lock(&block)
+        in_write_lock(&block)
+      rescue FailedToObtainLockError
+        raise LockedError, "build trace `#{job.id}` is locked"
+      end
+
+      private
+
+      def read_stream
         stream = Gitlab::Ci::Trace::Stream.new do
           if trace_artifact
             trace_artifact.open
@@ -97,57 +165,13 @@ module Gitlab
         stream&.close
       end
 
-      def write(mode, &blk)
-        in_write_lock do
-          unsafe_write!(mode, &blk)
-        end
-      end
-
-      def erase!
-        ##
-        # Erase the archived trace
-        trace_artifact&.destroy!
-
-        ##
-        # Erase the live trace
-        job.trace_chunks.fast_destroy_all # Destroy chunks of a live trace
-        FileUtils.rm_f(current_path) if current_path # Remove a trace file of a live trace
-        job.erase_old_trace! if job.has_old_trace? # Remove a trace in database of a live trace
-      ensure
-        @current_path = nil
-      end
-
-      def archive!
-        in_write_lock do
-          unsafe_archive!
-        end
-      end
-
-      def update_interval
-        being_watched? ? UPDATE_FREQUENCY_WHEN_BEING_WATCHED : UPDATE_FREQUENCY_DEFAULT
-      end
-
-      def being_watched!
-        Gitlab::Redis::SharedState.with do |redis|
-          redis.set(being_watched_cache_key, true, ex: WATCH_FLAG_TTL)
-        end
-      end
-
-      def being_watched?
-        Gitlab::Redis::SharedState.with do |redis|
-          redis.exists(being_watched_cache_key)
-        end
-      end
-
-      private
-
       def unsafe_write!(mode, &blk)
         stream = Gitlab::Ci::Trace::Stream.new do
           if trace_artifact
             raise AlreadyArchivedError, 'Could not write to the archived trace'
           elsif current_path
             File.open(current_path, mode)
-          elsif Feature.enabled?('ci_enable_live_trace', job.project)
+          elsif Feature.enabled?(:ci_enable_live_trace, job.project)
             Gitlab::Ci::Trace::ChunkedIO.new(job)
           else
             File.open(ensure_path, mode)
@@ -162,13 +186,18 @@ module Gitlab
       end
 
       def unsafe_archive!
-        raise AlreadyArchivedError, 'Could not archive again' if trace_artifact
         raise ArchiveError, 'Job is not finished yet' unless job.complete?
+
+        if trace_artifact
+          unsafe_trace_cleanup!
+
+          raise AlreadyArchivedError, 'Could not archive again'
+        end
 
         if job.trace_chunks.any?
           Gitlab::Ci::Trace::ChunkedIO.new(job) do |stream|
             archive_stream!(stream)
-            stream.destroy!
+            destroy_stream(job) { stream.destroy! }
           end
         elsif current_path
           File.open(current_path) do |stream|
@@ -180,6 +209,18 @@ module Gitlab
             archive_stream!(stream)
             job.erase_old_trace!
           end
+        end
+      end
+
+      def unsafe_trace_cleanup!
+        return unless trace_artifact
+
+        if trace_artifact.archived_trace_exists?
+          # An archive already exists, so make sure to remove the trace chunks
+          erase_trace_chunks!
+        else
+          # An archive already exists, but its associated file does not, so remove it
+          trace_artifact.destroy!
         end
       end
 
@@ -254,7 +295,29 @@ module Gitlab
       end
 
       def trace_artifact
-        job.job_artifacts_trace
+        read_trace_artifact(job) { job.job_artifacts_trace }
+      end
+
+      def destroy_stream(build)
+        if consistent_archived_trace?(build)
+          ::Gitlab::Database::LoadBalancing::Sticking
+            .stick(LOAD_BALANCING_STICKING_NAMESPACE, build.id)
+        end
+
+        yield
+      end
+
+      def read_trace_artifact(build)
+        if consistent_archived_trace?(build)
+          ::Gitlab::Database::LoadBalancing::Sticking
+            .unstick_or_continue_sticking(LOAD_BALANCING_STICKING_NAMESPACE, build.id)
+        end
+
+        yield
+      end
+
+      def consistent_archived_trace?(build)
+        ::Feature.enabled?(:gitlab_ci_archived_trace_consistent_reads, build.project, default_enabled: false)
       end
 
       def being_watched_cache_key

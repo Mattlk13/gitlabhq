@@ -2,7 +2,7 @@
 
 require 'spec_helper'
 
-describe 'Profile account page', :js do
+RSpec.describe 'Profile account page', :js do
   let(:user) { create(:user) }
 
   before do
@@ -12,6 +12,9 @@ describe 'Profile account page', :js do
   describe 'when I delete my account' do
     before do
       visit profile_account_path
+
+      # Scroll page to the bottom to make Delete account button visible
+      execute_script('window.scrollTo(0, document.body.scrollHeight)')
     end
 
     it { expect(page).to have_content('Delete account') }
@@ -67,7 +70,7 @@ describe 'Profile account page', :js do
       within('.feed-token-reset') do
         previous_token = find("#feed_token").value
 
-        accept_confirm { click_link('reset it') }
+        accept_confirm { find('[data-testid="reset_feed_token_link"]').click }
 
         expect(find('#feed_token').value).not_to eq(previous_token)
       end
@@ -86,7 +89,7 @@ describe 'Profile account page', :js do
       within('.incoming-email-token-reset') do
         previous_token = find('#incoming_email_token').value
 
-        accept_confirm { click_link('reset it') }
+        accept_confirm { find('[data-testid="reset_email_token_link"]').click }
 
         expect(find('#incoming_email_token').value).not_to eq(previous_token)
       end
@@ -101,10 +104,10 @@ describe 'Profile account page', :js do
     it 'changes my username' do
       fill_in 'username-change-input', with: 'new-username'
 
-      page.find('[data-target="#username-change-confirmation-modal"]').click
+      page.find('[data-testid="username-change-confirmation-modal"]').click
 
       page.within('.modal') do
-        find('.js-modal-primary-action').click
+        find('.js-modal-action-primary').click
       end
 
       expect(page).to have_content('new-username')

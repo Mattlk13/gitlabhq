@@ -26,7 +26,7 @@ module Gitlab
         end
         types Issue, MergeRequest
         condition do
-          current_user.can?(:"admin_#{quick_action_target.to_ability_name}", project)
+          quick_action_target.supports_assignee? && current_user.can?(:"admin_#{quick_action_target.to_ability_name}", project)
         end
         parse_params do |assignee_param|
           extract_users(assignee_param)
@@ -91,6 +91,7 @@ module Gitlab
         params '%"milestone"'
         types Issue, MergeRequest
         condition do
+          quick_action_target.supports_milestone? &&
           current_user.can?(:"admin_#{quick_action_target.to_ability_name}", project) &&
             find_milestones(project, state: 'active').any?
         end
@@ -113,6 +114,7 @@ module Gitlab
         condition do
           quick_action_target.persisted? &&
             quick_action_target.milestone_id? &&
+            quick_action_target.supports_milestone? &&
             current_user.can?(:"admin_#{quick_action_target.to_ability_name}", project)
         end
         command :remove_milestone do
@@ -153,6 +155,7 @@ module Gitlab
         params '<1w 3d 2h 14m>'
         types Issue, MergeRequest
         condition do
+          quick_action_target.supports_time_tracking? &&
           current_user.can?(:"admin_#{quick_action_target.to_ability_name}", project)
         end
         parse_params do |raw_duration|
@@ -175,12 +178,13 @@ module Gitlab
         params '<time(1h30m | -1h30m)> <date(YYYY-MM-DD)>'
         types Issue, MergeRequest
         condition do
+          quick_action_target.supports_time_tracking? &&
           current_user.can?(:"admin_#{quick_action_target.to_ability_name}", quick_action_target)
         end
         parse_params do |raw_time_date|
           Gitlab::QuickActions::SpendTimeAndDateSeparator.new(raw_time_date).execute
         end
-        command :spend do |time_spent, time_spent_date|
+        command :spend, :spent do |time_spent, time_spent_date|
           if time_spent
             @updates[:spend_time] = {
               duration: time_spent,

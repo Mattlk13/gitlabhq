@@ -1,19 +1,18 @@
 import $ from 'jquery';
 import Vue from 'vue';
-import Translate from '../../../../vue_shared/translate';
-import GlFieldErrors from '../../../../gl_field_errors';
-import intervalPatternInput from './components/interval_pattern_input.vue';
-import TimezoneDropdown from './components/timezone_dropdown';
-import TargetBranchDropdown from './components/target_branch_dropdown';
 import setupNativeFormVariableList from '../../../../ci_variable_list/native_form_variable_list';
+import GlFieldErrors from '../../../../gl_field_errors';
+import Translate from '../../../../vue_shared/translate';
+import intervalPatternInput from './components/interval_pattern_input.vue';
+import TargetBranchDropdown from './components/target_branch_dropdown';
+import TimezoneDropdown from './components/timezone_dropdown';
 
 Vue.use(Translate);
 
 function initIntervalPatternInput() {
   const intervalPatternMount = document.getElementById('interval-pattern-input');
-  const initialCronInterval = intervalPatternMount
-    ? intervalPatternMount.dataset.initialInterval
-    : '';
+  const initialCronInterval = intervalPatternMount?.dataset?.initialInterval;
+  const dailyLimit = intervalPatternMount.dataset?.dailyLimit;
 
   return new Vue({
     el: intervalPatternMount,
@@ -24,6 +23,7 @@ function initIntervalPatternInput() {
       return createElement('interval-pattern-input', {
         props: {
           initialCronInterval,
+          dailyLimit,
         },
       });
     },

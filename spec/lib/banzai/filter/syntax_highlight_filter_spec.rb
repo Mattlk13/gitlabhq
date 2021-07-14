@@ -2,7 +2,7 @@
 
 require 'spec_helper'
 
-describe Banzai::Filter::SyntaxHighlightFilter do
+RSpec.describe Banzai::Filter::SyntaxHighlightFilter do
   include FilterSpecHelper
 
   shared_examples "XSS prevention" do |lang|
@@ -20,17 +20,25 @@ describe Banzai::Filter::SyntaxHighlightFilter do
     it "highlights as plaintext" do
       result = filter('<pre><code>def fun end</code></pre>')
 
-      expect(result.to_html).to eq('<pre class="code highlight js-syntax-highlight plaintext" lang="plaintext" v-pre="true"><code><span id="LC1" class="line" lang="plaintext">def fun end</span></code></pre>')
+      expect(result.to_html).to eq('<pre class="code highlight js-syntax-highlight language-plaintext" lang="plaintext" v-pre="true"><code><span id="LC1" class="line" lang="plaintext">def fun end</span></code></pre>')
     end
 
     include_examples "XSS prevention", ""
+  end
+
+  context "when contains mermaid diagrams" do
+    it "ignores mermaid blocks" do
+      result = filter('<pre data-mermaid-style="display"><code>mermaid code</code></pre>')
+
+      expect(result.to_html).to eq('<pre data-mermaid-style="display"><code>mermaid code</code></pre>')
+    end
   end
 
   context "when a valid language is specified" do
     it "highlights as that language" do
       result = filter('<pre><code lang="ruby">def fun end</code></pre>')
 
-      expect(result.to_html).to eq('<pre class="code highlight js-syntax-highlight ruby" lang="ruby" v-pre="true"><code><span id="LC1" class="line" lang="ruby"><span class="k">def</span> <span class="nf">fun</span> <span class="k">end</span></span></code></pre>')
+      expect(result.to_html).to eq('<pre class="code highlight js-syntax-highlight language-ruby" lang="ruby" v-pre="true"><code><span id="LC1" class="line" lang="ruby"><span class="k">def</span> <span class="nf">fun</span> <span class="k">end</span></span></code></pre>')
     end
 
     include_examples "XSS prevention", "ruby"
@@ -40,7 +48,7 @@ describe Banzai::Filter::SyntaxHighlightFilter do
     it "highlights as plaintext" do
       result = filter('<pre><code lang="gnuplot">This is a test</code></pre>')
 
-      expect(result.to_html).to eq('<pre class="code highlight js-syntax-highlight plaintext" lang="plaintext" v-pre="true"><code><span id="LC1" class="line" lang="plaintext">This is a test</span></code></pre>')
+      expect(result.to_html).to eq('<pre class="code highlight js-syntax-highlight language-plaintext" lang="plaintext" v-pre="true"><code><span id="LC1" class="line" lang="plaintext">This is a test</span></code></pre>')
     end
 
     include_examples "XSS prevention", "gnuplot"
@@ -55,7 +63,7 @@ describe Banzai::Filter::SyntaxHighlightFilter do
         it "highlights as plaintext but with the correct language attribute and class" do
           result = filter(%{<pre><code lang="#{lang}">This is a test</code></pre>})
 
-          expect(result.to_html).to eq(%{<pre class="code highlight js-syntax-highlight #{lang}" lang="#{lang}" v-pre="true"><code><span id="LC1" class="line" lang="#{lang}">This is a test</span></code></pre>})
+          expect(result.to_html).to eq(%{<pre class="code highlight js-syntax-highlight language-#{lang}" lang="#{lang}" v-pre="true"><code><span id="LC1" class="line" lang="#{lang}">This is a test</span></code></pre>})
         end
 
         include_examples "XSS prevention", lang
@@ -67,7 +75,7 @@ describe Banzai::Filter::SyntaxHighlightFilter do
         it "includes data-lang-params tag with extra information" do
           result = filter(%{<pre><code lang="#{lang}#{delimiter}#{lang_params}">This is a test</code></pre>})
 
-          expect(result.to_html).to eq(%{<pre class="code highlight js-syntax-highlight #{lang}" lang="#{lang}" #{data_attr}="#{lang_params}" v-pre="true"><code><span id="LC1" class="line" lang="#{lang}">This is a test</span></code></pre>})
+          expect(result.to_html).to eq(%{<pre class="code highlight js-syntax-highlight language-#{lang}" lang="#{lang}" #{data_attr}="#{lang_params}" v-pre="true"><code><span id="LC1" class="line" lang="#{lang}">This is a test</span></code></pre>})
         end
 
         include_examples "XSS prevention", lang
@@ -85,7 +93,7 @@ describe Banzai::Filter::SyntaxHighlightFilter do
       it "delimits on the first appearance" do
         result = filter(%{<pre><code lang="#{lang}#{delimiter}#{lang_params}#{delimiter}more-things">This is a test</code></pre>})
 
-        expect(result.to_html).to eq(%{<pre class="code highlight js-syntax-highlight #{lang}" lang="#{lang}" #{data_attr}="#{lang_params}#{delimiter}more-things" v-pre="true"><code><span id="LC1" class="line" lang="#{lang}">This is a test</span></code></pre>})
+        expect(result.to_html).to eq(%{<pre class="code highlight js-syntax-highlight language-#{lang}" lang="#{lang}" #{data_attr}="#{lang_params}#{delimiter}more-things" v-pre="true"><code><span id="LC1" class="line" lang="#{lang}">This is a test</span></code></pre>})
       end
     end
   end

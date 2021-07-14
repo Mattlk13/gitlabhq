@@ -12,20 +12,25 @@ class ApplicationController < ActionController::Base
   include WorkhorseHelper
   include EnforcesTwoFactorAuthentication
   include WithPerformanceBar
+  include Gitlab::SearchContext::ControllerConcern
   include SessionlessAuthentication
   include SessionsHelper
   include ConfirmEmailWarning
-  include Gitlab::Tracking::ControllerConcern
   include Gitlab::Experimentation::ControllerConcern
   include InitializesCurrentUserMode
+  include Impersonation
+  include Gitlab::Logging::CloudflareHelper
+  include Gitlab::Utils::StrongMemoize
+  include ::Gitlab::WithFeatureCategory
+  include FlocOptOut
 
   before_action :authenticate_user!, except: [:route_not_found]
   before_action :enforce_terms!, if: :should_enforce_terms?
   before_action :validate_user_service_ticket!
   before_action :check_password_expiration, if: :html_request?
   before_action :ldap_security_check
-  around_action :sentry_context
   before_action :default_headers
+  before_action :default_cache_headers
   before_action :add_gon_variables, if: :html_request?
   before_action :configure_permitted_parameters, if: :devise_controller?
   before_action :require_email, unless: :devise_controller?
@@ -34,7 +39,13 @@ class ApplicationController < ActionController::Base
   before_action :check_impersonation_availability
   before_action :required_signup_info
 
-  around_action :set_current_context
+  # Make sure the `auth_user` is memoized so it can be logged, we do this after
+  # all other before filters that could have set the user.
+  before_action :auth_user
+
+  prepend_around_action :set_current_context
+
+  around_action :sessionless_bypass_admin_mode!, if: :sessionless_user?
   around_action :set_locale
   around_action :set_session_storage
   around_action :set_current_admin
@@ -49,8 +60,7 @@ class ApplicationController < ActionController::Base
     :gitea_import_enabled?, :github_import_configured?,
     :gitlab_import_enabled?, :gitlab_import_configured?,
     :bitbucket_import_enabled?, :bitbucket_import_configured?,
-    :bitbucket_server_import_enabled?,
-    :google_code_import_enabled?, :fogbugz_import_enabled?,
+    :bitbucket_server_import_enabled?, :fogbugz_import_enabled?,
     :git_import_enabled?, :gitlab_project_import_enabled?,
     :manifest_import_enabled?, :phabricator_import_enabled?
 
@@ -92,14 +102,6 @@ class ApplicationController < ActionController::Base
     head :forbidden, retry_after: Gitlab::Auth::UniqueIpsLimiter.config.unique_ips_limit_time_window
   end
 
-  rescue_from GRPC::Unavailable, Gitlab::Git::CommandError do |exception|
-    log_exception(exception)
-
-    headers['Retry-After'] = exception.retry_after if exception.respond_to?(:retry_after)
-
-    render_503
-  end
-
   def redirect_back_or_default(default: root_path, options: {})
     redirect_back(fallback_location: default, **options)
   end
@@ -109,7 +111,7 @@ class ApplicationController < ActionController::Base
   end
 
   def route_not_found
-    if current_user
+    if current_user || browser.bot.search_engine?
       not_found
     else
       store_location_for(:user, request.fullpath) unless request.xhr?
@@ -138,20 +140,19 @@ class ApplicationController < ActionController::Base
 
     payload[:ua] = request.env["HTTP_USER_AGENT"]
     payload[:remote_ip] = request.remote_ip
+
     payload[Labkit::Correlation::CorrelationId::LOG_KEY] = Labkit::Correlation::CorrelationId.current_id
+    payload[:metadata] = @current_context
 
     logged_user = auth_user
-
     if logged_user.present?
       payload[:user_id] = logged_user.try(:id)
       payload[:username] = logged_user.try(:username)
     end
 
-    if response.status == 422 && response.body.present? && response.content_type == 'application/json'
-      payload[:response] = response.body
-    end
+    payload[:queue_duration_s] = request.env[::Gitlab::Middleware::RailsQueueDuration::GITLAB_RAILS_QUEUE_DURATION_KEY]
 
-    payload[:queue_duration] = request.env[::Gitlab::Middleware::RailsQueueDuration::GITLAB_RAILS_QUEUE_DURATION_KEY]
+    store_cloudflare_headers!(payload, request)
   end
 
   ##
@@ -159,15 +160,22 @@ class ApplicationController < ActionController::Base
   # (e.g. tokens) to authenticate the user, whereas Devise sets current_user.
   #
   def auth_user
-    if user_signed_in?
-      current_user
-    else
-      try(:authenticated_user)
+    strong_memoize(:auth_user) do
+      if user_signed_in?
+        current_user
+      else
+        try(:authenticated_user)
+      end
     end
   end
 
   def log_exception(exception)
-    Gitlab::ErrorTracking.track_exception(exception)
+    # At this point, the controller already exits set_current_context around
+    # block. To maintain the context while handling error exception, we need to
+    # set the context again
+    set_current_context do
+      Gitlab::ErrorTracking.track_exception(exception)
+    end
 
     backtrace_cleaner = request.env["action_dispatch.backtrace_cleaner"]
     application_trace = ActionDispatch::ExceptionWrapper.new(backtrace_cleaner, exception).application_trace
@@ -200,13 +208,13 @@ class ApplicationController < ActionController::Base
       end
 
     respond_to do |format|
-      format.any { head status }
       format.html do
         render template,
                layout: "errors",
                status: status,
                locals: { message: message }
       end
+      format.any { head status }
     end
   end
 
@@ -216,8 +224,8 @@ class ApplicationController < ActionController::Base
 
   def render_403
     respond_to do |format|
-      format.any { head :forbidden }
       format.html { render "errors/access_denied", layout: "errors", status: :forbidden }
+      format.any { head :forbidden }
     end
   end
 
@@ -234,23 +242,16 @@ class ApplicationController < ActionController::Base
     head :unprocessable_entity
   end
 
-  def render_503
-    respond_to do |format|
-      format.html do
-        render(
-          file: Rails.root.join("public", "503"),
-          layout: false,
-          status: :service_unavailable
-        )
-      end
-      format.any { head :service_unavailable }
-    end
-  end
-
   def no_cache_headers
     DEFAULT_GITLAB_NO_CACHE_HEADERS.each do |k, v|
       headers[k] = v
     end
+  end
+
+  def stream_headers
+    headers['Content-Length'] = nil
+    headers['X-Accel-Buffering'] = 'no' # Disable buffering on Nginx
+    headers['Last-Modified'] = '0' # Prevent buffering via Rack::ETag middleware
   end
 
   def default_headers
@@ -258,11 +259,21 @@ class ApplicationController < ActionController::Base
     headers['X-XSS-Protection'] = '1; mode=block'
     headers['X-UA-Compatible'] = 'IE=edge'
     headers['X-Content-Type-Options'] = 'nosniff'
+  end
 
+  def default_cache_headers
     if current_user
       headers['Cache-Control'] = default_cache_control
       headers['Pragma'] = 'no-cache' # HTTP 1.0 compatibility
     end
+  end
+
+  def stream_csv_headers(csv_filename)
+    no_cache_headers
+    stream_headers
+
+    headers['Content-Type'] = 'text/csv; charset=utf-8; header=present'
+    headers['Content-Disposition'] = "attachment; filename=\"#{csv_filename}\""
   end
 
   def default_cache_control
@@ -291,7 +302,7 @@ class ApplicationController < ActionController::Base
     return if session[:impersonator_id] || !current_user&.allow_password_authentication?
 
     if current_user&.password_expired?
-      return redirect_to new_profile_password_path
+      redirect_to new_profile_password_path
     end
   end
 
@@ -307,19 +318,12 @@ class ApplicationController < ActionController::Base
     if current_user && current_user.requires_ldap_check?
       return unless current_user.try_obtain_ldap_lease
 
-      unless Gitlab::Auth::LDAP::Access.allowed?(current_user)
+      unless Gitlab::Auth::Ldap::Access.allowed?(current_user)
         sign_out current_user
         flash[:alert] = _("Access denied for your LDAP account.")
         redirect_to new_user_session_path
       end
     end
-  end
-
-  def event_filter
-    @event_filter ||=
-      EventFilter.new(params[:event_filter].presence || cookies[:event_filter]).tap do |new_event_filter|
-        cookies[:event_filter] = new_event_filter.filter
-      end
   end
 
   # JSON for infinite scroll via Pager object
@@ -356,7 +360,7 @@ class ApplicationController < ActionController::Base
 
   def require_email
     if current_user && current_user.temp_oauth_email? && session[:impersonator_id].nil?
-      return redirect_to profile_path, notice: _('Please complete your profile with email address')
+      redirect_to profile_path, notice: _('Please complete your profile with email address')
     end
   end
 
@@ -419,10 +423,6 @@ class ApplicationController < ActionController::Base
     Gitlab::Auth::OAuth::Provider.enabled?(:bitbucket)
   end
 
-  def google_code_import_enabled?
-    Gitlab::CurrentSettings.import_sources.include?('google_code')
-  end
-
   def fogbugz_import_enabled?
     Gitlab::CurrentSettings.import_sources.include?('fogbugz')
   end
@@ -451,12 +451,17 @@ class ApplicationController < ActionController::Base
   end
 
   def set_current_context(&block)
-    Gitlab::ApplicationContext.with_context(
-      user: -> { auth_user },
-      project: -> { @project },
-      namespace: -> { @group },
-      caller_id: full_action_name,
-      &block)
+    Gitlab::ApplicationContext.push(
+      user: -> { context_user },
+      project: -> { @project if @project&.persisted? },
+      namespace: -> { @group if @group&.persisted? },
+      caller_id: caller_id,
+      remote_ip: request.ip,
+      feature_category: feature_category
+    )
+    yield
+  ensure
+    @current_context = Gitlab::ApplicationContext.current
   end
 
   def set_locale(&block)
@@ -471,11 +476,11 @@ class ApplicationController < ActionController::Base
 
   def set_page_title_header
     # Per https://tools.ietf.org/html/rfc5987, headers need to be ISO-8859-1, not UTF-8
-    response.headers['Page-Title'] = URI.escape(page_title('GitLab'))
+    response.headers['Page-Title'] = Addressable::URI.encode_component(page_title('GitLab'))
   end
 
   def set_current_admin(&block)
-    return yield unless Feature.enabled?(:user_mode_in_session)
+    return yield unless Gitlab::CurrentSettings.admin_mode
     return yield unless current_user
 
     Gitlab::Auth::CurrentUserMode.with_current_admin(current_user, &block)
@@ -493,6 +498,10 @@ class ApplicationController < ActionController::Base
     return false unless Gitlab::CurrentSettings.current_application_settings.enforce_terms
 
     html_request? && !devise_controller?
+  end
+
+  def public_visibility_restricted?
+    Gitlab::VisibilityLevel.public_visibility_restricted?
   end
 
   def set_usage_stats_consent_flag
@@ -520,57 +529,29 @@ class ApplicationController < ActionController::Base
       .execute
   end
 
-  def check_impersonation_availability
-    return unless session[:impersonator_id]
-
-    unless Gitlab.config.gitlab.impersonation_enabled
-      stop_impersonation
-      access_denied! _('Impersonation has been disabled')
-    end
-  end
-
-  def stop_impersonation
-    log_impersonation_event
-
-    warden.set_user(impersonator, scope: :user)
-    session[:impersonator_id] = nil
-
-    impersonated_user
-  end
-
-  def impersonated_user
-    current_user
-  end
-
-  def log_impersonation_event
-    Gitlab::AppLogger.info("User #{impersonator.username} has stopped impersonating #{impersonated_user.username}")
-  end
-
-  def impersonator
-    @impersonator ||= User.find(session[:impersonator_id]) if session[:impersonator_id]
-  end
-
-  def sentry_context(&block)
-    Gitlab::ErrorTracking.with_context(current_user, &block)
-  end
-
   def allow_gitaly_ref_name_caching
     ::Gitlab::GitalyClient.allow_ref_name_caching do
       yield
     end
   end
 
-  def full_action_name
+  # Avoid loading the auth_user again after the request. Otherwise calling
+  # `auth_user` again would also trigger the Warden callbacks again
+  def context_user
+    auth_user if strong_memoized?(:auth_user)
+  end
+
+  def caller_id
     "#{self.class.name}##{action_name}"
   end
 
-  # A user requires a role and have the setup_for_company attribute set when they are part of the experimental signup
-  # flow (executed by the Growth team). Users are redirected to the welcome page when their role is required and the
-  # experiment is enabled for the current user.
+  def feature_category
+    self.class.feature_category_for_action(action_name).to_s
+  end
+
   def required_signup_info
     return unless current_user
     return unless current_user.role_required?
-    return unless experiment_enabled?(:signup_flow)
 
     store_location_for :user, request.fullpath
 
@@ -578,4 +559,4 @@ class ApplicationController < ActionController::Base
   end
 end
 
-ApplicationController.prepend_if_ee('EE::ApplicationController')
+ApplicationController.prepend_mod

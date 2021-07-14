@@ -2,6 +2,14 @@
  * File content holder
  *
  */
+.container-fluid.container-limited.limit-container-width {
+  .file-holder.readme-holder.limited-width-container .file-content {
+    max-width: $limited-layout-width;
+    margin-left: auto;
+    margin-right: auto;
+  }
+}
+
 .file-holder {
   border: 1px solid $border-color;
   border-top: 0;
@@ -17,12 +25,6 @@
 
   &.readme-holder {
     margin: $gl-padding 0;
-
-    &.limited-width-container .file-content {
-      max-width: $limited-layout-width;
-      margin-left: auto;
-      margin-right: auto;
-    }
   }
 
   .file-title {
@@ -45,12 +47,7 @@
     }
 
     .file-actions {
-      position: absolute;
-      top: 5px;
-      right: 15px;
-      margin-left: auto;
-
-      .btn {
+      .btn:not(.btn-icon) {
         padding: 0 10px;
         font-size: 13px;
         line-height: 28px;
@@ -105,7 +102,7 @@
   }
 
   .file-content {
-    background: $white-light;
+    background: $white;
 
     &.image_file,
     &.audio,
@@ -131,7 +128,7 @@
 
     &.blob-no-preview {
       background: $gray-darker;
-      text-shadow: 0 1px 2px $white-light;
+      text-shadow: 0 1px 2px $white;
       padding: 100px 0;
     }
 
@@ -183,7 +180,7 @@
 
         &.line-numbers {
           float: none;
-          border-left: 1px solid $gl-gray-100;
+          border-left: 1px solid $gray-100;
 
           i {
             float: none;
@@ -209,7 +206,7 @@
       }
 
       .doc-versions {
-        color: $gray-600;
+        color: $gray-400;
 
         &:hover {
           color: $gray-900;
@@ -227,7 +224,7 @@
         padding: 10px 0;
         border-left: 1px solid $border-color;
         margin-bottom: 0;
-        background: $white-light;
+        background: $white;
 
         li {
           color: $logs-li-color;
@@ -300,7 +297,7 @@ span.idiff {
 
   .renamed-file {
     a {
-      color: $orange-600;
+      color: $orange-500;
     }
   }
 
@@ -342,56 +339,30 @@ span.idiff {
     padding: $gl-padding-8 $gl-padding;
     margin: 0;
     border-radius: $border-radius-default $border-radius-default 0 0;
+
+    @include media-breakpoint-up(md) {
+      flex-wrap: nowrap;
+    }
   }
 
   .file-header-content {
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
     padding-right: 30px;
-    position: relative;
-    width: auto;
-
-    @media (max-width: map-get($grid-breakpoints, sm)-1) {
-      width: 100%;
-    }
-  }
-
-  .file-holder & {
-    .file-actions {
-      position: static;
-    }
-  }
-
-  .btn-clipboard {
-    position: absolute;
-    right: 0;
   }
 
   a {
     color: $gl-text-color;
   }
 
-  .file-actions .btn {
-    padding: 0 10px;
-    font-size: 13px;
-    line-height: 28px;
-    display: inline-block;
-    float: none;
-  }
-
   .file-actions .ide-edit-button {
     z-index: 2;
   }
 
-  @include media-breakpoint-down(xs) {
-    display: block;
-
+  @include media-breakpoint-down(md) {
     .file-actions {
-      white-space: normal;
+      margin-top: $gl-padding-8;
 
-      .btn-group {
-        padding-top: 5px;
+      .btn {
+        margin-bottom: $gl-padding-8;
       }
     }
   }
@@ -467,12 +438,6 @@ span.idiff {
     .user-avatar-link.new-comment {
       position: absolute;
       margin: 40px $gl-padding 0 116px;
-
-      ~ .note-edit-form form.edit-note {
-        @include media-breakpoint-up(sm) {
-          margin-left: $note-icon-gutter-width;
-        }
-      }
     }
   }
 
@@ -480,7 +445,7 @@ span.idiff {
     padding-bottom: $gl-padding;
 
     .discussion-reply-holder {
-      border-bottom: 1px solid $gray-100;
+      border-bottom: 1px solid $gray-50;
       border-radius: 0;
     }
   }
@@ -495,19 +460,73 @@ span.idiff {
   max-height: 20rem;
 }
 
-#js-openapi-viewer pre.version {
-  background-color: transparent;
-  border: transparent;
-}
-
-.code-navigation {
-  border-bottom: 1px $gray-darkest dashed;
-
-  &:hover {
-    border-bottom-color: $almost-black;
+#js-openapi-viewer {
+  pre.version,
+  code {
+    background-color: transparent;
+    border: transparent;
   }
 }
 
-.code-navigation-popover {
-  max-width: 450px;
+.code-navigation-line:hover {
+  .code-navigation {
+    border-bottom: 1px $gray-darkest dashed;
+
+    &:hover {
+      border-bottom-color: $almost-black;
+    }
+  }
 }
+
+.code-navigation-popover.popover {
+  max-width: calc(min(#{px-to-rem(560px)}, calc(100vw - #{$gl-padding-32})));
+}
+
+.code-navigation-popover-container {
+  max-height: px-to-rem(320px);
+}
+
+.code-navigation-popover .code {
+  padding-left: $grid-size * 3;
+  text-indent: -$grid-size * 2;
+}
+
+.tree-item-link {
+  &:not(.is-submodule) {
+    span {
+      z-index: 2;
+    }
+
+    &::before {
+      content: '';
+      position: absolute;
+      left: 0;
+      top: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 1;
+    }
+  }
+}
+
+//
+// IMPORTANT PERFORMANCE OPTIMIZATION BELOW
+//
+// * :nth-of-type(1n+70) - makes sure we do not render lines 71+ right
+// away. Even though the HTML is injected in the DOM, as long as we do
+// not render those lines, the browser doesn't need to spend resources
+// calculating and repainting what's hidden.
+//
+// * :not(:last-of-type) makes sure that we output the last line of the
+// blob's snippet. This is important because the column with the line
+// numbers has auto width and is expanding based on the content in it.
+// This leads to unnecessary layout shift when the last lines of the
+// snippet are longer than two (2) digits.
+// EXAMPLE: Let's say, we have a blob with 100 lines. If we output 70
+// lines, and then, the remaining 30 (incl the line 100), it will lead
+// to the layout reflow and styles recalculation when we output line
+// 100 (because the width of '100' is always bigger than '70'). By
+// outputting the last line right away, we prevent that as the column
+// will always be expanded to the maximum needed width.
+.blob-viewer[data-loading] .file-content.code .line:nth-of-type(1n+70):not(:last-of-type),
+.blob-viewer[data-loading] .file-content.code .file-line-num:nth-of-type(1n+70):not(:last-of-type) {display: none !important;}

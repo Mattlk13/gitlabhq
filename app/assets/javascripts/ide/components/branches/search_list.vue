@@ -1,14 +1,13 @@
 <script>
+import { GlLoadingIcon, GlIcon } from '@gitlab/ui';
+import { debounce } from 'lodash';
 import { mapActions, mapState } from 'vuex';
-import _ from 'underscore';
-import { GlLoadingIcon } from '@gitlab/ui';
-import Icon from '~/vue_shared/components/icon.vue';
 import Item from './item.vue';
 
 export default {
   components: {
     Item,
-    Icon,
+    GlIcon,
     GlLoadingIcon,
   },
   data() {
@@ -39,7 +38,7 @@ export default {
     loadBranches() {
       this.fetchBranches({ search: this.search });
     },
-    searchBranches: _.debounce(function debounceSearch() {
+    searchBranches: debounce(function debounceSearch() {
       this.loadBranches();
     }, 250),
     focusSearch() {
@@ -58,7 +57,10 @@ export default {
 
 <template>
   <div>
-    <label class="dropdown-input pt-3 pb-3 mb-0 border-bottom block position-relative" @click.stop>
+    <label
+      class="dropdown-input gl-pt-3 gl-pb-5 gl-mb-0 gl-border-b-1 gl-border-b-solid gl-display-block"
+      @click.stop
+    >
       <input
         ref="searchInput"
         v-model="search"
@@ -67,12 +69,12 @@ export default {
         class="form-control dropdown-input-field"
         @input="searchBranches"
       />
-      <icon :size="18" name="search" class="ml-3 input-icon" />
+      <gl-icon name="search" class="gl-ml-5 gl-mt-1 input-icon" />
     </label>
     <div class="dropdown-content ide-merge-requests-dropdown-content d-flex">
       <gl-loading-icon
         v-if="isLoading"
-        :size="2"
+        size="lg"
         class="mt-3 mb-3 align-self-center ml-auto mr-auto"
       />
       <ul v-else class="mb-0 w-100">

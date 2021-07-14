@@ -2,21 +2,21 @@
 
 class NewMergeRequestWorker # rubocop:disable Scalability/IdempotentWorker
   include ApplicationWorker
+
+  sidekiq_options retry: 3
   include NewIssuable
 
-  feature_category :source_code_management
-  latency_sensitive_worker!
+  feature_category :code_review
+  urgency :high
   worker_resource_boundary :cpu
   weight 2
 
   def perform(merge_request_id, user_id)
     return unless objects_found?(merge_request_id, user_id)
 
-    EventCreateService.new.open_mr(issuable, user)
-    NotificationService.new.new_merge_request(issuable, user)
-
-    issuable.diffs(include_stats: false).write_cache
-    issuable.create_cross_references!(user)
+    MergeRequests::AfterCreateService
+      .new(project: issuable.target_project, current_user: user)
+      .execute(issuable)
   end
 
   def issuable_class

@@ -4,49 +4,39 @@ RSpec.shared_examples 'cache counters invalidator' do
   it 'invalidates counter cache for assignees' do
     expect_any_instance_of(User).to receive(:invalidate_merge_request_cache_counts)
 
-    described_class.new(project, user, {}).execute(merge_request)
-  end
-end
-
-RSpec.shared_examples 'system notes for milestones' do
-  def update_issuable(opts)
-    issuable = try(:issue) || try(:merge_request)
-    described_class.new(project, user, opts).execute(issuable)
-  end
-
-  context 'group milestones' do
-    let(:group) { create(:group) }
-    let(:group_milestone) { create(:milestone, group: group) }
-
-    before do
-      project.update(namespace: group)
-      create(:group_member, group: group, user: user)
-    end
-
-    it 'creates a system note' do
-      expect do
-        update_issuable(milestone: group_milestone)
-      end.to change { Note.system.count }.by(1)
-    end
-  end
-
-  context 'project milestones' do
-    it 'creates a system note' do
-      expect do
-        update_issuable(milestone: create(:milestone, project: project))
-      end.to change { Note.system.count }.by(1)
-    end
+    described_class.new(project: project, current_user: user).execute(merge_request)
   end
 end
 
 RSpec.shared_examples 'updating a single task' do
   def update_issuable(opts)
     issuable = try(:issue) || try(:merge_request)
-    described_class.new(project, user, opts).execute(issuable)
+    described_class.new(project: project, current_user: user, params: opts).execute(issuable)
   end
 
   before do
     update_issuable(description: "- [ ] Task 1\n- [ ] Task 2")
+  end
+
+  context 'usage counters' do
+    it 'update as expected' do
+      if try(:merge_request)
+        expect(Gitlab::UsageDataCounters::MergeRequestActivityUniqueCounter)
+          .to receive(:track_task_item_status_changed).once.with(user: user)
+      else
+        expect(Gitlab::UsageDataCounters::MergeRequestActivityUniqueCounter)
+          .not_to receive(:track_task_item_status_changed)
+      end
+
+      update_issuable(
+        update_task: {
+          index: 1,
+          checked: true,
+          line_source: '- [ ] Task 1',
+          line_number: 1
+        }
+      )
+    end
   end
 
   context 'when a task is marked as completed' do

@@ -1,7 +1,7 @@
 <script>
-import Stacktrace from '~/error_tracking/components/stacktrace.vue';
 import { GlLoadingIcon } from '@gitlab/ui';
 import { mapActions, mapState, mapGetters } from 'vuex';
+import Stacktrace from '~/error_tracking/components/stacktrace.vue';
 
 export default {
   name: 'SentryErrorStackTrace',
@@ -36,7 +36,7 @@ export default {
       </div>
     </div>
     <div v-if="loadingStacktrace" class="card">
-      <gl-loading-icon class="py-2" label="Fetching stack trace" :size="1" />
+      <gl-loading-icon class="py-2" label="Fetching stack trace" size="sm" />
     </div>
     <stacktrace v-else :entries="stacktrace" />
   </div>

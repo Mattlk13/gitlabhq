@@ -1,8 +1,8 @@
 <script>
 import { isString } from 'lodash';
+import { visitUrl } from '~/lib/utils/url_utility';
 import Timeago from '~/vue_shared/components/time_ago_tooltip.vue';
 import Url from './url.vue';
-import { visitUrl } from '~/lib/utils/url_utility';
 
 export default {
   components: {
@@ -71,7 +71,7 @@ export default {
       </p>
       <b>{{ name }}</b>
       <div v-for="line in description.split('\n')" :key="line">{{ line }}</div>
-      <url :uri="targetUrl" class="prepend-top-8 no-expand" />
+      <url :uri="targetUrl" class="gl-mt-3 no-expand" />
     </div>
   </li>
 </template>

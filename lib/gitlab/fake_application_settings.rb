@@ -4,7 +4,7 @@
 # ActiveRecord access. We rely on the initial values being true or false to
 # determine whether to define a predicate method because for a newly-added
 # column that has not been migrated yet, there is no way to determine the
-# column type without parsing db/schema.rb.
+# column type without parsing db/structure.sql.
 module Gitlab
   class FakeApplicationSettings < OpenStruct
     include ApplicationSettingImplementation
@@ -33,4 +33,4 @@ module Gitlab
   end
 end
 
-Gitlab::FakeApplicationSettings.prepend_if_ee('EE::Gitlab::FakeApplicationSettings')
+Gitlab::FakeApplicationSettings.prepend_mod_with('Gitlab::FakeApplicationSettings')

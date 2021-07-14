@@ -6,7 +6,7 @@ module MembershipActions
 
   def create
     create_params = params.permit(:user_ids, :access_level, :expires_at)
-    result = Members::CreateService.new(current_user, create_params).execute(membershipable)
+    result = Members::CreateService.new(current_user, create_params.merge({ source: membershipable, invite_source: "#{plain_source_type}-members-page" })).execute
 
     if result[:status] == :success
       redirect_to members_page_url, notice: _('Users were successfully added.')
@@ -18,20 +18,36 @@ module MembershipActions
   def update
     update_params = params.require(root_params_key).permit(:access_level, :expires_at)
     member = membershipable.members_and_requesters.find(params[:id])
-    member = Members::UpdateService
+    result = Members::UpdateService
       .new(current_user, update_params)
       .execute(member)
 
-    member = present_members([member]).first
+    member = result[:member]
 
-    respond_to do |format|
-      format.js { render 'shared/members/update', locals: { member: member } }
+    member_data = if member.expires?
+                    {
+                      expires_in: helpers.distance_of_time_in_words_to_now(member.expires_at),
+                      expires_soon: member.expires_soon?,
+                      expires_at_formatted: member.expires_at.to_time.in_time_zone.to_s(:medium)
+                    }
+                  else
+                    {}
+                  end
+
+    if result[:status] == :success
+      render json: member_data
+    else
+      render json: { message: result[:message] }, status: :unprocessable_entity
     end
   end
 
   def destroy
     member = membershipable.members_and_requesters.find(params[:id])
-    Members::DestroyService.new(current_user).execute(member)
+    skip_subresources = !ActiveRecord::Type::Boolean.new.cast(params.delete(:remove_sub_memberships))
+    # !! is used in case unassign_issuables contains empty string which would result in nil
+    unassign_issuables = !!ActiveRecord::Type::Boolean.new.cast(params.delete(:unassign_issuables))
+
+    Members::DestroyService.new(current_user).execute(member, skip_subresources: skip_subresources, unassign_issuables: unassign_issuables)
 
     respond_to do |format|
       format.html do
@@ -39,7 +55,11 @@ module MembershipActions
           begin
             case membershipable
             when Namespace
-              _("User was successfully removed from group and any subresources.")
+              if skip_subresources
+                _("User was successfully removed from group.")
+              else
+                _("User was successfully removed from group and any subgroups and projects.")
+              end
             else
               _("User was successfully removed from project.")
             end
@@ -53,10 +73,16 @@ module MembershipActions
   end
 
   def request_access
-    membershipable.request_access(current_user)
+    access_requester = membershipable.request_access(current_user)
 
-    redirect_to polymorphic_path(membershipable),
-                notice: _('Your request for access has been queued for review.')
+    if access_requester.persisted?
+      redirect_to polymorphic_path(membershipable),
+                  notice: _('Your request for access has been queued for review.')
+    else
+      redirect_to polymorphic_path(membershipable),
+                  alert: _("Your request for access could not be processed: %{error_meesage}") %
+                    { error_meesage: access_requester.errors.full_messages.to_sentence }
+    end
   end
 
   def approve_access_request
@@ -82,7 +108,7 @@ module MembershipActions
 
     respond_to do |format|
       format.html do
-        redirect_path = member.request? ? member.source : [:dashboard, membershipable.class.to_s.tableize]
+        redirect_path = member.request? ? member.source : [:dashboard, membershipable.class.to_s.tableize.to_sym]
         redirect_to redirect_path, notice: notice
       end
 
@@ -92,7 +118,7 @@ module MembershipActions
   # rubocop: enable CodeReuse/ActiveRecord
 
   def resend_invite
-    member = membershipable.members.find(params[:id])
+    member = membershipable_members.find(params[:id])
 
     if member.invite?
       member.resend_invite
@@ -109,40 +135,24 @@ module MembershipActions
     raise NotImplementedError
   end
 
+  def membershipable_members
+    raise NotImplementedError
+  end
+
   def root_params_key
-    case membershipable
-    when Namespace
-      :group_member
-    when Project
-      :project_member
-    else
-      raise "Unknown membershipable type: #{membershipable}!"
-    end
+    raise NotImplementedError
   end
 
   def members_page_url
-    case membershipable
-    when Namespace
-      polymorphic_url([membershipable, :members])
-    when Project
-      project_project_members_path(membershipable)
-    else
-      raise "Unknown membershipable type: #{membershipable}!"
-    end
+    raise NotImplementedError
   end
 
   def source_type
-    @source_type ||=
-      begin
-        case membershipable
-        when Namespace
-          _("group")
-        when Project
-          _("project")
-        else
-          raise "Unknown membershipable type: #{membershipable}!"
-        end
-      end
+    raise NotImplementedError
+  end
+
+  def plain_source_type
+    raise NotImplementedError
   end
 
   def requested_relations
@@ -156,3 +166,5 @@ module MembershipActions
     end
   end
 end
+
+MembershipActions.prepend_mod_with('MembershipActions')

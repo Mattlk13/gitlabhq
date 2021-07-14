@@ -2,12 +2,13 @@
 
 require 'spec_helper'
 
-describe API::AwardEmoji do
+RSpec.describe API::AwardEmoji do
   let_it_be(:user)        { create(:user) }
   let_it_be(:project)     { create(:project) }
   let_it_be(:issue)       { create(:issue, project: project) }
   let_it_be(:award_emoji) { create(:award_emoji, awardable: issue, user: user) }
   let_it_be(:note)        { create(:note, project: project, noteable: issue) }
+
   let!(:merge_request)    { create(:merge_request, source_project: project, target_project: project) }
   let!(:downvote)         { create(:award_emoji, :downvote, awardable: merge_request, user: user) }
 
@@ -26,7 +27,7 @@ describe API::AwardEmoji do
       end
 
       it "returns a 404 error when issue id not found" do
-        get api("/projects/#{project.id}/issues/12345/award_emoji", user)
+        get api("/projects/#{project.id}/issues/#{non_existing_record_iid}/award_emoji", user)
 
         expect(response).to have_gitlab_http_status(:not_found)
       end
@@ -91,7 +92,7 @@ describe API::AwardEmoji do
       end
 
       it "returns a 404 error if the award is not found" do
-        get api("/projects/#{project.id}/issues/#{issue.iid}/award_emoji/12345", user)
+        get api("/projects/#{project.id}/issues/#{issue.iid}/award_emoji/#{non_existing_record_id}", user)
 
         expect(response).to have_gitlab_http_status(:not_found)
       end
@@ -255,7 +256,7 @@ describe API::AwardEmoji do
       end
 
       it 'returns a 404 error when the award emoji can not be found' do
-        delete api("/projects/#{project.id}/issues/#{issue.iid}/award_emoji/12345", user)
+        delete api("/projects/#{project.id}/issues/#{issue.iid}/award_emoji/#{non_existing_record_id}", user)
 
         expect(response).to have_gitlab_http_status(:not_found)
       end
@@ -275,7 +276,7 @@ describe API::AwardEmoji do
       end
 
       it 'returns a 404 error when note id not found' do
-        delete api("/projects/#{project.id}/merge_requests/#{merge_request.iid}/notes/12345", user)
+        delete api("/projects/#{project.id}/merge_requests/#{merge_request.iid}/notes/#{non_existing_record_id}", user)
 
         expect(response).to have_gitlab_http_status(:not_found)
       end

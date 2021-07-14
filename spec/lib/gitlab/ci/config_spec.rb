@@ -2,7 +2,7 @@
 
 require 'spec_helper'
 
-describe Gitlab::Ci::Config do
+RSpec.describe Gitlab::Ci::Config do
   include StubRequests
 
   let_it_be(:user) { create(:user) }
@@ -20,7 +20,7 @@ describe Gitlab::Ci::Config do
   context 'when config is valid' do
     let(:yml) do
       <<-EOS
-        image: ruby:2.2
+        image: ruby:2.7
 
         rspec:
           script:
@@ -32,7 +32,7 @@ describe Gitlab::Ci::Config do
     describe '#to_hash' do
       it 'returns hash created from string' do
         hash = {
-          image: 'ruby:2.2',
+          image: 'ruby:2.7',
           rspec: {
             script: ['gem install rspec',
                      'rspec']
@@ -79,33 +79,37 @@ describe Gitlab::Ci::Config do
 
         it { is_expected.to eq %w[.pre stage1 stage2 .post] }
       end
-
-      context 'with feature disabled' do
-        before do
-          stub_feature_flags(ci_pre_post_pipeline_stages: false)
-        end
-
-        let(:yml) do
-          <<-EOS
-            stages:
-              - stage1
-              - stage2
-            job1:
-              stage: stage1
-              script:
-                - ls
-          EOS
-        end
-
-        it { is_expected.to eq %w[stage1 stage2] }
-      end
     end
+  end
+
+  describe '#included_templates' do
+    let(:yml) do
+      <<-EOS
+        include:
+          - template: Jobs/Deploy.gitlab-ci.yml
+          - template: Jobs/Build.gitlab-ci.yml
+          - remote: https://example.com/gitlab-ci.yml
+      EOS
+    end
+
+    before do
+      stub_request(:get, 'https://example.com/gitlab-ci.yml').to_return(status: 200, body: <<-EOS)
+        test:
+          script: [ 'echo hello world' ]
+      EOS
+    end
+
+    subject(:included_templates) do
+      config.included_templates
+    end
+
+    it { is_expected.to contain_exactly('Jobs/Deploy.gitlab-ci.yml', 'Jobs/Build.gitlab-ci.yml') }
   end
 
   context 'when using extendable hash' do
     let(:yml) do
       <<-EOS
-        image: ruby:2.2
+        image: ruby:2.7
 
         rspec:
           script: rspec
@@ -118,7 +122,7 @@ describe Gitlab::Ci::Config do
 
     it 'correctly extends the hash' do
       hash = {
-        image: 'ruby:2.2',
+        image: 'ruby:2.7',
         rspec: { script: 'rspec' },
         test: {
           extends: 'rspec',
@@ -208,7 +212,7 @@ describe Gitlab::Ci::Config do
         let(:yml) do
           <<-EOS
             image:
-              name: ruby:2.2
+              name: ruby:2.7
               ports:
                 - 80
           EOS
@@ -222,12 +226,12 @@ describe Gitlab::Ci::Config do
       context 'in the job image' do
         let(:yml) do
           <<-EOS
-            image: ruby:2.2
+            image: ruby:2.7
 
             test:
               script: rspec
               image:
-                name: ruby:2.2
+                name: ruby:2.7
                 ports:
                   - 80
           EOS
@@ -241,11 +245,11 @@ describe Gitlab::Ci::Config do
       context 'in the services' do
         let(:yml) do
           <<-EOS
-            image: ruby:2.2
+            image: ruby:2.7
 
             test:
               script: rspec
-              image: ruby:2.2
+              image: ruby:2.7
               services:
                 - name: test
                   alias: test
@@ -259,12 +263,40 @@ describe Gitlab::Ci::Config do
         end
       end
     end
+
+    context 'when yaml uses circular !reference' do
+      let(:yml) do
+        <<~YAML
+        job-1:
+          script:
+            - !reference [job-2, before_script]
+
+        job-2:
+          before_script: !reference [job-1, script]
+        YAML
+      end
+
+      it 'raises error' do
+        expect { config }.to raise_error(
+          described_class::ConfigError,
+          /\!reference \["job-2", "before_script"\] is part of a circular chain/
+        )
+      end
+    end
   end
 
   context "when using 'include' directive" do
     let(:project) { create(:project, :repository) }
     let(:remote_location) { 'https://gitlab.com/gitlab-org/gitlab-foss/blob/1234/.gitlab-ci-1.yml' }
     let(:local_location) { 'spec/fixtures/gitlab/ci/external_files/.gitlab-ci-template-1.yml' }
+
+    let(:local_file_content) do
+      File.read(Rails.root.join(local_location))
+    end
+
+    let(:local_location_hash) do
+      YAML.safe_load(local_file_content).deep_symbolize_keys
+    end
 
     let(:remote_file_content) do
       <<~HEREDOC
@@ -276,8 +308,8 @@ describe Gitlab::Ci::Config do
       HEREDOC
     end
 
-    let(:local_file_content) do
-      File.read(Rails.root.join(local_location))
+    let(:remote_file_hash) do
+      YAML.safe_load(remote_file_content).deep_symbolize_keys
     end
 
     let(:gitlab_ci_yml) do
@@ -286,7 +318,7 @@ describe Gitlab::Ci::Config do
         - #{local_location}
         - #{remote_location}
 
-      image: ruby:2.2
+      image: ruby:2.7
       HEREDOC
     end
 
@@ -303,22 +335,11 @@ describe Gitlab::Ci::Config do
 
     context "when gitlab_ci_yml has valid 'include' defined" do
       it 'returns a composed hash' do
-        before_script_values = [
-          "apt-get update -qq && apt-get install -y -qq sqlite3 libsqlite3-dev nodejs", "ruby -v",
-          "which ruby",
-          "bundle install --jobs $(nproc)  \"${FLAGS[@]}\""
-        ]
-        variables = {
-          POSTGRES_USER: "user",
-          POSTGRES_PASSWORD: "testing-password",
-          POSTGRES_ENABLED: "true",
-          POSTGRES_DB: "$CI_ENVIRONMENT_SLUG"
-        }
         composed_hash = {
-          before_script: before_script_values,
-          image: "ruby:2.2",
+          before_script: local_location_hash[:before_script],
+          image: "ruby:2.7",
           rspec: { script: ["bundle exec rspec"] },
-          variables: variables
+          variables: remote_file_hash[:variables]
         }
 
         expect(config.to_hash).to eq(composed_hash)
@@ -332,7 +353,7 @@ describe Gitlab::Ci::Config do
         HEREDOC
       end
 
-      it 'raises error YamlProcessor validationError' do
+      it 'raises ConfigError' do
         expect { config }.to raise_error(
           described_class::ConfigError,
           "Included file `invalid` does not have YAML extension!"
@@ -349,7 +370,7 @@ describe Gitlab::Ci::Config do
         HEREDOC
       end
 
-      it 'raises error YamlProcessor validationError' do
+      it 'raises ConfigError' do
         expect { config }.to raise_error(
           described_class::ConfigError,
           'Include `{"remote":"http://url","local":"/local/file.yml"}` needs to match exactly one accessor!'
@@ -373,23 +394,6 @@ describe Gitlab::Ci::Config do
           described_class::ConfigError,
           'Resolving config took longer than expected'
         )
-      end
-    end
-
-    context 'when context expansion timeout is disabled' do
-      before do
-        allow_next_instance_of(Gitlab::Ci::Config::External::Context) do |instance|
-          allow(instance).to receive(:check_execution_time!).and_call_original
-        end
-
-        allow(Feature)
-          .to receive(:enabled?)
-          .with(:ci_limit_yaml_expansion, project, default_enabled: true)
-          .and_return(false)
-      end
-
-      it 'does not raises errors' do
-        expect { config }.not_to raise_error
       end
     end
 
@@ -418,7 +422,7 @@ describe Gitlab::Ci::Config do
         include:
           - #{remote_location}
 
-        image: ruby:2.2
+        image: ruby:2.7
         HEREDOC
       end
 
@@ -429,7 +433,7 @@ describe Gitlab::Ci::Config do
       end
 
       it 'takes precedence' do
-        expect(config.to_hash).to eq({ image: 'ruby:2.2' })
+        expect(config.to_hash).to eq({ image: 'ruby:2.7' })
       end
     end
 
@@ -539,6 +543,128 @@ describe Gitlab::Ci::Config do
             }
           })
         end
+      end
+    end
+
+    context 'when including file from artifact' do
+      let(:config) do
+        described_class.new(
+          gitlab_ci_yml,
+          project: nil,
+          sha: nil,
+          user: nil,
+          parent_pipeline: parent_pipeline)
+      end
+
+      let(:gitlab_ci_yml) do
+        <<~HEREDOC
+        include:
+          - artifact: generated.yml
+            job: rspec
+        HEREDOC
+      end
+
+      let(:parent_pipeline) { nil }
+
+      context 'when used in the context of a child pipeline' do
+        # This job has ci_build_artifacts.zip artifact archive which
+        # contains generated.yml
+        let!(:job) { create(:ci_build, :artifacts, name: 'rspec', pipeline: parent_pipeline) }
+        let(:parent_pipeline) { create(:ci_pipeline) }
+
+        it 'returns valid config' do
+          expect(config).to be_valid
+        end
+
+        context 'when job key is missing' do
+          let(:gitlab_ci_yml) do
+            <<~HEREDOC
+            include:
+              - artifact: generated.yml
+            HEREDOC
+          end
+
+          it 'raises an error' do
+            expect { config }.to raise_error(
+              described_class::ConfigError,
+              'Job must be provided when including configs from artifacts'
+            )
+          end
+        end
+
+        context 'when artifact key is missing' do
+          let(:gitlab_ci_yml) do
+            <<~HEREDOC
+            include:
+              - job: rspec
+            HEREDOC
+          end
+
+          it 'raises an error' do
+            expect { config }.to raise_error(
+              described_class::ConfigError,
+              /needs to match exactly one accessor!/
+            )
+          end
+        end
+      end
+
+      it 'disallows the use in parent pipelines' do
+        expect { config }.to raise_error(
+          described_class::ConfigError,
+          'Including configs from artifacts is only allowed when triggering child pipelines'
+        )
+      end
+    end
+
+    context "when including multiple files from a project" do
+      let(:other_file_location) { 'my_builds.yml' }
+
+      let(:other_file_content) do
+        <<~HEREDOC
+        build:
+          stage: build
+          script: echo hello
+
+        rspec:
+          stage: test
+          script: bundle exec rspec
+        HEREDOC
+      end
+
+      let(:gitlab_ci_yml) do
+        <<~HEREDOC
+        include:
+          - project: #{project.full_path}
+            file:
+              - #{local_location}
+              - #{other_file_location}
+
+        image: ruby:2.7
+        HEREDOC
+      end
+
+      before do
+        project.add_developer(user)
+
+        allow_next_instance_of(Repository) do |repository|
+          allow(repository).to receive(:blob_data_at).with(an_instance_of(String), local_location)
+                                                     .and_return(local_file_content)
+
+          allow(repository).to receive(:blob_data_at).with(an_instance_of(String), other_file_location)
+                                                     .and_return(other_file_content)
+        end
+      end
+
+      it 'returns a composed hash' do
+        composed_hash = {
+          before_script: local_location_hash[:before_script],
+          image: "ruby:2.7",
+          build: { stage: "build", script: "echo hello" },
+          rspec: { stage: "test", script: "bundle exec rspec" }
+        }
+
+        expect(config.to_hash).to eq(composed_hash)
       end
     end
   end

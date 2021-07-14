@@ -8,10 +8,19 @@ module Projects
     ValidationError = Class.new(StandardError)
 
     def execute
+      build_topics
       remove_unallowed_params
       validate!
 
       ensure_wiki_exists if enabling_wiki?
+
+      if changing_repository_storage?
+        storage_move = project.repository_storage_moves.build(
+          source_storage_name: project.repository_storage,
+          destination_storage_name: params.delete(:repository_storage)
+        )
+        storage_move.schedule
+      end
 
       yield if block_given?
 
@@ -41,16 +50,30 @@ module Projects
 
     def validate!
       unless valid_visibility_level_change?(project, params[:visibility_level])
-        raise ValidationError.new(s_('UpdateProject|New visibility level not allowed!'))
+        raise ValidationError, s_('UpdateProject|New visibility level not allowed!')
       end
 
       if renaming_project_with_container_registry_tags?
-        raise ValidationError.new(s_('UpdateProject|Cannot rename project because it contains container registry tags!'))
+        raise ValidationError, s_('UpdateProject|Cannot rename project because it contains container registry tags!')
       end
 
-      if changing_default_branch?
-        raise ValidationError.new(s_("UpdateProject|Could not set the default branch")) unless project.change_head(params[:default_branch])
+      validate_default_branch_change
+    end
+
+    def validate_default_branch_change
+      return unless changing_default_branch?
+
+      previous_default_branch = project.default_branch
+
+      if project.change_head(params[:default_branch])
+        after_default_branch_change(previous_default_branch)
+      else
+        raise ValidationError, s_("UpdateProject|Could not set the default branch")
       end
+    end
+
+    def after_default_branch_change(previous_default_branch)
+      # overridden by EE module
     end
 
     def remove_unallowed_params
@@ -77,11 +100,6 @@ module Projects
         after_rename_service(project).execute
       else
         system_hook_service.execute_hooks_for(project, :update)
-      end
-
-      if project.visibility_level_decreased? && project.unlink_forks_upon_visibility_decrease_enabled?
-        # It's a system-bounded operation, so no extra authorization check is required.
-        Projects::UnlinkForkService.new(project, current_user).execute
       end
 
       update_pages_config if changing_pages_related_config?
@@ -127,20 +145,38 @@ module Projects
     end
 
     def ensure_wiki_exists
-      ProjectWiki.new(project, project.owner).wiki
-    rescue ProjectWiki::CouldNotCreateWikiError
+      return if project.create_wiki
+
       log_error("Could not create wiki for #{project.full_name}")
       Gitlab::Metrics.counter(:wiki_can_not_be_created_total, 'Counts the times we failed to create a wiki').increment
     end
 
     def update_pages_config
-      Projects::UpdatePagesConfigurationService.new(project).execute
+      return unless project.pages_deployed?
+
+      PagesUpdateConfigurationWorker.perform_async(project.id)
     end
 
     def changing_pages_https_only?
       project.previous_changes.include?(:pages_https_only)
     end
+
+    def changing_repository_storage?
+      new_repository_storage = params[:repository_storage]
+
+      new_repository_storage && project.repository.exists? &&
+        project.repository_storage != new_repository_storage &&
+        can?(current_user, :change_repository_storage, project)
+    end
+
+    def build_topics
+      topics = params.delete(:topics)
+      tag_list = params.delete(:tag_list)
+      topic_list = topics || tag_list
+
+      params[:topic_list] ||= topic_list if topic_list
+    end
   end
 end
 
-Projects::UpdateService.prepend_if_ee('EE::Projects::UpdateService')
+Projects::UpdateService.prepend_mod_with('Projects::UpdateService')

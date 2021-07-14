@@ -2,16 +2,10 @@
 
 export SETUP_DB=${SETUP_DB:-true}
 export USE_BUNDLE_INSTALL=${USE_BUNDLE_INSTALL:-true}
-export BUNDLE_INSTALL_FLAGS="--without=production --jobs=$(nproc) --path=vendor --retry=3 --quiet"
 
 if [ "$USE_BUNDLE_INSTALL" != "false" ]; then
-  bundle --version
-  bundle install --clean $BUNDLE_INSTALL_FLAGS && bundle check
+  bundle_install_script
 fi
-
-# Only install knapsack after bundle install! Otherwise oddly some native
-# gems could not be found under some circumstance. No idea why, hours wasted.
-retry gem install knapsack --no-document
 
 cp config/gitlab.yml.example config/gitlab.yml
 sed -i 's/bin_path: \/usr\/bin\/git/bin_path: \/usr\/local\/bin\/git/' config/gitlab.yml
@@ -33,6 +27,9 @@ if [ -f config/database_geo.yml ]; then
   sed -i 's/username: git/username: postgres/g' config/database_geo.yml
 fi
 
+cp config/cable.yml.example config/cable.yml
+sed -i 's|url:.*$|url: redis://redis:6379|g' config/cable.yml
+
 cp config/resque.yml.example config/resque.yml
 sed -i 's|url:.*$|url: redis://redis:6379|g' config/resque.yml
 
@@ -44,6 +41,9 @@ sed -i 's|url:.*$|url: redis://redis:6379/11|g' config/redis.queues.yml
 
 cp config/redis.shared_state.yml.example config/redis.shared_state.yml
 sed -i 's|url:.*$|url: redis://redis:6379/12|g' config/redis.shared_state.yml
+
+cp config/redis.trace_chunks.yml.example config/redis.trace_chunks.yml
+sed -i 's|url:.*$|url: redis://redis:6379/13|g' config/redis.trace_chunks.yml
 
 if [ "$SETUP_DB" != "false" ]; then
   setup_db

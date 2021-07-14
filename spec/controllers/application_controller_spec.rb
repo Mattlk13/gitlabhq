@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 require 'spec_helper'
 
-describe ApplicationController do
+RSpec.describe ApplicationController do
   include TermsHelper
 
   let(:user) { create(:user) }
@@ -14,7 +14,7 @@ describe ApplicationController do
     end
 
     it 'redirects if the user is over their password expiry' do
-      user.password_expires_at = Time.new(2002)
+      user.password_expires_at = Time.zone.local(2002)
 
       expect(user.ldap_user?).to be_falsey
       allow(controller).to receive(:current_user).and_return(user)
@@ -25,7 +25,7 @@ describe ApplicationController do
     end
 
     it 'does not redirect if the user is under their password expiry' do
-      user.password_expires_at = Time.now + 20010101
+      user.password_expires_at = Time.current + 20010101
 
       expect(user.ldap_user?).to be_falsey
       allow(controller).to receive(:current_user).and_return(user)
@@ -35,7 +35,7 @@ describe ApplicationController do
     end
 
     it 'does not redirect if the user is over their password expiry but they are an ldap user' do
-      user.password_expires_at = Time.new(2002)
+      user.password_expires_at = Time.zone.local(2002)
 
       allow(user).to receive(:ldap_user?).and_return(true)
       allow(controller).to receive(:current_user).and_return(user)
@@ -47,7 +47,7 @@ describe ApplicationController do
     it 'does not redirect if the user is over their password expiry but password authentication is disabled for the web interface' do
       stub_application_setting(password_authentication_enabled_for_web: false)
       stub_application_setting(password_authentication_enabled_for_git: false)
-      user.password_expires_at = Time.new(2002)
+      user.password_expires_at = Time.zone.local(2002)
 
       allow(controller).to receive(:current_user).and_return(user)
       expect(controller).not_to receive(:redirect_to)
@@ -55,8 +55,6 @@ describe ApplicationController do
       controller.send(:check_password_expiration)
     end
   end
-
-  it_behaves_like 'a Trackable Controller'
 
   describe '#add_gon_variables' do
     before do
@@ -171,6 +169,8 @@ describe ApplicationController do
 
   describe '#route_not_found' do
     controller(described_class) do
+      skip_before_action :authenticate_user!, only: :index
+
       def index
         route_not_found
       end
@@ -184,26 +184,24 @@ describe ApplicationController do
       expect(response).to have_gitlab_http_status(:not_found)
     end
 
+    it 'renders 404 if client is a search engine crawler' do
+      request.env['HTTP_USER_AGENT'] = 'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)'
+
+      get :index
+
+      expect(response).to have_gitlab_http_status(:not_found)
+    end
+
     it 'redirects to login page if not authenticated' do
       get :index
 
       expect(response).to redirect_to new_user_session_path
     end
 
-    context 'request format is unknown' do
-      it 'redirects if unauthenticated' do
-        get :index, format: 'unknown'
+    it 'redirects if unauthenticated and request format is unknown' do
+      get :index, format: 'unknown'
 
-        expect(response).to redirect_to new_user_session_path
-      end
-
-      it 'returns a 401 if the feature flag is disabled' do
-        stub_feature_flags(devise_redirect_unknown_formats: false)
-
-        get :index, format: 'unknown'
-
-        expect(response).to have_gitlab_http_status(:unauthorized)
-      end
+      expect(response).to redirect_to new_user_session_path
     end
   end
 
@@ -239,6 +237,7 @@ describe ApplicationController do
 
       it 'does not redirect if 2FA is not required' do
         allow(controller).to receive(:two_factor_authentication_required?).and_return(false)
+        allow(controller).to receive(:current_user).and_return(create(:user))
 
         expect(controller).not_to receive(:redirect_to)
 
@@ -310,13 +309,6 @@ describe ApplicationController do
 
         expect(subject).to be_truthy
       end
-
-      it 'returns true if user has signed up using omniauth-ultraauth' do
-        user = create(:omniauth_user, provider: 'ultraauth')
-        allow(controller).to receive(:current_user).and_return(user)
-
-        expect(subject).to be_truthy
-      end
     end
 
     describe '#two_factor_grace_period' do
@@ -363,13 +355,17 @@ describe ApplicationController do
         let(:user) { create :user, otp_grace_period_started_at: 2.hours.ago }
 
         it 'returns true if the grace period has expired' do
-          allow(controller).to receive(:two_factor_grace_period).and_return(1)
+          allow_next_instance_of(Gitlab::Auth::TwoFactorAuthVerifier) do |verifier|
+            allow(verifier).to receive(:two_factor_grace_period).and_return(2)
+          end
 
           expect(subject).to be_truthy
         end
 
         it 'returns false if the grace period is still active' do
-          allow(controller).to receive(:two_factor_grace_period).and_return(3)
+          allow_next_instance_of(Gitlab::Auth::TwoFactorAuthVerifier) do |verifier|
+            allow(verifier).to receive(:two_factor_grace_period).and_return(3)
+          end
 
           expect(subject).to be_falsey
         end
@@ -428,13 +424,13 @@ describe ApplicationController do
         end
 
         it 'returns false if the grace period has expired' do
-          Timecop.freeze(3.hours.from_now) do
+          travel_to(3.hours.from_now) do
             expect(subject).to be_falsey
           end
         end
 
         it 'returns true if the grace period is still active' do
-          Timecop.freeze(1.hour.from_now) do
+          travel_to(1.hour.from_now) do
             expect(subject).to be_truthy
           end
         end
@@ -531,39 +527,12 @@ describe ApplicationController do
       expect(controller.last_payload).to include('correlation_id' => 'new-id')
     end
 
-    context '422 errors' do
-      it 'logs a response with a string' do
-        response = spy(ActionDispatch::Response, status: 422, body: 'Hello world', content_type: 'application/json', cookies: {})
-        allow(controller).to receive(:response).and_return(response)
-        get :index
+    it 'adds context metadata to the payload' do
+      sign_in user
 
-        expect(controller.last_payload[:response]).to eq('Hello world')
-      end
+      get :index
 
-      it 'logs a response with an array' do
-        body = ['I want', 'my hat back']
-        response = spy(ActionDispatch::Response, status: 422, body: body, content_type: 'application/json', cookies: {})
-        allow(controller).to receive(:response).and_return(response)
-        get :index
-
-        expect(controller.last_payload[:response]).to eq(body)
-      end
-
-      it 'does not log a string with an empty body' do
-        response = spy(ActionDispatch::Response, status: 422, body: nil, content_type: 'application/json', cookies: {})
-        allow(controller).to receive(:response).and_return(response)
-        get :index
-
-        expect(controller.last_payload.has_key?(:response)).to be_falsey
-      end
-
-      it 'does not log an HTML body' do
-        response = spy(ActionDispatch::Response, status: 422, body: 'This is a test', content_type: 'application/html', cookies: {})
-        allow(controller).to receive(:response).and_return(response)
-        get :index
-
-        expect(controller.last_payload.has_key?(:response)).to be_falsey
-      end
+      expect(controller.last_payload[:metadata]).to include('meta.user' => user.username)
     end
   end
 
@@ -725,6 +694,7 @@ describe ApplicationController do
         get :index
 
         expect(response.headers['Cache-Control']).to be_nil
+        expect(response.headers['Pragma']).to be_nil
       end
     end
 
@@ -734,7 +704,8 @@ describe ApplicationController do
 
         get :index
 
-        expect(response.headers['Cache-Control']).to eq 'max-age=0, private, must-revalidate, no-store'
+        expect(response.headers['Cache-Control']).to eq 'no-store'
+        expect(response.headers['Pragma']).to eq 'no-cache'
       end
 
       it 'does not set the "no-store" header for XHR requests' do
@@ -744,6 +715,49 @@ describe ApplicationController do
 
         expect(response.headers['Cache-Control']).to eq 'max-age=0, private, must-revalidate'
       end
+    end
+  end
+
+  describe '#stream_csv_headers' do
+    controller(described_class) do
+      def index
+        respond_to do |format|
+          format.csv do
+            stream_csv_headers('test.csv')
+
+            self.response_body = Rack::Test::UploadedFile.new('spec/fixtures/csv_comma.csv')
+          end
+        end
+      end
+    end
+
+    subject { get :index, format: :csv }
+
+    before do
+      sign_in(user)
+    end
+
+    it 'sets no-cache headers', :aggregate_failures do
+      subject
+
+      expect(response.headers['Cache-Control']).to eq 'no-store'
+      expect(response.headers['Pragma']).to eq 'no-cache'
+      expect(response.headers['Expires']).to eq 'Fri, 01 Jan 1990 00:00:00 GMT'
+    end
+
+    it 'sets stream headers', :aggregate_failures do
+      subject
+
+      expect(response.headers['Content-Length']).to be nil
+      expect(response.headers['X-Accel-Buffering']).to eq 'no'
+      expect(response.headers['Last-Modified']).to eq '0'
+    end
+
+    it 'sets the csv specific headers', :aggregate_failures do
+      subject
+
+      expect(response.headers['Content-Type']).to eq 'text/csv; charset=utf-8; header=present'
+      expect(response.headers['Content-Disposition']).to eq "attachment; filename=\"test.csv\""
     end
   end
 
@@ -781,7 +795,7 @@ describe ApplicationController do
     end
   end
 
-  describe '#current_user_mode', :do_not_mock_admin_mode do
+  describe '#current_user_mode' do
     include_context 'custom session'
 
     controller(described_class) do
@@ -832,13 +846,8 @@ describe ApplicationController do
     end
 
     let(:user) { create(:user) }
-    let(:experiment_enabled) { true }
 
-    before do
-      stub_experiment_for_user(signup_flow: experiment_enabled)
-    end
-
-    context 'experiment enabled and user with required role' do
+    context 'user with required role' do
       before do
         user.set_role_required!
         sign_in(user)
@@ -848,7 +857,7 @@ describe ApplicationController do
       it { is_expected.to redirect_to users_sign_up_welcome_path }
     end
 
-    context 'experiment enabled and user without a required role' do
+    context 'user without a required role' do
       before do
         sign_in(user)
         get :index
@@ -856,50 +865,40 @@ describe ApplicationController do
 
       it { is_expected.not_to redirect_to users_sign_up_welcome_path }
     end
+  end
 
-    context 'experiment disabled' do
-      let(:experiment_enabled) { false }
+  describe 'rescue_from Gitlab::Auth::IpBlacklisted' do
+    controller(described_class) do
+      skip_before_action :authenticate_user!
 
-      before do
-        user.set_role_required!
-        sign_in(user)
-        get :index
+      def index
+        raise Gitlab::Auth::IpBlacklisted
       end
-
-      it { is_expected.not_to redirect_to users_sign_up_welcome_path }
     end
 
-    describe 'rescue_from Gitlab::Auth::IpBlacklisted' do
-      controller(described_class) do
-        skip_before_action :authenticate_user!
+    it 'returns a 403 and logs the request' do
+      expect(Gitlab::AuthLogger).to receive(:error).with({
+        message: 'Rack_Attack',
+        env: :blocklist,
+        remote_ip: '1.2.3.4',
+        request_method: 'GET',
+        path: '/anonymous'
+      })
 
-        def index
-          raise Gitlab::Auth::IpBlacklisted
-        end
-      end
+      request.remote_addr = '1.2.3.4'
 
-      it 'returns a 403 and logs the request' do
-        expect(Gitlab::AuthLogger).to receive(:error).with({
-          message: 'Rack_Attack',
-          env: :blocklist,
-          remote_ip: '1.2.3.4',
-          request_method: 'GET',
-          path: '/anonymous'
-        })
+      get :index
 
-        request.remote_addr = '1.2.3.4'
-
-        get :index
-
-        expect(response).to have_gitlab_http_status(:forbidden)
-      end
+      expect(response).to have_gitlab_http_status(:forbidden)
     end
   end
 
   describe '#set_current_context' do
     controller(described_class) do
+      feature_category :issue_tracking
+
       def index
-        Labkit::Context.with_context do |context|
+        Gitlab::ApplicationContext.with_raw_context do |context|
           render json: context.to_h
         end
       end
@@ -924,7 +923,7 @@ describe ApplicationController do
     end
 
     it 'sets the group if it was available' do
-      group = build(:group)
+      group = build_stubbed(:group)
       controller.instance_variable_set(:@group, group)
 
       get :index, format: :json
@@ -933,7 +932,7 @@ describe ApplicationController do
     end
 
     it 'sets the project if one was available' do
-      project = build(:project)
+      project = build_stubbed(:project)
       controller.instance_variable_set(:@project, project)
 
       get :index, format: :json
@@ -945,6 +944,127 @@ describe ApplicationController do
       get :index, format: :json
 
       expect(json_response['meta.caller_id']).to eq('AnonymousController#index')
+    end
+
+    it 'sets the feature_category as defined in the controller' do
+      get :index, format: :json
+
+      expect(json_response['meta.feature_category']).to eq('issue_tracking')
+    end
+
+    it 'assigns the context to a variable for logging' do
+      get :index, format: :json
+
+      expect(assigns(:current_context)).to include('meta.user' => user.username)
+    end
+
+    it 'assigns the context when the action caused an error' do
+      allow(controller).to receive(:index) { raise 'Broken' }
+
+      expect { get :index, format: :json }.to raise_error('Broken')
+
+      expect(assigns(:current_context)).to include('meta.user' => user.username)
+    end
+  end
+
+  describe '#current_user' do
+    controller(described_class) do
+      def index; end
+    end
+
+    let_it_be(:impersonator) { create(:user) }
+    let_it_be(:user) { create(:user) }
+
+    before do
+      sign_in(user)
+    end
+
+    context 'when being impersonated' do
+      before do
+        allow(controller).to receive(:session).and_return({ impersonator_id: impersonator.id })
+      end
+
+      it 'returns a User with impersonator', :aggregate_failures do
+        get :index
+
+        expect(controller.current_user).to be_a(User)
+        expect(controller.current_user.impersonator).to eq(impersonator)
+      end
+    end
+
+    context 'when not being impersonated' do
+      before do
+        allow(controller).to receive(:session).and_return({})
+      end
+
+      it 'returns a User', :aggregate_failures do
+        get :index
+
+        expect(controller.current_user).to be_a(User)
+        expect(controller.current_user.impersonator).to be_nil
+      end
+    end
+  end
+
+  describe 'locale' do
+    let(:user) { create(:user, preferred_language: 'uk') }
+
+    controller(described_class) do
+      def index
+        :ok
+      end
+    end
+
+    before do
+      sign_in(user)
+
+      allow(Gitlab::I18n).to receive(:with_locale).and_call_original
+    end
+
+    it "sets user's locale" do
+      expect(Gitlab::I18n).to receive(:with_locale).with('uk')
+
+      get :index
+    end
+  end
+
+  describe 'setting permissions-policy header' do
+    controller do
+      skip_before_action :authenticate_user!
+
+      def index
+        render html: 'It is a flock of sheep, not a floc of sheep.'
+      end
+    end
+
+    before do
+      routes.draw do
+        get 'index' => 'anonymous#index'
+      end
+    end
+
+    context 'with FloC enabled' do
+      before do
+        stub_application_setting floc_enabled: true
+      end
+
+      it 'does not set the Permissions-Policy header' do
+        get :index
+
+        expect(response.headers['Permissions-Policy']).to eq(nil)
+      end
+    end
+
+    context 'with FloC disabled' do
+      before do
+        stub_application_setting floc_enabled: false
+      end
+
+      it 'sets the Permissions-Policy header' do
+        get :index
+
+        expect(response.headers['Permissions-Policy']).to eq('interest-cohort=()')
+      end
     end
   end
 end

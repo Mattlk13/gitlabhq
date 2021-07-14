@@ -1,6 +1,8 @@
 # frozen_string_literal: true
 
 class NotificationSetting < ApplicationRecord
+  include FromUnion
+
   enum level: { global: 3, watch: 2, participating: 1, mention: 4, disabled: 0, custom: 5 }
 
   default_value_for :level, NotificationSetting.levels[:global]
@@ -14,6 +16,7 @@ class NotificationSetting < ApplicationRecord
   validates :user_id, uniqueness: { scope: [:source_type, :source_id],
                                     message: "already exists in source",
                                     allow_nil: true }
+  validate :owns_notification_email, if: :notification_email_changed?
 
   scope :for_groups, -> { where(source_type: 'Namespace') }
 
@@ -29,6 +32,9 @@ class NotificationSetting < ApplicationRecord
 
   scope :preload_source_route, -> { preload(source: [:route]) }
 
+  scope :order_by_id_asc, -> { order(id: :asc) }
+
+  # NOTE: Applicable unfound_translations.rb also needs to be updated when below events are changed.
   EMAIL_EVENTS = [
     :new_release,
     :new_note,
@@ -42,13 +48,15 @@ class NotificationSetting < ApplicationRecord
     :reopen_merge_request,
     :close_merge_request,
     :reassign_merge_request,
+    :change_reviewer_merge_request,
     :merge_merge_request,
     :failed_pipeline,
     :fixed_pipeline,
-    :success_pipeline
+    :success_pipeline,
+    :moved_project,
+    :merge_when_pipeline_succeeds
   ].freeze
 
-  # Update unfound_translations.rb when events are changed
   def self.email_events(source = nil)
     EMAIL_EVENTS
   end
@@ -95,8 +103,19 @@ class NotificationSetting < ApplicationRecord
   alias_method :fixed_pipeline?, :fixed_pipeline
 
   def event_enabled?(event)
-    respond_to?(event) && !!public_send(event) # rubocop:disable GitlabSecurity/PublicSend
+    # We override these two attributes, so we can't use read_attribute
+    return failed_pipeline if event.to_sym == :failed_pipeline
+    return fixed_pipeline if event.to_sym == :fixed_pipeline
+
+    has_attribute?(event) && !!read_attribute(event)
+  end
+
+  def owns_notification_email
+    return if user.temp_oauth_email?
+    return if notification_email.empty?
+
+    errors.add(:notification_email, _("is not an email you own")) unless user.verified_emails.include?(notification_email)
   end
 end
 
-NotificationSetting.prepend_if_ee('EE::NotificationSetting')
+NotificationSetting.prepend_mod_with('NotificationSetting')

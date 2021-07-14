@@ -1,9 +1,9 @@
 # frozen_string_literal: true
 
 require 'spec_helper'
-require Rails.root.join('db', 'post_migrate', '20190520201748_populate_rule_type_on_approval_merge_request_rules.rb')
+require_migration!
 
-describe PopulateRuleTypeOnApprovalMergeRequestRules, :migration do
+RSpec.describe PopulateRuleTypeOnApprovalMergeRequestRules do
   let(:migration) { described_class.new }
 
   describe '#up' do

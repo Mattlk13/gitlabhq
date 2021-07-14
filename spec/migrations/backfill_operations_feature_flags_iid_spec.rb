@@ -1,18 +1,16 @@
 # frozen_string_literal: true
 
 require 'spec_helper'
-require Rails.root.join('db', 'post_migrate', '20200117194850_backfill_operations_feature_flags_iid.rb')
+require_migration!
 
-describe BackfillOperationsFeatureFlagsIid, :migration do
+RSpec.describe BackfillOperationsFeatureFlagsIid do
   let(:namespaces)   { table(:namespaces) }
   let(:projects)     { table(:projects) }
   let(:flags)        { table(:operations_feature_flags) }
 
   def setup
     namespace = namespaces.create!(name: 'foo', path: 'foo')
-    project = projects.create!(namespace_id: namespace.id)
-
-    project
+    projects.create!(namespace_id: namespace.id)
   end
 
   it 'migrates successfully when there are no flags in the database' do

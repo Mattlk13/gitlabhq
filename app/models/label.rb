@@ -9,10 +9,14 @@ class Label < ApplicationRecord
   include Sortable
   include FromUnion
   include Presentable
+  include IgnorableColumns
+
+  # TODO: Project#create_labels can remove column exception when this column is dropped from all envs
+  ignore_column :remove_on_close, remove_with: '14.1', remove_after: '2021-06-22'
 
   cache_markdown_field :description, pipeline: :single_line
 
-  DEFAULT_COLOR = '#428BCA'
+  DEFAULT_COLOR = '#6699cc'
 
   default_value_for :color, DEFAULT_COLOR
 
@@ -31,7 +35,7 @@ class Label < ApplicationRecord
   validates :title, uniqueness: { scope: [:group_id, :project_id] }
   validates :title, length: { maximum: 255 }
 
-  default_scope { order(title: :asc) }
+  default_scope { order(title: :asc) } # rubocop:disable Cop/DefaultScope
 
   scope :templates, -> { where(template: true, type: [Label.name, nil]) }
   scope :with_title, ->(title) { where(title: title) }
@@ -131,14 +135,18 @@ class Label < ApplicationRecord
     nil
   end
 
+  def self.ids_on_board(board_id)
+    on_board(board_id).pluck(:label_id)
+  end
+
   # Searches for labels with a matching title or description.
   #
-  # This method uses ILIKE on PostgreSQL and LIKE on MySQL.
+  # This method uses ILIKE on PostgreSQL.
   #
   # query - The search query as a String.
   #
   # Returns an ActiveRecord::Relation.
-  def self.search(query)
+  def self.search(query, **options)
     fuzzy_search(query, [:title, :description])
   end
 
@@ -149,14 +157,15 @@ class Label < ApplicationRecord
     1
   end
 
-  def self.by_ids(ids)
-    where(id: ids)
-  end
-
   def self.on_project_board?(project_id, label_id)
     return false if label_id.blank?
 
     on_project_boards(project_id).where(id: label_id).exists?
+  end
+
+  # Generate a hex color based on hex-encoded value
+  def self.color_for(value)
+    "##{Digest::MD5.hexdigest(value)[0..5]}"
   end
 
   def open_issues_count(user = nil)
@@ -256,7 +265,7 @@ class Label < ApplicationRecord
   end
 
   def present(attributes)
-    super(attributes.merge(presenter_class: ::LabelPresenter))
+    super(**attributes.merge(presenter_class: ::LabelPresenter))
   end
 
   private
@@ -285,4 +294,4 @@ class Label < ApplicationRecord
   end
 end
 
-Label.prepend_if_ee('EE::Label')
+Label.prepend_mod_with('Label')

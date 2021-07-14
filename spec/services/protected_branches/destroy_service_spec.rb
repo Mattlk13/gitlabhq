@@ -2,7 +2,7 @@
 
 require 'spec_helper'
 
-describe ProtectedBranches::DestroyService do
+RSpec.describe ProtectedBranches::DestroyService do
   let(:protected_branch) { create(:protected_branch) }
   let(:project) { protected_branch.project }
   let(:user) { project.owner }
@@ -18,7 +18,7 @@ describe ProtectedBranches::DestroyService do
 
     context 'when a policy restricts rule deletion' do
       before do
-        policy = instance_double(ProtectedBranchPolicy, can?: false)
+        policy = instance_double(ProtectedBranchPolicy, allowed?: false)
         expect(ProtectedBranchPolicy).to receive(:new).and_return(policy)
       end
 

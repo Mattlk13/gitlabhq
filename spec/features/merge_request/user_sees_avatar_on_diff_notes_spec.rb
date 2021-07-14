@@ -2,7 +2,7 @@
 
 require 'spec_helper'
 
-describe 'Merge request > User sees avatars on diff notes', :js do
+RSpec.describe 'Merge request > User sees avatars on diff notes', :js do
   include NoteInteractionHelpers
 
   let(:project)       { create(:project, :public, :repository) }
@@ -16,10 +16,10 @@ describe 'Merge request > User sees avatars on diff notes', :js do
       diff_refs: merge_request.diff_refs
     )
   end
+
   let!(:note) { create(:diff_note_on_merge_request, project: project, noteable: merge_request, position: position) }
 
   before do
-    stub_feature_flags(diffs_batch_load: false)
     project.add_maintainer(user)
     sign_in user
 
@@ -37,12 +37,12 @@ describe 'Merge request > User sees avatars on diff notes', :js do
     end
 
     it 'does not render avatars after commenting on discussion tab' do
-      click_button 'Reply...'
+      find_field('Reply…').click
 
       page.within('.js-discussion-note-form') do
         find('.note-textarea').native.send_keys('Test comment')
 
-        click_button 'Comment'
+        click_button 'Add comment now'
       end
 
       expect(page).to have_content('Test comment')
@@ -132,12 +132,12 @@ describe 'Merge request > User sees avatars on diff notes', :js do
       end
 
       it 'adds avatar when commenting' do
-        click_button 'Reply...'
+        find_field('Reply…', match: :first).click
 
         page.within '.js-discussion-note-form' do
           find('.js-note-text').native.send_keys('Test')
 
-          click_button 'Comment'
+          click_button 'Add comment now'
 
           wait_for_requests
         end
@@ -151,11 +151,11 @@ describe 'Merge request > User sees avatars on diff notes', :js do
 
       it 'adds multiple comments' do
         3.times do
-          click_button 'Reply...'
+          find_field('Reply…', match: :first).click
 
           page.within '.js-discussion-note-form' do
             find('.js-note-text').native.send_keys('Test')
-            find('.js-comment-button').click
+            click_button 'Add comment now'
 
             wait_for_requests
           end
@@ -190,7 +190,7 @@ describe 'Merge request > User sees avatars on diff notes', :js do
 
   def find_line(line_code)
     line = find("[id='#{line_code}']")
-    line = line.find(:xpath, 'preceding-sibling::*[1][self::td]') if line.tag_name == 'td'
+    line = line.find(:xpath, 'preceding-sibling::*[1][self::td]/preceding-sibling::*[1][self::td]') if line.tag_name == 'td'
     line
   end
 end

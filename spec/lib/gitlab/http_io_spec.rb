@@ -2,7 +2,7 @@
 
 require 'spec_helper'
 
-describe Gitlab::HttpIO do
+RSpec.describe Gitlab::HttpIO do
   include HttpIOHelpers
 
   let(:http_io) { described_class.new(url, size) }
@@ -318,5 +318,13 @@ describe Gitlab::HttpIO do
     subject { http_io.present? }
 
     it { is_expected.to be_truthy }
+  end
+
+  describe '#send' do
+    subject(:send) { http_io.send(:request) }
+
+    it 'does not set the "accept-encoding" header' do
+      expect(send['accept-encoding']).to be_nil
+    end
   end
 end

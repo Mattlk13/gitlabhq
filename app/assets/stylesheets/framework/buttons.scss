@@ -1,6 +1,6 @@
 @mixin btn-comment-icon {
   border-radius: 50%;
-  background: $white-light;
+  background: $white;
   padding: 1px;
   font-size: 12px;
   color: $blue-500;
@@ -12,7 +12,7 @@
   &.inverted {
     background: $blue-500;
     border-color: $blue-600;
-    color: $white-light;
+    color: $white;
   }
 
   &:active {
@@ -95,8 +95,6 @@
 
   &:active,
   &.active {
-    box-shadow: $gl-btn-active-background;
-
     background-color: $dark;
     border-color: $border-dark;
     color: $color;
@@ -104,23 +102,23 @@
 }
 
 @mixin btn-green {
-  @include btn-color($green-500, $green-600, $green-600, $green-700, $green-700, $green-800, $white-light);
+  @include btn-color($green-500, $green-600, $green-600, $green-700, $green-700, $green-800, $white);
 }
 
 @mixin btn-blue {
-  @include btn-color($blue-500, $blue-600, $blue-600, $blue-700, $blue-700, $blue-800, $white-light);
+  @include btn-color($blue-500, $blue-600, $blue-600, $blue-700, $blue-700, $blue-800, $white);
 }
 
 @mixin btn-orange {
-  @include btn-color($orange-500, $orange-600, $orange-600, $orange-700, $orange-700, $orange-800, $white-light);
+  @include btn-color($orange-500, $orange-600, $orange-500, $orange-600, $orange-600, $orange-800, $white);
 }
 
 @mixin btn-red {
-  @include btn-color($red-500, $red-600, $red-600, $red-700, $red-700, $red-800, $white-light);
+  @include btn-color($red-500, $red-600, $red-600, $red-700, $red-700, $red-800, $white);
 }
 
 @mixin btn-white {
-  @include btn-color($white-light, $border-color, $white-normal, $border-white-normal, $white-dark, $border-gray-dark, $gl-text-color);
+  @include btn-color($white, $border-color, $white-normal, $border-white-normal, $white-dark, $border-white-normal, $gl-text-color);
 }
 
 @mixin btn-with-margin {
@@ -166,28 +164,26 @@
     line-height: $gl-btn-xs-line-height;
   }
 
-  &.btn-success,
-  &.btn-register {
+  &.btn-success {
     @include btn-green;
   }
 
-  &.btn-inverted {
+  &.btn-inverted:not(.disabled):not(:disabled) {
     &.btn-success {
-      @include btn-outline($white-light, $green-600, $green-500, $green-100, $green-700, $green-500, $green-200, $green-600, $green-800);
+      @include btn-outline($white, $green-600, $green-500, $green-100, $green-700, $green-500, $green-200, $green-600, $green-800);
     }
 
-    &.btn-remove,
     &.btn-danger {
-      @include btn-outline($white-light, $red-500, $red-500, $red-100, $red-700, $red-500, $red-200, $red-600, $red-800);
+      @include btn-outline($white, $red-500, $red-500, $red-100, $red-700, $red-500, $red-200, $red-600, $red-800);
     }
 
     &.btn-warning {
-      @include btn-outline($white-light, $orange-500, $orange-500, $orange-100, $orange-700, $orange-500, $orange-200, $orange-600, $orange-800);
+      @include btn-outline($white, $orange-500, $orange-500, $orange-50, $orange-600, $orange-600, $orange-100, $orange-700, $orange-700);
     }
 
     &.btn-primary,
     &.btn-info {
-      @include btn-outline($white-light, $blue-500, $blue-500, $blue-100, $blue-700, $blue-500, $blue-200, $blue-600, $blue-800);
+      @include btn-outline($white, $blue-500, $blue-500, $blue-100, $blue-700, $blue-500, $blue-200, $blue-600, $blue-800);
     }
   }
 
@@ -200,28 +196,8 @@
     @include btn-orange;
   }
 
-  &.btn-close,
-  &.btn-close-color {
-    @include btn-outline($white-light, $orange-600, $orange-500, $orange-100, $orange-700, $orange-500, $orange-200, $orange-600, $orange-800);
-  }
-
-  &.btn-spam {
-    @include btn-outline($white-light, $red-500, $red-500, $red-100, $red-700, $red-500, $red-200, $red-600, $red-800);
-  }
-
-  &.btn-danger,
-  &.btn-remove,
-  &.btn-red {
+  &.btn-danger {
     @include btn-red;
-  }
-
-  &.btn-cancel {
-    float: right;
-  }
-
-  &.btn-reopen,
-  .btn-reopen-color {
-    /* should be same as parent class for now */
   }
 
   &.btn-grouped {
@@ -229,27 +205,17 @@
   }
 
   &.btn-icon {
-    color: $gl-gray-700;
+    color: $gray-700;
   }
 
-  .fa-caret-down,
-  .fa-chevron-down {
-    margin-left: 5px;
-  }
-
-  &.dropdown-toggle {
-    .fa-caret-down {
-      margin-left: 3px;
-    }
-  }
-
+  // deprecated class
   &.btn-text-field {
     width: 100%;
     text-align: left;
     padding: 6px 16px;
     border-color: $border-color;
     color: $gray-darkest;
-    background-color: $white-light;
+    background-color: $white;
 
     &:hover,
     &:active,
@@ -274,15 +240,10 @@
   svg {
     height: 15px;
     width: 15px;
-    position: relative;
-    top: 2px;
   }
 
-  svg,
-  .fa {
-    &:not(:last-child) {
-      margin-right: 5px;
-    }
+  svg:not(:last-child) {
+    margin-right: 5px;
   }
 }
 
@@ -365,38 +326,21 @@
   .active {
     box-shadow: $gl-btn-active-background;
 
-    border: 1px solid $border-gray-dark !important;
+    border: 1px solid $border-white-normal !important;
     background-color: $btn-active-gray-light !important;
   }
 }
 
 .btn-loading {
   &:not(.disabled) {
-    .fa,
-    .spinner {
+    .gl-spinner {
       display: none;
     }
-  }
-
-  .fa {
-    margin-right: 5px;
-  }
-}
-
-.btn-build {
-  margin-left: 10px;
-
-  i {
-    color: $gl-text-color-secondary;
-  }
-
-  svg {
-    fill: $gl-text-color-secondary;
   }
 }
 
 .clone-dropdown-btn a {
-  color: $gl-gray-700;
+  color: $gray-700;
 
   &:hover {
     text-decoration: none;
@@ -409,19 +353,13 @@
   cursor: default;
 
   &:active {
-    box-shadow: inset 0 0 0 $white-light;
+    box-shadow: inset 0 0 0 $white;
   }
 }
 
 .btn-inverted {
   &-secondary {
-    @include btn-outline($white-light, $blue-500, $blue-500, $blue-100, $blue-700, $blue-500, $blue-200, $blue-600, $blue-800);
-  }
-}
-
-@include media-breakpoint-down(xs) {
-  .btn-wide-on-xs {
-    width: 100%;
+    @include btn-outline($white, $blue-500, $blue-500, $blue-100, $blue-700, $blue-500, $blue-200, $blue-600, $blue-800);
   }
 }
 
@@ -447,6 +385,7 @@
   font-weight: normal;
   border-radius: 0;
   border-color: transparent;
+  border-width: 0;
 
   &:hover,
   &:active,
@@ -481,45 +420,40 @@
   }
 }
 
-.btn-missing {
-  color: $gl-text-color-secondary;
-  border: 1px dashed $border-gray-normal-dashed;
-  border-radius: $border-radius-default;
-
-  &:hover,
-  &:active,
-  &:focus {
-    color: $gl-text-color-secondary;
-    background-color: $white-normal;
-  }
-}
-
+// The .btn-svg class is available for legacy icon buttons to
+// preserve a 34px height and have 16x16 icons at the same time.
+// Once a button is migrated (to the current 32px height)
+// please remove this class from the new button.
 .btn-svg svg {
   @include btn-svg;
 }
 
 // All disabled buttons, regardless of color, type, etc
-%disabled {
-  background-color: $gray-light !important;
-  border-color: $gray-200 !important;
-  color: $gl-text-color-disabled !important;
-  opacity: 1 !important;
-  cursor: default !important;
-
-  i {
-    color: $gl-text-color-disabled !important;
-  }
-}
-
 .btn.disabled,
 .btn[disabled],
 fieldset[disabled] .btn,
 .dropdown-toggle[disabled],
 [disabled].dropdown-menu-toggle {
-  @extend %disabled;
-
+  &,
   &:hover {
-    @extend %disabled;
+    background-color: $gray-light;
+    border-color: $gray-100;
+    color: $gl-text-color-disabled;
+    opacity: 1;
+    text-decoration: none;
+    cursor: default;
+
+    &.cursor-not-allowed {
+      cursor: not-allowed;
+    }
+
+    i {
+      color: $gl-text-color-disabled;
+    }
+  }
+
+  &.btn-link {
+    background-color: transparent;
   }
 }
 
@@ -529,4 +463,14 @@ fieldset[disabled] .btn,
 
 .btn-no-padding {
   padding: 0;
+}
+
+// This class helps convert `.gl-button` children so that they consistently
+// match the style of `.btn` elements which might be around them. Ideally we
+// wouldn't need this class.
+//
+// Remove by upgrading all buttons in a container to use the new `.gl-button` style.
+.gl-button-deprecated-adapter .gl-button {
+  box-shadow: none;
+  border-width: 1px;
 }

@@ -2,11 +2,12 @@
 
 require 'spec_helper'
 
-describe Git::BranchPushService, services: true do
+RSpec.describe Git::BranchPushService, services: true do
   include RepoHelpers
 
   let_it_be(:user) { create(:user) }
   let_it_be(:project, reload: true) { create(:project, :repository) }
+
   let(:blankrev) { Gitlab::Git::BLANK_SHA }
   let(:oldrev)   { sample_commit.parent_id }
   let(:newrev)   { sample_commit.id }
@@ -129,6 +130,21 @@ describe Git::BranchPushService, services: true do
         end
       end
     end
+
+    context 'when .gitlab-ci.yml file is invalid' do
+      before do
+        stub_ci_pipeline_yaml_file('invalid yaml file')
+      end
+
+      it 'persists an error pipeline' do
+        expect { subject }.to change { Ci::Pipeline.count }
+
+        pipeline = Ci::Pipeline.last
+        expect(pipeline).to be_push
+        expect(pipeline).to be_failed
+        expect(pipeline).to be_config_error
+      end
+    end
   end
 
   describe "Updates merge requests" do
@@ -186,7 +202,7 @@ describe Git::BranchPushService, services: true do
       end
 
       it "when pushing a branch for the first time with default branch protection disabled" do
-        stub_application_setting(default_branch_protection: Gitlab::Access::PROTECTION_NONE)
+        expect(project.namespace).to receive(:default_branch_protection).and_return(Gitlab::Access::PROTECTION_NONE)
 
         expect(project).to receive(:execute_hooks)
         expect(project.default_branch).to eq("master")
@@ -195,7 +211,7 @@ describe Git::BranchPushService, services: true do
       end
 
       it "when pushing a branch for the first time with default branch protection set to 'developers can push'" do
-        stub_application_setting(default_branch_protection: Gitlab::Access::PROTECTION_DEV_CAN_PUSH)
+        expect(project.namespace).to receive(:default_branch_protection).and_return(Gitlab::Access::PROTECTION_DEV_CAN_PUSH)
 
         expect(project).to receive(:execute_hooks)
         expect(project.default_branch).to eq("master")
@@ -208,7 +224,7 @@ describe Git::BranchPushService, services: true do
       end
 
       it "when pushing a branch for the first time with an existing branch permission configured" do
-        stub_application_setting(default_branch_protection: Gitlab::Access::PROTECTION_DEV_CAN_PUSH)
+        expect(project.namespace).to receive(:default_branch_protection).and_return(Gitlab::Access::PROTECTION_DEV_CAN_PUSH)
 
         create(:protected_branch, :no_one_can_push, :developers_can_merge, project: project, name: 'master')
         expect(project).to receive(:execute_hooks)
@@ -223,7 +239,7 @@ describe Git::BranchPushService, services: true do
       end
 
       it "when pushing a branch for the first time with default branch protection set to 'developers can merge'" do
-        stub_application_setting(default_branch_protection: Gitlab::Access::PROTECTION_DEV_CAN_MERGE)
+        expect(project.namespace).to receive(:default_branch_protection).and_return(Gitlab::Access::PROTECTION_DEV_CAN_MERGE)
 
         expect(project).to receive(:execute_hooks)
         expect(project.default_branch).to eq("master")
@@ -276,7 +292,7 @@ describe Git::BranchPushService, services: true do
       execute_service(project, user, oldrev: oldrev, newrev: newrev, ref: ref)
     end
 
-    it "defaults to the pushing user if the commit's author is not known", :sidekiq_might_not_need_inline do
+    it "defaults to the pushing user if the commit's author is not known", :sidekiq_inline, :use_clean_rails_redis_caching do
       allow(commit).to receive_messages(
         author_name: 'unknown name',
         author_email: 'unknown@email.com'
@@ -300,7 +316,7 @@ describe Git::BranchPushService, services: true do
     let(:issue) { create :issue, project: project }
     let(:commit_author) { create :user }
     let(:commit) { project.commit }
-    let(:commit_time) { Time.now }
+    let(:commit_time) { Time.current }
 
     before do
       project.add_developer(commit_author)
@@ -321,7 +337,7 @@ describe Git::BranchPushService, services: true do
     end
 
     context "while saving the 'first_mentioned_in_commit_at' metric for an issue" do
-      it 'sets the metric for referenced issues', :sidekiq_might_not_need_inline do
+      it 'sets the metric for referenced issues', :sidekiq_inline, :use_clean_rails_redis_caching do
         execute_service(project, user, oldrev: oldrev, newrev: newrev, ref: ref)
 
         expect(issue.reload.metrics.first_mentioned_in_commit_at).to be_like_time(commit_time)
@@ -382,7 +398,7 @@ describe Git::BranchPushService, services: true do
         allow(project).to receive(:default_branch).and_return('not-master')
       end
 
-      it "creates cross-reference notes", :sidekiq_might_not_need_inline do
+      it "creates cross-reference notes", :sidekiq_inline, :use_clean_rails_redis_caching do
         expect(SystemNoteService).to receive(:cross_reference).with(issue, closing_commit, commit_author)
         execute_service(project, user, oldrev: oldrev, newrev: newrev, ref: ref)
       end
@@ -396,12 +412,13 @@ describe Git::BranchPushService, services: true do
     context "for jira issue tracker" do
       include JiraServiceHelper
 
-      let(:jira_tracker) { project.create_jira_service if project.jira_service.nil? }
+      let(:jira_tracker) { project.create_jira_integration if project.jira_integration.nil? }
 
       before do
-        # project.create_jira_service doesn't seem to invalidate the cache here
+        # project.create_jira_integration doesn't seem to invalidate the cache here
         project.has_external_issue_tracker = true
-        jira_service_settings
+        stub_jira_integration_test
+        jira_integration_settings
         stub_jira_urls("JIRA-1")
 
         allow(closing_commit).to receive_messages({
@@ -423,7 +440,7 @@ describe Git::BranchPushService, services: true do
       context "mentioning an issue" do
         let(:message) { "this is some work.\n\nrelated to JIRA-1" }
 
-        it "initiates one api call to jira server to mention the issue", :sidekiq_might_not_need_inline do
+        it "initiates one api call to jira server to mention the issue", :sidekiq_inline, :use_clean_rails_redis_caching do
           execute_service(project, user, oldrev: oldrev, newrev: newrev, ref: ref)
 
           expect(WebMock).to have_requested(:post, jira_api_comment_url('JIRA-1')).with(
@@ -538,7 +555,7 @@ describe Git::BranchPushService, services: true do
   end
 
   describe "housekeeping" do
-    let(:housekeeping) { Projects::HousekeepingService.new(project) }
+    let(:housekeeping) { Repositories::HousekeepingService.new(project) }
 
     before do
       # Flush any raw key-value data stored by the housekeeping code.
@@ -546,7 +563,7 @@ describe Git::BranchPushService, services: true do
       Gitlab::Redis::Queues.with { |conn| conn.flushall }
       Gitlab::Redis::SharedState.with { |conn| conn.flushall }
 
-      allow(Projects::HousekeepingService).to receive(:new).and_return(housekeeping)
+      allow(Repositories::HousekeepingService).to receive(:new).and_return(housekeeping)
     end
 
     after do
@@ -620,6 +637,37 @@ describe Git::BranchPushService, services: true do
     end
   end
 
+  describe 'artifacts' do
+    context 'create branch' do
+      let(:oldrev) { blankrev }
+
+      it 'does nothing' do
+        expect(::Ci::RefDeleteUnlockArtifactsWorker).not_to receive(:perform_async)
+
+        execute_service(project, user, oldrev: oldrev, newrev: newrev, ref: ref)
+      end
+    end
+
+    context 'update branch' do
+      it 'does nothing' do
+        expect(::Ci::RefDeleteUnlockArtifactsWorker).not_to receive(:perform_async)
+
+        execute_service(project, user, oldrev: oldrev, newrev: newrev, ref: ref)
+      end
+    end
+
+    context 'delete branch' do
+      let(:newrev) { blankrev }
+
+      it 'unlocks artifacts' do
+        expect(::Ci::RefDeleteUnlockArtifactsWorker)
+          .to receive(:perform_async).with(project.id, user.id, "refs/heads/#{branch}")
+
+        execute_service(project, user, oldrev: oldrev, newrev: newrev, ref: ref)
+      end
+    end
+  end
+
   describe 'Hooks' do
     context 'run on a branch' do
       it 'delegates to Git::BranchHooksService' do
@@ -656,5 +704,70 @@ describe Git::BranchPushService, services: true do
     service = described_class.new(project, user, change: change, push_options: push_options)
     service.execute
     service
+  end
+
+  context 'Jira Connect hooks' do
+    let_it_be(:project) { create(:project, :repository) }
+
+    let(:branch_to_sync) { nil }
+    let(:commits_to_sync) { [] }
+    let(:params) do
+      { change: { oldrev: oldrev, newrev: newrev, ref: ref } }
+    end
+
+    subject do
+      described_class.new(project, user, params)
+    end
+
+    shared_examples 'enqueues Jira sync worker' do
+      specify :aggregate_failures do
+        Sidekiq::Testing.fake! do
+          expect(JiraConnect::SyncBranchWorker).to receive(:perform_async)
+                                                     .with(project.id, branch_to_sync, commits_to_sync, kind_of(Numeric))
+                                                     .and_call_original
+
+          expect { subject.execute }.to change(JiraConnect::SyncBranchWorker.jobs, :size).by(1)
+        end
+      end
+    end
+
+    shared_examples 'does not enqueue Jira sync worker' do
+      specify do
+        Sidekiq::Testing.fake! do
+          expect { subject.execute }.not_to change(JiraConnect::SyncBranchWorker.jobs, :size)
+        end
+      end
+    end
+
+    context 'with a Jira subscription' do
+      before do
+        create(:jira_connect_subscription, namespace: project.namespace)
+      end
+
+      context 'branch name contains Jira issue key' do
+        let(:branch_to_sync) { 'branch-JIRA-123' }
+        let(:ref) { "refs/heads/#{branch_to_sync}" }
+
+        it_behaves_like 'enqueues Jira sync worker'
+      end
+
+      context 'commit message contains Jira issue key' do
+        let(:commits_to_sync) { [newrev] }
+
+        before do
+          allow_any_instance_of(Commit).to receive(:safe_message).and_return('Commit with key JIRA-123')
+        end
+
+        it_behaves_like 'enqueues Jira sync worker'
+      end
+
+      context 'branch name and commit message does not contain Jira issue key' do
+        it_behaves_like 'does not enqueue Jira sync worker'
+      end
+    end
+
+    context 'without a Jira subscription' do
+      it_behaves_like 'does not enqueue Jira sync worker'
+    end
   end
 end

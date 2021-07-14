@@ -4,6 +4,9 @@ module API
   module Entities
     class Board < Grape::Entity
       expose :id
+      expose :name
+      expose :hide_backlog_list
+      expose :hide_closed_list
       expose :project, using: Entities::BasicProjectDetails
 
       expose :lists, using: Entities::List do |board|
@@ -13,4 +16,4 @@ module API
   end
 end
 
-API::Entities::Board.prepend_if_ee('EE::API::Entities::Board')
+API::Entities::Board.prepend_mod_with('API::Entities::Board')

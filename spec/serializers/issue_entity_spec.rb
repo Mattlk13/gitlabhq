@@ -2,7 +2,7 @@
 
 require 'spec_helper'
 
-describe IssueEntity do
+RSpec.describe IssueEntity do
   let(:project)  { create(:project) }
   let(:resource) { create(:issue, project: project) }
   let(:user)     { create(:user) }
@@ -29,7 +29,7 @@ describe IssueEntity do
     before do
       project.add_developer(member)
       public_project.add_developer(member)
-      Issues::MoveService.new(public_project, member).execute(issue, project)
+      Issues::MoveService.new(project: public_project, current_user: member).execute(issue, project)
     end
 
     context 'when user cannot read target project' do
@@ -61,7 +61,7 @@ describe IssueEntity do
 
     before do
       Issues::DuplicateService
-        .new(project, member)
+        .new(project: project, current_user: member)
         .execute(issue, new_issue)
     end
 
@@ -112,7 +112,7 @@ describe IssueEntity do
 
     context 'when project is archived' do
       before do
-        project.update(archived: true)
+        project.update!(archived: true)
       end
 
       it 'returns archived true' do

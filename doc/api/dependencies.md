@@ -1,6 +1,12 @@
+---
+stage: Secure
+group: Composition Analysis
+info: To determine the technical writer assigned to the Stage/Group associated with this page, see https://about.gitlab.com/handbook/engineering/ux/technical-writing/#assignments
+---
+
 # Dependencies API **(ULTIMATE)**
 
-CAUTION: **Caution:**
+WARNING:
 This API is in an alpha stage and considered unstable.
 The response payload may be subject to change or breakage
 across GitLab releases.
@@ -24,11 +30,11 @@ GET /projects/:id/dependencies?package_manager=yarn,bundler
 
 | Attribute     | Type           | Required | Description                                                                                                                                                                 |
 | ------------- | -------------- | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `id`          | integer/string | yes      | The ID or [URL-encoded path of the project](README.md#namespaced-path-encoding).                                                            |
+| `id`          | integer/string | yes      | The ID or [URL-encoded path of the project](index.md#namespaced-path-encoding).                                                            |
 | `package_manager` | string array   | no       | Returns dependencies belonging to specified package manager. Valid values: `bundler`, `composer`, `maven`, `npm`, `pip` or `yarn`.                                   |
 
 ```shell
-curl --header "PRIVATE-TOKEN: <your_access_token>" https://gitlab.example.com/api/v4/projects/4/dependencies
+curl --header "PRIVATE-TOKEN: <your_access_token>" "https://gitlab.example.com/api/v4/projects/4/dependencies"
 ```
 
 Example response:

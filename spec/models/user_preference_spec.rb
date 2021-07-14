@@ -2,7 +2,7 @@
 
 require 'spec_helper'
 
-describe UserPreference do
+RSpec.describe UserPreference do
   let(:user_preference) { create(:user_preference) }
 
   describe 'notes filters global keys' do
@@ -53,7 +53,7 @@ describe UserPreference do
       it 'returns the current notes filter' do
         user_preference.set_notes_filter(only_comments, issuable)
 
-        expect(user_preference.set_notes_filter(9999, issuable)).to eq(only_comments)
+        expect(user_preference.set_notes_filter(non_existing_record_id, issuable)).to eq(only_comments)
       end
     end
   end
@@ -61,7 +61,7 @@ describe UserPreference do
   describe 'sort_by preferences' do
     shared_examples_for 'a sort_by preference' do
       it 'allows nil sort fields' do
-        user_preference.update(attribute => nil)
+        user_preference.update!(attribute => nil)
 
         expect(user_preference).to be_valid
       end

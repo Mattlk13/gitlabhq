@@ -3,7 +3,11 @@
 class PersonalSnippet < Snippet
   include WithUploads
 
-  def web_url(only_path: nil)
-    Gitlab::Routing.url_helpers.snippet_url(self, only_path: only_path)
+  def parent_user
+    author
+  end
+
+  def skip_project_check?
+    true
   end
 end

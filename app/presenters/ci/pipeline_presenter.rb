@@ -8,9 +8,16 @@ module Ci
     # We use a class method here instead of a constant, allowing EE to redefine
     # the returned `Hash` more easily.
     def self.failure_reasons
-      { unknown_failure: 'Unknown pipeline failure!',
-        config_error: 'CI/CD YAML configuration error!',
-        external_validation_failure: 'External pipeline validation failed!' }
+      { unknown_failure: 'The reason for the pipeline failure is unknown.',
+        config_error: 'The pipeline failed due to an error on the CI/CD configuration file.',
+        external_validation_failure: 'The external pipeline validation failed.',
+        user_not_verified: 'The pipeline failed due to the user not being verified',
+        activity_limit_exceeded: 'The pipeline activity limit was exceeded.',
+        size_limit_exceeded: 'The pipeline size limit was exceeded.',
+        job_activity_limit_exceeded: 'The pipeline job activity limit was exceeded.',
+        deployments_limit_exceeded: 'The pipeline deployments limit was exceeded.',
+        project_deleted: 'The project associated with this pipeline was deleted.',
+        user_blocked: 'The user who created this pipeline is blocked.' }
     end
 
     presents :pipeline
@@ -36,16 +43,18 @@ module Ci
       end
     end
 
-    NAMES = {
-      merge_train: s_('Pipeline|Merge train pipeline'),
-      merged_result: s_('Pipeline|Merged result pipeline'),
-      detached: s_('Pipeline|Detached merge request pipeline')
-    }.freeze
+    def localized_names
+      {
+        merge_train: s_('Pipeline|Merge train pipeline'),
+        merged_result: s_('Pipeline|Merged result pipeline'),
+        detached: s_('Pipeline|Detached merge request pipeline')
+      }.freeze
+    end
 
     def name
       # Currently, `merge_request_event_type` is the only source to name pipelines
       # but this could be extended with the other types in the future.
-      NAMES.fetch(pipeline.merge_request_event_type, s_('Pipeline|Pipeline'))
+      localized_names.fetch(pipeline.merge_request_event_type, s_('Pipeline|Pipeline'))
     end
 
     def ref_text
@@ -55,7 +64,7 @@ module Ci
             link_to_merge_request: link_to_merge_request,
             link_to_merge_request_source_branch: link_to_merge_request_source_branch
           }
-      elsif pipeline.merge_request_pipeline?
+      elsif pipeline.merged_result_pipeline?
         _("for %{link_to_merge_request} with %{link_to_merge_request_source_branch} into %{link_to_merge_request_target_branch}")
           .html_safe % {
             link_to_merge_request: link_to_merge_request,
@@ -108,6 +117,17 @@ module Ci
       merge_request_presenter&.target_branch_link
     end
 
+    def downloadable_path_for_report_type(file_type)
+      if (job_artifact = batch_lookup_report_artifact_for_file_type(file_type)) &&
+          can?(current_user, :read_build, job_artifact.job)
+        download_project_job_artifacts_path(
+          job_artifact.project,
+          job_artifact.job,
+          file_type: file_type,
+          proxy: true)
+      end
+    end
+
     private
 
     def plain_ref_name
@@ -134,10 +154,14 @@ module Ci
 
     def all_related_merge_requests
       strong_memoize(:all_related_merge_requests) do
-        pipeline.ref ? pipeline.all_merge_requests_by_recency.to_a : []
+        if pipeline.ref && can?(current_user, :read_merge_request, pipeline.project)
+          pipeline.all_merge_requests_by_recency.to_a
+        else
+          []
+        end
       end
     end
   end
 end
 
-Ci::PipelinePresenter.prepend_if_ee('EE::Ci::PipelinePresenter')
+Ci::PipelinePresenter.prepend_mod_with('Ci::PipelinePresenter')

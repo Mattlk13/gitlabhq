@@ -2,8 +2,11 @@
 
 require 'spec_helper'
 
-describe AddressableUrlValidator do
+RSpec.describe AddressableUrlValidator do
   let!(:badge) { build(:badge, link_url: 'http://www.example.com') }
+
+  let(:validator) { described_class.new(validator_options.reverse_merge(attributes: [:link_url])) }
+  let(:validator_options) { {} }
 
   subject { validator.validate(badge) }
 
@@ -16,18 +19,20 @@ describe AddressableUrlValidator do
 
     it 'returns error when url is nil' do
       expect(validator.validate_each(badge, :link_url, nil)).to be_falsey
-      expect(badge.errors.first[1]).to eq validator.options.fetch(:message)
+      expect(badge.errors.added?(:link_url, validator.options.fetch(:message))).to be true
     end
 
     it 'returns error when url is empty' do
       expect(validator.validate_each(badge, :link_url, '')).to be_falsey
-      expect(badge.errors.first[1]).to eq validator.options.fetch(:message)
+      expect(badge.errors.added?(:link_url, validator.options.fetch(:message))).to be true
     end
 
     it 'does not allow urls with CR or LF characters' do
       aggregate_failures do
         urls_with_CRLF.each do |url|
-          expect(validator.validate_each(badge, :link_url, url)[0]).to eq 'is blocked: URI is invalid'
+          validator.validate_each(badge, :link_url, url)
+
+          expect(badge.errors.added?(:link_url, 'is blocked: URI is invalid')).to be true
         end
       end
     end
@@ -110,7 +115,20 @@ describe AddressableUrlValidator do
 
     it 'does block nil url with provided error message' do
       expect(validator.validate_each(badge, :link_url, nil)).to be_falsey
-      expect(badge.errors.first[1]).to eq message
+      expect(badge.errors.added?(:link_url, message)).to be true
+    end
+  end
+
+  context 'when blocked_message is set' do
+    let(:message) { 'is not allowed due to: %{exception_message}' }
+    let(:validator_options) { { blocked_message: message } }
+
+    it 'blocks url with provided error message' do
+      badge.link_url = 'javascript:alert(window.opener.document.location)'
+
+      subject
+
+      expect(badge.errors.added?(:link_url, 'is not allowed due to: Only allowed schemes are http, https')).to be true
     end
   end
 

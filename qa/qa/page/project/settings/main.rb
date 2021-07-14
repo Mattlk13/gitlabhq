@@ -5,22 +5,20 @@ module QA
     module Project
       module Settings
         class Main < Page::Base
-          include Common
+          include QA::Page::Settings::Common
           include Component::Select2
           include SubMenus::Project
+          include Component::Breadcrumbs
 
           view 'app/views/projects/edit.html.haml' do
-            element :advanced_settings
-            element :merge_request_settings
+            element :advanced_settings_content
+            element :merge_request_settings_content
+            element :visibility_features_permissions_content
           end
 
           view 'app/views/projects/settings/_general.html.haml' do
             element :project_name_field
             element :save_naming_topics_avatar_button
-          end
-
-          view 'app/views/projects/edit.html.haml' do
-            element :visibility_features_permissions_content
           end
 
           def rename_project_to(name)
@@ -37,19 +35,19 @@ module QA
           end
 
           def expand_advanced_settings(&block)
-            expand_section(:advanced_settings) do
+            expand_content(:advanced_settings_content) do
               Advanced.perform(&block)
             end
           end
 
           def expand_merge_requests_settings(&block)
-            expand_section(:merge_request_settings) do
+            expand_content(:merge_request_settings_content) do
               MergeRequest.perform(&block)
             end
           end
 
           def expand_visibility_project_features_permissions(&block)
-            expand_section(:visibility_features_permissions_content) do
+            expand_content(:visibility_features_permissions_content) do
               VisibilityFeaturesPermissions.perform(&block)
             end
           end
@@ -58,3 +56,5 @@ module QA
     end
   end
 end
+
+QA::Page::Project::Settings::Main.prepend_mod_with("Page::Project::Settings::Main", namespace: QA)

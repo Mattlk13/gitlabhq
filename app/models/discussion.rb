@@ -7,6 +7,9 @@ class Discussion
   include GlobalID::Identification
   include ResolvableDiscussion
 
+  # Bump this if we need to refresh the cached versions of discussions
+  CACHE_VERSION = 1
+
   attr_reader :notes, :context_noteable
 
   delegate  :created_at,
@@ -14,14 +17,17 @@ class Discussion
             :author,
             :noteable,
             :commit_id,
+            :confidential?,
             :for_commit?,
+            :for_design?,
             :for_merge_request?,
             :noteable_ability_name,
             :to_ability_name,
             :editable?,
+            :resolved_by_id,
             :system_note_with_references_visible_for?,
             :resource_parent,
-
+            :save,
             to: :first_note
 
   def declarative_policy_delegate
@@ -154,5 +160,20 @@ class Discussion
 
   def reply_attributes
     first_note.slice(:type, :noteable_type, :noteable_id, :commit_id, :discussion_id)
+  end
+
+  def cache_key
+    # Need this so cache will be invalidated when note within a discussion
+    # has been deleted.
+    notes_sha = Digest::SHA1.hexdigest(notes.map(&:id).join(':'))
+
+    [
+      CACHE_VERSION,
+      notes.last.latest_cached_markdown_version,
+      id,
+      notes_sha,
+      notes.max_by(&:updated_at).updated_at,
+      resolved_at
+    ].join(':')
   end
 end

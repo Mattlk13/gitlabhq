@@ -11,7 +11,8 @@ module ResourceEvents
 
     SYNTHETIC_NOTE_BUILDER_SERVICES = [
       SyntheticLabelNotesBuilderService,
-      SyntheticMilestoneNotesBuilderService
+      SyntheticMilestoneNotesBuilderService,
+      SyntheticStateNotesBuilderService
     ].freeze
 
     attr_reader :resource, :current_user, :params
@@ -23,7 +24,7 @@ module ResourceEvents
     end
 
     def execute(notes = [])
-      (notes + synthetic_notes).sort_by { |n| n.created_at }
+      (notes + synthetic_notes).sort_by(&:created_at)
     end
 
     private
@@ -36,4 +37,4 @@ module ResourceEvents
   end
 end
 
-ResourceEvents::MergeIntoNotesService.prepend_if_ee('EE::ResourceEvents::MergeIntoNotesService')
+ResourceEvents::MergeIntoNotesService.prepend_mod_with('ResourceEvents::MergeIntoNotesService')

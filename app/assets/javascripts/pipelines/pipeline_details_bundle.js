@@ -1,31 +1,36 @@
 import Vue from 'vue';
-import Flash from '~/flash';
-import Translate from '~/vue_shared/translate';
+import createFlash from '~/flash';
+import { parseBoolean } from '~/lib/utils/common_utils';
 import { __ } from '~/locale';
-import { setUrlFragment, redirectTo } from '~/lib/utils/url_utility';
-import pipelineGraph from './components/graph/graph_component.vue';
-import GraphBundleMixin from './mixins/graph_pipeline_bundle_mixin';
-import PipelinesMediator from './pipeline_details_mediator';
-import pipelineHeader from './components/header_component.vue';
-import eventHub from './event_hub';
+import Translate from '~/vue_shared/translate';
+import PipelineGraphLegacy from './components/graph/graph_component_legacy.vue';
 import TestReports from './components/test_reports/test_reports.vue';
-import testReportsStore from './stores/test_reports';
-import axios from '~/lib/utils/axios_utils';
+import GraphBundleMixin from './mixins/graph_pipeline_bundle_mixin';
+import createDagApp from './pipeline_details_dag';
+import { createPipelinesDetailApp } from './pipeline_details_graph';
+import { createPipelineHeaderApp } from './pipeline_details_header';
+import { apolloProvider } from './pipeline_shared_client';
+import createTestReportsStore from './stores/test_reports';
+import { reportToSentry } from './utils';
 
 Vue.use(Translate);
 
-export default () => {
-  const { dataset } = document.querySelector('.js-pipeline-details-vue');
+const SELECTORS = {
+  PIPELINE_DETAILS: '.js-pipeline-details-vue',
+  PIPELINE_GRAPH: '#js-pipeline-graph-vue',
+  PIPELINE_HEADER: '#js-pipeline-header-vue',
+  PIPELINE_TESTS: '#js-pipeline-tests-detail',
+};
 
-  const mediator = new PipelinesMediator({ endpoint: dataset.endpoint });
-
-  mediator.fetchPipeline();
-
+const createLegacyPipelinesDetailApp = (mediator) => {
+  if (!document.querySelector(SELECTORS.PIPELINE_GRAPH)) {
+    return;
+  }
   // eslint-disable-next-line no-new
   new Vue({
-    el: '#js-pipeline-graph-vue',
+    el: SELECTORS.PIPELINE_GRAPH,
     components: {
-      pipelineGraph,
+      PipelineGraphLegacy,
     },
     mixins: [GraphBundleMixin],
     data() {
@@ -33,8 +38,11 @@ export default () => {
         mediator,
       };
     },
+    errorCaptured(err, _vm, info) {
+      reportToSentry('pipeline_details_bundle_legacy_details', `error: ${err}, info: ${info}`);
+    },
     render(createElement) {
-      return createElement('pipeline-graph', {
+      return createElement('pipeline-graph-legacy', {
         props: {
           isLoading: this.mediator.state.isLoading,
           pipeline: this.mediator.store.state.pipeline,
@@ -42,104 +50,75 @@ export default () => {
         },
         on: {
           refreshPipelineGraph: this.requestRefreshPipelineGraph,
-          onClickTriggeredBy: (parentPipeline, pipeline) =>
-            this.clickTriggeredByPipeline(parentPipeline, pipeline),
-          onClickTriggered: (parentPipeline, pipeline) =>
-            this.clickTriggeredPipeline(parentPipeline, pipeline),
+          onResetDownstream: (parentPipeline, pipeline) =>
+            this.resetDownstreamPipelines(parentPipeline, pipeline),
+          onClickUpstreamPipeline: (pipeline) => this.clickUpstreamPipeline(pipeline),
+          onClickDownstreamPipeline: (pipeline) => this.clickDownstreamPipeline(pipeline),
         },
       });
     },
+  });
+};
+
+const createTestDetails = () => {
+  const el = document.querySelector(SELECTORS.PIPELINE_TESTS);
+  const { blobPath, emptyStateImagePath, hasTestReport, summaryEndpoint, suiteEndpoint } =
+    el?.dataset || {};
+  const testReportsStore = createTestReportsStore({
+    blobPath,
+    summaryEndpoint,
+    suiteEndpoint,
   });
 
   // eslint-disable-next-line no-new
   new Vue({
-    el: '#js-pipeline-header-vue',
+    el,
     components: {
-      pipelineHeader,
+      TestReports,
     },
-    data() {
-      return {
-        mediator,
-      };
+    provide: {
+      emptyStateImagePath,
+      hasTestReport: parseBoolean(hasTestReport),
     },
-    created() {
-      eventHub.$on('headerPostAction', this.postAction);
-      eventHub.$on('headerDeleteAction', this.deleteAction);
-    },
-    beforeDestroy() {
-      eventHub.$off('headerPostAction', this.postAction);
-      eventHub.$off('headerDeleteAction', this.deleteAction);
-    },
-    methods: {
-      postAction(path) {
-        this.mediator.service
-          .postAction(path)
-          .then(() => this.mediator.refreshPipeline())
-          .catch(() => Flash(__('An error occurred while making the request.')));
-      },
-      deleteAction(path) {
-        this.mediator.stopPipelinePoll();
-        this.mediator.service
-          .deleteAction(path)
-          .then(({ request }) => redirectTo(setUrlFragment(request.responseURL, 'delete_success')))
-          .catch(() => Flash(__('An error occurred while deleting the pipeline.')));
-      },
-    },
+    store: testReportsStore,
     render(createElement) {
-      return createElement('pipeline-header', {
-        props: {
-          isLoading: this.mediator.state.isLoading,
-          pipeline: this.mediator.store.state.pipeline,
-        },
-      });
+      return createElement('test-reports');
     },
   });
-
-  const tabsElement = document.querySelector('.pipelines-tabs');
-  const testReportsEnabled =
-    window.gon && window.gon.features && window.gon.features.junitPipelineView;
-
-  if (tabsElement && testReportsEnabled) {
-    const fetchReportsAction = 'fetchReports';
-    testReportsStore.dispatch('setEndpoint', dataset.testReportEndpoint);
-
-    const isTestTabActive = Boolean(
-      document.querySelector('.pipelines-tabs > li > a.test-tab.active'),
-    );
-
-    if (isTestTabActive) {
-      testReportsStore.dispatch(fetchReportsAction);
-    } else {
-      const tabClickHandler = e => {
-        if (e.target.className === 'test-tab') {
-          testReportsStore.dispatch(fetchReportsAction);
-          tabsElement.removeEventListener('click', tabClickHandler);
-        }
-      };
-
-      tabsElement.addEventListener('click', tabClickHandler);
-    }
-
-    // eslint-disable-next-line no-new
-    new Vue({
-      el: '#js-pipeline-tests-detail',
-      components: {
-        TestReports,
-      },
-      render(createElement) {
-        return createElement('test-reports');
-      },
-    });
-
-    axios
-      .get(dataset.testReportsCountEndpoint)
-      .then(({ data }) => {
-        if (!data.total_count) {
-          return;
-        }
-
-        document.querySelector('.js-test-report-badge-counter').innerHTML = data.total_count;
-      })
-      .catch(() => {});
-  }
 };
+
+export default async function initPipelineDetailsBundle() {
+  const canShowNewPipelineDetails =
+    gon.features.graphqlPipelineDetails || gon.features.graphqlPipelineDetailsUsers;
+
+  const { dataset } = document.querySelector(SELECTORS.PIPELINE_DETAILS);
+
+  try {
+    createPipelineHeaderApp(SELECTORS.PIPELINE_HEADER, apolloProvider, dataset.graphqlResourceEtag);
+  } catch {
+    createFlash({
+      message: __('An error occurred while loading a section of this page.'),
+    });
+  }
+
+  if (canShowNewPipelineDetails) {
+    try {
+      createPipelinesDetailApp(SELECTORS.PIPELINE_GRAPH, apolloProvider, dataset);
+    } catch {
+      createFlash({
+        message: __('An error occurred while loading the pipeline.'),
+      });
+    }
+  } else {
+    const { default: PipelinesMediator } = await import(
+      /* webpackChunkName: 'PipelinesMediator' */ './pipeline_details_mediator'
+    );
+    const mediator = new PipelinesMediator({ endpoint: dataset.endpoint });
+    mediator.fetchPipeline();
+
+    createLegacyPipelinesDetailApp(mediator);
+  }
+
+  createDagApp(apolloProvider);
+  createTestDetails();
+}

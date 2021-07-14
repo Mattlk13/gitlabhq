@@ -2,9 +2,10 @@
 
 require "spec_helper"
 
-describe "User views labels" do
+RSpec.describe "User views labels" do
   let_it_be(:project) { create(:project_empty_repo, :public) }
   let_it_be(:user) { create(:user) }
+
   let(:label_titles) { %w[bug enhancement feature] }
   let!(:prioritized_label) { create(:label, project: project, title: 'prioritized-label-name', priority: 1) }
 

@@ -2,7 +2,7 @@
 
 require 'spec_helper'
 
-describe 'File blob', :js do
+RSpec.describe 'File blob', :js do
   include MobileHelpers
 
   let(:project) { create(:project, :public, :repository) }
@@ -11,10 +11,6 @@ describe 'File blob', :js do
     visit project_blob_path(project, File.join(ref, path), anchor: anchor)
 
     wait_for_requests
-  end
-
-  before do
-    stub_feature_flags(code_navigation: false)
   end
 
   context 'Ruby file' do
@@ -119,6 +115,99 @@ describe 'File blob', :js do
               expect(page).to have_selector('.js-copy-blob-source-btn:not(.disabled)')
             end
           end
+        end
+      end
+    end
+
+    context 'when ref switch' do
+      def switch_ref_to(ref_name)
+        first('.qa-branches-select').click
+
+        page.within '.project-refs-form' do
+          click_link ref_name
+          wait_for_requests
+        end
+      end
+
+      it 'displays single highlighted line number of different ref' do
+        visit_blob('files/js/application.js', anchor: 'L1')
+
+        switch_ref_to('feature')
+
+        page.within '.blob-content' do
+          expect(find_by_id('LC1')[:class]).to include("hll")
+        end
+      end
+
+      it 'displays multiple highlighted line numbers of different ref' do
+        visit_blob('files/js/application.js', anchor: 'L1-3')
+
+        switch_ref_to('feature')
+
+        page.within '.blob-content' do
+          expect(find_by_id('LC1')[:class]).to include("hll")
+          expect(find_by_id('LC2')[:class]).to include("hll")
+          expect(find_by_id('LC3')[:class]).to include("hll")
+        end
+      end
+
+      it 'displays no highlighted number of different ref' do
+        Files::UpdateService.new(
+          project,
+          project.owner,
+          commit_message: 'Update',
+          start_branch: 'feature',
+          branch_name: 'feature',
+          file_path: 'files/js/application.js',
+          file_content: 'new content'
+        ).execute
+
+        project.commit('feature').diffs.diff_files.first
+
+        visit_blob('files/js/application.js', anchor: 'L3')
+        switch_ref_to('feature')
+
+        page.within '.blob-content' do
+          expect(page).not_to have_css('.hll')
+        end
+      end
+
+      context 'successfully change ref of similar name' do
+        before do
+          project.repository.create_branch('dev')
+          project.repository.create_branch('development')
+        end
+
+        it 'switch ref from longer to shorter ref name' do
+          visit_blob('files/js/application.js', ref: 'development')
+          switch_ref_to('dev')
+
+          aggregate_failures do
+            expect(page.find('.file-title-name').text).to eq('application.js')
+            expect(page).not_to have_css('flash-container')
+          end
+        end
+
+        it 'switch ref from shorter to longer ref name' do
+          visit_blob('files/js/application.js', ref: 'dev')
+          switch_ref_to('development')
+
+          aggregate_failures do
+            expect(page.find('.file-title-name').text).to eq('application.js')
+            expect(page).not_to have_css('flash-container')
+          end
+        end
+      end
+
+      it 'successfully changes ref when the ref name matches the project name' do
+        project.repository.create_branch(project.name)
+
+        visit_blob('files/js/application.js', ref: project.name)
+        switch_ref_to('master')
+
+        aggregate_failures do
+          expect(page.find('.file-title-name').text).to eq('application.js')
+          expect(page).not_to have_css('flash-container')
         end
       end
     end
@@ -304,6 +393,48 @@ describe 'File blob', :js do
 
         # shows a download button
         expect(page).to have_link('Download')
+      end
+    end
+  end
+
+  context 'Jupiter Notebook file' do
+    before do
+      project.add_maintainer(project.creator)
+
+      Files::CreateService.new(
+        project,
+        project.creator,
+        start_branch: 'master',
+        branch_name: 'master',
+        commit_message: "Add Jupiter Notebook",
+        file_path: 'files/basic.ipynb',
+        file_content: project.repository.blob_at('add-ipython-files', 'files/ipython/basic.ipynb').data
+      ).execute
+
+      visit_blob('files/basic.ipynb')
+
+      wait_for_requests
+    end
+
+    it 'displays the blob' do
+      aggregate_failures do
+        # shows rendered notebook
+        expect(page).to have_selector('.js-notebook-viewer-mounted')
+
+        # does show a viewer switcher
+        expect(page).to have_selector('.js-blob-viewer-switcher')
+
+        # show a disabled copy button
+        expect(page).to have_selector('.js-copy-blob-source-btn.disabled')
+
+        # shows a raw button
+        expect(page).to have_link('Open raw')
+
+        # shows a download button
+        expect(page).to have_link('Download')
+
+        # shows the rendered notebook
+        expect(page).to have_content('test')
       end
     end
   end
@@ -509,6 +640,94 @@ describe 'File blob', :js do
 
         # shows a learn more link
         expect(page).to have_link('Learn more')
+      end
+    end
+  end
+
+  describe '.gitlab/dashboards/custom-dashboard.yml' do
+    before do
+      project.add_maintainer(project.creator)
+
+      Files::CreateService.new(
+        project,
+        project.creator,
+        start_branch: 'master',
+        branch_name: 'master',
+        commit_message: "Add .gitlab/dashboards/custom-dashboard.yml",
+        file_path: '.gitlab/dashboards/custom-dashboard.yml',
+        file_content: file_content
+      ).execute
+    end
+
+    context 'with metrics_dashboard_exhaustive_validations feature flag off' do
+      before do
+        stub_feature_flags(metrics_dashboard_exhaustive_validations: false)
+        visit_blob('.gitlab/dashboards/custom-dashboard.yml')
+      end
+
+      context 'valid dashboard file' do
+        let(:file_content) { File.read(Rails.root.join('config/prometheus/common_metrics.yml')) }
+
+        it 'displays an auxiliary viewer' do
+          aggregate_failures do
+            # shows that dashboard yaml is valid
+            expect(page).to have_content('Metrics Dashboard YAML definition is valid.')
+
+            # shows a learn more link
+            expect(page).to have_link('Learn more')
+          end
+        end
+      end
+
+      context 'invalid dashboard file' do
+        let(:file_content) { "dashboard: 'invalid'" }
+
+        it 'displays an auxiliary viewer' do
+          aggregate_failures do
+            # shows that dashboard yaml is invalid
+            expect(page).to have_content('Metrics Dashboard YAML definition is invalid:')
+            expect(page).to have_content("panel_groups: should be an array of panel_groups objects")
+
+            # shows a learn more link
+            expect(page).to have_link('Learn more')
+          end
+        end
+      end
+    end
+
+    context 'with metrics_dashboard_exhaustive_validations feature flag on' do
+      before do
+        stub_feature_flags(metrics_dashboard_exhaustive_validations: true)
+        visit_blob('.gitlab/dashboards/custom-dashboard.yml')
+      end
+
+      context 'valid dashboard file' do
+        let(:file_content) { File.read(Rails.root.join('config/prometheus/common_metrics.yml')) }
+
+        it 'displays an auxiliary viewer' do
+          aggregate_failures do
+            # shows that dashboard yaml is valid
+            expect(page).to have_content('Metrics Dashboard YAML definition is valid.')
+
+            # shows a learn more link
+            expect(page).to have_link('Learn more')
+          end
+        end
+      end
+
+      context 'invalid dashboard file' do
+        let(:file_content) { "dashboard: 'invalid'" }
+
+        it 'displays an auxiliary viewer' do
+          aggregate_failures do
+            # shows that dashboard yaml is invalid
+            expect(page).to have_content('Metrics Dashboard YAML definition is invalid:')
+            expect(page).to have_content("root is missing required keys: panel_groups")
+
+            # shows a learn more link
+            expect(page).to have_link('Learn more')
+          end
+        end
       end
     end
   end

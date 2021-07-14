@@ -21,7 +21,7 @@ module Issues
     end
 
     def update(issue, attrs)
-      ::Issues::UpdateService.new(project, current_user, attrs).execute(issue)
+      ::Issues::UpdateService.new(project: project, current_user: current_user, params: attrs).execute(issue)
     rescue ActiveRecord::RecordNotFound
       false
     end
@@ -40,7 +40,7 @@ module Issues
     def move_between_ids
       ids = [params[:move_after_id], params[:move_before_id]]
               .map(&:to_i)
-              .map { |m| m.positive? ? m : nil }
+              .map { |m| m > 0 ? m : nil }
 
       ids.any? ? ids : nil
     end

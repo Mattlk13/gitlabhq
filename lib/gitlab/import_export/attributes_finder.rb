@@ -3,12 +3,15 @@
 module Gitlab
   module ImportExport
     class AttributesFinder
+      attr_reader :tree, :included_attributes, :excluded_attributes, :methods, :preloads, :export_reorders
+
       def initialize(config:)
         @tree = config[:tree] || {}
         @included_attributes = config[:included_attributes] || {}
         @excluded_attributes = config[:excluded_attributes] || {}
         @methods = config[:methods] || {}
         @preloads = config[:preloads] || {}
+        @export_reorders = config[:export_reorders] || {}
       end
 
       def find_root(model_key)
@@ -31,14 +34,15 @@ module Gitlab
           except: @excluded_attributes[model_key],
           methods: @methods[model_key],
           include: resolve_model_tree(model_tree),
-          preload: resolve_preloads(model_key, model_tree)
+          preload: resolve_preloads(model_key, model_tree),
+          export_reorder: @export_reorders[model_key]
         }.compact
       end
 
       def resolve_preloads(model_key, model_tree)
         model_tree
           .map { |submodel_key, submodel_tree| resolve_preload(model_key, submodel_key, submodel_tree) }
-          .compact
+          .tap { |entries| entries.compact! }
           .to_h
           .deep_merge(@preloads[model_key].to_h)
           .presence

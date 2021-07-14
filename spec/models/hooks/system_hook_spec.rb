@@ -2,7 +2,7 @@
 
 require "spec_helper"
 
-describe SystemHook do
+RSpec.describe SystemHook do
   context 'default attributes' do
     let(:system_hook) { build(:system_hook) }
 
@@ -56,7 +56,7 @@ describe SystemHook do
     end
 
     it "user_destroy hook" do
-      user.destroy
+      user.destroy!
 
       expect(WebMock).to have_requested(:post, system_hook.url).with(
         body: /user_destroy/,
@@ -75,7 +75,7 @@ describe SystemHook do
 
     it "project member destroy hook" do
       project.add_maintainer(user)
-      project.project_members.destroy_all # rubocop: disable DestroyAll
+      project.project_members.destroy_all # rubocop: disable Cop/DestroyAll
 
       expect(WebMock).to have_requested(:post, system_hook.url).with(
         body: /user_remove_from_team/,
@@ -102,7 +102,7 @@ describe SystemHook do
     end
 
     it 'group destroy hook' do
-      group.destroy
+      group.destroy!
 
       expect(WebMock).to have_requested(:post, system_hook.url).with(
         body: /group_destroy/,
@@ -121,7 +121,7 @@ describe SystemHook do
 
     it 'group member destroy hook' do
       group.add_maintainer(user)
-      group.group_members.destroy_all # rubocop: disable DestroyAll
+      group.group_members.destroy_all # rubocop: disable Cop/DestroyAll
 
       expect(WebMock).to have_requested(:post, system_hook.url).with(
         body: /user_remove_from_group/,
@@ -167,6 +167,24 @@ describe SystemHook do
       expect_any_instance_of(WebHookService).to receive(:async_execute)
 
       hook.async_execute(data, hook_name)
+    end
+  end
+
+  describe '#rate_limit' do
+    let(:hook) { build(:system_hook) }
+
+    it 'returns nil' do
+      expect(hook.rate_limit).to be_nil
+    end
+  end
+
+  describe '#application_context' do
+    let(:hook) { build(:system_hook) }
+
+    it 'includes the type' do
+      expect(hook.application_context).to eq(
+        related_class: 'SystemHook'
+      )
     end
   end
 end

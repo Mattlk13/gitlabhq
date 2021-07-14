@@ -6,11 +6,12 @@ module QA
       module Overview
         module Users
           class Index < QA::Page::Base
-            view 'app/views/admin/users/index.html.haml' do
+            view 'app/views/admin/users/_users.html.haml' do
               element :user_search_field
+              element :pending_approval_tab
             end
 
-            view 'app/views/admin/users/_user.html.haml' do
+            view 'app/assets/javascripts/admin/users/components/users_table.vue' do
               element :user_row_content
             end
 
@@ -22,9 +23,13 @@ module QA
               find_element(:user_search_field).set(username).send_keys(:return)
             end
 
+            def click_pending_approval_tab
+              click_element :pending_approval_tab
+            end
+
             def click_user(username)
               within_element(:user_row_content, text: username) do
-                click_element(:username_link)
+                click_link(username)
               end
             end
           end

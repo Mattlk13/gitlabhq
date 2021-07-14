@@ -16,13 +16,12 @@ const prefixMap = [
   // E.g. the mock ce/foo/bar maps to require path ~/foo/bar
   { mocksRoot: 'ce', requirePrefix: '~' },
   // { mocksRoot: 'ee', requirePrefix: 'ee' }, // We'll deal with EE-specific mocks later
-  { mocksRoot: 'node', requirePrefix: '' },
   // { mocksRoot: 'virtual', requirePrefix: '' }, // We'll deal with virtual mocks later
 ];
 
-const mockFileFilter = stats => stats.isFile() && stats.path.endsWith('.js');
+const mockFileFilter = (stats) => stats.isFile() && stats.path.endsWith('.js');
 
-const getMockFiles = root => readdir.sync(root, { deep: MAX_DEPTH, filter: mockFileFilter });
+const getMockFiles = (root) => readdir.sync(root, { deep: MAX_DEPTH, filter: mockFileFilter });
 
 // Function that performs setting a mock. This has to be overridden by the unit test, because
 // jest.setMock can't be overwritten across files.
@@ -30,7 +29,6 @@ const getMockFiles = root => readdir.sync(root, { deep: MAX_DEPTH, filter: mockF
 const defaultSetMock = (srcPath, mockPath) =>
   jest.mock(srcPath, () => jest.requireActual(mockPath));
 
-// eslint-disable-next-line import/prefer-default-export
 export const setupManualMocks = function setupManualMocks(setMock = defaultSetMock) {
   prefixMap.forEach(({ mocksRoot, requirePrefix }) => {
     const mocksRootAbsolute = path.join(__dirname, mocksRoot);
@@ -38,7 +36,7 @@ export const setupManualMocks = function setupManualMocks(setMock = defaultSetMo
       return;
     }
 
-    getMockFiles(path.join(__dirname, mocksRoot)).forEach(mockPath => {
+    getMockFiles(path.join(__dirname, mocksRoot)).forEach((mockPath) => {
       const mockPathNoExt = mockPath.substring(0, mockPath.length - path.extname(mockPath).length);
       const sourcePath = path.join(requirePrefix, mockPathNoExt);
       const mockPathRelative = `./${path.join(mocksRoot, mockPathNoExt)}`;

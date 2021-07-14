@@ -1,17 +1,43 @@
 import $ from 'jquery';
 import { debounce } from 'lodash';
+import createFlash from '~/flash';
 import axios from '~/lib/utils/axios_utils';
-import flash from '~/flash';
-import { __ } from '~/locale';
 import { textColorForBackground } from '~/lib/utils/color_utils';
+import { DEFAULT_DEBOUNCE_AND_THROTTLE_MS } from '~/lib/utils/constants';
+import { __ } from '~/locale';
 
 export default () => {
   const $broadcastMessageColor = $('.js-broadcast-message-color');
   const $broadcastMessageType = $('.js-broadcast-message-type');
   const $broadcastBannerMessagePreview = $('.js-broadcast-banner-message-preview');
   const $broadcastMessage = $('.js-broadcast-message-message');
-  const previewPath = $broadcastMessage.data('previewPath');
   const $jsBroadcastMessagePreview = $('.js-broadcast-message-preview');
+
+  const reloadPreview = function reloadPreview() {
+    const previewPath = $broadcastMessage.data('previewPath');
+    const message = $broadcastMessage.val();
+    const type = $broadcastMessageType.val();
+
+    if (message === '') {
+      $jsBroadcastMessagePreview.text(__('Your message here'));
+    } else {
+      axios
+        .post(previewPath, {
+          broadcast_message: {
+            message,
+            broadcast_type: type,
+          },
+        })
+        .then(({ data }) => {
+          $jsBroadcastMessagePreview.html(data.message);
+        })
+        .catch(() =>
+          createFlash({
+            message: __('An error occurred while rendering preview broadcast message'),
+          }),
+        );
+    }
+  };
 
   $broadcastMessageColor.on('input', function onMessageColorInput() {
     const previewColor = $(this).val();
@@ -25,32 +51,22 @@ export default () => {
 
   $broadcastMessageType.on('change', () => {
     const $broadcastMessageColorFormGroup = $('.js-broadcast-message-background-color-form-group');
+    const $broadcastMessageDismissableFormGroup = $('.js-broadcast-message-dismissable-form-group');
     const $broadcastNotificationMessagePreview = $('.js-broadcast-notification-message-preview');
 
     $broadcastMessageColorFormGroup.toggleClass('hidden');
+    $broadcastMessageDismissableFormGroup.toggleClass('hidden');
     $broadcastBannerMessagePreview.toggleClass('hidden');
     $broadcastNotificationMessagePreview.toggleClass('hidden');
+
+    reloadPreview();
   });
 
   $broadcastMessage.on(
     'input',
-    debounce(function onMessageInput() {
-      const message = $(this).val();
-      if (message === '') {
-        $jsBroadcastMessagePreview.text(__('Your message here'));
-      } else {
-        axios
-          .post(previewPath, {
-            broadcast_message: {
-              message,
-            },
-          })
-          .then(({ data }) => {
-            $jsBroadcastMessagePreview.html(data.message);
-          })
-          .catch(() => flash(__('An error occurred while rendering preview broadcast message')));
-      }
-    }, 250),
+    debounce(() => {
+      reloadPreview();
+    }, DEFAULT_DEBOUNCE_AND_THROTTLE_MS),
   );
 
   const updateColorPreview = () => {
@@ -71,7 +87,7 @@ export default () => {
     return $jsBroadcastMessagePreview.css(selectedColorStyle);
   };
 
-  const setSuggestedColor = e => {
+  const setSuggestedColor = (e) => {
     const color = $(e.currentTarget).data('color');
     $broadcastMessageColor
       .val(color)

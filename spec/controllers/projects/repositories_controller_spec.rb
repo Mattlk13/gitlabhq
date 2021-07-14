@@ -2,7 +2,7 @@
 
 require "spec_helper"
 
-describe Projects::RepositoriesController do
+RSpec.describe Projects::RepositoriesController do
   let(:project) { create(:project, :repository) }
 
   describe "GET archive" do
@@ -28,6 +28,12 @@ describe Projects::RepositoriesController do
         sign_in(user)
       end
 
+      it_behaves_like "hotlink interceptor" do
+        let(:http_request) do
+          get :archive, params: { namespace_id: project.namespace, project_id: project, id: "master" }, format: "zip"
+        end
+      end
+
       it "uses Gitlab::Workhorse" do
         get :archive, params: { namespace_id: project.namespace, project_id: project, id: "master" }, format: "zip"
 
@@ -47,28 +53,6 @@ describe Projects::RepositoriesController do
 
         expect(assigns(:ref)).to eq("improve/awesome")
         expect(assigns(:filename)).to eq(archive_name)
-        expect(response.header[Gitlab::Workhorse::SEND_DATA_HEADER]).to start_with("git-archive:")
-      end
-
-      it 'handles legacy queries with no ref' do
-        get :archive, params: { namespace_id: project.namespace, project_id: project }, format: "zip"
-
-        expect(response.header[Gitlab::Workhorse::SEND_DATA_HEADER]).to start_with("git-archive:")
-      end
-
-      it 'handles legacy queries with the ref specified as ref in params' do
-        get :archive, params: { namespace_id: project.namespace, project_id: project, ref: 'feature' }, format: 'zip'
-
-        expect(response).to have_gitlab_http_status(:ok)
-        expect(assigns(:ref)).to eq('feature')
-        expect(response.header[Gitlab::Workhorse::SEND_DATA_HEADER]).to start_with("git-archive:")
-      end
-
-      it 'handles legacy queries with the ref specified as id in params' do
-        get :archive, params: { namespace_id: project.namespace, project_id: project, id: 'feature' }, format: 'zip'
-
-        expect(response).to have_gitlab_http_status(:ok)
-        expect(assigns(:ref)).to eq('feature')
         expect(response.header[Gitlab::Workhorse::SEND_DATA_HEADER]).to start_with("git-archive:")
       end
 
@@ -116,7 +100,9 @@ describe Projects::RepositoriesController do
 
           expect(response).to have_gitlab_http_status(:ok)
           expect(response.header['ETag']).to be_present
-          expect(response.header['Cache-Control']).to include('max-age=60, private')
+          expect(response.cache_control[:public]).to eq(false)
+          expect(response.cache_control[:max_age]).to eq(60)
+          expect(response.cache_control[:no_store]).to be_nil
         end
 
         context 'when project is public' do
@@ -128,6 +114,18 @@ describe Projects::RepositoriesController do
             expect(response).to have_gitlab_http_status(:ok)
             expect(response.header['ETag']).to be_present
             expect(response.header['Cache-Control']).to include('max-age=60, public')
+          end
+
+          context 'and repo is private' do
+            let(:project) { create(:project, :repository, :public, :repository_private) }
+
+            it 'sets appropriate caching headers' do
+              get_archive
+
+              expect(response).to have_gitlab_http_status(:ok)
+              expect(response.header['ETag']).to be_present
+              expect(response.header['Cache-Control']).to include('max-age=60, private')
+            end
           end
         end
 

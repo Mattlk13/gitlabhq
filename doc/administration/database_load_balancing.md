@@ -1,6 +1,13 @@
-# Database Load Balancing **(PREMIUM ONLY)**
+---
+stage: Enablement
+group: Database
+info: To determine the technical writer assigned to the Stage/Group associated with this page, see https://about.gitlab.com/handbook/engineering/ux/technical-writing/#assignments
+---
 
-> [Introduced][ee-1283] in [GitLab Premium][eep] 9.0.
+# Database Load Balancing **(FREE SELF)**
+
+> - [Introduced](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/1283) in [GitLab Premium](https://about.gitlab.com/pricing/) 9.0.
+> - [Moved](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/60894) from GitLab Premium to GitLab Free in 14.0.
 
 Distribute read-only queries among multiple database servers.
 
@@ -11,12 +18,10 @@ multiple computing resources. Load balancing aims to optimize resource use,
 maximize throughput, minimize response time, and avoid overload of any single
 resource. Using multiple components with load balancing instead of a single
 component may increase reliability and availability through redundancy.
-[_Wikipedia article_][wikipedia]
+[_Wikipedia article_](https://en.wikipedia.org/wiki/Load_balancing_(computing))
 
 When database load balancing is enabled in GitLab, the load is balanced using
 a simple round-robin algorithm, without any external dependencies such as Redis.
-Load balancing is not enabled for Sidekiq as this would lead to consistency
-problems, and Sidekiq mostly performs writes anyway.
 
 In the following image, you can see the load is balanced rather evenly among
 all the secondaries (`db4`, `db5`, `db6`). Because `SELECT` queries are not
@@ -26,18 +31,18 @@ sent to the primary (unless necessary), the primary (`db3`) hardly has any load.
 
 ## Requirements
 
-For load balancing to work you will need at least PostgreSQL 9.2 or newer,
-[**MySQL is not supported**][db-req]. You also need to make sure that you have
-at least 1 secondary in [hot standby][hot-standby] mode.
+For load balancing to work, you need at least PostgreSQL 11 or newer,
+[**MySQL is not supported**](../install/requirements.md#database). You also need to make sure that you have
+at least 1 secondary in [hot standby](https://www.postgresql.org/docs/11/hot-standby.html) mode.
 
 Load balancing also requires that the configured hosts **always** point to the
 primary, even after a database failover. Furthermore, the additional hosts to
 balance load among must **always** point to secondary databases. This means that
-you should put a load balance in front of every database, and have GitLab connect
+you should put a load balancer in front of every database, and have GitLab connect
 to those load balancers.
 
 For example, say you have a primary (`db1.gitlab.com`) and two secondaries,
-`db2.gitlab.com` and `db3.gitlab.com`. For this setup you will need to have 3
+`db2.gitlab.com` and `db3.gitlab.com`. For this setup, you need to have 3
 load balancers, one for every host. For example:
 
 - `primary.gitlab.com` forwards to `db1.gitlab.com`
@@ -51,7 +56,7 @@ means forwarding should now happen as follows:
 - `secondary1.gitlab.com` forwards to `db1.gitlab.com`
 - `secondary2.gitlab.com` forwards to `db3.gitlab.com`
 
-GitLab does not take care of this for you, so you will need to do so yourself.
+GitLab does not take care of this for you, so you need to do so yourself.
 
 Finally, load balancing requires that GitLab can connect to all hosts using the
 same credentials and port as configured in the
@@ -67,7 +72,7 @@ different ports or credentials for different hosts is not supported.
 ## Enabling load balancing
 
 For the environment in which you want to use load balancing, you'll need to add
-the following. This will balance the load between `host1.example.com` and
+the following. This balances the load between `host1.example.com` and
 `host2.example.com`.
 
 **In Omnibus installations:**
@@ -78,7 +83,7 @@ the following. This will balance the load between `host1.example.com` and
    gitlab_rails['db_load_balancing'] = { 'hosts' => ['host1.example.com', 'host2.example.com'] }
    ```
 
-1. Save the file and [reconfigure GitLab][] for the changes to take effect.
+1. Save the file and [reconfigure GitLab](restart_gitlab.md#omnibus-gitlab-reconfigure) for the changes to take effect.
 
 ---
 
@@ -97,11 +102,37 @@ the following. This will balance the load between `host1.example.com` and
          - host2.example.com
    ```
 
-1. Save the file and [restart GitLab][] for the changes to take effect.
+1. Save the file and [restart GitLab](restart_gitlab.md#installations-from-source) for the changes to take effect.
+
+### Enable the load balancer for Sidekiq
+
+Sidekiq mostly writes to the database, which means that most of its traffic hits the
+primary database.
+
+Some background jobs can use database replicas to read application state.
+This allows to offload the primary database.
+
+Load balancing is disabled by default in Sidekiq. When enabled, we can define
+[the data consistency](../development/sidekiq_style_guide.md#job-data-consistency-strategies)
+requirements for a specific job.
+
+To enable it, define the `ENABLE_LOAD_BALANCING_FOR_SIDEKIQ` variable to the environment, as shown below.
+
+For Omnibus installations:
+
+```ruby
+gitlab_rails['env'] = {"ENABLE_LOAD_BALANCING_FOR_SIDEKIQ" => "true"}
+```
+
+For installations from source:
+
+```shell
+export ENABLE_LOAD_BALANCING_FOR_SIDEKIQ="true"
+```
 
 ## Service Discovery
 
-> [Introduced][ee-5883] in [GitLab Premium][eep] 11.0.
+> [Introduced](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/5883) in [GitLab Premium](https://about.gitlab.com/pricing/) 11.0.
 
 Service discovery allows GitLab to automatically retrieve a list of secondary
 databases to use, instead of having to manually specify these in the
@@ -128,7 +159,7 @@ production:
       disconnect_timeout: 120
 ```
 
-Here the `discover:` section specifies the configuration details to use for
+Here, the `discover:` section specifies the configuration details to use for
 service discovery.
 
 ### Configuration
@@ -139,54 +170,36 @@ The following options can be set:
 |----------------------|---------------------------------------------------------------------------------------------------|-----------|
 | `nameserver`         | The nameserver to use for looking up the DNS record.                                              | localhost |
 | `record`             | The record to look up. This option is required for service discovery to work.                     |           |
-| `record_type`        | Optional record type to look up, this can be either A or SRV (since GitLab 12.3)                  | A         |
+| `record_type`        | Optional record type to look up, this can be either A or SRV (GitLab 12.3 and later)              | A         |
 | `port`               | The port of the nameserver.                                                                       | 8600      |
 | `interval`           | The minimum time in seconds between checking the DNS record.                                      | 60        |
 | `disconnect_timeout` | The time in seconds after which an old connection is closed, after the list of hosts was updated. | 120       |
 | `use_tcp`            | Lookup DNS resources using TCP instead of UDP                                                     | false     |
 
-If `record_type` is set to `SRV`, GitLab will continue to use a round-robin algorithm
-and will ignore the `weight` and `priority` in the record. Since SRV records usually
-return hostnames instead of IPs, GitLab will look for the IPs of returned hostnames
+If `record_type` is set to `SRV`, then GitLab continues to use round-robin algorithm
+and ignores the `weight` and `priority` in the record. Since SRV records usually
+return hostnames instead of IPs, GitLab needs to look for the IPs of returned hostnames
 in the additional section of the SRV response. If no IP is found for a hostname, GitLab
-will query the configured `nameserver` for ANY record for each such hostname looking for A or AAAA
+needs to query the configured `nameserver` for ANY record for each such hostname looking for A or AAAA
 records, eventually dropping this hostname from rotation if it can't resolve its IP.
 
 The `interval` value specifies the _minimum_ time between checks. If the A
-record has a TTL greater than this value, then service discovery will honor said
+record has a TTL greater than this value, then service discovery honors said
 TTL. For example, if the TTL of the A record is 90 seconds, then service
-discovery will wait at least 90 seconds before checking the A record again.
+discovery waits at least 90 seconds before checking the A record again.
 
 When the list of hosts is updated, it might take a while for the old connections
 to be terminated. The `disconnect_timeout` setting can be used to enforce an
-upper limit on the time it will take to terminate all old database connections.
+upper limit on the time it takes to terminate all old database connections.
 
-Some nameservers (like [Consul][consul-udp]) can return a truncated list of hosts when
+Some nameservers (like [Consul](https://www.consul.io/docs/discovery/dns#udp-based-dns-queries)) can return a truncated list of hosts when
 queried over UDP. To overcome this issue, you can use TCP for querying by setting
 `use_tcp` to `true`.
 
-### Forking
-
-If you use an application server that forks, such as Unicorn, you _have to_
-update your Unicorn configuration to start service discovery _after_ a fork.
-Failure to do so will lead to service discovery only running in the parent
-process. If you are using Unicorn, then you can add the following to your
-Unicorn configuration file:
-
-```ruby
-after_fork do |server, worker|
-  defined?(Gitlab::Database::LoadBalancing) &&
-    Gitlab::Database::LoadBalancing.start_service_discovery
-end
-```
-
-This will ensure that service discovery is started in both the parent and all
-child processes.
-
 ## Balancing queries
 
-Read-only `SELECT` queries will be balanced among all the secondary hosts.
-Everything else (including transactions) will be executed on the primary.
+Read-only `SELECT` queries balance among all the secondary hosts.
+Everything else (including transactions) executes on the primary.
 Queries such as `SELECT ... FOR UPDATE` are also executed on the primary.
 
 ## Prepared statements
@@ -197,19 +210,19 @@ response timings.
 
 ## Primary sticking
 
-After a write has been performed, GitLab will stick to using the primary for a
-certain period of time, scoped to the user that performed the write. GitLab will
-revert back to using secondaries when they have either caught up, or after 30
+After a write has been performed, GitLab sticks to using the primary for a
+certain period of time, scoped to the user that performed the write. GitLab
+reverts back to using secondaries when they have either caught up, or after 30
 seconds.
 
 ## Failover handling
 
-In the event of a failover or an unresponsive database, the load balancer will
-try to use the next available host. If no secondaries are available the
+In the event of a failover or an unresponsive database, the load balancer
+tries to use the next available host. If no secondaries are available the
 operation is performed on the primary instead.
 
-In the event of a connection error being produced when writing data, the
-operation will be retried up to 3 times using an exponential back-off.
+If a connection error occurs while writing data, the
+operation is retried up to 3 times using an exponential back-off.
 
 When using load balancing, you should be able to safely restart a database server
 without it immediately leading to errors being presented to the users.
@@ -217,7 +230,7 @@ without it immediately leading to errors being presented to the users.
 ## Logging
 
 The load balancer logs various events in
-[`database_load_balancing.log`](logs.md#database_load_balancinglog-premium-only), such as
+[`database_load_balancing.log`](logs.md#database_load_balancinglog), such as
 
 - When a host is marked as offline
 - When a host comes back online
@@ -239,14 +252,14 @@ For example:
 
 ## Handling Stale Reads
 
-> [Introduced][ee-3526] in [GitLab Premium][eep] 10.3.
+> [Introduced](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/3526) in [GitLab Premium](https://about.gitlab.com/pricing/) 10.3.
 
-To prevent reading from an outdated secondary the load balancer will check if it
+To prevent reading from an outdated secondary the load balancer checks if it
 is in sync with the primary. If the data is determined to be recent enough the
-secondary can be used, otherwise it will be ignored. To reduce the overhead of
+secondary is used, otherwise it is ignored. To reduce the overhead of
 these checks we only perform these checks at certain intervals.
 
-There are three configuration options that influence this behaviour:
+There are three configuration options that influence this behavior:
 
 | Option                       | Description                                                                                                    | Default    |
 |------------------------------|----------------------------------------------------------------------------------------------------------------|------------|
@@ -270,14 +283,3 @@ production:
     max_replication_lag_time: 30
     replica_check_interval: 30
 ```
-
-[hot-standby]: https://www.postgresql.org/docs/9.6/hot-standby.html
-[ee-1283]: https://gitlab.com/gitlab-org/gitlab/-/merge_requests/1283
-[eep]: https://about.gitlab.com/pricing/
-[reconfigure gitlab]: restart_gitlab.md#omnibus-gitlab-reconfigure "How to reconfigure Omnibus GitLab"
-[restart gitlab]: restart_gitlab.md#installations-from-source "How to restart GitLab"
-[wikipedia]: https://en.wikipedia.org/wiki/Load_balancing_(computing)
-[db-req]: ../install/requirements.md#database
-[ee-3526]: https://gitlab.com/gitlab-org/gitlab/-/merge_requests/3526
-[ee-5883]: https://gitlab.com/gitlab-org/gitlab/-/merge_requests/5883
-[consul-udp]: https://www.consul.io/docs/agent/dns.html#udp-based-dns-queries

@@ -10,14 +10,14 @@ module Projects
       forked_project
     end
 
-    def valid_fork_targets
-      @valid_fork_targets ||= ForkTargetsFinder.new(@project, current_user).execute
+    def valid_fork_targets(options = {})
+      @valid_fork_targets ||= ForkTargetsFinder.new(@project, current_user).execute(options)
     end
 
-    def valid_fork_target?
+    def valid_fork_target?(namespace = target_namespace)
       return true if current_user.admin?
 
-      valid_fork_targets.include?(target_namespace)
+      valid_fork_targets.include?(namespace)
     end
 
     private
@@ -34,21 +34,18 @@ module Projects
       new_project = CreateService.new(current_user, new_fork_params).execute
       return new_project unless new_project.persisted?
 
-      # Set the forked_from_project relation after saving to avoid having to
-      # reload the project to reset the association information and cause an
-      # extra query.
-      new_project.forked_from_project = @project
-
-      builds_access_level = @project.project_feature.builds_access_level
-      new_project.project_feature.update(builds_access_level: builds_access_level)
+      new_project.project_feature.update!(
+        @project.project_feature.slice(ProjectFeature::FEATURES.map { |f| "#{f}_access_level" })
+      )
 
       new_project
     end
 
     def new_fork_params
       new_params = {
-        visibility_level:          allowed_visibility_level,
-        description:               @project.description,
+        forked_from_project:       @project,
+        visibility_level:          target_visibility_level,
+        description:               target_description,
         name:                      target_name,
         path:                      target_path,
         shared_runners_enabled:    @project.shared_runners_enabled,
@@ -111,6 +108,10 @@ module Projects
       @target_name ||= @params[:name] || @project.name
     end
 
+    def target_description
+      @target_description ||= @params[:description] || @project.description
+    end
+
     def target_namespace
       @target_namespace ||= @params[:namespace] || current_user.namespace
     end
@@ -119,8 +120,9 @@ module Projects
       @skip_disk_validation ||= @params[:skip_disk_validation] || false
     end
 
-    def allowed_visibility_level
+    def target_visibility_level
       target_level = [@project.visibility_level, target_namespace.visibility_level].min
+      target_level = [target_level, Gitlab::VisibilityLevel.level_value(params[:visibility])].min if params.key?(:visibility)
 
       Gitlab::VisibilityLevel.closest_allowed_level(target_level)
     end

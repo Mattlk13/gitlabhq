@@ -1,37 +1,44 @@
 <script>
-import { __ } from '~/locale';
 import {
   GlAvatar,
   GlIcon,
   GlSprintf,
-  GlButton,
   GlModal,
   GlAlert,
   GlLoadingIcon,
   GlDropdown,
   GlDropdownItem,
+  GlButton,
+  GlTooltipDirective,
 } from '@gitlab/ui';
+import CanCreateProjectSnippet from 'shared_queries/snippet/project_permissions.query.graphql';
+import CanCreatePersonalSnippet from 'shared_queries/snippet/user_permissions.query.graphql';
+import { fetchPolicies } from '~/lib/graphql';
+import { joinPaths } from '~/lib/utils/url_utility';
+import { __ } from '~/locale';
 import TimeAgoTooltip from '~/vue_shared/components/time_ago_tooltip.vue';
 
 import DeleteSnippetMutation from '../mutations/deleteSnippet.mutation.graphql';
-import CanCreatePersonalSnippet from '../queries/userPermissions.query.graphql';
-import CanCreateProjectSnippet from '../queries/projectPermissions.query.graphql';
 
 export default {
   components: {
     GlAvatar,
     GlIcon,
     GlSprintf,
-    GlButton,
     GlModal,
     GlAlert,
     GlLoadingIcon,
     GlDropdown,
     GlDropdownItem,
     TimeAgoTooltip,
+    GlButton,
+  },
+  directives: {
+    GlTooltip: GlTooltipDirective,
   },
   apollo: {
     canCreateSnippet: {
+      fetchPolicy: fetchPolicies.NO_CACHE,
       query() {
         return this.snippet.project ? CanCreateProjectSnippet : CanCreatePersonalSnippet;
       },
@@ -43,7 +50,7 @@ export default {
       update(data) {
         return this.snippet.project
           ? data.project.userPermissions.createSnippet
-          : data.currentUser.userPermissions.createSnippet;
+          : data.currentUser?.userPermissions.createSnippet;
       },
     },
   },
@@ -61,33 +68,42 @@ export default {
     };
   },
   computed: {
+    snippetHasBinary() {
+      return Boolean(this.snippet.blobs.find((blob) => blob.binary));
+    },
+    authoredMessage() {
+      return this.snippet.author
+        ? __('Authored %{timeago} by %{author}')
+        : __('Authored %{timeago}');
+    },
     personalSnippetActions() {
       return [
         {
           condition: this.snippet.userPermissions.updateSnippet,
           text: __('Edit'),
           href: this.editLink,
-          click: undefined,
-          variant: 'outline-info',
-          cssClass: undefined,
+          disabled: this.snippetHasBinary,
+          title: this.snippetHasBinary
+            ? __('Snippets with non-text files can only be edited via Git.')
+            : undefined,
         },
         {
           condition: this.snippet.userPermissions.adminSnippet,
           text: __('Delete'),
-          href: undefined,
           click: this.showDeleteModal,
-          variant: 'outline-danger',
-          cssClass: 'btn-inverted btn-danger ml-2',
+          variant: 'danger',
+          category: 'secondary',
+          cssClass: 'ml-2',
         },
         {
           condition: this.canCreateSnippet,
           text: __('New snippet'),
           href: this.snippet.project
-            ? `${this.snippet.project.webUrl}/snippets/new`
-            : '/snippets/new',
-          click: undefined,
-          variant: 'outline-success',
-          cssClass: 'btn-inverted btn-success ml-2',
+            ? joinPaths(this.snippet.project.webUrl, '-/snippets/new')
+            : joinPaths('/', gon.relative_url_root, '/-/snippets/new'),
+          variant: 'success',
+          category: 'secondary',
+          cssClass: 'ml-2',
         },
       ];
     },
@@ -104,7 +120,7 @@ export default {
             ? __('The snippet is visible only to project members.')
             : __('The snippet is visible only to me.');
         case 'internal':
-          return __('The snippet is visible to any logged in user.');
+          return __('The snippet is visible to any logged in user except external users.');
         default:
           return __('The snippet can be accessed without any authentication.');
       }
@@ -122,7 +138,9 @@ export default {
   },
   methods: {
     redirectToSnippets() {
-      window.location.pathname = 'dashboard/snippets';
+      window.location.pathname = this.snippet.project
+        ? `${this.snippet.project.fullPath}/-/snippets`
+        : `${gon.relative_url_root}dashboard/snippets`;
     },
     closeDeleteModal() {
       this.$refs.deleteModal.hide();
@@ -137,13 +155,16 @@ export default {
           mutation: DeleteSnippetMutation,
           variables: { id: this.snippet.id },
         })
-        .then(() => {
+        .then(({ data }) => {
+          if (data?.destroySnippet?.errors.length) {
+            throw new Error(data?.destroySnippet?.errors[0]);
+          }
           this.isDeleting = false;
           this.errorMessage = undefined;
           this.closeDeleteModal();
           this.redirectToSnippets();
         })
-        .catch(err => {
+        .catch((err) => {
           this.isDeleting = false;
           this.errorMessage = err.message;
         });
@@ -155,7 +176,8 @@ export default {
   <div class="detail-page-header">
     <div class="detail-page-header-body">
       <div
-        class="snippet-box qa-snippet-box has-tooltip d-flex align-items-center append-right-5 mb-1"
+        class="snippet-box has-tooltip d-flex align-items-center gl-mr-2 mb-1"
+        data-qa-selector="snippet_container"
         :title="snippetVisibilityLevelDescription"
         data-container="body"
       >
@@ -164,8 +186,8 @@ export default {
         </span>
         <gl-icon :name="visibilityLevelIcon" :size="14" />
       </div>
-      <div class="creator">
-        <gl-sprintf :message="__('Authored %{timeago} by %{author}')">
+      <div class="creator" data-testid="authored-message">
+        <gl-sprintf :message="authoredMessage">
           <template #timeago>
             <time-ago-tooltip
               :time="snippet.createdAt"
@@ -178,32 +200,51 @@ export default {
               <gl-avatar :size="24" :src="snippet.author.avatarUrl" />
               <span class="bold">{{ snippet.author.name }}</span>
             </a>
+            <gl-emoji
+              v-if="snippet.author.status"
+              v-gl-tooltip
+              class="gl-vertical-align-baseline font-size-inherit gl-mr-1"
+              :title="snippet.author.status.message"
+              :data-name="snippet.author.status.emoji"
+            />
           </template>
         </gl-sprintf>
       </div>
     </div>
 
     <div class="detail-page-header-actions">
-      <div class="d-none d-sm-block">
+      <div class="d-none d-sm-flex">
         <template v-for="(action, index) in personalSnippetActions">
-          <gl-button
+          <div
             v-if="action.condition"
             :key="index"
-            :variant="action.variant"
-            :class="action.cssClass"
-            :href="action.href || undefined"
-            @click="action.click ? action.click() : undefined"
+            v-gl-tooltip
+            :title="action.title"
+            class="d-inline-block"
           >
-            {{ action.text }}
-          </gl-button>
+            <gl-button
+              :disabled="action.disabled"
+              :variant="action.variant"
+              :category="action.category"
+              :class="action.cssClass"
+              :href="action.href"
+              data-qa-selector="snippet_action_button"
+              :data-qa-action="action.text"
+              @click="action.click ? action.click() : undefined"
+            >
+              {{ action.text }}
+            </gl-button>
+          </div>
         </template>
       </div>
       <div class="d-block d-sm-none dropdown">
-        <gl-dropdown :text="__('Options')" class="w-100" toggle-class="text-center">
+        <gl-dropdown :text="__('Options')" block>
           <gl-dropdown-item
             v-for="(action, index) in personalSnippetActions"
             :key="index"
-            :href="action.href || undefined"
+            :disabled="action.disabled"
+            :title="action.title"
+            :href="action.href"
             @click="action.click ? action.click() : undefined"
             >{{ action.text }}</gl-dropdown-item
           >
@@ -228,11 +269,12 @@ export default {
         <gl-button @click="closeDeleteModal">{{ __('Cancel') }}</gl-button>
         <gl-button
           variant="danger"
+          category="primary"
           :disabled="isDeleting"
           data-qa-selector="delete_snippet_button"
           @click="deleteSnippet"
         >
-          <gl-loading-icon v-if="isDeleting" inline />
+          <gl-loading-icon v-if="isDeleting" size="sm" inline />
           {{ __('Delete snippet') }}
         </gl-button>
       </template>

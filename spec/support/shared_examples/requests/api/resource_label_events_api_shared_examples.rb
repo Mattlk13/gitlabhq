@@ -15,7 +15,7 @@ RSpec.shared_examples 'resource_label_events API' do |parent_type, eventable_typ
       end
 
       it "returns a 404 error when eventable id not found" do
-        get api("/#{parent_type}/#{parent.id}/#{eventable_type}/12345/resource_label_events", user)
+        get api("/#{parent_type}/#{parent.id}/#{eventable_type}/#{non_existing_record_id}/resource_label_events", user)
 
         expect(response).to have_gitlab_http_status(:not_found)
       end
@@ -48,7 +48,7 @@ RSpec.shared_examples 'resource_label_events API' do |parent_type, eventable_typ
         get api("/#{parent_type}/#{parent.id}/#{eventable_type}/#{eventable[id_name]}/resource_label_events", user)
 
         expect(json_response).to be_an Array
-        expect(json_response).to eq []
+        expect(json_response).to be_empty
       end
     end
   end
@@ -74,7 +74,7 @@ RSpec.shared_examples 'resource_label_events API' do |parent_type, eventable_typ
       end
 
       it "returns a 404 error if resource label event not found" do
-        get api("/#{parent_type}/#{parent.id}/#{eventable_type}/#{eventable[id_name]}/resource_label_events/12345", user)
+        get api("/#{parent_type}/#{parent.id}/#{eventable_type}/#{eventable[id_name]}/resource_label_events/#{non_existing_record_id}", user)
 
         expect(response).to have_gitlab_http_status(:not_found)
       end
@@ -90,6 +90,20 @@ RSpec.shared_examples 'resource_label_events API' do |parent_type, eventable_typ
 
         expect(response).to have_gitlab_http_status(:not_found)
       end
+    end
+  end
+
+  describe 'pagination' do
+    let!(:event1) { create_event(label) }
+    let!(:event2) { create_event(label) }
+
+    # https://gitlab.com/gitlab-org/gitlab/-/issues/220192
+    it "returns the second page" do
+      get api("/#{parent_type}/#{parent.id}/#{eventable_type}/#{eventable[id_name]}/resource_label_events?page=2&per_page=1", user)
+
+      expect(response).to have_gitlab_http_status(:ok)
+      expect(json_response.count).to eq(1)
+      expect(json_response.first['id']).to eq(event2.id)
     end
   end
 

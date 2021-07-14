@@ -1,4 +1,4 @@
-import flash from '~/flash';
+import createFlash from '~/flash';
 import { __ } from '~/locale';
 
 export default {
@@ -6,14 +6,16 @@ export default {
     getExpandedPipelines(pipeline) {
       this.mediator.service
         .getPipeline(this.mediator.getExpandedParameters())
-        .then(response => {
+        .then((response) => {
           this.mediator.store.toggleLoading(pipeline);
           this.mediator.store.storePipeline(response.data);
           this.mediator.poll.enable({ data: this.mediator.getExpandedParameters() });
         })
         .catch(() => {
           this.mediator.store.toggleLoading(pipeline);
-          flash(__('An error occurred while fetching the pipeline.'));
+          createFlash({
+            message: __('An error occurred while fetching the pipeline.'),
+          });
         });
     },
     /**
@@ -27,9 +29,9 @@ export default {
      * @param {String} resetStoreKey Store key for the visible pipeline that will need to be reset
      * @param {Object} pipeline The clicked pipeline
      */
-    clickPipeline(parentPipeline, pipeline, openMethod, closeMethod) {
+    clickPipeline(pipeline, openMethod, closeMethod) {
       if (!pipeline.isExpanded) {
-        this.mediator.store[openMethod](parentPipeline, pipeline);
+        this.mediator.store[openMethod](pipeline);
         this.mediator.store.toggleLoading(pipeline);
         this.mediator.poll.stop();
 
@@ -41,28 +43,23 @@ export default {
         this.mediator.poll.enable({ data: this.mediator.getExpandedParameters() });
       }
     },
-    clickTriggeredByPipeline(parentPipeline, pipeline) {
-      this.clickPipeline(
-        parentPipeline,
-        pipeline,
-        'openTriggeredByPipeline',
-        'closeTriggeredByPipeline',
-      );
+    resetDownstreamPipelines(parentPipeline, pipeline) {
+      this.mediator.store.resetTriggeredPipelines(parentPipeline, pipeline);
     },
-    clickTriggeredPipeline(parentPipeline, pipeline) {
-      this.clickPipeline(
-        parentPipeline,
-        pipeline,
-        'openTriggeredPipeline',
-        'closeTriggeredPipeline',
-      );
+    clickUpstreamPipeline(pipeline) {
+      this.clickPipeline(pipeline, 'openPipeline', 'closePipeline');
+    },
+    clickDownstreamPipeline(pipeline) {
+      this.clickPipeline(pipeline, 'openPipeline', 'closePipeline');
     },
     requestRefreshPipelineGraph() {
       // When an action is clicked
       // (whether in the dropdown or in the main nodes, we refresh the big graph)
-      this.mediator
-        .refreshPipeline()
-        .catch(() => flash(__('An error occurred while making the request.')));
+      this.mediator.refreshPipeline().catch(() =>
+        createFlash({
+          message: __('An error occurred while making the request.'),
+        }),
+      );
     },
   },
 };

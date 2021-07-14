@@ -2,7 +2,9 @@
 
 require 'spec_helper'
 
-describe ContainerExpirationPoliciesHelper do
+RSpec.describe ContainerExpirationPoliciesHelper do
+  using RSpec::Parameterized::TableSyntax
+
   describe '#keep_n_options' do
     it 'returns keep_n options formatted for dropdown usage' do
       expected_result = [
@@ -37,11 +39,34 @@ describe ContainerExpirationPoliciesHelper do
       expected_result = [
         { key: '7d', label: '7 days until tags are automatically removed' },
         { key: '14d', label: '14 days until tags are automatically removed' },
-        { key: '30d', label: '30 days until tags are automatically removed', default: true },
-        { key: '90d', label: '90 days until tags are automatically removed' }
+        { key: '30d', label: '30 days until tags are automatically removed' },
+        { key: '90d', label: '90 days until tags are automatically removed', default: true }
       ]
 
       expect(helper.older_than_options).to eq(expected_result)
+    end
+  end
+
+  describe '#container_expiration_policies_historic_entry_enabled?' do
+    let_it_be(:project) { build_stubbed(:project) }
+
+    subject { helper.container_expiration_policies_historic_entry_enabled?(project) }
+
+    where(:application_setting, :feature_flag, :expected_result) do
+      true  | true  | true
+      true  | false | true
+      false | true  | true
+      false | false | false
+    end
+
+    with_them do
+      before do
+        stub_feature_flags(container_expiration_policies_historic_entry: false)
+        stub_application_setting(container_expiration_policies_enable_historic_entries: application_setting)
+        stub_feature_flags(container_expiration_policies_historic_entry: project) if feature_flag
+      end
+
+      it { is_expected.to eq(expected_result) }
     end
   end
 end

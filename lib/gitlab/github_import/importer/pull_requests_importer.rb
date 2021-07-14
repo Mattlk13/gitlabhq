@@ -11,7 +11,7 @@ module Gitlab
         end
 
         def representation_class
-          Representation::PullRequest
+          Gitlab::GithubImport::Representation::PullRequest
         end
 
         def sidekiq_worker_class
@@ -20,6 +20,10 @@ module Gitlab
 
         def id_for_already_imported_cache(pr)
           pr.number
+        end
+
+        def object_type
+          :pull_request
         end
 
         def each_object_to_import
@@ -36,12 +40,18 @@ module Gitlab
           # updating the timestamp.
           project.update_column(:last_repository_updated_at, Time.zone.now)
 
-          project.repository.fetch_remote('github', forced: false)
+          if Feature.enabled?(:fetch_remote_params, project, default_enabled: :yaml)
+            project.repository.fetch_remote('github', url: project.import_url, refmap: Gitlab::GithubImport.refmap, forced: false)
+          else
+            project.repository.fetch_remote('github', forced: false)
+          end
 
           pname = project.path_with_namespace
 
-          Rails.logger # rubocop:disable Gitlab/RailsLogger
-            .info("GitHub importer finished updating repository for #{pname}")
+          Gitlab::Import::Logger.info(
+            message: 'GitHub importer finished updating repository',
+            project_name: pname
+          )
 
           repository_updates_counter.increment
         end

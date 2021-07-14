@@ -55,7 +55,15 @@ module Emails
            reply_to:  @message.reply_to,
            subject:   @message.subject)
     end
+
+    def prometheus_alert_fired_email(project, user, alert)
+      @project = project
+      @alert = alert.present
+
+      subject_text = "Alert: #{@alert.email_title}"
+      mail(to: user.notification_email_for(@project.group), subject: subject(subject_text))
+    end
   end
 end
 
-Emails::Projects.prepend_if_ee('EE::Emails::Projects')
+Emails::Projects.prepend_mod_with('Emails::Projects')

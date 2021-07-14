@@ -9,7 +9,7 @@ module Gitlab
           include SelfMonitoring::Helpers
 
           VISIBILITY_LEVEL = Gitlab::VisibilityLevel::INTERNAL
-          PROJECT_NAME = 'GitLab self monitoring'
+          PROJECT_NAME = 'Monitoring'
 
           steps :validate_application_settings,
             :create_group,
@@ -75,13 +75,13 @@ module Gitlab
 
             if response
               # In the add_prometheus_manual_configuration method, the Prometheus
-              # listen_address config is saved as an api_url in the PrometheusService
-              # model. There are validates hooks in the PrometheusService model that
-              # check if the project associated with the PrometheusService is the
+              # server_address config is saved as an api_url in the Integrations::Prometheus
+              # model. There are validates hooks in the Integrations::Prometheus model that
+              # check if the project associated with the Integrations::Prometheus is the
               # self_monitoring project. It checks
               # Gitlab::CurrentSettings.self_monitoring_project_id, which is why the
               # Gitlab::CurrentSettings cache needs to be expired here, so that
-              # PrometheusService sees the latest self_monitoring_project_id.
+              # Integrations::Prometheus sees the latest self_monitoring_project_id.
               Gitlab::CurrentSettings.expire_current_application_settings
               success(result)
             else
@@ -105,12 +105,12 @@ module Gitlab
 
           def add_prometheus_manual_configuration(result)
             return success(result) unless prometheus_enabled?
-            return success(result) unless prometheus_listen_address.present?
+            return success(result) unless prometheus_server_address.present?
 
-            service = result[:project].find_or_initialize_service('prometheus')
+            prometheus = result[:project].find_or_initialize_integration('prometheus')
 
-            unless service.update(prometheus_service_attributes)
-              log_error('Could not save prometheus manual configuration for self-monitoring project. Errors: %{errors}' % { errors: service.errors.full_messages })
+            unless prometheus.update(prometheus_integration_attributes)
+              log_error('Could not save prometheus manual configuration for self-monitoring project. Errors: %{errors}' % { errors: prometheus.errors.full_messages })
               return error(_('Could not save prometheus manual configuration'))
             end
 
@@ -118,7 +118,8 @@ module Gitlab
           end
 
           def track_event(result)
-            ::Gitlab::Tracking.event("self_monitoring", "project_created")
+            project = result[:project]
+            ::Gitlab::Tracking.event("self_monitoring", "project_created", project: project, namespace: project.namespace)
 
             success(result)
           end
@@ -132,8 +133,8 @@ module Gitlab
             ::Gitlab::Prometheus::Internal.prometheus_enabled?
           end
 
-          def prometheus_listen_address
-            ::Gitlab::Prometheus::Internal.listen_address
+          def prometheus_server_address
+            ::Gitlab::Prometheus::Internal.server_address
           end
 
           def docs_path
@@ -147,18 +148,18 @@ module Gitlab
               initialize_with_readme: true,
               visibility_level: VISIBILITY_LEVEL,
               name: PROJECT_NAME,
-              description: "This project is automatically generated and will be used to help monitor this GitLab instance. [More information](#{docs_path})",
+              description: "This project is automatically generated and helps monitor this GitLab instance. [Learn more](#{docs_path}).",
               namespace_id: group.id
             }
           end
 
-          def internal_prometheus_listen_address_uri
+          def internal_prometheus_server_address_uri
             ::Gitlab::Prometheus::Internal.uri
           end
 
-          def prometheus_service_attributes
+          def prometheus_integration_attributes
             {
-              api_url: internal_prometheus_listen_address_uri,
+              api_url: internal_prometheus_server_address_uri,
               manual_configuration: true,
               active: true
             }

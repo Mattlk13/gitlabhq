@@ -9,6 +9,16 @@ module ApplicationSettings
     MARKDOWN_CACHE_INVALIDATING_PARAMS = %w(asset_proxy_enabled asset_proxy_url asset_proxy_secret_key asset_proxy_whitelist).freeze
 
     def execute
+      result = update_settings
+
+      auto_approve_blocked_users if result
+
+      result
+    end
+
+    private
+
+    def update_settings
       validate_classification_label(application_setting, :external_authorization_service_default_label) unless bypass_external_auth?
 
       if application_setting.errors.any?
@@ -40,8 +50,6 @@ module ApplicationSettings
       @application_setting.save
     end
 
-    private
-
     def usage_stats_updated?
       params.key?(:usage_ping_enabled) || params.key?(:version_check_enabled)
     end
@@ -59,10 +67,8 @@ module ApplicationSettings
     end
 
     def update_terms(terms)
-      return unless terms.present?
-
       # Avoid creating a new terms record if the text is exactly the same.
-      terms = terms.strip
+      terms = terms&.strip
       return if terms == @application_setting.terms
 
       ApplicationSetting::Term.create(terms: terms)
@@ -95,7 +101,21 @@ module ApplicationSettings
     def bypass_external_auth?
       params.key?(:external_authorization_service_enabled) && !Gitlab::Utils.to_boolean(params[:external_authorization_service_enabled])
     end
+
+    def auto_approve_blocked_users
+      return unless should_auto_approve_blocked_users?
+
+      ApproveBlockedPendingApprovalUsersWorker.perform_async(current_user.id)
+    end
+
+    def should_auto_approve_blocked_users?
+      return false unless application_setting.previous_changes.key?(:require_admin_approval_after_user_signup)
+
+      enabled_previous, enabled_current = application_setting.previous_changes[:require_admin_approval_after_user_signup]
+
+      enabled_previous && !enabled_current
+    end
   end
 end
 
-ApplicationSettings::UpdateService.prepend_if_ee('EE::ApplicationSettings::UpdateService')
+ApplicationSettings::UpdateService.prepend_mod_with('ApplicationSettings::UpdateService')

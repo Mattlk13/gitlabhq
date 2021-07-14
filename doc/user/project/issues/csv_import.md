@@ -1,13 +1,21 @@
-# Importing issues from CSV
+---
+stage: Manage
+group: Import
+info: To determine the technical writer assigned to the Stage/Group associated with this page, see https://about.gitlab.com/handbook/engineering/ux/technical-writing/#assignments
+---
+
+# Importing issues from CSV **(FREE)**
 
 > [Introduced](https://gitlab.com/gitlab-org/gitlab-foss/-/merge_requests/23532) in GitLab 11.7.
 
 Issues can be imported to a project by uploading a CSV file with the columns
-`title` and `description`, in that order.
+`title` and `description`. Other columns are **not** imported. If you want to
+retain columns such as labels and milestones, consider the [Move Issue feature](managing_issues.md#moving-issues).
 
-The user uploading the CSV file will be set as the author of the imported issues.
+The user uploading the CSV file is set as the author of the imported issues.
 
-NOTE: **Note:** A permission level of [Developer](../../permissions.md), or higher, is required
+NOTE:
+A permission level of [Developer](../../permissions.md), or higher, is required
 to import issues.
 
 ## Prepare for the import
@@ -31,9 +39,9 @@ to you once the import is complete.
 
 When importing issues from a CSV file, it must be formatted in a certain way:
 
-- **header row:** CSV files must contain a header row where the first column header
-  is `title` and the second is `description`. If additional columns are present, they
-  will be ignored.
+- **header row:** CSV files must include the following headers:
+`title` and `description`. The case of the headers does not matter.
+- **columns:** Data from columns beyond `title` and `description` are not imported.
 - **separators:** The column separator is automatically detected from the header row.
   Supported separator characters are: commas (`,`), semicolons (`;`), and tabs (`\t`).
   The row separator can be either `CRLF` or `LF`.
@@ -44,9 +52,12 @@ When importing issues from a CSV file, it must be formatted in a certain way:
 - **data rows:** After the header row, succeeding rows must follow the same column
   order. The issue title is required while the description is optional.
 
+If you have special characters _within_ a field, (such as `\n` or `,`),
+wrap the characters in double quotes.
+
 Sample CSV data:
 
-```csv
+```plaintext
 title,description
 My Issue Title,My Issue Description
 Another Title,"A description, with a comma"

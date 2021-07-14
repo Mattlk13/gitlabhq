@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 class Profiles::KeysController < Profiles::ApplicationController
-  skip_before_action :authenticate_user!, only: [:get_keys]
+  feature_category :users
 
   def index
     @keys = current_user.keys.order_id_desc
@@ -33,28 +33,9 @@ class Profiles::KeysController < Profiles::ApplicationController
     end
   end
 
-  # Get all keys of a user(params[:username]) in a text format
-  # Helpful for sysadmins to put in respective servers
-  def get_keys
-    if params[:username].present?
-      begin
-        user = UserFinder.new(params[:username]).find_by_username
-        if user.present?
-          render plain: user.all_ssh_keys.join("\n")
-        else
-          return render_404
-        end
-      rescue => e
-        render html: e.message
-      end
-    else
-      return render_404
-    end
-  end
-
   private
 
   def key_params
-    params.require(:key).permit(:title, :key)
+    params.require(:key).permit(:title, :key, :expires_at)
   end
 end

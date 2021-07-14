@@ -1,13 +1,13 @@
 # frozen_string_literal: true
 
 module Mattermost
-  class NoSessionError < Mattermost::Error
+  class NoSessionError < ::Mattermost::Error
     def message
       'No session could be set up, is Mattermost configured with Single Sign On?'
     end
   end
 
-  ConnectionError = Class.new(Mattermost::Error)
+  ConnectionError = Class.new(::Mattermost::Error)
 
   # This class' prime objective is to obtain a session token on a Mattermost
   # instance with SSO configured where this GitLab instance is the provider.
@@ -41,8 +41,8 @@ module Mattermost
         begin
           yield self
         rescue Errno::ECONNREFUSED => e
-          Rails.logger.error(e.message + "\n" + e.backtrace.join("\n")) # rubocop:disable Gitlab/RailsLogger
-          raise Mattermost::NoSessionError
+          Gitlab::AppLogger.error(e.message + "\n" + e.backtrace.join("\n"))
+          raise ::Mattermost::NoSessionError
         ensure
           destroy
         end
@@ -52,7 +52,7 @@ module Mattermost
     # Next methods are needed for Doorkeeper
     def pre_auth
       @pre_auth ||= Doorkeeper::OAuth::PreAuthorization.new(
-        Doorkeeper.configuration, server.client_via_uid, params)
+        Doorkeeper.configuration, params)
     end
 
     def authorization
@@ -100,11 +100,11 @@ module Mattermost
     end
 
     def create
-      raise Mattermost::NoSessionError unless oauth_uri
-      raise Mattermost::NoSessionError unless token_uri
+      raise ::Mattermost::NoSessionError unless oauth_uri
+      raise ::Mattermost::NoSessionError unless token_uri
 
       @token = request_token
-      raise Mattermost::NoSessionError unless @token
+      raise ::Mattermost::NoSessionError unless @token
 
       @headers = {
         Authorization: "Bearer #{@token}"
@@ -174,9 +174,9 @@ module Mattermost
     def handle_exceptions
       yield
     rescue Gitlab::HTTP::Error => e
-      raise Mattermost::ConnectionError.new(e.message)
+      raise ::Mattermost::ConnectionError, e.message
     rescue Errno::ECONNREFUSED => e
-      raise Mattermost::ConnectionError.new(e.message)
+      raise ::Mattermost::ConnectionError, e.message
     end
 
     def parse_cookie(response)

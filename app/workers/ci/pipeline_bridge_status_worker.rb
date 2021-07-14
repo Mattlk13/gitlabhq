@@ -5,7 +5,8 @@ module Ci
     include ::ApplicationWorker
     include ::PipelineQueue
 
-    latency_sensitive_worker!
+    sidekiq_options retry: 3
+    urgency :high
     worker_resource_boundary :cpu
 
     def perform(pipeline_id)

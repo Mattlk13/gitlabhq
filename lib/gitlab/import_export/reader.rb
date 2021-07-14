@@ -17,8 +17,16 @@ module Gitlab
         tree_by_key(:project)
       end
 
+      def project_relation_names
+        attributes_finder.find_relations_tree(:project).keys
+      end
+
       def group_tree
         tree_by_key(:group)
+      end
+
+      def group_relation_names
+        attributes_finder.find_relations_tree(:group).keys
       end
 
       def group_members_tree
@@ -27,7 +35,7 @@ module Gitlab
 
       def tree_by_key(key)
         attributes_finder.find_root(key)
-      rescue => e
+      rescue StandardError => e
         @shared.error(e)
         false
       end

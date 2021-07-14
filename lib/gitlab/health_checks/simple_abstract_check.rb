@@ -16,7 +16,7 @@ module Gitlab
         else
           HealthChecks::Result.new(name, false, "unexpected #{human_name} check result: #{check_result}")
         end
-      rescue => e
+      rescue StandardError => e
         HealthChecks::Result.new(name, false, "unexpected #{human_name} check result: #{e}")
       end
 
@@ -24,7 +24,7 @@ module Gitlab
         result, elapsed = with_timing(&method(:check))
         return if result.nil?
 
-        Rails.logger.error("#{human_name} check returned unexpected result #{result}") unless successful?(result) # rubocop:disable Gitlab/RailsLogger
+        Gitlab::AppLogger.error("#{human_name} check returned unexpected result #{result}") unless successful?(result)
         [
           metric("#{metric_prefix}_timeout", result.is_a?(Timeout::Error) ? 1 : 0),
           metric("#{metric_prefix}_success", successful?(result) ? 1 : 0),

@@ -2,7 +2,7 @@
 
 require 'spec_helper'
 
-describe ProjectFeature do
+RSpec.describe ProjectFeature do
   using RSpec::Parameterized::TableSyntax
 
   let(:project) { create(:project) }
@@ -18,92 +18,9 @@ describe ProjectFeature do
     end
   end
 
-  describe '.quoted_access_level_column' do
-    it 'returns the table name and quoted column name for a feature' do
-      expected = '"project_features"."issues_access_level"'
-
-      expect(described_class.quoted_access_level_column(:issues)).to eq(expected)
-    end
-  end
-
-  describe '#feature_available?' do
-    let(:features) { %w(issues wiki builds merge_requests snippets repository pages) }
-
-    context 'when features are disabled' do
-      it "returns false" do
-        features.each do |feature|
-          project.project_feature.update_attribute("#{feature}_access_level".to_sym, ProjectFeature::DISABLED)
-          expect(project.feature_available?(:issues, user)).to eq(false)
-        end
-      end
-    end
-
-    context 'when features are enabled only for team members' do
-      it "returns false when user is not a team member" do
-        features.each do |feature|
-          project.project_feature.update_attribute("#{feature}_access_level".to_sym, ProjectFeature::PRIVATE)
-          expect(project.feature_available?(:issues, user)).to eq(false)
-        end
-      end
-
-      it "returns true when user is a team member" do
-        project.add_developer(user)
-
-        features.each do |feature|
-          project.project_feature.update_attribute("#{feature}_access_level".to_sym, ProjectFeature::PRIVATE)
-          expect(project.feature_available?(:issues, user)).to eq(true)
-        end
-      end
-
-      it "returns true when user is a member of project group" do
-        group = create(:group)
-        project = create(:project, namespace: group)
-        group.add_developer(user)
-
-        features.each do |feature|
-          project.project_feature.update_attribute("#{feature}_access_level".to_sym, ProjectFeature::PRIVATE)
-          expect(project.feature_available?(:issues, user)).to eq(true)
-        end
-      end
-
-      it "returns true if user is an admin" do
-        user.update_attribute(:admin, true)
-
-        features.each do |feature|
-          project.project_feature.update_attribute("#{feature}_access_level".to_sym, ProjectFeature::PRIVATE)
-          expect(project.feature_available?(:issues, user)).to eq(true)
-        end
-      end
-    end
-
-    context 'when feature is enabled for everyone' do
-      it "returns true" do
-        features.each do |feature|
-          expect(project.feature_available?(:issues, user)).to eq(true)
-        end
-      end
-    end
-
-    context 'when feature is disabled by a feature flag' do
-      it 'returns false' do
-        stub_feature_flags(issues: false)
-
-        expect(project.feature_available?(:issues, user)).to eq(false)
-      end
-    end
-
-    context 'when feature is enabled by a feature flag' do
-      it 'returns true' do
-        stub_feature_flags(issues: true)
-
-        expect(project.feature_available?(:issues, user)).to eq(true)
-      end
-    end
-  end
-
   context 'repository related features' do
     before do
-      project.project_feature.update(
+      project.project_feature.update!(
         merge_requests_access_level: ProjectFeature::DISABLED,
         builds_access_level: ProjectFeature::DISABLED,
         repository_access_level: ProjectFeature::PRIVATE
@@ -117,13 +34,13 @@ describe ProjectFeature do
       features.each do |feature|
         field = "#{feature}_access_level".to_sym
         project_feature.update_attribute(field, ProjectFeature::ENABLED)
-        expect(project_feature.valid?).to be_falsy
+        expect(project_feature.valid?).to be_falsy, "#{field} failed"
       end
     end
   end
 
   context 'public features' do
-    features = %w(issues wiki builds merge_requests snippets repository)
+    features = ProjectFeature::FEATURES - %i(pages)
 
     features.each do |feature|
       it "does not allow public access level for #{feature}" do
@@ -131,31 +48,7 @@ describe ProjectFeature do
         field = "#{feature}_access_level".to_sym
         project_feature.update_attribute(field, ProjectFeature::PUBLIC)
 
-        expect(project_feature.valid?).to be_falsy
-      end
-    end
-  end
-
-  describe '#*_enabled?' do
-    let(:features) { %w(wiki builds merge_requests) }
-
-    it "returns false when feature is disabled" do
-      features.each do |feature|
-        project.project_feature.update_attribute("#{feature}_access_level".to_sym, ProjectFeature::DISABLED)
-        expect(project.public_send("#{feature}_enabled?")).to eq(false)
-      end
-    end
-
-    it "returns true when feature is enabled only for team members" do
-      features.each do |feature|
-        project.project_feature.update_attribute("#{feature}_access_level".to_sym, ProjectFeature::PRIVATE)
-        expect(project.public_send("#{feature}_enabled?")).to eq(true)
-      end
-    end
-
-    it "returns true when feature is enabled for everyone" do
-      features.each do |feature|
-        expect(project.public_send("#{feature}_enabled?")).to eq(true)
+        expect(project_feature.valid?).to be_falsy, "#{field} failed"
       end
     end
   end
@@ -198,7 +91,7 @@ describe ProjectFeature do
   end
 
   describe '#public_pages?' do
-    it 'returns true if Pages access controll is not enabled' do
+    it 'returns true if Pages access control is not enabled' do
       stub_config(pages: { access_control: false })
 
       project_feature = described_class.new(pages_access_level: described_class::PRIVATE)
@@ -281,7 +174,7 @@ describe ProjectFeature do
     it 'raises error if feature is invalid' do
       expect do
         described_class.required_minimum_access_level(:foos)
-      end.to raise_error
+      end.to raise_error(ArgumentError)
     end
   end
 
@@ -292,6 +185,32 @@ describe ProjectFeature do
 
     it 'returns normal permission for issues' do
       expect(described_class.required_minimum_access_level_for_private_project(:issues)).to eq(Gitlab::Access::GUEST)
+    end
+  end
+
+  describe 'container_registry_access_level' do
+    context 'when the project is created with container_registry_enabled false' do
+      it 'creates project with DISABLED container_registry_access_level' do
+        project = create(:project, container_registry_enabled: false)
+
+        expect(project.project_feature.container_registry_access_level).to eq(described_class::DISABLED)
+      end
+    end
+
+    context 'when the project is created with container_registry_enabled true' do
+      it 'creates project with ENABLED container_registry_access_level' do
+        project = create(:project, container_registry_enabled: true)
+
+        expect(project.project_feature.container_registry_access_level).to eq(described_class::ENABLED)
+      end
+    end
+
+    context 'when the project is created with container_registry_enabled nil' do
+      it 'creates project with DISABLED container_registry_access_level' do
+        project = create(:project, container_registry_enabled: nil)
+
+        expect(project.project_feature.container_registry_access_level).to eq(described_class::DISABLED)
+      end
     end
   end
 end

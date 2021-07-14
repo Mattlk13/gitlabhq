@@ -2,8 +2,9 @@
 
 require 'spec_helper'
 
-describe LfsFileLock do
+RSpec.describe LfsFileLock do
   let_it_be(:lfs_file_lock, reload: true) { create(:lfs_file_lock) }
+
   subject { lfs_file_lock }
 
   it { is_expected.to belong_to(:project) }

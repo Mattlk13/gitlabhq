@@ -1,5 +1,6 @@
 <script>
 import { GlButton, GlLink } from '@gitlab/ui';
+import { mapState } from 'vuex';
 import { s__ } from '../../locale';
 
 export default {
@@ -8,20 +9,13 @@ export default {
     GlLink,
   },
   props: {
-    clustersPath: {
-      type: String,
-      required: true,
-    },
-    helpPath: {
-      type: String,
-      required: true,
-    },
     missingData: {
       type: Boolean,
       required: true,
     },
   },
   computed: {
+    ...mapState(['clustersPath', 'helpPath']),
     missingStateClass() {
       return this.missingData ? 'missing-prometheus-state' : 'empty-prometheus-state';
     },
@@ -32,7 +26,7 @@ export default {
       return this.missingData
         ? s__(`ServerlessDetails|Invocation metrics loading or not available at this time.`)
         : s__(
-            `ServerlessDetails|Function invocation metrics require Prometheus to be installed first.`,
+            `ServerlessDetails|Function invocation metrics require the Prometheus cluster integration.`,
           );
     },
   },
@@ -53,8 +47,8 @@ export default {
         </p>
 
         <div v-if="!missingData" class="text-left">
-          <gl-button :href="clustersPath" variant="success">
-            {{ s__('ServerlessDetails|Install Prometheus') }}
+          <gl-button :href="clustersPath" variant="success" category="primary">
+            {{ s__('ServerlessDetails|Configure cluster.') }}
           </gl-button>
         </div>
       </div>

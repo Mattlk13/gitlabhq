@@ -1,8 +1,10 @@
 # frozen_string_literal: true
 
 module API
-  class Features < Grape::API
+  class Features < ::API::Base
     before { authenticated_as_admin! }
+
+    feature_category :feature_flags
 
     helpers do
       def gate_value(params)
@@ -13,6 +15,15 @@ module API
           false
         else
           params[:value].to_i
+        end
+      end
+
+      def gate_key(params)
+        case params[:key]
+        when 'percentage_of_actors'
+          :percentage_of_actors
+        else
+          :percentage_of_time
         end
       end
 
@@ -35,47 +46,78 @@ module API
         present features, with: Entities::Feature, current_user: current_user
       end
 
+      desc 'Get a list of all feature definitions' do
+        success Entities::Feature::Definition
+      end
+      get :definitions do
+        definitions = ::Feature::Definition.definitions.values.map(&:to_h)
+
+        present definitions, with: Entities::Feature::Definition, current_user: current_user
+      end
+
       desc 'Set the gate value for the given feature' do
         success Entities::Feature
       end
       params do
         requires :value, type: String, desc: '`true` or `false` to enable/disable, an integer for percentage of time'
+        optional :key, type: String, desc: '`percentage_of_actors` or the default `percentage_of_time`'
         optional :feature_group, type: String, desc: 'A Feature group name'
         optional :user, type: String, desc: 'A GitLab username'
         optional :group, type: String, desc: "A GitLab group's path, such as 'gitlab-org'"
         optional :project, type: String, desc: 'A projects path, like gitlab-org/gitlab-ce'
+        optional :force, type: Boolean, desc: 'Skip feature flag validation checks, ie. YAML definition'
+
+        mutually_exclusive :key, :feature_group
+        mutually_exclusive :key, :user
+        mutually_exclusive :key, :group
+        mutually_exclusive :key, :project
       end
       post ':name' do
-        feature = Feature.get(params[:name])
+        validate_feature_flag_name!(params[:name]) unless params[:force]
+
         targets = gate_targets(params)
         value = gate_value(params)
+        key = gate_key(params)
 
         case value
         when true
           if gate_specified?(params)
-            targets.each { |target| feature.enable(target) }
+            targets.each { |target| Feature.enable(params[:name], target) }
           else
-            feature.enable
+            Feature.enable(params[:name])
           end
         when false
           if gate_specified?(params)
-            targets.each { |target| feature.disable(target) }
+            targets.each { |target| Feature.disable(params[:name], target) }
           else
-            feature.disable
+            Feature.disable(params[:name])
           end
         else
-          feature.enable_percentage_of_time(value)
+          if key == :percentage_of_actors
+            Feature.enable_percentage_of_actors(params[:name], value)
+          else
+            Feature.enable_percentage_of_time(params[:name], value)
+          end
         end
 
-        present feature, with: Entities::Feature, current_user: current_user
+        present Feature.get(params[:name]), # rubocop:disable Gitlab/AvoidFeatureGet
+          with: Entities::Feature, current_user: current_user
       end
 
       desc 'Remove the gate value for the given feature'
       delete ':name' do
-        Feature.get(params[:name]).remove
+        Feature.remove(params[:name])
 
         no_content!
       end
     end
+
+    helpers do
+      def validate_feature_flag_name!(name)
+        # no-op
+      end
+    end
   end
 end
+
+API::Features.prepend_mod_with('API::Features')

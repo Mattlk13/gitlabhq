@@ -21,17 +21,35 @@ module Projects
           project.storage_version = nil
         end
 
-        project.repository_read_only = false
-        project.save!(validate: false)
-
-        if result && block_given?
-          yield
+        project.transaction do
+          project.save!(validate: false)
+          project.set_repository_writable!
         end
 
         result
+      rescue Gitlab::Git::CommandError => e
+        logger.error("Repository #{project.full_path} failed to upgrade (PROJECT_ID=#{project.id}). Git operation failed: #{e.inspect}")
+
+        rollback_migration!
+
+        false
+      rescue OpenSSL::Cipher::CipherError => e
+        logger.error("Repository #{project.full_path} failed to upgrade (PROJECT_ID=#{project.id}). There is a problem with encrypted attributes: #{e.inspect}")
+
+        rollback_migration!
+
+        false
+      end
+
+      private
+
+      def rollback_migration!
+        rollback_folder_move
+        project.storage_version = nil
+        project.set_repository_writable!
       end
     end
   end
 end
 
-Projects::HashedStorage::MigrateRepositoryService.prepend_if_ee('EE::Projects::HashedStorage::MigrateRepositoryService')
+Projects::HashedStorage::MigrateRepositoryService.prepend_mod_with('Projects::HashedStorage::MigrateRepositoryService')

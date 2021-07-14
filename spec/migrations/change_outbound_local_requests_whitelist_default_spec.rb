@@ -1,9 +1,9 @@
 # frozen_string_literal: true
 
 require 'spec_helper'
-require Rails.root.join('db', 'migrate', '20190725012225_change_outbound_local_requests_whitelist_default.rb')
+require_migration!
 
-describe ChangeOutboundLocalRequestsWhitelistDefault, :migration do
+RSpec.describe ChangeOutboundLocalRequestsWhitelistDefault do
   let(:application_settings) { table(:application_settings) }
 
   it 'defaults to empty array' do

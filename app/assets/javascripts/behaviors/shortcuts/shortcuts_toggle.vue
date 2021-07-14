@@ -1,11 +1,14 @@
 <script>
-import { GlToggle, GlSprintf } from '@gitlab/ui';
+import { GlToggle } from '@gitlab/ui';
 import AccessorUtilities from '~/lib/utils/accessor';
+import { __ } from '~/locale';
 import { disableShortcuts, enableShortcuts, shouldDisableShortcuts } from './shortcuts_toggle';
 
 export default {
+  i18n: {
+    toggleLabel: __('Toggle shortcuts'),
+  },
   components: {
-    GlSprintf,
     GlToggle,
   },
   data() {
@@ -28,33 +31,12 @@ export default {
 </script>
 
 <template>
-  <div v-if="localStorageUsable" class="d-inline-flex align-items-center js-toggle-shortcuts">
+  <div v-if="localStorageUsable" class="js-toggle-shortcuts">
     <gl-toggle
       v-model="shortcutsEnabled"
-      aria-describedby="shortcutsToggle"
-      class="prepend-left-10 mb-0"
-      label-position="right"
+      :label="$options.i18n.toggleLabel"
+      label-position="left"
       @change="onChange"
-    >
-      <template #labelOn>
-        <gl-sprintf
-          :message="__('%{screenreaderOnlyStart}Keyboard shorcuts%{screenreaderOnlyEnd} Enabled')"
-        >
-          <template #screenreaderOnly="{ content }">
-            <span class="sr-only">{{ content }}</span>
-          </template>
-        </gl-sprintf>
-      </template>
-      <template #labelOff>
-        <gl-sprintf
-          :message="__('%{screenreaderOnlyStart}Keyboard shorcuts%{screenreaderOnlyEnd} Disabled')"
-        >
-          <template #screenreaderOnly="{ content }">
-            <span class="sr-only">{{ content }}</span>
-          </template>
-        </gl-sprintf>
-      </template>
-    </gl-toggle>
-    <div id="shortcutsToggle" class="sr-only">{{ __('Enable or disable keyboard shortcuts') }}</div>
+    />
   </div>
 </template>

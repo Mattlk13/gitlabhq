@@ -1,11 +1,14 @@
+import Cookies from 'js-cookie';
 import Vue from 'vue';
 import { mapActions, mapState, mapGetters } from 'vuex';
 import { parseBoolean } from '~/lib/utils/common_utils';
-import { getParameterValues } from '~/lib/utils/url_utility';
 import FindFile from '~/vue_shared/components/file_finder/index.vue';
 import eventHub from '../notes/event_hub';
 import diffsApp from './components/app.vue';
-import { TREE_LIST_STORAGE_KEY } from './constants';
+
+import { TREE_LIST_STORAGE_KEY, DIFF_WHITESPACE_COOKIE_NAME } from './constants';
+import { getReviewsForMergeRequest } from './utils/file_reviews';
+import { getDerivedMergeRequestInformation } from './utils/merge_request';
 
 export default function initDiffsApp(store) {
   const fileFinderEl = document.getElementById('js-diff-file-finder');
@@ -47,9 +50,6 @@ export default function initDiffsApp(store) {
             click: this.openFile,
           },
           class: ['diff-file-finder'],
-          style: {
-            display: this.fileFinderVisible ? '' : 'none',
-          },
         });
       },
     });
@@ -69,6 +69,9 @@ export default function initDiffsApp(store) {
         endpoint: dataset.endpoint,
         endpointMetadata: dataset.endpointMetadata || '',
         endpointBatch: dataset.endpointBatch || '',
+        endpointCoverage: dataset.endpointCoverage || '',
+        endpointCodequality: dataset.endpointCodequality || '',
+        endpointUpdateUser: dataset.updateCurrentUserPath,
         projectPath: dataset.projectPath,
         helpPagePath: dataset.helpPagePath,
         currentUser: JSON.parse(dataset.currentUserData) || {},
@@ -77,33 +80,54 @@ export default function initDiffsApp(store) {
         dismissEndpoint: dataset.dismissEndpoint,
         showSuggestPopover: parseBoolean(dataset.showSuggestPopover),
         showWhitespaceDefault: parseBoolean(dataset.showWhitespaceDefault),
+        viewDiffsFileByFile: parseBoolean(dataset.fileByFileDefault),
+        defaultSuggestionCommitMessage: dataset.defaultSuggestionCommitMessage,
       };
     },
     computed: {
       ...mapState({
-        activeTab: state => state.page.activeTab,
+        activeTab: (state) => state.page.activeTab,
       }),
     },
     created() {
-      let hideWhitespace = getParameterValues('w')[0];
       const treeListStored = localStorage.getItem(TREE_LIST_STORAGE_KEY);
       const renderTreeList = treeListStored !== null ? parseBoolean(treeListStored) : true;
 
       this.setRenderTreeList(renderTreeList);
-      if (!hideWhitespace) {
-        hideWhitespace = this.showWhitespaceDefault ? '0' : '1';
+
+      // NOTE: A "true" or "checked" value for `showWhitespace` is '0' not '1'.
+      // Check for cookie and save that setting for future use.
+      // Then delete the cookie as we are phasing it out and using the database as SSOT.
+      // NOTE: This can/should be removed later
+      if (Cookies.get(DIFF_WHITESPACE_COOKIE_NAME)) {
+        const hideWhitespace = Cookies.get(DIFF_WHITESPACE_COOKIE_NAME);
+        this.setShowWhitespace({
+          url: this.endpointUpdateUser,
+          showWhitespace: hideWhitespace !== '1',
+        });
+        Cookies.remove(DIFF_WHITESPACE_COOKIE_NAME);
+      } else {
+        // This is only to set the the user preference in Vuex for use later
+        this.setShowWhitespace({
+          showWhitespace: this.showWhitespaceDefault,
+          updateDatabase: false,
+        });
       }
-      this.setShowWhitespace({ showWhitespace: hideWhitespace !== '1' });
     },
     methods: {
       ...mapActions('diffs', ['setRenderTreeList', 'setShowWhitespace']),
     },
     render(createElement) {
+      const { mrPath } = getDerivedMergeRequestInformation({ endpoint: this.endpoint });
+
       return createElement('diffs-app', {
         props: {
           endpoint: this.endpoint,
           endpointMetadata: this.endpointMetadata,
           endpointBatch: this.endpointBatch,
+          endpointCoverage: this.endpointCoverage,
+          endpointCodequality: this.endpointCodequality,
+          endpointUpdateUser: this.endpointUpdateUser,
           currentUser: this.currentUser,
           projectPath: this.projectPath,
           helpPagePath: this.helpPagePath,
@@ -112,7 +136,9 @@ export default function initDiffsApp(store) {
           isFluidLayout: this.isFluidLayout,
           dismissEndpoint: this.dismissEndpoint,
           showSuggestPopover: this.showSuggestPopover,
-          showWhitespaceDefault: this.showWhitespaceDefault,
+          fileByFileUserPreference: this.viewDiffsFileByFile,
+          defaultSuggestionCommitMessage: this.defaultSuggestionCommitMessage,
+          rehydratedMrReviews: getReviewsForMergeRequest(mrPath),
         },
       });
     },

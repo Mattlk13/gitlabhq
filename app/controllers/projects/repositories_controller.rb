@@ -4,17 +4,23 @@ class Projects::RepositoriesController < Projects::ApplicationController
   include ExtractsPath
   include StaticObjectExternalStorage
   include Gitlab::RateLimitHelpers
+  include HotlinkInterceptor
 
   prepend_before_action(only: [:archive]) { authenticate_sessionless_user!(:archive) }
+
+  skip_before_action :default_cache_headers, only: :archive
 
   # Authorize
   before_action :require_non_empty_project, except: :create
   before_action :archive_rate_limit!, only: :archive
+  before_action :intercept_hotlinking!, only: :archive
   before_action :assign_archive_vars, only: :archive
   before_action :assign_append_sha, only: :archive
   before_action :authorize_download_code!
   before_action :authorize_admin_project!, only: :create
   before_action :redirect_to_external_storage, only: :archive, if: :static_objects_external_storage_enabled?
+
+  feature_category :source_code_management
 
   def create
     @project.create_repository
@@ -29,7 +35,7 @@ class Projects::RepositoriesController < Projects::ApplicationController
     return if archive_not_modified?
 
     send_git_archive @repository, **repo_params
-  rescue => ex
+  rescue StandardError => ex
     logger.error("#{self.class.name}: #{ex}")
     git_not_found!
   end
@@ -47,7 +53,7 @@ class Projects::RepositoriesController < Projects::ApplicationController
   end
 
   def set_cache_headers
-    expires_in cache_max_age(archive_metadata['CommitId']), public: project.public?
+    expires_in cache_max_age(archive_metadata['CommitId']), public: Guest.can?(:download_code, project)
     fresh_when(etag: archive_metadata['ArchivePath'])
   end
 
@@ -121,4 +127,4 @@ class Projects::RepositoriesController < Projects::ApplicationController
   end
 end
 
-Projects::RepositoriesController.prepend_if_ee('EE::Projects::RepositoriesController')
+Projects::RepositoriesController.prepend_mod_with('Projects::RepositoriesController')

@@ -2,10 +2,10 @@
 
 require 'spec_helper'
 
-describe 'Dashboard Projects' do
-  let(:user) { create(:user) }
-  let(:project) { create(:project, :repository, name: 'awesome stuff') }
-  let(:project2) { create(:project, :public, name: 'Community project') }
+RSpec.describe 'Dashboard Projects' do
+  let_it_be(:user) { create(:user) }
+  let_it_be(:project, reload: true) { create(:project, :repository) }
+  let_it_be(:project2) { create(:project, :public) }
 
   before do
     project.add_developer(user)
@@ -15,19 +15,6 @@ describe 'Dashboard Projects' do
   it_behaves_like "an autodiscoverable RSS feed with current_user's feed token" do
     before do
       visit dashboard_projects_path
-    end
-  end
-
-  it 'shows the project the user in a member of in the list' do
-    visit dashboard_projects_path
-    expect(page).to have_content('awesome stuff')
-  end
-
-  it 'shows "New project" button' do
-    visit dashboard_projects_path
-
-    page.within '#content-body' do
-      expect(page).to have_link('New project')
     end
   end
 
@@ -48,7 +35,7 @@ describe 'Dashboard Projects' do
           expect(page).to have_content('Developer')
         end
 
-        project.members.last.update(access_level: 40)
+        project.members.last.update!(access_level: 40)
 
         visit dashboard_projects_path
 
@@ -125,7 +112,7 @@ describe 'Dashboard Projects' do
   end
 
   context 'when on Starred projects tab', :js do
-    it 'shows the empty state when there are no starred projects' do
+    it 'shows the empty state when there are no starred projects', quarantine: 'https://gitlab.com/gitlab-org/gitlab/-/issues/222357' do
       visit(starred_dashboard_projects_path)
 
       element = page.find('.row.empty-state')
@@ -149,6 +136,61 @@ describe 'Dashboard Projects' do
       visit(starred_dashboard_projects_path)
 
       expect(page).not_to have_content '.filtered-search-nav'
+    end
+  end
+
+  describe 'with a pipeline', :clean_gitlab_redis_shared_state do
+    let_it_be(:pipeline) { create(:ci_pipeline, project: project, sha: project.commit.sha, ref: project.default_branch) }
+
+    before do
+      # Since the cache isn't updated when a new pipeline is created
+      # we need the pipeline to advance in the pipeline since the cache was created
+      # by visiting the login page.
+      pipeline.succeed
+    end
+
+    it 'shows that the last pipeline passed' do
+      visit dashboard_projects_path
+
+      page.within('.controls') do
+        expect(page).to have_xpath("//a[@href='#{pipelines_project_commit_path(project, project.commit, ref: pipeline.ref)}']")
+        expect(page).to have_css('.ci-status-link')
+        expect(page).to have_css('.ci-status-icon-success')
+        expect(page).to have_link('Pipeline: passed')
+      end
+    end
+
+    shared_examples 'hidden pipeline status' do
+      it 'does not show the pipeline status' do
+        visit dashboard_projects_path
+
+        page.within('.controls') do
+          expect(page).not_to have_xpath("//a[@href='#{pipelines_project_commit_path(project, project.commit, ref: pipeline.ref)}']")
+          expect(page).not_to have_css('.ci-status-link')
+          expect(page).not_to have_css('.ci-status-icon-success')
+          expect(page).not_to have_link('Pipeline: passed')
+        end
+      end
+    end
+
+    context 'guest user of project and project has private pipelines' do
+      let(:guest_user) { create(:user) }
+
+      before do
+        project.update!(public_builds: false)
+        project.add_guest(guest_user)
+        sign_in(guest_user)
+      end
+
+      it_behaves_like 'hidden pipeline status'
+    end
+
+    context "when last_pipeline is missing" do
+      before do
+        project.last_pipeline.delete
+      end
+
+      it_behaves_like 'hidden pipeline status'
     end
   end
 
@@ -189,13 +231,15 @@ describe 'Dashboard Projects' do
 
     ActiveRecord::QueryRecorder.new { visit dashboard_projects_path }.count
 
-    # There are three known N+1 queries:
+    # There are seven known N+1 queries: https://gitlab.com/gitlab-org/gitlab/-/issues/214037
     # 1. Project#open_issues_count
     # 2. Project#open_merge_requests_count
     # 3. Project#forks_count
-    #
-    # In addition, ProjectsHelper#load_pipeline_status also adds an
-    # additional query.
-    expect { visit dashboard_projects_path }.not_to exceed_query_limit(control_count + 4)
+    # 4. ProjectsHelper#load_pipeline_status
+    # 5. RendersMemberAccess#preload_max_member_access_for_collection
+    # 6. User#max_member_access_for_project_ids
+    # 7. Ci::CommitWithPipeline#last_pipeline
+
+    expect { visit dashboard_projects_path }.not_to exceed_query_limit(control_count + 7)
   end
 end

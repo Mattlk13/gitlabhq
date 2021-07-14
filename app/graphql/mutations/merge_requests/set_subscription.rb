@@ -2,24 +2,31 @@
 
 module Mutations
   module MergeRequests
-    class SetSubscription < Base
+    class SetSubscription < BaseMutation
       graphql_name 'MergeRequestSetSubscription'
 
-      argument :subscribed_state,
-               GraphQL::BOOLEAN_TYPE,
+      include ResolvesSubscription
+      include Mutations::ResolvesIssuable
+
+      argument :project_path, GraphQL::ID_TYPE,
                required: true,
-               description: 'The desired state of the subscription'
+               description: "The project the merge request to mutate is in."
 
-      def resolve(project_path:, iid:, subscribed_state:)
-        merge_request = authorized_find!(project_path: project_path, iid: iid)
-        project = merge_request.project
+      argument :iid, GraphQL::STRING_TYPE,
+               required: true,
+               description: "The IID of the merge request to mutate."
 
-        merge_request.set_subscription(current_user, subscribed_state, project)
+      field :merge_request,
+            Types::MergeRequestType,
+            null: true,
+            description: "The merge request after mutation."
 
-        {
-          merge_request: merge_request,
-          errors: merge_request.errors.full_messages
-        }
+      authorize :update_subscription
+
+      private
+
+      def find_object(project_path:, iid:)
+        resolve_issuable(type: :merge_request, parent_path: project_path, iid: iid)
       end
     end
   end

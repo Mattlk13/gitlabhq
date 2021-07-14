@@ -34,8 +34,8 @@ module Storage
         begin
           gitlab_shell.mv_repository(repository_storage, "#{old_full_path}.wiki", "#{new_full_path}.wiki")
           return true
-        rescue => e
-          Rails.logger.error "Exception renaming #{old_full_path} -> #{new_full_path}: #{e}" # rubocop:disable Gitlab/RailsLogger
+        rescue StandardError => e
+          Gitlab::AppLogger.error("Exception renaming #{old_full_path} -> #{new_full_path}: #{e}")
           # Returning false does not rollback after_* transaction but gives
           # us information about failing some of tasks
           return false

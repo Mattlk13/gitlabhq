@@ -2,9 +2,9 @@
 
 require 'spec_helper'
 
-require Rails.root.join('db', 'migrate', '20200212014653_rename_security_dashboard_feature_flag_to_instance_security_dashboard.rb')
+require_migration!
 
-describe RenameSecurityDashboardFeatureFlagToInstanceSecurityDashboard, :migration do
+RSpec.describe RenameSecurityDashboardFeatureFlagToInstanceSecurityDashboard do
   let(:feature_gates) { table(:feature_gates) }
 
   subject(:migration) { described_class.new }

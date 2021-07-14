@@ -9,6 +9,9 @@ class Projects::BlobController < Projects::ApplicationController
   include ActionView::Helpers::SanitizeHelper
   include RedirectsForMissingPathOnTree
   include SourcegraphDecorator
+  include DiffHelper
+  include RedisTracking
+  extend ::Gitlab::Utils::Override
 
   prepend_before_action :authenticate_user!, only: [:edit]
 
@@ -28,10 +31,15 @@ class Projects::BlobController < Projects::ApplicationController
   before_action :editor_variables, except: [:show, :preview, :diff]
   before_action :validate_diff_params, only: :diff
   before_action :set_last_commit_sha, only: [:edit, :update]
+  before_action :track_experiment, only: :create
 
-  before_action only: :show do
-    push_frontend_feature_flag(:code_navigation, @project)
-    push_frontend_feature_flag(:suggest_pipeline) if experiment_enabled?(:suggest_pipeline)
+  track_redis_hll_event :create, :update, name: 'g_edit_by_sfe'
+
+  feature_category :source_code_management
+
+  before_action do
+    push_frontend_feature_flag(:refactor_blob_viewer, @project, default_enabled: :yaml)
+    push_frontend_feature_flag(:consolidated_edit_button, @project, default_enabled: :yaml)
   end
 
   def new
@@ -40,7 +48,7 @@ class Projects::BlobController < Projects::ApplicationController
 
   def create
     create_commit(Files::CreateService, success_notice: _("The file has been successfully created."),
-                                        success_path: -> { project_blob_path(@project, File.join(@branch_name, @file_path)) },
+                                        success_path: -> { create_success_path },
                                         failure_view: :new,
                                         failure_path: project_new_blob_path(@project, @ref))
   end
@@ -71,6 +79,7 @@ class Projects::BlobController < Projects::ApplicationController
 
   def update
     @path = params[:file_path] if params[:file_path].present?
+
     create_commit(Files::UpdateService, success_path: -> { after_edit_path },
                                         failure_view: :edit,
                                         failure_path: project_blob_path(@project, @id))
@@ -84,7 +93,7 @@ class Projects::BlobController < Projects::ApplicationController
     @blob.load_all_data!
     diffy = Diffy::Diff.new(@blob.data, @content, diff: '-U 3', include_diff_info: true)
     diff_lines = diffy.diff.scan(/.*\n/)[2..-1]
-    diff_lines = Gitlab::Diff::Parser.new.parse(diff_lines)
+    diff_lines = Gitlab::Diff::Parser.new.parse(diff_lines).to_a
     @diff_lines = Gitlab::Diff::Highlight.new(diff_lines, repository: @repository).highlight
 
     render layout: false
@@ -93,13 +102,10 @@ class Projects::BlobController < Projects::ApplicationController
   def destroy
     create_commit(Files::DeleteService, success_notice: _("The file has been successfully deleted."),
                                         success_path: -> { after_delete_path },
-                                        failure_view: :show,
                                         failure_path: project_blob_path(@project, @id))
   end
 
   def diff
-    apply_diff_view_cookie!
-
     @form = Blobs::UnfoldPresenter.new(blob, diff_params)
 
     # keep only json rendering when
@@ -115,6 +121,8 @@ class Projects::BlobController < Projects::ApplicationController
 
   private
 
+  attr_reader :branch_name
+
   def blob
     @blob ||= @repository.blob_at(@commit.id, @path)
 
@@ -127,7 +135,7 @@ class Projects::BlobController < Projects::ApplicationController
         end
       end
 
-      return redirect_to_tree_root_for_missing_path(@project, @ref, @path)
+      redirect_to_tree_root_for_missing_path(@project, @ref, @path)
     end
   end
 
@@ -205,14 +213,15 @@ class Projects::BlobController < Projects::ApplicationController
 
   def set_last_commit_sha
     @last_commit_sha = Gitlab::Git::Commit
-      .last_for_path(@repository, @ref, @path).sha
+      .last_for_path(@repository, @ref, @path, literal_pathspec: true).sha
   end
 
   def show_html
     environment_params = @repository.branch_exists?(@ref) ? { ref: @ref } : { commit: @commit }
     environment_params[:find_latest] = true
-    @environment = EnvironmentsFinder.new(@project, current_user, environment_params).execute.last
-    @last_commit = @repository.last_commit_for_path(@commit.id, @blob.path)
+    @environment = ::Environments::EnvironmentsByDeploymentsFinder.new(@project, current_user, environment_params).execute.last
+    @last_commit = @repository.last_commit_for_path(@commit.id, @blob.path, literal_pathspec: true)
+    @code_navigation_path = Gitlab::CodeNavigationPath.new(@project, @blob.commit_id).full_json_path_for(@blob.path)
 
     render 'show'
   end
@@ -251,5 +260,24 @@ class Projects::BlobController < Projects::ApplicationController
 
   def diff_params
     params.permit(:full, :since, :to, :bottom, :unfold, :offset, :indent)
+  end
+
+  override :visitor_id
+  def visitor_id
+    current_user&.id
+  end
+
+  def create_success_path
+    if params[:code_quality_walkthrough]
+      project_pipelines_path(@project, code_quality_walkthrough: true)
+    else
+      project_blob_path(@project, File.join(@branch_name, @file_path))
+    end
+  end
+
+  def track_experiment
+    return unless params[:code_quality_walkthrough]
+
+    experiment(:code_quality_walkthrough, namespace: @project.root_ancestor).track(:commit_created)
   end
 end

@@ -17,13 +17,13 @@ module Peek
       end
 
       def detail_store
-        ::Gitlab::SafeRequestStore["#{key}_call_details"] ||= []
+        ::Gitlab::SafeRequestStore["#{key}_call_details".to_sym] ||= []
       end
 
       private
 
       def duration
-        detail_store.map { |entry| entry[:duration] }.sum * 1000 # rubocop:disable CodeReuse/ActiveRecord
+        detail_store.map { |entry| entry[:duration] }.sum * 1000
       end
 
       def calls

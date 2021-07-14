@@ -5,16 +5,23 @@ class ProjectMember < Member
 
   belongs_to :project, foreign_key: 'source_id'
 
+  delegate :namespace_id, to: :project
+
   # Make sure project member points only to project as it source
   default_value_for :source_type, SOURCE_TYPE
   validates :source_type, format: { with: /\AProject\z/ }
   validates :access_level, inclusion: { in: Gitlab::Access.values }
-  default_scope { where(source_type: SOURCE_TYPE) }
+  default_scope { where(source_type: SOURCE_TYPE) } # rubocop:disable Cop/DefaultScope
 
   scope :in_project, ->(project) { where(source_id: project.id) }
   scope :in_namespaces, ->(groups) do
     joins('INNER JOIN projects ON projects.id = members.source_id')
-      .where('projects.namespace_id in (?)', groups.select(:id))
+      .where(projects: { namespace_id: groups.select(:id) })
+  end
+
+  scope :without_project_bots, -> do
+    left_join_users
+      .merge(User.without_project_bot)
   end
 
   class << self
@@ -41,7 +48,7 @@ class ProjectMember < Member
         project_ids.each do |project_id|
           project = Project.find(project_id)
 
-          add_users(
+          Members::Projects::CreatorService.add_users( # rubocop:todo CodeReuse/ServiceClass
             project,
             users,
             access_level,
@@ -62,7 +69,7 @@ class ProjectMember < Member
       end
 
       true
-    rescue
+    rescue StandardError
       false
     end
 
@@ -72,12 +79,6 @@ class ProjectMember < Member
 
     def access_level_roles
       Gitlab::Access.options
-    end
-
-    private
-
-    def can_update_member?(current_user, member)
-      super || (member.owner? && member.new_record?)
     end
   end
 
@@ -147,4 +148,4 @@ class ProjectMember < Member
   # rubocop: enable CodeReuse/ServiceClass
 end
 
-ProjectMember.prepend_if_ee('EE::ProjectMember')
+ProjectMember.prepend_mod_with('ProjectMember')

@@ -1,5 +1,5 @@
-import { __ } from '../../../../locale';
 import Api from '../../../../api';
+import { __ } from '../../../../locale';
 import { scopes } from './constants';
 import * as types from './mutation_types';
 
@@ -9,7 +9,7 @@ export const receiveMergeRequestsError = ({ commit, dispatch }, { type, search }
     'setErrorMessage',
     {
       text: __('Error loading merge requests.'),
-      action: payload =>
+      action: (payload) =>
         dispatch('fetchMergeRequests', payload).then(() =>
           dispatch('setErrorMessage', null, { root: true }),
         ),
@@ -41,5 +41,3 @@ export const fetchMergeRequests = (
 };
 
 export const resetMergeRequests = ({ commit }) => commit(types.RESET_MERGE_REQUESTS);
-
-export default () => {};

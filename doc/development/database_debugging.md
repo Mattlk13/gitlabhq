@@ -1,31 +1,43 @@
-# Database Debugging and Troubleshooting
+---
+stage: Enablement
+group: Database
+info: To determine the technical writer assigned to the Stage/Group associated with this page, see https://about.gitlab.com/handbook/engineering/ux/technical-writing/#assignments
+---
+
+# Troubleshooting and Debugging Database
 
 This section is to help give some copy-pasta you can use as a reference when you
 run into some head-banging database problems.
 
 An easy first step is to search for your error in Slack, or search for `GitLab <my error>` with Google.
 
----
+Available `RAILS_ENV`:
 
-Available `RAILS_ENV`
+- `production` (generally not for your main GDK database, but you may need this for other installations such as Omnibus).
+- `development` (this is your main GDK db).
+- `test` (used for tests like RSpec).
 
-- `production` (generally not for your main GDK db, but you may need this for e.g. Omnibus)
-- `development` (this is your main GDK db)
-- `test` (used for tests like rspec)
+## Delete everything and start over
 
-## Nuke everything and start over
+If you just want to delete everything and start over with an empty DB (approximately 1 minute):
 
-If you just want to delete everything and start over with an empty DB (~1 minute):
+```shell
+bundle exec rake db:reset RAILS_ENV=development
+```
 
-- `bundle exec rake db:reset RAILS_ENV=development`
+If you just want to delete everything and start over with sample data (approximately 4 minutes). This
+also does `db:reset` and runs DB-specific migrations:
 
-If you just want to delete everything and start over with dummy data (~4 minutes). This also does `db:reset` and runs DB-specific migrations:
+```shell
+bundle exec rake db:setup RAILS_ENV=development
+```
 
-- `bundle exec rake dev:setup RAILS_ENV=development`
+If your test DB is giving you problems, it is safe to delete everything because it doesn't contain important
+data:
 
-If your test DB is giving you problems, it is safe to nuke it because it doesn't contain important data:
-
-- `bundle exec rake db:reset RAILS_ENV=test`
+```shell
+bundle exec rake db:reset RAILS_ENV=test
+```
 
 ## Migration wrangling
 
@@ -39,10 +51,10 @@ If your test DB is giving you problems, it is safe to nuke it because it doesn't
 
 Access the database via one of these commands (they all get you to the same place)
 
-```
+```ruby
 gdk psql -d gitlabhq_development
-bundle exec rails dbconsole RAILS_ENV=development
-bundle exec rails db RAILS_ENV=development
+bundle exec rails dbconsole -e development
+bundle exec rails db -e development
 ```
 
 - `\q`: Quit/exit
@@ -57,14 +69,14 @@ bundle exec rails db RAILS_ENV=development
 Use these instructions for exploring the GitLab database while developing with the GDK:
 
 1. Install or open [Visual Studio Code](https://code.visualstudio.com/download).
-1. Install the [PostgreSQL VSCode Extension](https://marketplace.visualstudio.com/items?itemName=ckolkman.vscode-postgres) by Chris Kolkman.
+1. Install the [PostgreSQL VSCode Extension](https://marketplace.visualstudio.com/items?itemName=ckolkman.vscode-postgres).
 1. In Visual Studio Code click on the PostgreSQL Explorer button in the left toolbar.
 1. In the top bar of the new window, click on the `+` to **Add Database Connection**, and follow the prompts to fill in the details:
    1. **Hostname**: the path to the PostgreSQL folder in your GDK directory (for example `/dev/gitlab-development-kit/postgresql`).
    1. **PostgreSQL user to authenticate as**: usually your local username, unless otherwise specified during PostgreSQL installation.
    1. **Password of the PostgreSQL user**: the password you set when installing PostgreSQL.
    1. **Port number to connect to**: `5432` (default).
-   1. **Use an ssl connection?** This depends on your installation. Options are:
+   1. **Use an SSL connection?** This depends on your installation. Options are:
       - **Use Secure Connection**
       - **Standard Connection** (default)
    1. **(Optional) The database to connect to**: `gitlabhq_development`.
@@ -80,7 +92,7 @@ of the extension documentation.
 
 ### `ActiveRecord::PendingMigrationError` with Spring
 
-When running specs with the [Spring preloader](rake_tasks.md#speed-up-tests-rake-tasks-and-migrations),
+When running specs with the [Spring pre-loader](rake_tasks.md#speed-up-tests-rake-tasks-and-migrations),
 the test database can get into a corrupted state. Trying to run the migration or
 dropping/resetting the test database has no effect.
 

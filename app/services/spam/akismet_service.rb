@@ -17,17 +17,22 @@ module Spam
       params = {
         type: 'comment',
         text: text,
-        created_at: DateTime.now,
+        created_at: DateTime.current,
         author: owner_name,
         author_email: owner_email,
-        referrer: options[:referrer]
+        # NOTE: The akismet_client needs the option to be named `:referrer`, not `:referer`
+        referrer: options[:referer]
       }
 
       begin
         is_spam, is_blatant = akismet_client.check(options[:ip_address], options[:user_agent], params)
         is_spam || is_blatant
-      rescue => e
-        Rails.logger.error("Unable to connect to Akismet: #{e}, skipping check") # rubocop:disable Gitlab/RailsLogger
+      rescue ArgumentError => e
+        Gitlab::ErrorTracking.track_and_raise_for_dev_exception(e)
+        false
+      rescue StandardError => e
+        Gitlab::ErrorTracking.track_exception(e)
+        Gitlab::AppLogger.error("Error during Akismet spam check, flagging as not spam: #{e}")
         false
       end
     end
@@ -66,8 +71,8 @@ module Spam
       begin
         akismet_client.public_send(type, options[:ip_address], options[:user_agent], params) # rubocop:disable GitlabSecurity/PublicSend
         true
-      rescue => e
-        Rails.logger.error("Unable to connect to Akismet: #{e}, skipping!") # rubocop:disable Gitlab/RailsLogger
+      rescue StandardError => e
+        Gitlab::AppLogger.error("Unable to connect to Akismet: #{e}, skipping!")
         false
       end
     end

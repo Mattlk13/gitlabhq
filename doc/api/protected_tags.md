@@ -1,6 +1,13 @@
-# Protected tags API
+---
+stage: Create
+group: Source Code
+info: "To determine the technical writer assigned to the Stage/Group associated with this page, see https://about.gitlab.com/handbook/engineering/ux/technical-writing/#assignments"
+type: reference, api
+---
 
->**Note:** This feature was introduced in GitLab 11.3
+# Protected tags API **(FREE)**
+
+> Introduced in GitLab 11.3.
 
 **Valid access levels**
 
@@ -23,10 +30,10 @@ GET /projects/:id/protected_tags
 
 | Attribute | Type | Required | Description |
 | --------- | ---- | -------- | ----------- |
-| `id` | integer/string | yes | The ID or [URL-encoded path of the project](README.md#namespaced-path-encoding) owned by the authenticated user |
+| `id` | integer/string | yes | The ID or [URL-encoded path of the project](index.md#namespaced-path-encoding) owned by the authenticated user |
 
 ```shell
-curl --header "PRIVATE-TOKEN: <your_access_token>" 'https://gitlab.example.com/api/v4/projects/5/protected_tags'
+curl --header "PRIVATE-TOKEN: <your_access_token>" "https://gitlab.example.com/api/v4/projects/5/protected_tags"
 ```
 
 Example response:
@@ -57,11 +64,11 @@ GET /projects/:id/protected_tags/:name
 
 | Attribute | Type | Required | Description |
 | --------- | ---- | -------- | ----------- |
-| `id` | integer/string | yes | The ID or [URL-encoded path of the project](README.md#namespaced-path-encoding) owned by the authenticated user |
+| `id` | integer/string | yes | The ID or [URL-encoded path of the project](index.md#namespaced-path-encoding) owned by the authenticated user |
 | `name` | string | yes | The name of the tag or wildcard |
 
 ```shell
-curl --header "PRIVATE-TOKEN: <your_access_token>" 'https://gitlab.example.com/api/v4/projects/5/protected_tags/release-1-0'
+curl --header "PRIVATE-TOKEN: <your_access_token>" "https://gitlab.example.com/api/v4/projects/5/protected_tags/release-1-0"
 ```
 
 Example response:
@@ -88,14 +95,14 @@ POST /projects/:id/protected_tags
 ```
 
 ```shell
-curl --request POST --header "PRIVATE-TOKEN: <your_access_token>" 'https://gitlab.example.com/api/v4/projects/5/protected_tags?name=*-stable&create_access_level=30'
+curl --request POST --header "PRIVATE-TOKEN: <your_access_token>" "https://gitlab.example.com/api/v4/projects/5/protected_tags?name=*-stable&create_access_level=30"
 ```
 
 | Attribute | Type | Required | Description |
 | --------- | ---- | -------- | ----------- |
-| `id` | integer/string | yes | The ID or [URL-encoded path of the project](README.md#namespaced-path-encoding) owned by the authenticated user |
+| `id` | integer/string | yes | The ID or [URL-encoded path of the project](index.md#namespaced-path-encoding) owned by the authenticated user |
 | `name` | string | yes | The name of the tag or wildcard |
-| `create_access_level` | string | no | Access levels allowed to create (defaults: `40`, maintainer access level) |
+| `create_access_level` | string | no | Access levels allowed to create (defaults: `40`, Maintainer role) |
 
 Example response:
 
@@ -120,10 +127,10 @@ DELETE /projects/:id/protected_tags/:name
 ```
 
 ```shell
-curl --request DELETE --header "PRIVATE-TOKEN: <your_access_token>" 'https://gitlab.example.com/api/v4/projects/5/protected_tags/*-stable'
+curl --request DELETE --header "PRIVATE-TOKEN: <your_access_token>" "https://gitlab.example.com/api/v4/projects/5/protected_tags/*-stable"
 ```
 
 | Attribute | Type | Required | Description |
 | --------- | ---- | -------- | ----------- |
-| `id` | integer/string | yes | The ID or [URL-encoded path of the project](README.md#namespaced-path-encoding) owned by the authenticated user |
+| `id` | integer/string | yes | The ID or [URL-encoded path of the project](index.md#namespaced-path-encoding) owned by the authenticated user |
 | `name` | string | yes | The name of the tag |

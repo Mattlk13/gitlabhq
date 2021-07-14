@@ -1,70 +1,71 @@
 <script>
-import BlobEmbeddable from '~/blob/components/blob_embeddable.vue';
-import { SNIPPET_VISIBILITY_PUBLIC } from '../constants';
-import BlobHeader from '~/blob/components/blob_header.vue';
+import GetBlobContent from 'shared_queries/snippet/snippet_blob_content.query.graphql';
+
 import BlobContent from '~/blob/components/blob_content.vue';
-import { GlLoadingIcon } from '@gitlab/ui';
+import BlobHeader from '~/blob/components/blob_header.vue';
 
-import GetSnippetBlobQuery from '../queries/snippet.blob.query.graphql';
-import GetBlobContent from '../queries/snippet.blob.content.query.graphql';
-
-import { SIMPLE_BLOB_VIEWER, RICH_BLOB_VIEWER } from '~/blob/components/constants';
+import {
+  SIMPLE_BLOB_VIEWER,
+  RICH_BLOB_VIEWER,
+  BLOB_RENDER_EVENT_LOAD,
+  BLOB_RENDER_EVENT_SHOW_SOURCE,
+} from '~/blob/components/constants';
 
 export default {
   components: {
-    BlobEmbeddable,
     BlobHeader,
     BlobContent,
-    GlLoadingIcon,
   },
   apollo: {
-    blob: {
-      query: GetSnippetBlobQuery,
-      variables() {
-        return {
-          ids: this.snippet.id,
-        };
-      },
-      update: data => data.snippets.edges[0].node.blob,
-      result(res) {
-        const viewer = res.data.snippets.edges[0].node.blob.richViewer
-          ? RICH_BLOB_VIEWER
-          : SIMPLE_BLOB_VIEWER;
-        this.switchViewer(viewer, true);
-      },
-    },
     blobContent: {
       query: GetBlobContent,
       variables() {
         return {
-          ids: this.snippet.id,
+          ids: [this.snippet.id],
           rich: this.activeViewerType === RICH_BLOB_VIEWER,
+          paths: [this.blob.path],
         };
       },
-      update: data =>
-        data.snippets.edges[0].node.blob.richData || data.snippets.edges[0].node.blob.plainData,
+      update(data) {
+        return this.onContentUpdate(data);
+      },
+      result() {
+        if (this.activeViewerType === RICH_BLOB_VIEWER) {
+          // eslint-disable-next-line vue/no-mutating-props
+          this.blob.richViewer.renderError = null;
+        } else {
+          // eslint-disable-next-line vue/no-mutating-props
+          this.blob.simpleViewer.renderError = null;
+        }
+      },
+      skip() {
+        return this.viewer.renderError;
+      },
     },
+  },
+  provide() {
+    return {
+      blobHash: Math.random().toString().split('.')[1],
+    };
   },
   props: {
     snippet: {
       type: Object,
       required: true,
     },
+    blob: {
+      type: Object,
+      required: true,
+    },
   },
   data() {
     return {
-      blob: {},
       blobContent: '',
-      activeViewerType: window.location.hash ? SIMPLE_BLOB_VIEWER : '',
+      activeViewerType:
+        this.blob?.richViewer && !window.location.hash ? RICH_BLOB_VIEWER : SIMPLE_BLOB_VIEWER,
     };
   },
   computed: {
-    embeddable() {
-      return this.snippet.visibilityLevel === SNIPPET_VISIBILITY_PUBLIC;
-    },
-    isBlobLoading() {
-      return this.$apollo.queries.blob.loading;
-    },
     isContentLoading() {
       return this.$apollo.queries.blobContent.loading;
     },
@@ -72,26 +73,46 @@ export default {
       const { richViewer, simpleViewer } = this.blob;
       return this.activeViewerType === RICH_BLOB_VIEWER ? richViewer : simpleViewer;
     },
-  },
-  methods: {
-    switchViewer(newViewer, respectHash = false) {
-      this.activeViewerType = respectHash && window.location.hash ? SIMPLE_BLOB_VIEWER : newViewer;
+    hasRenderError() {
+      return Boolean(this.viewer.renderError);
     },
   },
+  methods: {
+    switchViewer(newViewer) {
+      this.activeViewerType = newViewer || SIMPLE_BLOB_VIEWER;
+    },
+    forceQuery() {
+      this.$apollo.queries.blobContent.skip = false;
+      this.$apollo.queries.blobContent.refetch();
+    },
+    onContentUpdate(data) {
+      const { path: blobPath } = this.blob;
+      const {
+        blobs: { nodes: dataBlobs },
+      } = data.snippets.nodes[0];
+      const updatedBlobData = dataBlobs.find((blob) => blob.path === blobPath);
+      return updatedBlobData.richData || updatedBlobData.plainData;
+    },
+  },
+  BLOB_RENDER_EVENT_LOAD,
+  BLOB_RENDER_EVENT_SHOW_SOURCE,
 };
 </script>
 <template>
-  <div>
-    <blob-embeddable v-if="embeddable" class="mb-3" :url="snippet.webUrl" />
-    <gl-loading-icon
-      v-if="isBlobLoading"
-      :label="__('Loading blob')"
-      size="lg"
-      class="prepend-top-20 append-bottom-20"
+  <article class="file-holder snippet-file-content">
+    <blob-header
+      :blob="blob"
+      :active-viewer-type="viewer.type"
+      :has-render-error="hasRenderError"
+      @viewer-changed="switchViewer"
     />
-    <article v-else class="file-holder snippet-file-content">
-      <blob-header :blob="blob" :active-viewer-type="viewer.type" @viewer-changed="switchViewer" />
-      <blob-content :loading="isContentLoading" :content="blobContent" :active-viewer="viewer" />
-    </article>
-  </div>
+    <blob-content
+      :loading="isContentLoading"
+      :content="blobContent"
+      :active-viewer="viewer"
+      :blob="blob"
+      @[$options.BLOB_RENDER_EVENT_LOAD]="forceQuery"
+      @[$options.BLOB_RENDER_EVENT_SHOW_SOURCE]="switchViewer"
+    />
+  </article>
 </template>

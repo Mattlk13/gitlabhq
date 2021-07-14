@@ -50,6 +50,7 @@ module Gitlab
 
           entry :variables, Entry::Variables,
             description: 'Environment variables that will be used.',
+            metadata: { use_value_data: true },
             reserved: true
 
           entry :stages, Entry::Stages,
@@ -60,22 +61,21 @@ module Gitlab
             description: 'Deprecated: stages for this pipeline.',
             reserved: true
 
-          entry :cache, Entry::Cache,
+          entry :cache, Entry::Caches,
             description: 'Configure caching between build jobs.',
             reserved: true
 
           entry :workflow, Entry::Workflow,
-            description: 'List of evaluable rules to determine Pipeline status'
+            description: 'List of evaluable rules to determine Pipeline status',
+            default: {}
 
-          helpers :default, :stages, :types, :variables, :workflow
-
-          helpers :jobs, dynamic: true
+          dynamic_helpers :jobs
 
           delegate :before_script_value,
                    :image_value,
                    :services_value,
                    :after_script_value,
-                   :cache_value, to: :default
+                   :cache_value, to: :default_entry
 
           attr_reader :jobs_config
 
@@ -102,14 +102,6 @@ module Gitlab
               compose_deprecated_entries!
               compose_jobs!
             end
-          end
-
-          def default
-            self[:default]
-          end
-
-          def workflow
-            self[:workflow] if workflow_defined?
           end
 
           private
@@ -143,7 +135,7 @@ module Gitlab
             @jobs_config = @config
               .except(*self.class.reserved_nodes_names)
               .select do |name, config|
-              Entry::Jobs.find_type(name, config).present?
+              Entry::Jobs.find_type(name, config).present? || ALLOWED_KEYS.exclude?(name)
             end
 
             @config = @config.except(*@jobs_config.keys)

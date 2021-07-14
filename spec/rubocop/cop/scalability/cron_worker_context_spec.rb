@@ -1,35 +1,29 @@
 # frozen_string_literal: true
 
 require 'fast_spec_helper'
-require 'rubocop'
-require_relative '../../../support/helpers/expect_offense'
 require_relative '../../../../rubocop/cop/scalability/cron_worker_context'
 
-describe RuboCop::Cop::Scalability::CronWorkerContext do
-  include CopHelper
-  include ExpectOffense
-
+RSpec.describe RuboCop::Cop::Scalability::CronWorkerContext do
   subject(:cop) { described_class.new }
 
   it 'adds an offense when including CronjobQueue' do
-    inspect_source(<<~CODE.strip_indent)
+    expect_offense(<<~CODE)
       class SomeWorker
         include CronjobQueue
+                ^^^^^^^^^^^^ Manually define an ApplicationContext for cronjob-workers.[...]
       end
     CODE
-
-    expect(cop.offenses.size).to eq(1)
   end
 
   it 'does not add offenses for other workers' do
-    expect_no_offenses(<<~CODE.strip_indent)
+    expect_no_offenses(<<~CODE)
       class SomeWorker
       end
     CODE
   end
 
   it 'does not add an offense when the class defines a context' do
-    expect_no_offenses(<<~CODE.strip_indent)
+    expect_no_offenses(<<~CODE)
       class SomeWorker
         include CronjobQueue
 
@@ -39,7 +33,7 @@ describe RuboCop::Cop::Scalability::CronWorkerContext do
   end
 
   it 'does not add an offense when the worker calls `with_context`' do
-    expect_no_offenses(<<~CODE.strip_indent)
+    expect_no_offenses(<<~CODE)
       class SomeWorker
         include CronjobQueue
 
@@ -53,7 +47,7 @@ describe RuboCop::Cop::Scalability::CronWorkerContext do
   end
 
   it 'does not add an offense when the worker calls `bulk_perform_async_with_contexts`' do
-    expect_no_offenses(<<~CODE.strip_indent)
+    expect_no_offenses(<<~CODE)
       class SomeWorker
         include CronjobQueue
 
@@ -67,7 +61,7 @@ describe RuboCop::Cop::Scalability::CronWorkerContext do
   end
 
   it 'does not add an offense when the worker calls `bulk_perform_in_with_contexts`' do
-    expect_no_offenses(<<~CODE.strip_indent)
+    expect_no_offenses(<<~CODE)
       class SomeWorker
         include CronjobQueue
 

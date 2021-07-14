@@ -1,28 +1,67 @@
-# GitLab Package Registry administration **(PREMIUM ONLY)**
+---
+stage: Package
+group: Package
+info: To determine the technical writer assigned to the Stage/Group associated with this page, see https://about.gitlab.com/handbook/engineering/ux/technical-writing/#assignments
+---
 
-GitLab Packages allows organizations to utilize GitLab as a private repository
+# GitLab Package Registry administration **(FREE SELF)**
+
+GitLab Packages allows organizations to use GitLab as a private repository
 for a variety of common package managers. Users are able to build and publish
 packages, which can be easily consumed as a dependency in downstream projects.
 
 The Packages feature allows GitLab to act as a repository for the following:
 
-| Software repository | Description | Available in GitLab version |
-| ------------------- | ----------- | --------------------------- |
-| [NuGet Repository](../../user/packages/nuget_repository/index.md) | The GitLab NuGet Repository enables every project in GitLab to have its own space to store [NuGet](https://www.nuget.org/) packages. | 12.8+ |
-| [Conan Repository](../../user/packages/conan_repository/index.md) | The GitLab Conan Repository enables every project in GitLab to have its own space to store [Conan](https://conan.io/) packages. | 12.4+ |
-| [Maven Repository](../../user/packages/maven_repository/index.md) | The GitLab Maven Repository enables every project in GitLab to have its own space to store [Maven](https://maven.apache.org/) packages. | 11.3+ |
-| [NPM Registry](../../user/packages/npm_registry/index.md)   | The GitLab NPM Registry enables every project in GitLab to have its own space to store [NPM](https://www.npmjs.com/) packages. | 11.7+ |
+The Package Registry supports the following formats:
 
-Don't you see your package management system supported yet?
-Please consider contributing
-to GitLab. This [development documentation](../../development/packages.md) will guide you through the process.
+<div class="row">
+<div class="col-md-9">
+<table align="left" style="width:50%">
+<tr style="background:#dfdfdf"><th>Package type</th><th>GitLab version</th></tr>
+<tr><td><a href="https://docs.gitlab.com/ee/user/packages/composer_repository/index.html">Composer</a></td><td>13.2+</td></tr>
+<tr><td><a href="https://docs.gitlab.com/ee/user/packages/conan_repository/index.html">Conan</a></td><td>12.6+</td></tr>
+<tr><td><a href="https://docs.gitlab.com/ee/user/packages/go_proxy/index.html">Go</a></td><td>13.1+</td></tr>
+<tr><td><a href="https://docs.gitlab.com/ee/user/packages/maven_repository/index.html">Maven</a></td><td>11.3+</td></tr>
+<tr><td><a href="https://docs.gitlab.com/ee/user/packages/npm_registry/index.html">npm</a></td><td>11.7+</td></tr>
+<tr><td><a href="https://docs.gitlab.com/ee/user/packages/nuget_repository/index.html">NuGet</a></td><td>12.8+</td></tr>
+<tr><td><a href="https://docs.gitlab.com/ee/user/packages/pypi_repository/index.html">PyPI</a></td><td>12.10+</td></tr>
+<tr><td><a href="https://docs.gitlab.com/ee/user/packages/generic_packages/index.html">Generic packages</a></td><td>13.5+</td></tr>
+<tr><td><a href="https://docs.gitlab.com/ee/user/packages/helm_repository/index.html">Helm Charts</a></td><td>14.1+</td></tr>
+</table>
+</div>
+</div>
+
+## Accepting contributions
+
+The below table lists formats that are not supported, but are accepting Community contributions for. Consider contributing to GitLab. This [development documentation](../../development/packages.md)
+guides you through the process.
+
+<!-- vale gitlab.Spelling = NO -->
+
+| Format | Status |
+| ------ | ------ |
+| Chef      | [#36889](https://gitlab.com/gitlab-org/gitlab/-/issues/36889) |
+| CocoaPods | [#36890](https://gitlab.com/gitlab-org/gitlab/-/issues/36890) |
+| Conda     | [#36891](https://gitlab.com/gitlab-org/gitlab/-/issues/36891) |
+| CRAN      | [#36892](https://gitlab.com/gitlab-org/gitlab/-/issues/36892) |
+| Debian    | [Draft: Merge Request](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/50438) |
+| Opkg      | [#36894](https://gitlab.com/gitlab-org/gitlab/-/issues/36894) |
+| P2        | [#36895](https://gitlab.com/gitlab-org/gitlab/-/issues/36895) |
+| Puppet    | [#36897](https://gitlab.com/gitlab-org/gitlab/-/issues/36897) |
+| RPM       | [#5932](https://gitlab.com/gitlab-org/gitlab/-/issues/5932) |
+| RubyGems  | [#803](https://gitlab.com/gitlab-org/gitlab/-/issues/803) |
+| SBT       | [#36898](https://gitlab.com/gitlab-org/gitlab/-/issues/36898) |
+| Terraform | [Draft: Merge Request](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/18834) |
+| Vagrant   | [#36899](https://gitlab.com/gitlab-org/gitlab/-/issues/36899) |
+
+<!-- vale gitlab.Spelling = YES -->
 
 ## Enabling the Packages feature
 
-NOTE: **Note:**
+NOTE:
 After the Packages feature is enabled, the repositories are available
-for all new projects by default. To enable it for existing projects, users will
-have to explicitly do so in the project's settings.
+for all new projects by default. To enable it for existing projects, users
+explicitly do so in the project's settings.
 
 To enable the Packages feature:
 
@@ -38,7 +77,7 @@ To enable the Packages feature:
 
 **Installations from source**
 
-1. After the installation is complete, you will have to configure the `packages`
+1. After the installation is complete, you configure the `packages`
    section in `config/gitlab.yml`. Set to `true` to enable it:
 
    ```yaml
@@ -47,6 +86,24 @@ To enable the Packages feature:
    ```
 
 1. [Restart GitLab](../restart_gitlab.md#omnibus-gitlab-reconfigure "How to reconfigure Omnibus GitLab") for the changes to take effect.
+
+**Helm Chart installations**
+
+1. After the installation is complete, you configure the `packages`
+   section in `global.appConfig.packages`. Set to `true` to enable it:
+
+   ```yaml
+   packages:
+     enabled: true
+   ```
+
+1. [Restart GitLab](../restart_gitlab.md#helm-chart-installations "How to reconfigure Helm GitLab") for the changes to take effect.
+
+## Rate limits
+
+When downloading packages as dependencies in downstream projects, many requests are made through the
+Packages API. You may therefore reach enforced user and IP rate limits. To address this issue, you
+can define specific rate limits for the Packages API. For more details, see [Package Registry Rate Limits](../../user/admin_area/settings/package_registry_rate_limits.md).
 
 ## Changing the storage path
 
@@ -57,7 +114,7 @@ local location or even use object storage.
 
 The packages for Omnibus GitLab installations are stored under
 `/var/opt/gitlab/gitlab-rails/shared/packages/` and for source
-installations under `shared/packages/` (relative to the Git homedir).
+installations under `shared/packages/` (relative to the Git home directory).
 To change the local storage path:
 
 **Omnibus GitLab installations**
@@ -86,7 +143,12 @@ To change the local storage path:
 ### Using object storage
 
 Instead of relying on the local storage, you can use an object storage to
-upload packages:
+store packages.
+
+[Read more about using object storage with GitLab](../object_storage.md).
+
+NOTE:
+We recommend using the [consolidated object storage settings](../object_storage.md#consolidated-object-storage-configuration). The following instructions apply to the original configuration format.
 
 **Omnibus GitLab installations**
 
@@ -95,7 +157,6 @@ upload packages:
 
    ```ruby
    gitlab_rails['packages_enabled'] = true
-   gitlab_rails['packages_storage_path'] = "/var/opt/gitlab/gitlab-rails/shared/packages"
    gitlab_rails['packages_object_store_enabled'] = true
    gitlab_rails['packages_object_store_remote_directory'] = "packages" # The bucket name.
    gitlab_rails['packages_object_store_direct_upload'] = false         # Use Object Storage directly for uploads instead of background uploads if enabled (Default: false).
@@ -109,6 +170,8 @@ upload packages:
      #'region' => 'eu-west-1',
      #'aws_access_key_id' => 'AWS_ACCESS_KEY_ID',
      #'aws_secret_access_key' => 'AWS_SECRET_ACCESS_KEY',
+     ## If an IAM profile is being used with AWS, omit the aws_access_key_id and aws_secret_access_key and uncomment
+     #'use_iam_profile' => true,
      ##
      ## If the provider is other than AWS (an S3-compatible one), uncomment the following
      ##
@@ -118,10 +181,7 @@ upload packages:
      #'path_style' => false                    # If true, use 'host/bucket_name/object' instead of 'bucket_name.host/object'.
    }
    ```
-  
-   NOTE: **Note:**
-   Some build tools, like Gradle, must make `HEAD` requests to Amazon S3 to pull a dependency’s metadata. The `gitlab_rails['packages_object_store_proxy_download']` property must be set to `true`. Without this setting, GitLab won't act as a proxy to the Amazon S3 service, and will instead return the signed URL. This will cause a `HTTP 403 Forbidden` response, since Amazon S3 expects a signed URL.
-  
+
 1. Save the file and [reconfigure GitLab](../restart_gitlab.md#omnibus-gitlab-reconfigure)
    for the changes to take effect.
 
@@ -130,33 +190,33 @@ upload packages:
 1. Edit the `packages` section in `config/gitlab.yml` (uncomment where necessary):
 
    ```yaml
-     packages:
-       enabled: true
+   packages:
+     enabled: true
+     ##
+     ## The location where build packages are stored (default: shared/packages).
+     ##
+     # storage_path: shared/packages
+     object_store:
+       enabled: false
+       remote_directory: packages  # The bucket name.
+       # direct_upload: false      # Use Object Storage directly for uploads instead of background uploads if enabled (Default: false).
+       # background_upload: true   # Temporary option to limit automatic upload (Default: true).
+       # proxy_download: false     # Passthrough all downloads via GitLab instead of using Redirects to Object Storage.
+       connection:
        ##
-       ## The location where build packages are stored (default: shared/packages).
+       ## If the provider is AWS S3, use the following:
        ##
-       #storage_path: shared/packages
-       object_store:
-         enabled: false
-         remote_directory: packages # The bucket name.
-         #direct_upload: false      # Use Object Storage directly for uploads instead of background uploads if enabled (Default: false).
-         #background_upload: true   # Temporary option to limit automatic upload (Default: true).
-         #proxy_download: false     # Passthrough all downloads via GitLab instead of using Redirects to Object Storage.
-         connection:
-           ##
-           ## If the provider is AWS S3, uncomment the following
-           ##
-           #provider: AWS
-           #region: us-east-1
-           #aws_access_key_id: AWS_ACCESS_KEY_ID
-           #aws_secret_access_key: AWS_SECRET_ACCESS_KEY
-           ##
-           ## If the provider is other than AWS (an S3-compatible one), uncomment the following
-           ##
-           #host: 's3.amazonaws.com'             # default: s3.amazonaws.com.
-           #aws_signature_version: 4             # For creation of signed URLs. Set to 2 if provider does not support v4.
-           #endpoint: 'https://s3.amazonaws.com' # Useful for S3-compliant services such as DigitalOcean Spaces.
-           #path_style: false                    # If true, use 'host/bucket_name/object' instead of 'bucket_name.host/object'.
+         provider: AWS
+         region: us-east-1
+         aws_access_key_id: AWS_ACCESS_KEY_ID
+         aws_secret_access_key: AWS_SECRET_ACCESS_KEY
+         ##
+         ## If the provider is other than AWS (an S3-compatible one), comment out the previous 4 lines and use the following instead:
+         ##
+         #  host: 's3.amazonaws.com'             # default: s3.amazonaws.com.
+         #  aws_signature_version: 4             # For creation of signed URLs. Set to 2 if provider does not support v4.
+         #  endpoint: 'https://s3.amazonaws.com' # Useful for S3-compliant services such as DigitalOcean Spaces.
+         #  path_style: false                    # If true, use 'host/bucket_name/object' instead of 'bucket_name.host/object'.
    ```
 
 1. Save the file and [restart GitLab](../restart_gitlab.md#installations-from-source) for the changes to take effect.
@@ -165,7 +225,7 @@ upload packages:
 
 After [configuring the object storage](#using-object-storage), you may use the
 following task to migrate existing packages from the local storage to the remote one.
-The processing will be done in a background worker and requires **no downtime**.
+The processing is done in a background worker and requires **no downtime**.
 
 For Omnibus GitLab:
 
@@ -177,4 +237,18 @@ For installations from source:
 
 ```shell
 RAILS_ENV=production sudo -u git -H bundle exec rake gitlab:packages:migrate
+```
+
+You can optionally track progress and verify that all packages migrated successfully.
+
+From the [PostgreSQL console](https://docs.gitlab.com/omnibus/settings/database.html#connecting-to-the-bundled-postgresql-database)
+(`sudo gitlab-psql -d gitlabhq_production` for Omnibus GitLab), verify that `objectstg` below (where
+`file_store=2`) has the count of all packages:
+
+```shell
+gitlabhq_production=# SELECT count(*) AS total, sum(case when file_store = '1' then 1 else 0 end) AS filesystem, sum(case when file_store = '2' then 1 else 0 end) AS objectstg FROM packages_package_files;
+
+total | filesystem | objectstg
+------+------------+-----------
+ 34   |          0 |        34
 ```

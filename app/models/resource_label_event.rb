@@ -1,20 +1,18 @@
 # frozen_string_literal: true
 
-class ResourceLabelEvent < ApplicationRecord
-  include Importable
-  include Gitlab::Utils::StrongMemoize
+class ResourceLabelEvent < ResourceEvent
   include CacheMarkdownField
-  include ResourceEventTools
+  include IssueResourceEvent
+  include MergeRequestResourceEvent
 
   cache_markdown_field :reference
 
-  belongs_to :issue
-  belongs_to :merge_request
   belongs_to :label
 
   scope :inc_relations, -> { includes(:label, :user) }
 
   validates :label, presence: { unless: :importing? }, on: :create
+  validate :exactly_one_issuable, unless: :importing?
 
   after_save :expire_etag_cache
   after_destroy :expire_etag_cache
@@ -41,12 +39,6 @@ class ResourceLabelEvent < ApplicationRecord
     issue || merge_request
   end
 
-  def discussion_id(resource = nil)
-    strong_memoize(:discussion_id) do
-      Digest::SHA1.hexdigest(discussion_id_key.join("-"))
-    end
-  end
-
   def project
     issuable.project
   end
@@ -62,7 +54,7 @@ class ResourceLabelEvent < ApplicationRecord
   end
 
   def banzai_render_context(field)
-    super.merge(pipeline: 'label', only_path: true)
+    super.merge(pipeline: :label, only_path: true)
   end
 
   def refresh_invalid_reference
@@ -76,6 +68,14 @@ class ResourceLabelEvent < ApplicationRecord
       save
     elsif invalidated_markdown_cache?
       refresh_markdown_cache!
+    end
+  end
+
+  def self.visible_to_user?(user, events)
+    ResourceLabelEvent.preload_label_subjects(events)
+
+    events.select do |event|
+      Ability.allowed?(user, :read_label, event)
     end
   end
 
@@ -115,4 +115,4 @@ class ResourceLabelEvent < ApplicationRecord
   end
 end
 
-ResourceLabelEvent.prepend_if_ee('EE::ResourceLabelEvent')
+ResourceLabelEvent.prepend_mod_with('ResourceLabelEvent')

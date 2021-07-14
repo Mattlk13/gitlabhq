@@ -1,6 +1,7 @@
+import { GlModal } from '@gitlab/ui';
 import { shallowMount, createLocalVue } from '@vue/test-utils';
 import Vuex from 'vuex';
-import { GlModal } from '@gitlab/ui';
+import { BV_SHOW_MODAL, BV_HIDE_MODAL } from '~/lib/utils/constants';
 import GlModalVuex from '~/vue_shared/components/gl_modal_vuex.vue';
 import createState from '~/vuex_shared/modules/modal/state';
 
@@ -38,6 +39,9 @@ describe('GlModalVuex', () => {
       localVue,
       store,
       propsData,
+      stubs: {
+        GlModal,
+      },
     });
   };
 
@@ -115,7 +119,7 @@ describe('GlModalVuex', () => {
     expect(actions.hide).toHaveBeenCalledTimes(1);
   });
 
-  it('calls bootstrap show when isVisible changes', done => {
+  it('calls bootstrap show when isVisible changes', (done) => {
     state.isVisible = false;
 
     factory();
@@ -126,13 +130,13 @@ describe('GlModalVuex', () => {
     wrapper.vm
       .$nextTick()
       .then(() => {
-        expect(rootEmit).toHaveBeenCalledWith('bv::show::modal', TEST_MODAL_ID);
+        expect(rootEmit).toHaveBeenCalledWith(BV_SHOW_MODAL, TEST_MODAL_ID);
       })
       .then(done)
       .catch(done.fail);
   });
 
-  it('calls bootstrap hide when isVisible changes', done => {
+  it('calls bootstrap hide when isVisible changes', (done) => {
     state.isVisible = true;
 
     factory();
@@ -143,9 +147,34 @@ describe('GlModalVuex', () => {
     wrapper.vm
       .$nextTick()
       .then(() => {
-        expect(rootEmit).toHaveBeenCalledWith('bv::hide::modal', TEST_MODAL_ID);
+        expect(rootEmit).toHaveBeenCalledWith(BV_HIDE_MODAL, TEST_MODAL_ID);
       })
       .then(done)
       .catch(done.fail);
   });
+
+  it.each(['ok', 'cancel'])(
+    'passes an "%s" handler to the "modal-footer" slot scope',
+    (handlerName) => {
+      state.isVisible = true;
+
+      const modalFooterSlotContent = jest.fn();
+
+      factory({
+        scopedSlots: {
+          'modal-footer': modalFooterSlotContent,
+        },
+      });
+
+      const handler = modalFooterSlotContent.mock.calls[0][0][handlerName];
+
+      expect(wrapper.emitted(handlerName)).toBeFalsy();
+      expect(actions.hide).not.toHaveBeenCalled();
+
+      handler();
+
+      expect(actions.hide).toHaveBeenCalledTimes(1);
+      expect(wrapper.emitted(handlerName)).toBeTruthy();
+    },
+  );
 });

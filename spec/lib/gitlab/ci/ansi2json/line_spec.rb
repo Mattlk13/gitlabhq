@@ -2,7 +2,7 @@
 
 require 'spec_helper'
 
-describe Gitlab::Ci::Ansi2json::Line do
+RSpec.describe Gitlab::Ci::Ansi2json::Line do
   let(:offset) { 0 }
   let(:style) { Gitlab::Ci::Ansi2json::Style.new }
 
@@ -58,6 +58,15 @@ describe Gitlab::Ci::Ansi2json::Line do
     end
   end
 
+  describe '#set_section_options' do
+    it 'sets the current section\'s options' do
+      options = { collapsed: true }
+      subject.set_section_options(options)
+
+      expect(subject.to_h[:section_options]).to eq(options)
+    end
+  end
+
   describe '#set_as_section_header' do
     it 'change the section_header to true' do
       expect { subject.set_as_section_header }
@@ -67,10 +76,25 @@ describe Gitlab::Ci::Ansi2json::Line do
   end
 
   describe '#set_section_duration' do
-    it 'sets and formats the section_duration' do
-      subject.set_section_duration(75)
+    using RSpec::Parameterized::TableSyntax
 
-      expect(subject.section_duration).to eq('01:15')
+    where(:duration, :result) do
+      nil                                         | '00:00'
+      'string'                                    | '00:00'
+      0.seconds                                   | '00:00'
+      7.seconds                                   | '00:07'
+      75                                          | '01:15'
+      1.minute + 15.seconds                       | '01:15'
+      13.hours + 14.minutes + 15.seconds          | '13:14:15'
+      1.day + 13.hours + 14.minutes + 15.seconds  | '37:14:15'
+    end
+
+    with_them do
+      it do
+        subject.set_section_duration(duration)
+
+        expect(subject.section_duration).to eq(result)
+      end
     end
   end
 

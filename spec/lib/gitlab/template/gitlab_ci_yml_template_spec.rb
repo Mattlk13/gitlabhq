@@ -2,14 +2,10 @@
 
 require 'spec_helper'
 
-describe Gitlab::Template::GitlabCiYmlTemplate do
+RSpec.describe Gitlab::Template::GitlabCiYmlTemplate do
   subject { described_class }
 
   describe '.all' do
-    it 'strips the gitlab-ci suffix' do
-      expect(subject.all.first.name).not_to end_with('.gitlab-ci.yml')
-    end
-
     it 'combines the globals and rest' do
       all = subject.all.map(&:name)
 
@@ -18,32 +14,59 @@ describe Gitlab::Template::GitlabCiYmlTemplate do
       expect(all).to include('Ruby')
     end
 
-    it 'ensure that the template name is used exactly once' do
-      all = subject.all.group_by(&:name)
-      duplicates = all.select { |_, templates| templates.length > 1 }
+    it 'does not include Browser-Performance template in FOSS' do
+      all = subject.all.map(&:name)
 
-      expect(duplicates).to be_empty
+      expect(all).not_to include('Browser-Performance') unless Gitlab.ee?
     end
   end
 
   describe '.find' do
-    it 'returns nil if the file does not exist' do
-      expect(subject.find('mepmep-yadida')).to be nil
-    end
+    let_it_be(:project) { create(:project) }
+    let_it_be(:other_project) { create(:project) }
 
-    it 'returns the GitlabCiYml object of a valid file' do
-      ruby = subject.find('Ruby')
+    described_class::TEMPLATES_WITH_LATEST_VERSION.keys.each do |key|
+      it "finds the latest template for #{key}" do
+        result = described_class.find(key, project)
+        expect(result.full_name).to eq("#{key}.latest.gitlab-ci.yml")
+        expect(result.content).to be_present
+      end
 
-      expect(ruby).to be_a described_class
-      expect(ruby.name).to eq('Ruby')
-    end
-  end
+      context 'when `redirect_to_latest_template` feature flag is disabled' do
+        before do
+          stub_feature_flags("redirect_to_latest_template_#{key.underscore.tr('/', '_')}".to_sym => false)
+        end
 
-  describe '.by_category' do
-    it 'returns sorted results' do
-      result = described_class.by_category('General')
+        it "finds the stable template for #{key}" do
+          result = described_class.find(key, project)
+          expect(result.full_name).to eq("#{key}.gitlab-ci.yml")
+          expect(result.content).to be_present
+        end
+      end
 
-      expect(result).to eq(result.sort)
+      context 'when `redirect_to_latest_template` feature flag is enabled on the project' do
+        before do
+          stub_feature_flags("redirect_to_latest_template_#{key.underscore.tr('/', '_')}".to_sym => project)
+        end
+
+        it "finds the latest template for #{key}" do
+          result = described_class.find(key, project)
+          expect(result.full_name).to eq("#{key}.latest.gitlab-ci.yml")
+          expect(result.content).to be_present
+        end
+      end
+
+      context 'when `redirect_to_latest_template` feature flag is enabled on the other project' do
+        before do
+          stub_feature_flags("redirect_to_latest_template_#{key.underscore.tr('/', '_')}".to_sym => other_project)
+        end
+
+        it "finds the stable template for #{key}" do
+          result = described_class.find(key, project)
+          expect(result.full_name).to eq("#{key}.gitlab-ci.yml")
+          expect(result.content).to be_present
+        end
+      end
     end
   end
 
@@ -56,13 +79,5 @@ describe Gitlab::Template::GitlabCiYmlTemplate do
     end
   end
 
-  describe '#<=>' do
-    it 'sorts lexicographically' do
-      one = described_class.new('a.gitlab-ci.yml')
-      other = described_class.new('z.gitlab-ci.yml')
-
-      expect(one.<=>(other)).to be(-1)
-      expect([other, one].sort).to eq([one, other])
-    end
-  end
+  it_behaves_like 'file template shared examples', 'Ruby', '.gitlab-ci.yml'
 end

@@ -80,6 +80,9 @@ module MigrationsHelpers
     allow(ActiveRecord::Base.connection)
       .to receive(:active?)
       .and_return(false)
+    allow(Gitlab::Runtime)
+      .to receive(:rake?)
+      .and_return(true)
 
     stub_env('IN_MEMORY_APPLICATION_SETTINGS', 'false')
   end
@@ -169,4 +172,4 @@ module MigrationsHelpers
   end
 end
 
-MigrationsHelpers.prepend_if_ee('EE::MigrationsHelpers')
+MigrationsHelpers.prepend_mod_with('MigrationsHelpers')

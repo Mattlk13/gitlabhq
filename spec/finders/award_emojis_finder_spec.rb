@@ -2,7 +2,7 @@
 
 require 'spec_helper'
 
-describe AwardEmojisFinder do
+RSpec.describe AwardEmojisFinder do
   let_it_be(:issue_1) { create(:issue) }
   let_it_be(:issue_1_thumbsup) { create(:award_emoji, name: 'thumbsup', awardable: issue_1) }
   let_it_be(:issue_1_thumbsdown) { create(:award_emoji, name: 'thumbsdown', awardable: issue_1) }
@@ -18,6 +18,11 @@ describe AwardEmojisFinder do
         ArgumentError,
         'Invalid name param'
       )
+    end
+
+    it 'does not raise an error if `name` is numeric' do
+      subject = described_class.new(issue_1, { name: 100 })
+      expect { subject.execute }.not_to raise_error
     end
 
     it 'raises an error if `awarded_by` is invalid' do

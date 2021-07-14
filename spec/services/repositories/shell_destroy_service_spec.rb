@@ -2,8 +2,9 @@
 
 require 'spec_helper'
 
-describe Repositories::ShellDestroyService do
+RSpec.describe Repositories::ShellDestroyService do
   let_it_be(:user) { create(:user) }
+
   let!(:project) { create(:project, :repository, namespace: user.namespace) }
   let(:path) { project.repository.disk_path }
   let(:remove_path) { "#{path}+#{project.id}#{described_class::DELETED_FLAG}" }

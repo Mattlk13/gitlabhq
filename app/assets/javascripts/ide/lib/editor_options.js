@@ -7,11 +7,33 @@ export const defaultEditorOptions = {
     enabled: false,
   },
   wordWrap: 'on',
+  glyphMargin: true,
 };
 
-export default [
+export const defaultDiffOptions = {
+  ignoreWhitespace: false,
+};
+
+export const defaultDiffEditorOptions = {
+  ...defaultEditorOptions,
+  quickSuggestions: false,
+  occurrencesHighlight: false,
+  ignoreTrimWhitespace: false,
+  readOnly: false,
+  renderLineHighlight: 'none',
+  hideCursorInOverviewRuler: true,
+  glyphMargin: true,
+};
+
+export const defaultModelOptions = {
+  endOfLine: 0,
+  insertFinalNewline: true,
+  trimTrailingWhitespace: false,
+};
+
+export const editorOptions = [
   {
-    readOnly: model => Boolean(model.file.file_lock),
-    quickSuggestions: model => !(model.language === 'markdown'),
+    readOnly: (model) => Boolean(model.file.file_lock),
+    quickSuggestions: (model) => !(model.language === 'markdown'),
   },
 ];

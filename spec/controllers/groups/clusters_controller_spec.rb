@@ -2,7 +2,7 @@
 
 require 'spec_helper'
 
-describe Groups::ClustersController do
+RSpec.describe Groups::ClustersController do
   include AccessMatchersForController
   include GoogleApi::CloudPlatformHelpers
 
@@ -32,7 +32,7 @@ describe Groups::ClustersController do
           create(:cluster, :disabled, :provided_by_gcp, :production_environment, cluster_type: :group_type, groups: [group])
         end
 
-        it 'lists available clusters' do
+        it 'lists available clusters and renders html' do
           go
 
           expect(response).to have_gitlab_http_status(:ok)
@@ -40,19 +40,45 @@ describe Groups::ClustersController do
           expect(assigns(:clusters)).to match_array([enabled_cluster, disabled_cluster])
         end
 
+        it 'lists available clusters with json serializer' do
+          go(format: :json)
+
+          expect(response).to have_gitlab_http_status(:ok)
+          expect(response).to match_response_schema('cluster_list')
+        end
+
+        it 'sets the polling interval header for json requests' do
+          go(format: :json)
+
+          expect(response).to have_gitlab_http_status(:ok)
+          expect(response.headers['Poll-Interval']).to eq("10000")
+        end
+
         context 'when page is specified' do
           let(:last_page) { group.clusters.page.total_pages }
+          let(:total_count) { group.clusters.page.total_count }
 
           before do
-            allow(Clusters::Cluster).to receive(:paginates_per).and_return(1)
-            create_list(:cluster, 2, :provided_by_gcp, :production_environment, cluster_type: :group_type, groups: [group])
+            create_list(:cluster, 30, :provided_by_gcp, :production_environment, cluster_type: :group_type, groups: [group])
           end
 
           it 'redirects to the page' do
+            expect(last_page).to be > 1
+
             go(page: last_page)
 
             expect(response).to have_gitlab_http_status(:ok)
             expect(assigns(:clusters).current_page).to eq(last_page)
+          end
+
+          it 'displays cluster list for associated page' do
+            expect(last_page).to be > 1
+
+            go(page: last_page, format: :json)
+
+            expect(response).to have_gitlab_http_status(:ok)
+            expect(response.headers['X-Page'].to_i).to eq(last_page)
+            expect(response.headers['X-Total'].to_i).to eq(total_count)
           end
         end
       end
@@ -73,7 +99,8 @@ describe Groups::ClustersController do
     describe 'security' do
       let(:cluster) { create(:cluster, :provided_by_gcp, cluster_type: :group_type, groups: [group]) }
 
-      it { expect { go }.to be_allowed_for(:admin) }
+      it('is allowed for admin when admin mode is enabled', :enable_admin_mode) { expect { go }.to be_allowed_for(:admin) }
+      it('is denied for admin when admin mode is disabled') { expect { go }.to be_denied_for(:admin) }
       it { expect { go }.to be_allowed_for(:owner).of(group) }
       it { expect { go }.to be_allowed_for(:maintainer).of(group) }
       it { expect { go }.to be_denied_for(:developer).of(group) }
@@ -154,8 +181,11 @@ describe Groups::ClustersController do
       end
     end
 
+    include_examples 'GET new cluster shared examples'
+
     describe 'security' do
-      it { expect { go }.to be_allowed_for(:admin) }
+      it('is allowed for admin when admin mode is enabled', :enable_admin_mode) { expect { go }.to be_allowed_for(:admin) }
+      it('is denied for admin when admin mode is disabled') { expect { go }.to be_denied_for(:admin) }
       it { expect { go }.to be_allowed_for(:owner).of(group) }
       it { expect { go }.to be_allowed_for(:maintainer).of(group) }
       it { expect { go }.to be_denied_for(:developer).of(group) }
@@ -163,6 +193,46 @@ describe Groups::ClustersController do
       it { expect { go }.to be_denied_for(:guest).of(group) }
       it { expect { go }.to be_denied_for(:user) }
       it { expect { go }.to be_denied_for(:external) }
+    end
+  end
+
+  it_behaves_like 'GET #metrics_dashboard for dashboard', 'Cluster health' do
+    let(:cluster) { create(:cluster, :provided_by_gcp, cluster_type: :group_type, groups: [group]) }
+
+    let(:metrics_dashboard_req_params) do
+      {
+        id: cluster.id,
+        group_id: group.name
+      }
+    end
+  end
+
+  describe 'GET #prometheus_proxy' do
+    let(:proxyable) do
+      create(:cluster, :provided_by_gcp, cluster_type: :group_type, groups: [group])
+    end
+
+    it_behaves_like 'metrics dashboard prometheus api proxy' do
+      let(:proxyable_params) do
+        {
+          id: proxyable.id.to_s,
+          group_id: group.name
+        }
+      end
+
+      context 'with anonymous user' do
+        let(:prometheus_body) { nil }
+
+        before do
+          sign_out(user)
+        end
+
+        it 'returns 404' do
+          get :prometheus_proxy, params: prometheus_proxy_params
+
+          expect(response).to have_gitlab_http_status(:not_found)
+        end
+      end
     end
   end
 
@@ -203,6 +273,7 @@ describe Groups::ClustersController do
           expect(cluster).to be_kubernetes
           expect(cluster.provider_gcp).to be_legacy_abac
           expect(cluster).to be_managed
+          expect(cluster).to be_namespace_per_environment
         end
 
         context 'when legacy_abac param is false' do
@@ -247,7 +318,8 @@ describe Groups::ClustersController do
         allow(WaitForClusterCreationWorker).to receive(:perform_in).and_return(nil)
       end
 
-      it { expect { go }.to be_allowed_for(:admin) }
+      it('is allowed for admin when admin mode is enabled', :enable_admin_mode) { expect { go }.to be_allowed_for(:admin) }
+      it('is denied for admin when admin mode is disabled') { expect { go }.to be_denied_for(:admin) }
       it { expect { go }.to be_allowed_for(:owner).of(group) }
       it { expect { go }.to be_allowed_for(:maintainer).of(group) }
       it { expect { go }.to be_denied_for(:developer).of(group) }
@@ -290,6 +362,7 @@ describe Groups::ClustersController do
           expect(cluster).to be_user
           expect(cluster).to be_kubernetes
           expect(cluster).to be_managed
+          expect(cluster).to be_namespace_per_environment
         end
       end
 
@@ -319,6 +392,7 @@ describe Groups::ClustersController do
           expect(cluster).to be_user
           expect(cluster).to be_kubernetes
           expect(cluster).to be_platform_kubernetes_rbac
+          expect(cluster).to be_namespace_per_environment
         end
       end
 
@@ -347,7 +421,8 @@ describe Groups::ClustersController do
     end
 
     describe 'security' do
-      it { expect { go }.to be_allowed_for(:admin) }
+      it('is allowed for admin when admin mode is enabled', :enable_admin_mode) { expect { go }.to be_allowed_for(:admin) }
+      it('is denied for admin when admin mode is disabled') { expect { go }.to be_denied_for(:admin) }
       it { expect { go }.to be_allowed_for(:owner).of(group) }
       it { expect { go }.to be_allowed_for(:maintainer).of(group) }
       it { expect { go }.to be_denied_for(:developer).of(group) }
@@ -388,7 +463,7 @@ describe Groups::ClustersController do
 
       cluster = group.clusters.first
 
-      expect(response.status).to eq(201)
+      expect(response).to have_gitlab_http_status(:created)
       expect(response.location).to eq(group_cluster_path(group, cluster))
       expect(cluster).to be_aws
       expect(cluster).to be_kubernetes
@@ -404,8 +479,8 @@ describe Groups::ClustersController do
       it 'does not create a cluster' do
         expect { post_create_aws }.not_to change { Clusters::Cluster.count }
 
-        expect(response.status).to eq(422)
-        expect(response.content_type).to eq('application/json')
+        expect(response).to have_gitlab_http_status(:unprocessable_entity)
+        expect(response.media_type).to eq('application/json')
         expect(response.body).to include('is invalid')
       end
     end
@@ -415,7 +490,8 @@ describe Groups::ClustersController do
         allow(WaitForClusterCreationWorker).to receive(:perform_in)
       end
 
-      it { expect { post_create_aws }.to be_allowed_for(:admin) }
+      it('is allowed for admin when admin mode is enabled', :enable_admin_mode) { expect { post_create_aws }.to be_allowed_for(:admin) }
+      it('is denied for admin when admin mode is disabled') { expect { post_create_aws }.to be_denied_for(:admin) }
       it { expect { post_create_aws }.to be_allowed_for(:owner).of(group) }
       it { expect { post_create_aws }.to be_allowed_for(:maintainer).of(group) }
       it { expect { post_create_aws }.to be_denied_for(:developer).of(group) }
@@ -427,14 +503,13 @@ describe Groups::ClustersController do
   end
 
   describe 'POST authorize AWS role for EKS cluster' do
-    let(:role_arn) { 'arn:aws:iam::123456789012:role/role-name' }
-    let(:role_external_id) { '12345' }
+    let!(:role) { create(:aws_role, user: user) }
 
+    let(:role_arn) { 'arn:new-role' }
     let(:params) do
       {
         cluster: {
-          role_arn: role_arn,
-          role_external_id: role_external_id
+          role_arn: role_arn
         }
       }
     end
@@ -448,29 +523,34 @@ describe Groups::ClustersController do
         .and_return(double(execute: double))
     end
 
-    it 'creates an Aws::Role record' do
-      expect { go }.to change { Aws::Role.count }
+    it 'updates the associated role with the supplied ARN' do
+      go
 
-      expect(response.status).to eq 200
-
-      role = Aws::Role.last
-      expect(role.user).to eq user
-      expect(role.role_arn).to eq role_arn
-      expect(role.role_external_id).to eq role_external_id
+      expect(response).to have_gitlab_http_status(:ok)
+      expect(role.reload.role_arn).to eq(role_arn)
     end
 
-    context 'role cannot be created' do
+    context 'supplied role is invalid' do
       let(:role_arn) { 'invalid-role' }
 
-      it 'does not create a record' do
-        expect { go }.not_to change { Aws::Role.count }
+      it 'does not update the associated role' do
+        expect { go }.not_to change { role.role_arn }
 
-        expect(response.status).to eq 422
+        expect(response).to have_gitlab_http_status(:unprocessable_entity)
       end
     end
 
     describe 'security' do
-      it { expect { go }.to be_allowed_for(:admin) }
+      before do
+        allow_next_instance_of(Clusters::Aws::AuthorizeRoleService) do |service|
+          response = double(status: :ok, body: double)
+
+          allow(service).to receive(:execute).and_return(response)
+        end
+      end
+
+      it('is allowed for admin when admin mode is enabled', :enable_admin_mode) { expect { go }.to be_allowed_for(:admin) }
+      it('is denied for admin when admin mode is disabled') { expect { go }.to be_denied_for(:admin) }
       it { expect { go }.to be_allowed_for(:owner).of(group) }
       it { expect { go }.to be_allowed_for(:maintainer).of(group) }
       it { expect { go }.to be_denied_for(:developer).of(group) }
@@ -506,7 +586,8 @@ describe Groups::ClustersController do
     end
 
     describe 'security' do
-      it { expect { go }.to be_allowed_for(:admin) }
+      it('is allowed for admin when admin mode is enabled', :enable_admin_mode) { expect { go }.to be_allowed_for(:admin) }
+      it('is denied for admin when admin mode is disabled') { expect { go }.to be_denied_for(:admin) }
       it { expect { go }.to be_allowed_for(:owner).of(group) }
       it { expect { go }.to be_allowed_for(:maintainer).of(group) }
       it { expect { go }.to be_denied_for(:developer).of(group) }
@@ -545,7 +626,8 @@ describe Groups::ClustersController do
     end
 
     describe 'security' do
-      it { expect { go }.to be_allowed_for(:admin) }
+      it('is allowed for admin when admin mode is enabled', :enable_admin_mode) { expect { go }.to be_allowed_for(:admin) }
+      it('is denied for admin when admin mode is disabled') { expect { go }.to be_denied_for(:admin) }
       it { expect { go }.to be_allowed_for(:owner).of(group) }
       it { expect { go }.to be_allowed_for(:maintainer).of(group) }
       it { expect { go }.to be_denied_for(:developer).of(group) }
@@ -559,25 +641,36 @@ describe Groups::ClustersController do
   describe 'GET show' do
     let(:cluster) { create(:cluster, :provided_by_gcp, cluster_type: :group_type, groups: [group]) }
 
-    def go
+    def go(tab: nil)
       get :show,
         params: {
           group_id: group,
-          id: cluster
+          id: cluster,
+          tab: tab
         }
     end
 
     describe 'functionality' do
+      render_views
+
       it 'renders view' do
         go
 
         expect(response).to have_gitlab_http_status(:ok)
         expect(assigns(:cluster)).to eq(cluster)
       end
+
+      it 'renders integration tab view', :aggregate_failures do
+        go(tab: 'integrations')
+
+        expect(response).to render_template('clusters/clusters/_integrations')
+        expect(response).to have_gitlab_http_status(:ok)
+      end
     end
 
     describe 'security' do
-      it { expect { go }.to be_allowed_for(:admin) }
+      it('is allowed for admin when admin mode is enabled', :enable_admin_mode) { expect { go }.to be_allowed_for(:admin) }
+      it('is denied for admin when admin mode is disabled') { expect { go }.to be_denied_for(:admin) }
       it { expect { go }.to be_allowed_for(:owner).of(group) }
       it { expect { go }.to be_allowed_for(:maintainer).of(group) }
       it { expect { go }.to be_denied_for(:developer).of(group) }
@@ -645,6 +738,7 @@ describe Groups::ClustersController do
                 enabled: false,
                 name: 'my-new-cluster-name',
                 managed: false,
+                namespace_per_environment: false,
                 domain: domain
               }
             }
@@ -658,6 +752,7 @@ describe Groups::ClustersController do
             expect(cluster.enabled).to be_falsey
             expect(cluster.name).to eq('my-new-cluster-name')
             expect(cluster).not_to be_managed
+            expect(cluster).not_to be_namespace_per_environment
           end
         end
 
@@ -683,7 +778,8 @@ describe Groups::ClustersController do
     describe 'security' do
       let_it_be(:cluster) { create(:cluster, :provided_by_gcp, cluster_type: :group_type, groups: [group]) }
 
-      it { expect { go }.to be_allowed_for(:admin) }
+      it('is allowed for admin when admin mode is enabled', :enable_admin_mode) { expect { go }.to be_allowed_for(:admin) }
+      it('is denied for admin when admin mode is disabled') { expect { go }.to be_denied_for(:admin) }
       it { expect { go }.to be_allowed_for(:owner).of(group) }
       it { expect { go }.to be_allowed_for(:maintainer).of(group) }
       it { expect { go }.to be_denied_for(:developer).of(group) }
@@ -751,7 +847,8 @@ describe Groups::ClustersController do
     describe 'security' do
       let_it_be(:cluster) { create(:cluster, :provided_by_gcp, :production_environment, cluster_type: :group_type, groups: [group]) }
 
-      it { expect { go }.to be_allowed_for(:admin) }
+      it('is allowed for admin when admin mode is enabled', :enable_admin_mode) { expect { go }.to be_allowed_for(:admin) }
+      it('is denied for admin when admin mode is disabled') { expect { go }.to be_denied_for(:admin) }
       it { expect { go }.to be_allowed_for(:owner).of(group) }
       it { expect { go }.to be_allowed_for(:maintainer).of(group) }
       it { expect { go }.to be_denied_for(:developer).of(group) }

@@ -7,8 +7,13 @@ module Projects
     class LfsDownloadLinkListService < BaseService
       DOWNLOAD_ACTION = 'download'
 
+      # This could be different per server, but it seems like a reasonable value to start with.
+      # https://github.com/git-lfs/git-lfs/issues/419
+      REQUEST_BATCH_SIZE = 100
+
       DownloadLinksError = Class.new(StandardError)
       DownloadLinkNotFound = Class.new(StandardError)
+      DownloadLinksRequestEntityTooLargeError = Class.new(StandardError)
 
       attr_reader :remote_uri
 
@@ -25,23 +30,46 @@ module Projects
       def execute(oids)
         return [] unless project&.lfs_enabled? && remote_uri && oids.present?
 
-        get_download_links(oids)
+        get_download_links_in_batches(oids)
       end
 
       private
+
+      def get_download_links_in_batches(oids, batch_size = REQUEST_BATCH_SIZE)
+        download_links = []
+
+        oids.each_slice(batch_size) do |batch|
+          download_links += get_download_links(batch)
+        end
+
+        download_links
+
+      rescue DownloadLinksRequestEntityTooLargeError => e
+        # Log this exceptions to see how open it happens
+        Gitlab::ErrorTracking
+          .track_exception(e, project_id: project&.id, batch_size: batch_size, oids_count: oids.count)
+
+        # Try again with a smaller batch
+        batch_size /= 2
+
+        retry if batch_size > REQUEST_BATCH_SIZE / 3
+
+        raise DownloadLinksError, 'Unable to download due to RequestEntityTooLarge errors'
+      end
 
       def get_download_links(oids)
         response = Gitlab::HTTP.post(remote_uri,
                                      body: request_body(oids),
                                      headers: headers)
 
+        raise DownloadLinksRequestEntityTooLargeError if response.request_entity_too_large?
         raise DownloadLinksError, response.message unless response.success?
 
         # Since the LFS Batch API may return a Content-Ttpe of
         # application/vnd.git-lfs+json
         # (https://github.com/git-lfs/git-lfs/blob/master/docs/api/batch.md#requests),
         # HTTParty does not know this is actually JSON.
-        data = JSON.parse(response.body)
+        data = Gitlab::Json.parse(response.body)
 
         raise DownloadLinksError, "LFS Batch API did return any objects" unless data.is_a?(Hash) && data.key?('objects')
 
@@ -53,11 +81,13 @@ module Projects
       def parse_response_links(objects_response)
         objects_response.each_with_object([]) do |entry, link_list|
           link = entry.dig('actions', DOWNLOAD_ACTION, 'href')
+          headers = entry.dig('actions', DOWNLOAD_ACTION, 'header')
 
           raise DownloadLinkNotFound unless link
 
           link_list << LfsDownloadObject.new(oid: entry['oid'],
                                              size: entry['size'],
+                                             headers: headers,
                                              link: add_credentials(link))
         rescue DownloadLinkNotFound, Addressable::URI::InvalidURIError
           log_error("Link for Lfs Object with oid #{entry['oid']} not found or invalid.")

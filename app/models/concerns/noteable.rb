@@ -17,14 +17,19 @@ module Noteable
 
     # `Noteable` class names that support resolvable notes.
     def resolvable_types
-      %w(MergeRequest)
+      %w(MergeRequest DesignManagement::Design)
+    end
+
+    # `Noteable` class names that support creating/forwarding individual notes.
+    def email_creatable_types
+      %w(Issue)
     end
   end
 
   # The timestamp of the note (e.g. the :created_at or :updated_at attribute if provided via
   # API call)
   def system_note_timestamp
-    @system_note_timestamp || Time.now # rubocop:disable Gitlab/ModuleWithInstanceVariables
+    @system_note_timestamp || Time.current # rubocop:disable Gitlab/ModuleWithInstanceVariables
   end
 
   attr_writer :system_note_timestamp
@@ -55,6 +60,10 @@ module Noteable
     supports_discussions? && self.class.replyable_types.include?(base_class_name)
   end
 
+  def supports_creating_notes_by_email?
+    self.class.email_creatable_types.include?(base_class_name)
+  end
+
   def supports_suggestion?
     false
   end
@@ -67,6 +76,10 @@ module Noteable
     false
   end
 
+  def has_any_diff_note_positions?
+    notes.any? && DiffNotePosition.where(note: notes).exists?
+  end
+
   def discussion_notes
     notes
   end
@@ -77,6 +90,12 @@ module Noteable
     @discussions ||= discussion_notes
       .inc_relations_for_view
       .discussions(self)
+  end
+
+  def discussion_ids_relation
+    notes.select(:discussion_id)
+      .group(:discussion_id)
+      .order('MIN(created_at), MIN(id)')
   end
 
   def capped_notes_count(max)
@@ -132,15 +151,37 @@ module Noteable
   end
 
   def note_etag_key
+    return Gitlab::Routing.url_helpers.designs_project_issue_path(project, issue, { vueroute: filename }) if self.is_a?(DesignManagement::Design)
+
     Gitlab::Routing.url_helpers.project_noteable_notes_path(
       project,
       target_type: self.class.name.underscore,
       target_id: id
     )
   end
+
+  def after_note_created(_note)
+    # no-op
+  end
+
+  def after_note_destroyed(_note)
+    # no-op
+  end
+
+  # Email address that an authorized user can send/forward an email to be added directly
+  # to an issue or merge request.
+  # example: incoming+h5bp-html5-boilerplate-8-1234567890abcdef123456789-issue-34@localhost.com
+  def creatable_note_email_address(author)
+    return unless supports_creating_notes_by_email?
+
+    project_email = project.new_issuable_address(author, self.class.name.underscore)
+    return unless project_email
+
+    project_email.sub('@', "-#{iid}@")
+  end
 end
 
 Noteable.extend(Noteable::ClassMethods)
 
-Noteable::ClassMethods.prepend_if_ee('EE::Noteable::ClassMethods') # rubocop: disable Cop/InjectEnterpriseEditionModule
-Noteable.prepend_if_ee('EE::Noteable')
+Noteable::ClassMethods.prepend_mod_with('Noteable::ClassMethods')
+Noteable.prepend_mod_with('Noteable')

@@ -2,7 +2,7 @@
 
 require 'spec_helper'
 
-describe Projects::MergeRequests::CreationsController do
+RSpec.describe Projects::MergeRequests::CreationsController do
   let(:project) { create(:project, :repository) }
   let(:user)    { project.owner }
   let(:fork_project) { create(:forked_project_with_submodules) }
@@ -212,6 +212,38 @@ describe Projects::MergeRequests::CreationsController do
 
       expect(assigns(:commit)).to be_nil
       expect(response).to have_gitlab_http_status(:ok)
+    end
+
+    context 'no target_project_id provided' do
+      before do
+        project.add_maintainer(user)
+      end
+
+      it 'selects itself as a target project' do
+        get :branch_to,
+          params: {
+          namespace_id: project.namespace,
+          project_id: project,
+          ref: 'master'
+        }
+
+        expect(assigns(:target_project)).to eq(project)
+        expect(response).to have_gitlab_http_status(:ok)
+      end
+
+      context 'project is a fork' do
+        it 'calls to project defaults to selects a correct target project' do
+          get :branch_to,
+            params: {
+            namespace_id: fork_project.namespace,
+            project_id: fork_project,
+            ref: 'master'
+          }
+
+          expect(assigns(:target_project)).to eq(project)
+          expect(response).to have_gitlab_http_status(:ok)
+        end
+      end
     end
   end
 

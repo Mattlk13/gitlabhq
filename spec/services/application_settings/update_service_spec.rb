@@ -2,7 +2,7 @@
 
 require 'spec_helper'
 
-describe ApplicationSettings::UpdateService do
+RSpec.describe ApplicationSettings::UpdateService do
   include ExternalAuthorizationServiceHelpers
 
   let(:application_settings) { create(:application_setting) }
@@ -23,8 +23,8 @@ describe ApplicationSettings::UpdateService do
     context 'when the passed terms are blank' do
       let(:params) { { terms: '' } }
 
-      it 'does not create terms' do
-        expect { subject.execute }.not_to change { ApplicationSetting::Term.count }
+      it 'does create terms' do
+        expect { subject.execute }.to change { ApplicationSetting::Term.count }.by(1)
       end
     end
 
@@ -49,7 +49,7 @@ describe ApplicationSettings::UpdateService do
         expect(application_settings.terms).to eq('Be nice!')
       end
 
-      it 'Only queries once when the terms are changed' do
+      it 'only queries once when the terms are changed' do
         create(:term, terms: 'Other terms')
         expect(application_settings.terms).to eq('Other terms')
 
@@ -66,7 +66,7 @@ describe ApplicationSettings::UpdateService do
     context 'when params is blank' do
       let(:params) { {} }
 
-      it 'does not add to whitelist' do
+      it 'does not add to allowlist' do
         expect { subject.execute }.not_to change {
           application_settings.outbound_local_requests_whitelist
         }
@@ -80,7 +80,7 @@ describe ApplicationSettings::UpdateService do
 
       let(:params) { { add_to_outbound_local_requests_whitelist: ['example.com', ''] } }
 
-      it 'adds to whitelist' do
+      it 'adds to allowlist' do
         expect { subject.execute }.to change {
           application_settings.outbound_local_requests_whitelist
         }
@@ -91,14 +91,14 @@ describe ApplicationSettings::UpdateService do
       end
     end
 
-    context 'when param outbound_local_requests_whitelist_raw is passed' do
+    context 'when param outbound_local_requests_allowlist_raw is passed' do
       before do
         application_settings.outbound_local_requests_whitelist = ['127.0.0.1']
       end
 
-      let(:params) { { outbound_local_requests_whitelist_raw: 'example.com;gitlab.com' } }
+      let(:params) { { outbound_local_requests_allowlist_raw: 'example.com;gitlab.com' } }
 
-      it 'overwrites the existing whitelist' do
+      it 'overwrites the existing allowlist' do
         expect { subject.execute }.to change {
           application_settings.outbound_local_requests_whitelist
         }
@@ -122,6 +122,7 @@ describe ApplicationSettings::UpdateService do
     it_behaves_like 'invalidates markdown cache', { asset_proxy_enabled: true }
     it_behaves_like 'invalidates markdown cache', { asset_proxy_url: 'http://test.com' }
     it_behaves_like 'invalidates markdown cache', { asset_proxy_secret_key: 'another secret' }
+    it_behaves_like 'invalidates markdown cache', { asset_proxy_allowlist: ['domain.com'] }
     it_behaves_like 'invalidates markdown cache', { asset_proxy_whitelist: ['domain.com'] }
 
     context 'when also setting the local_markdown_version' do
@@ -257,7 +258,7 @@ describe ApplicationSettings::UpdateService do
       described_class.new(application_settings, admin, { external_authorization_service_enabled: false }).execute
     end
 
-    it 'does validate labels if external authorization gets enabled ' do
+    it 'does validate labels if external authorization gets enabled' do
       expect_any_instance_of(described_class).to receive(:validate_classification_label)
 
       described_class.new(application_settings, admin, { external_authorization_service_enabled: true }).execute
@@ -332,6 +333,72 @@ describe ApplicationSettings::UpdateService do
       expect(application_settings.throttle_protected_paths_period_in_seconds).to eq(600)
       expect(application_settings.throttle_protected_paths_requests_per_period).to eq(100)
       expect(application_settings.protected_paths).to eq(['/users/password', '/users/sign_in'])
+    end
+  end
+
+  context 'when package registry rate limits are passed' do
+    let(:params) do
+      {
+        throttle_unauthenticated_packages_api_enabled: 1,
+        throttle_unauthenticated_packages_api_period_in_seconds: 500,
+        throttle_unauthenticated_packages_api_requests_per_period: 20,
+        throttle_authenticated_packages_api_enabled: 1,
+        throttle_authenticated_packages_api_period_in_seconds: 600,
+        throttle_authenticated_packages_api_requests_per_period: 10
+      }
+    end
+
+    it 'updates package registry throttle settings' do
+      subject.execute
+
+      application_settings.reload
+
+      expect(application_settings.throttle_unauthenticated_packages_api_enabled).to be_truthy
+      expect(application_settings.throttle_unauthenticated_packages_api_period_in_seconds).to eq(500)
+      expect(application_settings.throttle_unauthenticated_packages_api_requests_per_period).to eq(20)
+      expect(application_settings.throttle_authenticated_packages_api_enabled).to be_truthy
+      expect(application_settings.throttle_authenticated_packages_api_period_in_seconds).to eq(600)
+      expect(application_settings.throttle_authenticated_packages_api_requests_per_period).to eq(10)
+    end
+  end
+
+  context 'when issues_create_limit is passed' do
+    let(:params) do
+      {
+        issues_create_limit: 600
+      }
+    end
+
+    it 'updates issues_create_limit value' do
+      subject.execute
+
+      application_settings.reload
+
+      expect(application_settings.issues_create_limit).to eq(600)
+    end
+  end
+
+  context 'when require_admin_approval_after_user_signup changes' do
+    context 'when it goes from enabled to disabled' do
+      let(:params) { { require_admin_approval_after_user_signup: false } }
+
+      it 'calls ApproveBlockedPendingApprovalUsersWorker' do
+        expect(ApproveBlockedPendingApprovalUsersWorker).to receive(:perform_async)
+
+        subject.execute
+      end
+    end
+
+    context 'when it goes from disabled to enabled' do
+      let(:params) { { require_admin_approval_after_user_signup: true } }
+
+      it 'does not call ApproveBlockedPendingApprovalUsersWorker' do
+        application_settings.update!(require_admin_approval_after_user_signup: false)
+
+        expect(ApproveBlockedPendingApprovalUsersWorker).not_to receive(:perform_async)
+
+        subject.execute
+      end
     end
   end
 end

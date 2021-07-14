@@ -2,7 +2,7 @@
 
 require 'spec_helper'
 
-describe Banzai::ReferenceParser::CommitParser do
+RSpec.describe Banzai::ReferenceParser::CommitParser do
   include ReferenceParserHelpers
 
   let(:project) { create(:project, :public) }
@@ -130,11 +130,11 @@ describe Banzai::ReferenceParser::CommitParser do
   end
 
   context 'when checking commits on another projects' do
-    let(:control_links) do
+    let!(:control_links) do
       [commit_link]
     end
 
-    let(:actual_links) do
+    let!(:actual_links) do
       control_links + [commit_link, commit_link]
     end
 

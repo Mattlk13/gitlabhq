@@ -2,9 +2,12 @@
 
 # Blob is a Rails-specific wrapper around Gitlab::Git::Blob, SnippetBlob and Ci::ArtifactBlob
 class Blob < SimpleDelegator
+  include GlobalID::Identification
   include Presentable
   include BlobLanguageFromGitAttributes
   include BlobActiveModel
+
+  MODE_SYMLINK = '120000' # The STRING 120000 is the git-reported octal filemode for a symlink
 
   CACHE_TIME = 60 # Cache raw blobs referred to by a (mutable) ref for 1 minute
   CACHE_TIME_IMMUTABLE = 3600 # Cache blobs referred to by an immutable reference for 1 hour
@@ -24,6 +27,7 @@ class Blob < SimpleDelegator
   # type. LFS pointers to `.stl` files are assumed to always be the binary kind,
   # and use the `BinarySTL` viewer.
   RICH_VIEWERS = [
+    BlobViewer::CSV,
     BlobViewer::Markup,
     BlobViewer::Notebook,
     BlobViewer::SVG,
@@ -50,6 +54,7 @@ class Blob < SimpleDelegator
     BlobViewer::License,
     BlobViewer::Contributing,
     BlobViewer::Changelog,
+    BlobViewer::MetricsDashboardYml,
 
     BlobViewer::CargoToml,
     BlobViewer::Cartfile,
@@ -57,6 +62,7 @@ class Blob < SimpleDelegator
     BlobViewer::Gemfile,
     BlobViewer::Gemspec,
     BlobViewer::GodepsJson,
+    BlobViewer::GoMod,
     BlobViewer::PackageJson,
     BlobViewer::Podfile,
     BlobViewer::Podspec,
@@ -86,8 +92,8 @@ class Blob < SimpleDelegator
     new(blob, container)
   end
 
-  def self.lazy(container, commit_id, path, blob_size_limit: Gitlab::Git::Blob::MAX_DATA_DISPLAY_SIZE)
-    BatchLoader.for([commit_id, path]).batch(key: container.repository) do |items, loader, args|
+  def self.lazy(repository, commit_id, path, blob_size_limit: Gitlab::Git::Blob::MAX_DATA_DISPLAY_SIZE)
+    BatchLoader.for([commit_id, path]).batch(key: repository) do |items, loader, args|
       args[:key].blobs_at(items, blob_size_limit: blob_size_limit).each do |blob|
         loader.call([blob.commit_id, blob.path], blob) if blob
       end
@@ -129,7 +135,7 @@ class Blob < SimpleDelegator
 
   def external_storage_error?
     if external_storage == :lfs
-      !project&.lfs_enabled?
+      !repository.lfs_enabled?
     else
       false
     end
@@ -254,5 +260,3 @@ class Blob < SimpleDelegator
     classes.find { |viewer_class| viewer_class.can_render?(self, verify_binary: verify_binary) }
   end
 end
-
-Blob.prepend_if_ee('EE::Blob')

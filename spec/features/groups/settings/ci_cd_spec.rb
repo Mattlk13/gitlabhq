@@ -2,7 +2,7 @@
 
 require 'spec_helper'
 
-describe 'Group CI/CD settings' do
+RSpec.describe 'Group CI/CD settings' do
   include WaitForRequests
 
   let(:user) { create(:user) }
@@ -28,25 +28,12 @@ describe 'Group CI/CD settings' do
       let(:page_token) { find('#registration_token').text }
 
       before do
-        click_button 'Reset runners registration token'
+        click_button 'Reset registration token'
       end
 
       it 'changes registration token' do
         expect(page_token).not_to eq token
       end
-    end
-  end
-
-  context 'Deploy tokens' do
-    let!(:deploy_token) { create(:deploy_token, :group, groups: [group]) }
-
-    before do
-      stub_container_registry_config(enabled: true)
-      visit group_settings_ci_cd_path(group)
-    end
-
-    it_behaves_like 'a deploy token in ci/cd settings' do
-      let(:entity_type) { 'group' }
     end
   end
 

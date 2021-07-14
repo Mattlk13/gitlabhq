@@ -64,18 +64,25 @@ module Issues
 
     private
 
-    def whitelisted_issue_params
-      if can?(current_user, :admin_issue, project)
-        params.slice(:title, :description, :milestone_id)
-      else
-        params.slice(:title, :description)
-      end
+    def allowed_issue_params
+      allowed_params = [
+        :title,
+        :description,
+        :confidential
+      ]
+
+      allowed_params << :milestone_id if can?(current_user, :admin_issue, project)
+      allowed_params << :issue_type if issue_type_allowed?(project)
+
+      params.slice(*allowed_params)
     end
 
     def build_issue_params
-      issue_params_with_info_from_discussions.merge(whitelisted_issue_params)
+      { author: current_user }
+        .merge(issue_params_with_info_from_discussions)
+        .merge(allowed_issue_params)
     end
   end
 end
 
-Issues::BuildService.prepend_if_ee('EE::Issues::BuildService')
+Issues::BuildService.prepend_mod_with('Issues::BuildService')

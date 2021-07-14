@@ -2,45 +2,41 @@
 
 require 'spec_helper'
 
-describe GitlabSchema do
+RSpec.describe GitlabSchema do
+  let_it_be(:connections) { GitlabSchema.connections.all_wrappers }
+
   let(:user) { build :user }
 
   it 'uses batch loading' do
     expect(field_instrumenters).to include(BatchLoader::GraphQL)
   end
 
-  it 'enables the preload instrumenter' do
-    expect(field_instrumenters).to include(BatchLoader::GraphQL)
-  end
-
-  it 'enables the authorization instrumenter' do
-    expect(field_instrumenters).to include(instance_of(::Gitlab::Graphql::Authorize::Instrumentation))
-  end
-
-  it 'enables using presenters' do
-    expect(field_instrumenters).to include(instance_of(::Gitlab::Graphql::Present::Instrumentation))
-  end
-
-  it 'enables using gitaly call checker' do
-    expect(field_instrumenters).to include(instance_of(::Gitlab::Graphql::CallsGitaly::Instrumentation))
+  it 'enables the generic instrumenter' do
+    expect(field_instrumenters).to include(instance_of(::Gitlab::Graphql::GenericTracing))
   end
 
   it 'has the base mutation' do
-    expect(described_class.mutation).to eq(::Types::MutationType.to_graphql)
+    expect(described_class.mutation).to eq(::Types::MutationType)
   end
 
   it 'has the base query' do
-    expect(described_class.query).to eq(::Types::QueryType.to_graphql)
+    expect(described_class.query).to eq(::Types::QueryType)
   end
 
-  it 'paginates active record relations using `Gitlab::Graphql::Connections::KeysetConnection`' do
-    connection = GraphQL::Relay::BaseConnection::CONNECTION_IMPLEMENTATIONS[ActiveRecord::Relation.name]
+  it 'paginates active record relations using `Pagination::Keyset::Connection`' do
+    connection = connections[ActiveRecord::Relation]
 
-    expect(connection).to eq(Gitlab::Graphql::Connections::Keyset::Connection)
+    expect(connection).to eq(Gitlab::Graphql::Pagination::Keyset::Connection)
+  end
+
+  it 'paginates ExternallyPaginatedArray using `Pagination::ExternallyPaginatedArrayConnection`' do
+    connection = connections[Gitlab::Graphql::ExternallyPaginatedArray]
+
+    expect(connection).to eq(Gitlab::Graphql::Pagination::ExternallyPaginatedArrayConnection)
   end
 
   describe '.execute' do
-    context 'for different types of users' do
+    context 'with different types of users' do
       context 'when no context' do
         it 'returns DEFAULT_MAX_COMPLEXITY' do
           expect(GraphQL::Schema)
@@ -71,13 +67,15 @@ describe GitlabSchema do
 
       context 'when a logged in user' do
         it 'returns AUTHENTICATED_COMPLEXITY' do
-          expect(GraphQL::Schema).to receive(:execute).with('query', hash_including(max_complexity: GitlabSchema::AUTHENTICATED_COMPLEXITY))
+          expect(GraphQL::Schema).to receive(:execute)
+            .with('query', hash_including(max_complexity: GitlabSchema::AUTHENTICATED_COMPLEXITY))
 
           described_class.execute('query', context: { current_user: user })
         end
 
         it 'returns AUTHENTICATED_MAX_DEPTH' do
-          expect(GraphQL::Schema).to receive(:execute).with('query', hash_including(max_depth: GitlabSchema::AUTHENTICATED_MAX_DEPTH))
+          expect(GraphQL::Schema).to receive(:execute)
+            .with('query', hash_including(max_depth: GitlabSchema::AUTHENTICATED_MAX_DEPTH))
 
           described_class.execute('query', context: { current_user: user })
         end
@@ -87,7 +85,8 @@ describe GitlabSchema do
         it 'returns ADMIN_COMPLEXITY' do
           user = build :user, :admin
 
-          expect(GraphQL::Schema).to receive(:execute).with('query', hash_including(max_complexity: GitlabSchema::ADMIN_COMPLEXITY))
+          expect(GraphQL::Schema).to receive(:execute)
+            .with('query', hash_including(max_complexity: GitlabSchema::ADMIN_COMPLEXITY))
 
           described_class.execute('query', context: { current_user: user })
         end
@@ -123,7 +122,7 @@ describe GitlabSchema do
   end
 
   describe '.object_from_id' do
-    context 'for subclasses of `ApplicationRecord`' do
+    context 'with subclasses of `ApplicationRecord`' do
       let_it_be(:user) { create(:user) }
 
       it 'returns the correct record' do
@@ -155,7 +154,7 @@ describe GitlabSchema do
       end
     end
 
-    context 'for classes that are not ActiveRecord subclasses and have implemented .lazy_find' do
+    context 'with classes that are not ActiveRecord subclasses and have implemented .lazy_find' do
       it 'returns the correct record' do
         note = create(:discussion_note_on_merge_request)
 
@@ -175,16 +174,20 @@ describe GitlabSchema do
       end
     end
 
-    context 'for other classes' do
+    context 'with other classes' do
       # We cannot use an anonymous class here as `GlobalID` expects `.name` not
       # to return `nil`
-      class TestGlobalId
-        include GlobalID::Identification
-        attr_accessor :id
+      before do
+        test_global_id = Class.new do
+          include GlobalID::Identification
+          attr_accessor :id
 
-        def initialize(id)
-          @id = id
+          def initialize(id)
+            @id = id
+          end
         end
+
+        stub_const('TestGlobalId', test_global_id)
       end
 
       it 'falls back to a regular find' do
@@ -198,6 +201,86 @@ describe GitlabSchema do
 
     it 'raises the correct error on invalid input' do
       expect { described_class.object_from_id("bogus id") }.to raise_error(Gitlab::Graphql::Errors::ArgumentError)
+    end
+  end
+
+  describe '.parse_gid' do
+    let_it_be(:global_id) { 'gid://gitlab/TestOne/2147483647' }
+
+    subject(:parse_gid) { described_class.parse_gid(global_id) }
+
+    before do
+      test_base = Class.new
+      test_one = Class.new(test_base)
+      test_two = Class.new(test_base)
+      test_three = Class.new(test_base)
+
+      stub_const('TestBase', test_base)
+      stub_const('TestOne', test_one)
+      stub_const('TestTwo', test_two)
+      stub_const('TestThree', test_three)
+    end
+
+    it 'parses the gid' do
+      gid = parse_gid
+
+      expect(gid.model_id).to eq '2147483647'
+      expect(gid.model_class).to eq TestOne
+    end
+
+    context 'when gid is malformed' do
+      let_it_be(:global_id) { 'malformed://gitlab/TestOne/2147483647' }
+
+      it 'raises an error' do
+        expect { parse_gid }
+          .to raise_error(Gitlab::Graphql::Errors::ArgumentError, "#{global_id} is not a valid GitLab ID.")
+      end
+    end
+
+    context 'when using expected_type' do
+      it 'accepts a single type' do
+        gid = described_class.parse_gid(global_id, expected_type: TestOne)
+
+        expect(gid.model_class).to eq TestOne
+      end
+
+      it 'accepts an ancestor type' do
+        gid = described_class.parse_gid(global_id, expected_type: TestBase)
+
+        expect(gid.model_class).to eq TestOne
+      end
+
+      it 'rejects an unknown type' do
+        expect { described_class.parse_gid(global_id, expected_type: TestTwo) }
+          .to raise_error(Gitlab::Graphql::Errors::ArgumentError, "#{global_id} is not a valid ID for TestTwo.")
+      end
+
+      context 'when expected_type is an array' do
+        subject(:parse_gid) { described_class.parse_gid(global_id, expected_type: [TestOne, TestTwo]) }
+
+        context 'when global_id is of type TestOne' do
+          it 'returns an object of an expected type' do
+            expect(parse_gid.model_class).to eq TestOne
+          end
+        end
+
+        context 'when global_id is of type TestTwo' do
+          let_it_be(:global_id) { 'gid://gitlab/TestTwo/2147483647' }
+
+          it 'returns an object of an expected type' do
+            expect(parse_gid.model_class).to eq TestTwo
+          end
+        end
+
+        context 'when global_id is of type TestThree' do
+          let_it_be(:global_id) { 'gid://gitlab/TestThree/2147483647' }
+
+          it 'rejects an unknown type' do
+            expect { parse_gid }
+              .to raise_error(Gitlab::Graphql::Errors::ArgumentError, "#{global_id} is not a valid ID for TestOne, TestTwo.")
+          end
+        end
+      end
     end
   end
 

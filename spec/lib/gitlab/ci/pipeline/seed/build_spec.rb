@@ -2,14 +2,17 @@
 
 require 'spec_helper'
 
-describe Gitlab::Ci::Pipeline::Seed::Build do
-  let(:project) { create(:project, :repository) }
-  let(:head_sha) { project.repository.head_commit.id }
-  let(:pipeline) { create(:ci_empty_pipeline, project: project, sha: head_sha) }
+RSpec.describe Gitlab::Ci::Pipeline::Seed::Build do
+  let_it_be(:project) { create(:project, :repository) }
+  let_it_be(:head_sha) { project.repository.head_commit.id }
+
+  let(:pipeline) { build(:ci_empty_pipeline, project: project, sha: head_sha) }
+  let(:root_variables) { [] }
+  let(:seed_context) { double(pipeline: pipeline, root_variables: root_variables) }
   let(:attributes) { { name: 'rspec', ref: 'master', scheduling_type: :stage } }
   let(:previous_stages) { [] }
 
-  let(:seed_build) { described_class.new(pipeline, attributes, previous_stages) }
+  let(:seed_build) { described_class.new(seed_context, attributes, previous_stages) }
 
   describe '#attributes' do
     subject { seed_build.attributes }
@@ -71,86 +74,98 @@ describe Gitlab::Ci::Pipeline::Seed::Build do
       end
     end
 
+    context 'with job:rules:[variables:]' do
+      let(:attributes) do
+        { name: 'rspec',
+          ref: 'master',
+          job_variables: [{ key: 'VAR1', value: 'var 1', public: true },
+                          { key: 'VAR2', value: 'var 2', public: true }],
+          rules: [{ if: '$VAR == null', variables: { VAR1: 'new var 1', VAR3: 'var 3' } }] }
+      end
+
+      it do
+        is_expected.to include(yaml_variables: [{ key: 'VAR1', value: 'new var 1', public: true },
+                                                { key: 'VAR2', value: 'var 2', public: true },
+                                                { key: 'VAR3', value: 'var 3', public: true }])
+      end
+    end
+
     context 'with cache:key' do
       let(:attributes) do
         {
           name: 'rspec',
           ref: 'master',
-          cache: {
+          cache: [{
             key: 'a-value'
-          }
+          }]
         }
       end
 
-      it { is_expected.to include(options: { cache: { key: 'a-value' } }) }
-    end
+      it { is_expected.to include(options: { cache: [a_hash_including(key: 'a-value')] }) }
 
-    context 'with cache:key:files' do
-      let(:attributes) do
-        {
-          name: 'rspec',
-          ref: 'master',
-          cache: {
-            key: {
-              files: ['VERSION']
+      context 'with cache:key:files' do
+        let(:attributes) do
+          {
+            name: 'rspec',
+            ref: 'master',
+            cache: [{
+              key: {
+                files: ['VERSION']
+              }
+            }]
+          }
+        end
+
+        it 'includes cache options' do
+          cache_options = {
+            options: {
+              cache: [a_hash_including(key: 'f155568ad0933d8358f66b846133614f76dd0ca4')]
             }
           }
-        }
+
+          is_expected.to include(cache_options)
+        end
       end
 
-      it 'includes cache options' do
-        cache_options = {
-          options: {
-            cache: {
-              key: 'f155568ad0933d8358f66b846133614f76dd0ca4'
-            }
+      context 'with cache:key:prefix' do
+        let(:attributes) do
+          {
+            name: 'rspec',
+            ref: 'master',
+            cache: [{
+              key: {
+                prefix: 'something'
+              }
+            }]
           }
-        }
+        end
 
-        is_expected.to include(cache_options)
-      end
-    end
-
-    context 'with cache:key:prefix' do
-      let(:attributes) do
-        {
-          name: 'rspec',
-          ref: 'master',
-          cache: {
-            key: {
-              prefix: 'something'
-            }
-          }
-        }
+        it { is_expected.to include(options: { cache: [a_hash_including( key: 'something-default' )] }) }
       end
 
-      it { is_expected.to include(options: { cache: { key: 'something-default' } }) }
-    end
+      context 'with cache:key:files and prefix' do
+        let(:attributes) do
+          {
+            name: 'rspec',
+            ref: 'master',
+            cache: [{
+              key: {
+                files: ['VERSION'],
+                prefix: 'something'
+              }
+            }]
+          }
+        end
 
-    context 'with cache:key:files and prefix' do
-      let(:attributes) do
-        {
-          name: 'rspec',
-          ref: 'master',
-          cache: {
-            key: {
-              files: ['VERSION'],
-              prefix: 'something'
+        it 'includes cache options' do
+          cache_options = {
+            options: {
+              cache: [a_hash_including(key: 'something-f155568ad0933d8358f66b846133614f76dd0ca4')]
             }
           }
-        }
-      end
 
-      it 'includes cache options' do
-        cache_options = {
-          options: {
-            cache: {
-              key: 'something-f155568ad0933d8358f66b846133614f76dd0ca4'
-            }
-          }
-        }
-
-        is_expected.to include(cache_options)
+          is_expected.to include(cache_options)
+        end
       end
     end
 
@@ -163,7 +178,160 @@ describe Gitlab::Ci::Pipeline::Seed::Build do
         }
       end
 
-      it { is_expected.to include(options: {}) }
+      it { is_expected.to include({}) }
+    end
+
+    context 'with allow_failure' do
+      let(:options) do
+        { allow_failure_criteria: { exit_codes: [42] } }
+      end
+
+      let(:rules) do
+        [{ if: '$VAR == null', when: 'always' }]
+      end
+
+      let(:attributes) do
+        {
+          name: 'rspec',
+          ref: 'master',
+          options: options,
+          rules: rules
+        }
+      end
+
+      context 'when rules does not override allow_failure' do
+        it { is_expected.to match a_hash_including(options: options) }
+      end
+
+      context 'when rules set allow_failure to true' do
+        let(:rules) do
+          [{ if: '$VAR == null', when: 'always', allow_failure: true }]
+        end
+
+        it { is_expected.to match a_hash_including(options: { allow_failure_criteria: nil }) }
+      end
+
+      context 'when rules set allow_failure to false' do
+        let(:rules) do
+          [{ if: '$VAR == null', when: 'always', allow_failure: false }]
+        end
+
+        it { is_expected.to match a_hash_including(options: { allow_failure_criteria: nil }) }
+      end
+    end
+
+    context 'with workflow:rules:[variables:]' do
+      let(:attributes) do
+        { name: 'rspec',
+          ref: 'master',
+          yaml_variables: [{ key: 'VAR2', value: 'var 2', public: true },
+                           { key: 'VAR3', value: 'var 3', public: true }],
+          job_variables: [{ key: 'VAR2', value: 'var 2', public: true },
+                          { key: 'VAR3', value: 'var 3', public: true }],
+          root_variables_inheritance: root_variables_inheritance }
+      end
+
+      context 'when the pipeline has variables' do
+        let(:root_variables) do
+          [{ key: 'VAR1', value: 'var overridden pipeline 1', public: true },
+           { key: 'VAR2', value: 'var pipeline 2', public: true },
+           { key: 'VAR3', value: 'var pipeline 3', public: true },
+           { key: 'VAR4', value: 'new var pipeline 4', public: true }]
+        end
+
+        context 'when root_variables_inheritance is true' do
+          let(:root_variables_inheritance) { true }
+
+          it 'returns calculated yaml variables' do
+            expect(subject[:yaml_variables]).to match_array(
+              [{ key: 'VAR1', value: 'var overridden pipeline 1', public: true },
+               { key: 'VAR2', value: 'var 2', public: true },
+               { key: 'VAR3', value: 'var 3', public: true },
+               { key: 'VAR4', value: 'new var pipeline 4', public: true }]
+            )
+          end
+        end
+
+        context 'when root_variables_inheritance is false' do
+          let(:root_variables_inheritance) { false }
+
+          it 'returns job variables' do
+            expect(subject[:yaml_variables]).to match_array(
+              [{ key: 'VAR2', value: 'var 2', public: true },
+               { key: 'VAR3', value: 'var 3', public: true }]
+            )
+          end
+        end
+
+        context 'when root_variables_inheritance is an array' do
+          let(:root_variables_inheritance) { %w(VAR1 VAR2 VAR3) }
+
+          it 'returns calculated yaml variables' do
+            expect(subject[:yaml_variables]).to match_array(
+              [{ key: 'VAR1', value: 'var overridden pipeline 1', public: true },
+               { key: 'VAR2', value: 'var 2', public: true },
+               { key: 'VAR3', value: 'var 3', public: true }]
+            )
+          end
+        end
+      end
+
+      context 'when the pipeline has not a variable' do
+        let(:root_variables_inheritance) { true }
+
+        it 'returns seed yaml variables' do
+          expect(subject[:yaml_variables]).to match_array(
+            [{ key: 'VAR2', value: 'var 2', public: true },
+             { key: 'VAR3', value: 'var 3', public: true }])
+        end
+      end
+    end
+
+    context 'when the job rule depends on variables' do
+      let(:attributes) do
+        { name: 'rspec',
+          ref: 'master',
+          yaml_variables: [{ key: 'VAR1', value: 'var 1', public: true }],
+          job_variables: [{ key: 'VAR1', value: 'var 1', public: true }],
+          root_variables_inheritance: root_variables_inheritance,
+          rules: rules }
+      end
+
+      let(:root_variables_inheritance) { true }
+
+      context 'when the rules use job variables' do
+        let(:rules) do
+          [{ if: '$VAR1 == "var 1"', variables: { VAR1: 'overridden var 1', VAR2: 'new var 2' } }]
+        end
+
+        it 'recalculates the variables' do
+          expect(subject[:yaml_variables]).to contain_exactly({ key: 'VAR1', value: 'overridden var 1', public: true },
+                                                              { key: 'VAR2', value: 'new var 2', public: true })
+        end
+      end
+
+      context 'when the rules use root variables' do
+        let(:root_variables) do
+          [{ key: 'VAR2', value: 'var pipeline 2', public: true }]
+        end
+
+        let(:rules) do
+          [{ if: '$VAR2 == "var pipeline 2"', variables: { VAR1: 'overridden var 1', VAR2: 'overridden var 2' } }]
+        end
+
+        it 'recalculates the variables' do
+          expect(subject[:yaml_variables]).to contain_exactly({ key: 'VAR1', value: 'overridden var 1', public: true },
+                                                              { key: 'VAR2', value: 'overridden var 2', public: true })
+        end
+
+        context 'when the root_variables_inheritance is false' do
+          let(:root_variables_inheritance) { false }
+
+          it 'does not recalculate the variables' do
+            expect(subject[:yaml_variables]).to contain_exactly({ key: 'VAR1', value: 'var 1', public: true })
+          end
+        end
+      end
     end
   end
 
@@ -214,22 +382,96 @@ describe Gitlab::Ci::Pipeline::Seed::Build do
       it { is_expected.to be_a(::Ci::Build) }
       it { is_expected.to be_valid }
 
-      context 'when job has environment name' do
-        let(:attributes) { { name: 'rspec', ref: 'master', environment: 'production' } }
-
+      shared_examples_for 'deployment job' do
         it 'returns a job with deployment' do
           expect(subject.deployment).not_to be_nil
           expect(subject.deployment.deployable).to eq(subject)
-          expect(subject.deployment.environment.name).to eq('production')
+          expect(subject.deployment.environment.name).to eq(expected_environment_name)
         end
+      end
+
+      shared_examples_for 'non-deployment job' do
+        it 'returns a job without deployment' do
+          expect(subject.deployment).to be_nil
+        end
+      end
+
+      shared_examples_for 'ensures environment existence' do
+        it 'has environment' do
+          expect(subject).to be_has_environment
+          expect(subject.environment).to eq(environment_name)
+          expect(subject.metadata.expanded_environment_name).to eq(expected_environment_name)
+          expect(Environment.exists?(name: expected_environment_name)).to eq(true)
+        end
+      end
+
+      shared_examples_for 'ensures environment inexistence' do
+        it 'does not have environment' do
+          expect(subject).not_to be_has_environment
+          expect(subject.environment).to be_nil
+          expect(subject.metadata&.expanded_environment_name).to be_nil
+          expect(Environment.exists?(name: expected_environment_name)).to eq(false)
+        end
+      end
+
+      context 'when job deploys to production' do
+        let(:environment_name) { 'production' }
+        let(:expected_environment_name) { 'production' }
+        let(:attributes) { { name: 'deploy', ref: 'master', environment: 'production' } }
+
+        it_behaves_like 'deployment job'
+        it_behaves_like 'ensures environment existence'
 
         context 'when the environment name is invalid' do
-          let(:attributes) { { name: 'rspec', ref: 'master', environment: '!!!' } }
+          let(:attributes) { { name: 'deploy', ref: 'master', environment: '!!!' } }
 
-          it 'returns a job without deployment' do
-            expect(subject.deployment).to be_nil
+          it_behaves_like 'non-deployment job'
+          it_behaves_like 'ensures environment inexistence'
+
+          it 'tracks an exception' do
+            expect(Gitlab::ErrorTracking).to receive(:track_exception)
+              .with(an_instance_of(described_class::EnvironmentCreationFailure),
+                    project_id: project.id,
+                    reason: %q{Name can contain only letters, digits, '-', '_', '/', '$', '{', '}', '.', and spaces, but it cannot start or end with '/'})
+              .once
+
+            subject
           end
         end
+      end
+
+      context 'when job starts a review app' do
+        let(:environment_name) { 'review/$CI_COMMIT_REF_NAME' }
+        let(:expected_environment_name) { "review/#{pipeline.ref}" }
+
+        let(:attributes) do
+          {
+            name: 'deploy', ref: 'master', environment: environment_name,
+            options: { environment: { name: environment_name } }
+          }
+        end
+
+        it_behaves_like 'deployment job'
+        it_behaves_like 'ensures environment existence'
+      end
+
+      context 'when job stops a review app' do
+        let(:environment_name) { 'review/$CI_COMMIT_REF_NAME' }
+        let(:expected_environment_name) { "review/#{pipeline.ref}" }
+
+        let(:attributes) do
+          {
+            name: 'deploy', ref: 'master', environment: environment_name,
+            options: { environment: { name: environment_name, action: 'stop' } }
+          }
+        end
+
+        it 'returns a job without deployment' do
+          expect(subject.deployment).to be_nil
+        end
+
+        it_behaves_like 'non-deployment job'
+        it_behaves_like 'ensures environment existence'
       end
 
       context 'when job belongs to a resource group' do
@@ -243,14 +485,25 @@ describe Gitlab::Ci::Pipeline::Seed::Build do
     end
 
     context 'when job is a bridge' do
-      let(:attributes) do
+      let(:base_attributes) do
         {
           name: 'rspec', ref: 'master', options: { trigger: 'my/project' }, scheduling_type: :stage
         }
       end
 
+      let(:attributes) { base_attributes }
+
       it { is_expected.to be_a(::Ci::Bridge) }
       it { is_expected.to be_valid }
+
+      context 'when job belongs to a resource group' do
+        let(:attributes) { base_attributes.merge(resource_group_key: 'iOS') }
+
+        it 'returns a job with resource group' do
+          expect(subject.resource_group).not_to be_nil
+          expect(subject.resource_group.key).to eq('iOS')
+        end
+      end
     end
 
     it 'memoizes a resource object' do
@@ -429,7 +682,7 @@ describe Gitlab::Ci::Pipeline::Seed::Build do
       using RSpec::Parameterized
 
       let(:pipeline) do
-        build(:ci_empty_pipeline, ref: 'deploy', tag: false, source: source)
+        build(:ci_empty_pipeline, ref: 'deploy', tag: false, source: source, project: project)
       end
 
       context 'matches' do
@@ -692,7 +945,7 @@ describe Gitlab::Ci::Pipeline::Seed::Build do
 
       context 'with a matching changes: rule' do
         let(:pipeline) do
-          create(:ci_pipeline, project: project).tap do |pipeline|
+          build(:ci_pipeline, project: project).tap do |pipeline|
             stub_pipeline_modified_paths(pipeline, %w[app/models/ci/pipeline.rb spec/models/ci/pipeline_spec.rb .gitlab-ci.yml])
           end
         end
@@ -826,7 +1079,15 @@ describe Gitlab::Ci::Pipeline::Seed::Build do
 
       it "returns an error" do
         expect(subject.errors).to contain_exactly(
-          "rspec: needs 'build'")
+          "'rspec' job needs 'build' job, but it was not added to the pipeline")
+      end
+
+      context 'when the needed job is optional' do
+        let(:needs_attributes) { [{ name: 'build', optional: true }] }
+
+        it "does not return an error" do
+          expect(subject.errors).to be_empty
+        end
       end
     end
 
@@ -840,7 +1101,7 @@ describe Gitlab::Ci::Pipeline::Seed::Build do
       end
 
       let(:stage_seed) do
-        Gitlab::Ci::Pipeline::Seed::Stage.new(pipeline, stage_attributes, [])
+        Gitlab::Ci::Pipeline::Seed::Stage.new(seed_context, stage_attributes, [])
       end
 
       let(:previous_stages) { [stage_seed] }
@@ -854,29 +1115,105 @@ describe Gitlab::Ci::Pipeline::Seed::Build do
       end
     end
 
-    context 'when lower limit of needs is reached' do
-      before do
-        stub_feature_flags(ci_dag_limit_needs: true)
-      end
-
-      let(:needs_count) { described_class::LOW_NEEDS_LIMIT + 1 }
+    context 'when using 101 needs' do
+      let(:needs_count) { 101 }
 
       it "returns an error" do
         expect(subject.errors).to contain_exactly(
-          "rspec: one job can only need 10 others, but you have listed 11. See needs keyword documentation for more details")
+          "rspec: one job can only need 50 others, but you have listed 101. See needs keyword documentation for more details")
+      end
+
+      context 'when ci_needs_size_limit is set to 100' do
+        before do
+          project.actual_limits.update!(ci_needs_size_limit: 100)
+        end
+
+        it "returns an error" do
+          expect(subject.errors).to contain_exactly(
+            "rspec: one job can only need 100 others, but you have listed 101. See needs keyword documentation for more details")
+        end
+      end
+
+      context 'when ci_needs_size_limit is set to 0' do
+        before do
+          project.actual_limits.update!(ci_needs_size_limit: 0)
+        end
+
+        it "returns an error" do
+          expect(subject.errors).to contain_exactly(
+            "rspec: one job can only need 0 others, but you have listed 101. See needs keyword documentation for more details")
+        end
+      end
+    end
+  end
+
+  describe 'applying pipeline variables' do
+    subject { seed_build }
+
+    let(:pipeline_variables) { [] }
+    let(:pipeline) do
+      build(:ci_empty_pipeline, project: project, sha: head_sha, variables: pipeline_variables)
+    end
+
+    context 'containing variable references' do
+      let(:pipeline_variables) do
+        [
+          build(:ci_pipeline_variable, key: 'A', value: '$B'),
+          build(:ci_pipeline_variable, key: 'B', value: '$C')
+        ]
+      end
+
+      context 'when FF :variable_inside_variable is enabled' do
+        before do
+          stub_feature_flags(variable_inside_variable: [project])
+        end
+
+        it "does not have errors" do
+          expect(subject.errors).to be_empty
+        end
       end
     end
 
-    context 'when upper limit of needs is reached' do
-      before do
-        stub_feature_flags(ci_dag_limit_needs: false)
+    context 'containing cyclic reference' do
+      let(:pipeline_variables) do
+        [
+          build(:ci_pipeline_variable, key: 'A', value: '$B'),
+          build(:ci_pipeline_variable, key: 'B', value: '$C'),
+          build(:ci_pipeline_variable, key: 'C', value: '$A')
+        ]
       end
 
-      let(:needs_count) { described_class::HARD_NEEDS_LIMIT + 1 }
+      context 'when FF :variable_inside_variable is disabled' do
+        before do
+          stub_feature_flags(variable_inside_variable: false)
+        end
 
-      it "returns an error" do
-        expect(subject.errors).to contain_exactly(
-          "rspec: one job can only need 50 others, but you have listed 51. See needs keyword documentation for more details")
+        it "does not have errors" do
+          expect(subject.errors).to be_empty
+        end
+      end
+
+      context 'when FF :variable_inside_variable is enabled' do
+        before do
+          stub_feature_flags(variable_inside_variable: [project])
+        end
+
+        it "returns an error" do
+          expect(subject.errors).to contain_exactly(
+            'rspec: circular variable reference detected: ["A", "B", "C"]')
+        end
+
+        context 'with job:rules:[if:]' do
+          let(:attributes) { { name: 'rspec', ref: 'master', rules: [{ if: '$C != null', when: 'always' }] } }
+
+          it "included? does not raise" do
+            expect { subject.included? }.not_to raise_error
+          end
+
+          it "included? returns true" do
+            expect(subject.included?).to eq(true)
+          end
+        end
       end
     end
   end

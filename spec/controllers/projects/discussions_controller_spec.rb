@@ -2,7 +2,7 @@
 
 require 'spec_helper'
 
-describe Projects::DiscussionsController do
+RSpec.describe Projects::DiscussionsController do
   let(:user) { create(:user) }
   let(:merge_request) { create(:merge_request) }
   let(:project) { merge_request.source_project }
@@ -85,7 +85,7 @@ describe Projects::DiscussionsController do
 
       context "when the discussion is not resolvable" do
         before do
-          note.update(system: true)
+          note.update!(system: true)
         end
 
         it "returns status 404" do
@@ -168,7 +168,7 @@ describe Projects::DiscussionsController do
 
       context "when the discussion is not resolvable" do
         before do
-          note.update(system: true)
+          note.update!(system: true)
         end
 
         it "returns status 404" do
@@ -182,7 +182,15 @@ describe Projects::DiscussionsController do
         it "unresolves the discussion" do
           delete :unresolve, params: request_params
 
-          expect(note.reload.discussion.resolved?).to be false
+          # discussion is memoized and reload doesn't clear the memoization
+          expect(Note.find(note.id).discussion.resolved?).to be false
+        end
+
+        it "tracks thread unresolve usage data" do
+          expect(Gitlab::UsageDataCounters::MergeRequestActivityUniqueCounter)
+            .to receive(:track_unresolve_thread_action).with(user: user)
+
+          delete :unresolve, params: request_params
         end
 
         it "returns status 200" do

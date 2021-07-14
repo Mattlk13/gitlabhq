@@ -1,11 +1,11 @@
-import { take } from 'lodash';
 import { GlBreakpointInstance as bp } from '@gitlab/ui/dist/utils';
-import sanitize from 'sanitize-html';
+import { take } from 'lodash';
+import { sanitize } from '~/lib/dompurify';
 import { FREQUENT_ITEMS, HOUR_IN_MS } from './constants';
 
 export const isMobile = () => ['md', 'sm', 'xs'].includes(bp.getBreakpointSize());
 
-export const getTopFrequentItems = items => {
+export const getTopFrequentItems = (items) => {
   if (!items) {
     return [];
   }
@@ -13,7 +13,7 @@ export const getTopFrequentItems = items => {
     ? FREQUENT_ITEMS.LIST_COUNT_MOBILE
     : FREQUENT_ITEMS.LIST_COUNT_DESKTOP;
 
-  const frequentItems = items.filter(item => item.frequency >= FREQUENT_ITEMS.ELIGIBLE_FREQUENCY);
+  const frequentItems = items.filter((item) => item.frequency >= FREQUENT_ITEMS.ELIGIBLE_FREQUENCY);
 
   if (!frequentItems || frequentItems.length === 0) {
     return [];
@@ -35,18 +35,31 @@ export const getTopFrequentItems = items => {
 };
 
 export const updateExistingFrequentItem = (frequentItem, item) => {
-  const accessedOverHourAgo =
-    Math.abs(item.lastAccessedOn - frequentItem.lastAccessedOn) / HOUR_IN_MS > 1;
+  // `frequentItem` comes from localStorage and it's possible it doesn't have a `lastAccessedOn`
+  const neverAccessed = !frequentItem.lastAccessedOn;
+  const shouldUpdate =
+    neverAccessed || Math.abs(item.lastAccessedOn - frequentItem.lastAccessedOn) / HOUR_IN_MS > 1;
 
   return {
     ...item,
-    frequency: accessedOverHourAgo ? frequentItem.frequency + 1 : frequentItem.frequency,
-    lastAccessedOn: accessedOverHourAgo ? Date.now() : frequentItem.lastAccessedOn,
+    frequency: shouldUpdate ? frequentItem.frequency + 1 : frequentItem.frequency,
+    lastAccessedOn: shouldUpdate ? Date.now() : frequentItem.lastAccessedOn,
   };
 };
 
-export const sanitizeItem = item => ({
-  ...item,
-  name: sanitize(item.name.toString(), { allowedTags: [] }),
-  namespace: sanitize(item.namespace.toString(), { allowedTags: [] }),
-});
+export const sanitizeItem = (item) => {
+  // Only sanitize if the key exists on the item
+  const maybeSanitize = (key) => {
+    if (!Object.prototype.hasOwnProperty.call(item, key)) {
+      return {};
+    }
+
+    return { [key]: sanitize(item[key].toString(), { ALLOWED_TAGS: [] }) };
+  };
+
+  return {
+    ...item,
+    ...maybeSanitize('name'),
+    ...maybeSanitize('namespace'),
+  };
+};

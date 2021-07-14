@@ -2,8 +2,9 @@
 
 require 'spec_helper'
 
-describe Gitlab::GithubImport::Importer::PullRequestsImporter do
-  let(:project) { create(:project, import_source: 'foo/bar') }
+RSpec.describe Gitlab::GithubImport::Importer::PullRequestsImporter do
+  let(:url) { 'https://github.com/foo/bar.git' }
+  let(:project) { create(:project, import_source: 'foo/bar', import_url: url) }
   let(:client) { double(:client) }
 
   let(:pull_request) do
@@ -29,6 +30,7 @@ describe Gitlab::GithubImport::Importer::PullRequestsImporter do
       milestone: double(:milestone, number: 4),
       user: double(:user, id: 4, login: 'alice'),
       assignee: double(:user, id: 4, login: 'alice'),
+      merged_by: double(:user, id: 4, login: 'alice'),
       created_at: 1.second.ago,
       updated_at: 1.second.ago,
       merged_at: 1.second.ago
@@ -146,28 +148,48 @@ describe Gitlab::GithubImport::Importer::PullRequestsImporter do
     end
   end
 
-  describe '#update_repository' do
+  shared_examples '#update_repository' do
     it 'updates the repository' do
       importer = described_class.new(project, client)
 
-      expect(project.repository)
-        .to receive(:fetch_remote)
-        .with('github', forced: false)
-
-      expect(Rails.logger)
-        .to receive(:info)
-        .with(an_instance_of(String))
+      expect_next_instance_of(Gitlab::Import::Logger) do |logger|
+        expect(logger)
+          .to receive(:info)
+          .with(an_instance_of(Hash))
+      end
 
       expect(importer.repository_updates_counter)
         .to receive(:increment)
         .and_call_original
 
-      Timecop.freeze do
+      freeze_time do
         importer.update_repository
 
         expect(project.last_repository_updated_at).to be_like_time(Time.zone.now)
       end
     end
+  end
+
+  describe '#update_repository with :fetch_remote_params enabled' do
+    before do
+      stub_feature_flags(fetch_remote_params: true)
+      expect(project.repository)
+        .to receive(:fetch_remote)
+        .with('github', forced: false, url: url, refmap: Gitlab::GithubImport.refmap)
+    end
+
+    it_behaves_like '#update_repository'
+  end
+
+  describe '#update_repository with :fetch_remote_params disabled' do
+    before do
+      stub_feature_flags(fetch_remote_params: false)
+      expect(project.repository)
+        .to receive(:fetch_remote)
+        .with('github', forced: false)
+    end
+
+    it_behaves_like '#update_repository'
   end
 
   describe '#update_repository?' do

@@ -1,25 +1,50 @@
 import Vue from 'vue';
+import { parseBoolean } from '~/lib/utils/common_utils';
 import CiVariableSettings from './components/ci_variable_settings.vue';
 import createStore from './store';
-import { parseBoolean } from '~/lib/utils/common_utils';
 
-export default () => {
-  const el = document.getElementById('js-ci-project-variables');
-  const { endpoint, projectId, group, maskableRegex } = el.dataset;
+const mountCiVariableListApp = (containerEl) => {
+  const {
+    endpoint,
+    projectId,
+    group,
+    maskableRegex,
+    protectedByDefault,
+    awsLogoSvgPath,
+    awsTipDeployLink,
+    awsTipCommandsLink,
+    awsTipLearnLink,
+    protectedEnvironmentVariablesLink,
+    maskedEnvironmentVariablesLink,
+  } = containerEl.dataset;
   const isGroup = parseBoolean(group);
+  const isProtectedByDefault = parseBoolean(protectedByDefault);
 
   const store = createStore({
     endpoint,
     projectId,
     isGroup,
     maskableRegex,
+    isProtectedByDefault,
+    awsLogoSvgPath,
+    awsTipDeployLink,
+    awsTipCommandsLink,
+    awsTipLearnLink,
+    protectedEnvironmentVariablesLink,
+    maskedEnvironmentVariablesLink,
   });
 
   return new Vue({
-    el,
+    el: containerEl,
     store,
     render(createElement) {
       return createElement(CiVariableSettings);
     },
   });
+};
+
+export default (containerId = 'js-ci-project-variables') => {
+  const el = document.getElementById(containerId);
+
+  return !el ? {} : mountCiVariableListApp(el);
 };

@@ -2,7 +2,7 @@
 
 require 'spec_helper'
 
-describe 'Profile > Emails' do
+RSpec.describe 'Profile > Emails' do
   let(:user) { create(:user) }
 
   before do
@@ -31,10 +31,19 @@ describe 'Profile > Emails' do
       expect(email).to be_nil
       expect(page).to have_content('Email has already been taken')
     end
+
+    it 'does not add an invalid email' do
+      fill_in('Email', with: 'test.@example.com')
+      click_button('Add email address')
+
+      email = user.emails.find_by(email: email)
+      expect(email).to be_nil
+      expect(page).to have_content('Email is invalid')
+    end
   end
 
-  it 'User removes email' do
-    user.emails.create(email: 'my@email.com')
+  it 'user removes email' do
+    user.emails.create!(email: 'my@email.com')
     visit profile_emails_path
     expect(page).to have_content("my@email.com")
 
@@ -42,8 +51,8 @@ describe 'Profile > Emails' do
     expect(page).not_to have_content("my@email.com")
   end
 
-  it 'User confirms email' do
-    email = user.emails.create(email: 'my@email.com')
+  it 'user confirms email' do
+    email = user.emails.create!(email: 'my@email.com')
     visit profile_emails_path
     expect(page).to have_content("#{email.email} Unverified")
 
@@ -54,16 +63,16 @@ describe 'Profile > Emails' do
     expect(page).to have_content("#{email.email} Verified")
   end
 
-  it 'User re-sends confirmation email' do
-    email = user.emails.create(email: 'my@email.com')
+  it 'user re-sends confirmation email' do
+    email = user.emails.create!(email: 'my@email.com')
     visit profile_emails_path
 
-    expect { click_link("Resend confirmation email") }.to change { ActionMailer::Base.deliveries.size }
+    expect { click_link("Resend confirmation email") }.to have_enqueued_job.on_queue('mailers')
     expect(page).to have_content("Confirmation email sent to #{email.email}")
   end
 
   it 'old unconfirmed emails show Send Confirmation button' do
-    email = user.emails.create(email: 'my@email.com')
+    email = user.emails.create!(email: 'my@email.com')
     email.update_attribute(:confirmation_sent_at, nil)
     visit profile_emails_path
 

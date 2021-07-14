@@ -1,45 +1,76 @@
-# Repository checks
+---
+stage: Create
+group: Gitaly
+info: "To determine the technical writer assigned to the Stage/Group associated with this page, see https://about.gitlab.com/handbook/engineering/ux/technical-writing/#assignments"
+type: reference
+---
 
-> [Introduced][ce-3232] in GitLab 8.7. It is OFF by default because it still
-causes too many false alarms.
+# Repository checks **(FREE SELF)**
 
-Git has a built-in mechanism, [`git fsck`][git-fsck], to verify the
-integrity of all data committed to a repository. GitLab administrators
-can trigger such a check for a project via the project page under the
-admin panel. The checks run asynchronously so it may take a few minutes
-before the check result is visible on the project admin page. If the
-checks failed you can see their output on the admin log page under
-'repocheck.log'.
+You can use [`git fsck`](https://git-scm.com/docs/git-fsck) to verify the integrity of all data
+committed to a repository. GitLab administrators can trigger this check for a project using the
+GitLab UI:
 
-## Periodic checks
+1. On the top bar, select **Menu >** **{admin}** **Admin**.
+1. On the left sidebar, select **Overview > Projects**.
+1. Select the project to check.
+1. In the **Repository check** section, select **Trigger repository check**.
 
-When enabled, GitLab periodically runs a repository check on all project
-repositories and wiki repositories in order to detect data corruption.
-A project will be checked no more than once per month. If any projects
-fail their repository checks all GitLab administrators will receive an email
-notification of the situation. This notification is sent out once a week,
-by default, midnight at the start of Sunday. Repositories with known check
-failures can be found at `/admin/projects?last_repository_check_failed=1`.
+The checks run asynchronously so it may take a few minutes before the check result is visible on the
+project page in the Admin Area. If the checks fail, see [what to do](#what-to-do-if-a-check-failed).
 
-## Disabling periodic checks
+This setting is off by default, because it can cause many false alarms.
 
-You can disable the periodic checks on the 'Settings' page of the admin
-panel.
+## Enable periodic checks
+
+Instead of checking repositories manually, GitLab can be configured to run the checks periodically:
+
+1. On the top bar, select **Menu >** **{admin}** **Admin**.
+1. On the left sidebar, select **Settings > Repository** (`/admin/application_settings/repository`).
+1. Expand the **Repository maintenance** section.
+1. Enable **Enable repository checks**.
+
+When enabled, GitLab periodically runs a repository check on all project repositories and wiki
+repositories to detect possible data corruption. A project is checked no more than once per month.
+
+If any projects fail their repository checks, all GitLab administrators receive an email
+notification of the situation. By default, this notification is sent out once a week at midnight at
+the start of Sunday.
+
+Repositories with known check failures can be found at
+`/admin/projects?last_repository_check_failed=1`.
 
 ## What to do if a check failed
 
-If the repository check fails for some repository you should look up the error
-in `repocheck.log`:
+If a repository check fails, locate the error in the [`repocheck.log` file](logs.md#repochecklog) on
+disk at:
 
-- in the [admin panel](logs.md#repochecklog)
-- or on disk, see:
-  - `/var/log/gitlab/gitlab-rails` for Omnibus installations
-  - `/home/git/gitlab/log` for installations from source
+- `/var/log/gitlab/gitlab-rails` for Omnibus GitLab installations.
+- `/home/git/gitlab/log` for installations from source.
 
-If the periodic repository check causes false alarms, you can clear all repository check states by
-navigating to **Admin Area > Settings > Repository**
-(`/admin/application_settings/repository`) and clicking **Clear all repository checks**.
+If periodic repository checks cause false alarms, you can clear all repository check states:
 
----
-[ce-3232]: https://gitlab.com/gitlab-org/gitlab-foss/-/merge_requests/3232 "Auto git fsck"
-[git-fsck]: https://git-scm.com/docs/git-fsck "git fsck documentation"
+1. On the top bar, select **Menu >** **{admin}** **Admin**.
+1. On the left sidebar, select **Settings > Repository** (`/admin/application_settings/repository`).
+1. Expand the **Repository maintenance** section.
+1. Select **Clear all repository checks**.
+
+## Run a check using the command line
+
+You can run [`git fsck`](https://git-scm.com/docs/git-fsck) using the command line on repositories
+on [Gitaly servers](gitaly/index.md). To locate the repositories:
+
+1. Go to the storage location for repositories. For Omnibus GitLab installations, repositories are
+   stored by default in the `/var/opt/gitlab/git-data/repositories` directory.
+1. [Identify the subdirectory that contains the repository](repository_storage_types.md#from-project-name-to-hashed-path)
+   that you need to check.
+
+To run a check (for example):
+
+```shell
+sudo /opt/gitlab/embedded/bin/git -C /var/opt/gitlab/git-data/repositories/@hashed/0b/91/0b91...f9.git fsck
+```
+
+You can also run [Rake tasks](raketasks/check.md#repository-integrity) for checking Git
+repositories, which can be used to run `git fsck` against all repositories and generate repository
+checksums, as a way to compare repositories on different servers.

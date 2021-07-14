@@ -2,7 +2,7 @@
 
 require 'spec_helper'
 
-describe Gitlab::Diff::HighlightCache, :clean_gitlab_redis_cache do
+RSpec.describe Gitlab::Diff::HighlightCache, :clean_gitlab_redis_cache do
   let(:merge_request) { create(:merge_request_with_diffs) }
   let(:diff_hash) do
     { ".gitignore-false-false-false" =>
@@ -43,7 +43,8 @@ describe Gitlab::Diff::HighlightCache, :clean_gitlab_redis_cache do
 
   describe '#decorate' do
     # Manually creates a Diff::File object to avoid triggering the cache on
-    # the FileCollection::MergeRequestDiff
+    #   the FileCollection::MergeRequestDiff
+    #
     let(:diff_file) do
       diffs = merge_request.diffs
       raw_diff = diffs.diffable.raw_diffs(diffs.diff_options.merge(paths: ['CHANGELOG'])).first
@@ -53,29 +54,56 @@ describe Gitlab::Diff::HighlightCache, :clean_gitlab_redis_cache do
                              fallback_diff_refs: diffs.fallback_diff_refs)
     end
 
-    it 'does not calculate highlighting when reading from cache' do
+    before do
       cache.write_if_empty
       cache.decorate(diff_file)
+    end
 
+    it 'does not calculate highlighting when reading from cache' do
       expect_any_instance_of(Gitlab::Diff::Highlight).not_to receive(:highlight)
 
       diff_file.highlighted_diff_lines
     end
 
     it 'assigns highlighted diff lines to the DiffFile' do
-      cache.write_if_empty
-      cache.decorate(diff_file)
-
       expect(diff_file.highlighted_diff_lines.size).to be > 5
     end
 
     it 'assigns highlighted diff lines which rich_text are HTML-safe' do
-      cache.write_if_empty
-      cache.decorate(diff_file)
-
       rich_texts = diff_file.highlighted_diff_lines.map(&:rich_text)
 
       expect(rich_texts).to all(be_html_safe)
+    end
+
+    context "when diff_file is uncached due to default_max_patch_bytes change" do
+      before do
+        expect(cache).to receive(:read_file).at_least(:once).and_return([])
+
+        # Stub out the application's default and current patch size limits. We
+        #   want them to be different, and the diff file to be sized between
+        #   the 2 values.
+        #
+        diff_file_size_kb = (diff_file.diff.diff.bytesize * 10)
+
+        stub_const("#{diff_file.diff.class}::DEFAULT_MAX_PATCH_BYTES", diff_file_size_kb - 1 )
+        expect(diff_file.diff.class).to receive(:patch_safe_limit_bytes).and_return(diff_file_size_kb + 1)
+        expect(diff_file.diff.class)
+          .to receive(:patch_safe_limit_bytes)
+          .with(diff_file.diff.class::DEFAULT_MAX_PATCH_BYTES)
+          .and_call_original
+      end
+
+      it "manually writes highlighted lines to the cache" do
+        expect(cache).to receive(:write_to_redis_hash).and_call_original
+
+        cache.decorate(diff_file)
+      end
+
+      it "assigns highlighted diff lines to the DiffFile" do
+        expect(diff_file.highlighted_diff_lines.size).to be > 5
+
+        cache.decorate(diff_file)
+      end
     end
   end
 
@@ -99,6 +127,28 @@ describe Gitlab::Diff::HighlightCache, :clean_gitlab_redis_cache do
   describe '#write_if_empty' do
     it_behaves_like 'caches missing entries' do
       let(:paths) { merge_request.diffs.raw_diff_files.select(&:text?).map(&:file_path) }
+    end
+
+    it 'updates memory usage metrics if Redis version >= 4' do
+      allow_next_instance_of(Redis) do |redis|
+        allow(redis).to receive(:info).and_return({ "redis_version" => "4.0.0" })
+
+        expect(described_class.gitlab_redis_diff_caching_memory_usage_bytes)
+          .to receive(:observe).and_call_original
+
+        cache.send(:write_to_redis_hash, diff_hash)
+      end
+    end
+
+    it 'does not update memory usage metrics if Redis version < 4' do
+      allow_next_instance_of(Redis) do |redis|
+        allow(redis).to receive(:info).and_return({ "redis_version" => "3.0.0" })
+
+        expect(described_class.gitlab_redis_diff_caching_memory_usage_bytes)
+          .not_to receive(:observe)
+
+        cache.send(:write_to_redis_hash, diff_hash)
+      end
     end
 
     context 'different diff_collections for the same diffable' do
@@ -145,17 +195,70 @@ describe Gitlab::Diff::HighlightCache, :clean_gitlab_redis_cache do
     end
   end
 
+  describe "GZip usage" do
+    let(:diff_file) do
+      diffs = merge_request.diffs
+      raw_diff = diffs.diffable.raw_diffs(diffs.diff_options.merge(paths: ['CHANGELOG'])).first
+      Gitlab::Diff::File.new(raw_diff,
+                             repository: diffs.project.repository,
+                             diff_refs: diffs.diff_refs,
+                             fallback_diff_refs: diffs.fallback_diff_refs)
+    end
+
+    it "uses ActiveSupport::Gzip when reading from the cache" do
+      expect(ActiveSupport::Gzip).to receive(:decompress).at_least(:once).and_call_original
+
+      cache.write_if_empty
+      cache.decorate(diff_file)
+    end
+
+    it "uses ActiveSupport::Gzip to compress data when writing to cache" do
+      expect(ActiveSupport::Gzip).to receive(:compress).and_call_original
+
+      cache.send(:write_to_redis_hash, diff_hash)
+    end
+  end
+
   describe 'metrics' do
-    it 'defines :gitlab_redis_diff_caching_memory_usage_bytes histogram' do
-      expect(described_class).to respond_to(:gitlab_redis_diff_caching_memory_usage_bytes)
+    let(:transaction) { Gitlab::Metrics::WebTransaction.new({} ) }
+
+    before do
+      allow(cache).to receive(:current_transaction).and_return(transaction)
     end
 
-    it 'defines :gitlab_redis_diff_caching_hit' do
-      expect(described_class).to respond_to(:gitlab_redis_diff_caching_hit)
+    it 'observes :gitlab_redis_diff_caching_memory_usage_bytes' do
+      expect(transaction)
+        .to receive(:observe).with(:gitlab_redis_diff_caching_memory_usage_bytes, a_kind_of(Numeric))
+
+      cache.write_if_empty
+    end
+  end
+
+  describe '#key' do
+    subject { cache.key }
+
+    it 'returns cache key' do
+      is_expected.to eq("highlighted-diff-files:#{cache.diffable.cache_key}:2:#{cache.diff_options}:true:true")
     end
 
-    it 'defines :gitlab_redis_diff_caching_miss' do
-      expect(described_class).to respond_to(:gitlab_redis_diff_caching_miss)
+    context 'when the `use_marker_ranges` feature flag is disabled' do
+      before do
+        stub_feature_flags(use_marker_ranges: false)
+      end
+
+      it 'returns the original version of the cache' do
+        is_expected.to eq("highlighted-diff-files:#{cache.diffable.cache_key}:2:#{cache.diff_options}:false:true")
+      end
+    end
+
+    context 'when the `diff_line_syntax_highlighting` feature flag is disabled' do
+      before do
+        stub_feature_flags(diff_line_syntax_highlighting: false)
+      end
+
+      it 'returns the original version of the cache' do
+        is_expected.to eq("highlighted-diff-files:#{cache.diffable.cache_key}:2:#{cache.diff_options}:true:false")
+      end
     end
   end
 end

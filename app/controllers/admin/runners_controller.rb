@@ -1,11 +1,20 @@
 # frozen_string_literal: true
 
 class Admin::RunnersController < Admin::ApplicationController
-  before_action :runner, except: [:index, :tag_list]
+  include RunnerSetupScripts
+
+  before_action :runner, except: [:index, :tag_list, :runner_setup_scripts]
+  before_action only: [:index] do
+    push_frontend_feature_flag(:runner_list_view_vue_ui, current_user, default_enabled: :yaml)
+  end
+
+  feature_category :runner
+
+  NUMBER_OF_RUNNERS_PER_PAGE = 30
 
   def index
-    finder = Admin::RunnersFinder.new(params: params)
-    @runners = finder.execute
+    finder = Ci::RunnersFinder.new(current_user: current_user, params: params)
+    @runners = finder.execute.page(params[:page]).per(NUMBER_OF_RUNNERS_PER_PAGE)
     @active_runners_count = Ci::Runner.online.count
     @sort = finder.sort_key
   end
@@ -17,7 +26,6 @@ class Admin::RunnersController < Admin::ApplicationController
   def update
     if Ci::UpdateRunnerService.new(@runner).update(runner_params)
       respond_to do |format|
-        format.js
         format.html { redirect_to admin_runner_path(@runner) }
       end
     else
@@ -54,6 +62,10 @@ class Admin::RunnersController < Admin::ApplicationController
     render json: ActsAsTaggableOn::TagSerializer.new.represent(tags)
   end
 
+  def runner_setup_scripts
+    private_runner_setup_scripts
+  end
+
   private
 
   def runner
@@ -61,7 +73,15 @@ class Admin::RunnersController < Admin::ApplicationController
   end
 
   def runner_params
-    params.require(:runner).permit(Ci::Runner::FORM_EDITABLE)
+    params.require(:runner).permit(permitted_attrs)
+  end
+
+  def permitted_attrs
+    if Gitlab.com?
+      Ci::Runner::FORM_EDITABLE + Ci::Runner::MINUTES_COST_FACTOR_FIELDS
+    else
+      Ci::Runner::FORM_EDITABLE
+    end
   end
 
   # rubocop: disable CodeReuse/ActiveRecord

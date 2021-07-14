@@ -2,7 +2,7 @@
 
 require 'spec_helper'
 
-describe Banzai::Pipeline::FullPipeline do
+RSpec.describe Banzai::Pipeline::FullPipeline do
   describe 'References' do
     let(:project) { create(:project, :public) }
     let(:issue)   { create(:issue, project: project) }
@@ -24,7 +24,7 @@ describe Banzai::Pipeline::FullPipeline do
     it 'escapes the data-original attribute on a reference' do
       markdown = %Q{[">bad things](#{issue.to_reference})}
       result = described_class.to_html(markdown, project: project)
-      expect(result).to include(%{data-original='\"&gt;bad things'})
+      expect(result).to include(%{data-original='\"&amp;gt;bad things'})
     end
   end
 
@@ -109,6 +109,7 @@ describe Banzai::Pipeline::FullPipeline do
           # Header
       MARKDOWN
     end
+
     let(:invalid_markdown) do
       <<-MARKDOWN.strip_heredoc
           test [[_TOC_]]
@@ -128,6 +129,25 @@ describe Banzai::Pipeline::FullPipeline do
       output = described_class.to_html(invalid_markdown, project: project)
 
       expect(output).to include("test [[<em>TOC</em>]]")
+    end
+  end
+
+  describe 'backslash escapes' do
+    let_it_be(:project) { create(:project, :public) }
+    let_it_be(:issue)   { create(:issue, project: project) }
+
+    it 'does not convert an escaped reference' do
+      markdown = "\\#{issue.to_reference}"
+      output = described_class.to_html(markdown, project: project)
+
+      expect(output).to include("<span>#</span>#{issue.iid}")
+    end
+
+    it 'converts user reference with escaped underscore because of italics' do
+      markdown = '_@test\__'
+      output = described_class.to_html(markdown, project: project)
+
+      expect(output).to include('<em>@test_</em>')
     end
   end
 end

@@ -34,7 +34,7 @@ export const utilsMockData = [
     content: [
       {
         text:
-          'Using Docker executor with image dev.gitlab.org:5005/gitlab/gitlab-build-images:ruby-2.6.5-golang-1.12-git-2.24-lfs-2.9-chrome-73.0-node-12.x-yarn-1.16-postgresql-9.6-graphicsmagick-1.3.34',
+          'Using Docker executor with image dev.gitlab.org:5005/gitlab/gitlab-build-images:ruby-2.6.6-golang-1.14-git-2.28-lfs-2.9-chrome-84-node-12.x-yarn-1.21-postgresql-11-graphicsmagick-1.3.34',
       },
     ],
     section: 'prepare-executor',
@@ -54,6 +54,71 @@ export const utilsMockData = [
     offset: 1005,
     content: [],
     section: 'prepare-executor',
+    section_duration: '10:00',
+  },
+];
+
+export const multipleCollapsibleSectionsMockData = [
+  {
+    offset: 1001,
+    content: [{ text: ' on docker-auto-scale-com 8a6210b8' }],
+  },
+  {
+    offset: 1002,
+    content: [
+      {
+        text: 'Executing "step_script" stage of the job script',
+      },
+    ],
+    section: 'step-script',
+    section_header: true,
+  },
+  {
+    offset: 1003,
+    content: [{ text: 'sleep 60' }],
+    section: 'step-script',
+  },
+  {
+    offset: 1004,
+    content: [
+      {
+        text:
+          'Lorem ipsum dolor sit amet, consectetur adipiscing elit. Etiam lorem dolor, congue ac condimentum vitae',
+      },
+    ],
+    section: 'step-script',
+  },
+  {
+    offset: 1005,
+    content: [{ text: 'executing...' }],
+    section: 'step-script',
+  },
+  {
+    offset: 1006,
+    content: [{ text: '1st collapsible section' }],
+    section: 'collapsible-1',
+    section_header: true,
+  },
+  {
+    offset: 1007,
+    content: [
+      {
+        text:
+          'Lorem ipsum dolor sit amet, consectetur adipiscing elit. Etiam lorem dolor, congue ac condimentum vitae',
+      },
+    ],
+    section: 'collapsible-1',
+  },
+  {
+    offset: 1008,
+    content: [],
+    section: 'collapsible-1',
+    section_duration: '01:00',
+  },
+  {
+    offset: 1009,
+    content: [],
+    section: 'step-script',
     section_duration: '10:00',
   },
 ];

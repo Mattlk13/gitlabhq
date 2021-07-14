@@ -1,6 +1,5 @@
 # frozen_string_literal: true
 
-# Unicorn terminates any request which runs longer than 60 seconds.
 # Puma doesn't have any timeout mechanism for terminating long-running
 # requests, to make sure that server is not paralyzed by long-running
 # or stuck queries, we add a request timeout which terminates the
@@ -10,8 +9,6 @@
 # logged and we should fix the potential timeout issue in the code itself.
 
 if Gitlab::Runtime.puma? && !Rails.env.test?
-  require 'rack/timeout/base'
-
   Rack::Timeout::Logger.level = Logger::ERROR
 
   Gitlab::Application.configure do |config|

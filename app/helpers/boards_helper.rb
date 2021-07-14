@@ -10,14 +10,35 @@ module BoardsHelper
       boards_endpoint: @boards_endpoint,
       lists_endpoint: board_lists_path(board),
       board_id: board.id,
-      disabled: (!can?(current_user, :create_non_backlog_issues, board)).to_s,
-      issue_link_base: build_issue_link_base,
+      disabled: board.disabled_for?(current_user).to_s,
       root_path: root_path,
+      full_path: full_path,
       bulk_update_path: @bulk_issues_path,
-      default_avatar: image_path(default_avatar),
+      can_update: can_update?.to_s,
+      can_admin_list: can_admin_list?.to_s,
       time_tracking_limit_to_hours: Gitlab::CurrentSettings.time_tracking_limit_to_hours.to_s,
-      recent_boards_endpoint: recent_boards_path
+      recent_boards_endpoint: recent_boards_path,
+      parent: current_board_parent.model_name.param_key,
+      group_id: group_id,
+      labels_filter_base_path: build_issue_link_base,
+      labels_fetch_path: labels_fetch_path,
+      labels_manage_path: labels_manage_path,
+      board_type: board.to_type
     }
+  end
+
+  def group_id
+    return @group.id if board.group_board?
+
+    @project&.group&.id
+  end
+
+  def full_path
+    if board.group_board?
+      @group.full_path
+    else
+      @project.full_path
+    end
   end
 
   def build_issue_link_base
@@ -25,6 +46,22 @@ module BoardsHelper
       "#{group_path(@board.group)}/:project_path/issues"
     else
       project_issues_path(@project)
+    end
+  end
+
+  def labels_fetch_path
+    if board.group_board?
+      group_labels_path(@group, format: :json, only_group_labels: true, include_ancestor_groups: true)
+    else
+      project_labels_path(@project, format: :json, include_ancestor_groups: true)
+    end
+  end
+
+  def labels_manage_path
+    if board.group_board?
+      group_labels_path(@group)
+    else
+      project_labels_path(@project)
     end
   end
 
@@ -52,6 +89,18 @@ module BoardsHelper
     @current_board_parent ||= @group || @project
   end
 
+  def current_board_namespace
+    @current_board_namespace = board.group_board? ? @group : @project.namespace
+  end
+
+  def can_update?
+    can?(current_user, :admin_issue, board)
+  end
+
+  def can_admin_list?
+    can?(current_user, :admin_issue_board_list, current_board_parent)
+  end
+
   def can_admin_issue?
     can?(current_user, :admin_issue, current_board_parent)
   end
@@ -67,23 +116,6 @@ module BoardsHelper
       namespace_path: @namespace_path,
       project_path: @project&.path,
       group_path: @group&.path
-    }
-  end
-
-  def board_sidebar_user_data
-    dropdown_options = assignees_dropdown_options('issue')
-
-    {
-      toggle: 'dropdown',
-      field_name: 'issue[assignee_ids][]',
-      first_user: current_user&.username,
-      current_user: 'true',
-      project_id: @project&.id,
-      group_id: @group&.id,
-      null_user: 'true',
-      multi_select: 'true',
-      'dropdown-header': dropdown_options[:data][:'dropdown-header'],
-      'max-select': dropdown_options[:data][:'max-select']
     }
   end
 
@@ -108,4 +140,4 @@ module BoardsHelper
   end
 end
 
-BoardsHelper.prepend_if_ee('EE::BoardsHelper')
+BoardsHelper.prepend_mod_with('BoardsHelper')

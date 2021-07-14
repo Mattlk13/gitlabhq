@@ -23,10 +23,9 @@
 # An example defaults file can be found in lib/support/init.d/gitlab.default.example
 ###
 
-
 ### Environment variables
-RAILS_ENV="production"
-EXPERIMENTAL_PUMA=""
+RAILS_ENV=${RAILS_ENV:-'production'}
+SIDEKIQ_WORKERS=${SIDEKIQ_WORKERS:-1}
 
 # Script variable names should be lower-case not to conflict with
 # internal /bin/sh variables such as PATH, EDITOR or SHELL.
@@ -35,8 +34,7 @@ app_root="/home/$app_user/gitlab"
 pid_path="$app_root/tmp/pids"
 socket_path="$app_root/tmp/sockets"
 rails_socket="$socket_path/gitlab.socket"
-web_server_pid_path="$pid_path/unicorn.pid"
-sidekiq_pid_path="$pid_path/sidekiq.pid"
+web_server_pid_path="$pid_path/puma.pid"
 mail_room_enabled=false
 mail_room_pid_path="$pid_path/mail_room.pid"
 gitlab_workhorse_dir=$(cd $app_root/../gitlab-workhorse 2> /dev/null && pwd)
@@ -58,22 +56,20 @@ gitaly_log="$app_root/log/gitaly.log"
 test -f /etc/default/gitlab && . /etc/default/gitlab
 
 # Switch to the app_user if it is not they who are running the script.
-if [ `whoami` != "$app_user" ]; then
+if [ $(whoami) != "$app_user" ]; then
   eval su - "$app_user" -c $(echo \")$shell_path -l -c \'$0 "$@"\'$(echo \"); exit;
 fi
 
 # Switch to the gitlab path, exit on failure.
 if ! cd "$app_root" ; then
- echo "Failed to cd into $app_root, exiting!";  exit 1
+  echo "Failed to cd into $app_root, exiting!";  exit 1
 fi
 
-# Select the web server to use
-if [ -z "$EXPERIMENTAL_PUMA" ]; then
-  use_web_server="unicorn"
+if [ -z "$SIDEKIQ_WORKERS" ]; then
+  sidekiq_pid_path="$pid_path/sidekiq.pid"
 else
-  use_web_server="puma"
+  sidekiq_pid_path="$pid_path/sidekiq-cluster.pid"
 fi
-
 
 ### Init Script functions
 
@@ -131,8 +127,8 @@ wait_for_pids(){
     i=$((i+1))
     if [ $((i%10)) = 0 ]; then
       echo -n "."
-    elif [ $((i)) = 301 ]; then
-      echo "Waited 30s for the processes to write their pids, something probably went wrong."
+    elif [ $((i)) = 601 ]; then
+      echo "Waited 60s for the processes to write their pids, something probably went wrong."
       exit 1;
     fi
   done
@@ -263,7 +259,7 @@ start_gitlab() {
   check_stale_pids
 
   if [ "$web_status" != "0" ]; then
-    echo "Starting GitLab web server ($use_web_server)"
+    echo "Starting GitLab web server"
   fi
   if [ "$sidekiq_status" != "0" ]; then
     echo "Starting GitLab Sidekiq"
@@ -288,14 +284,14 @@ start_gitlab() {
     # Remove old socket if it exists
     rm -f "$rails_socket" 2>/dev/null
     # Start the web server
-    RAILS_ENV=$RAILS_ENV USE_WEB_SERVER=$use_web_server bin/web start
+    RAILS_ENV=$RAILS_ENV bin/web start
   fi
 
   # If sidekiq is already running, don't start it again.
   if [ "$sidekiq_status" = "0" ]; then
     echo "The Sidekiq job dispatcher is already running with pid $spid, not restarting"
   else
-    RAILS_ENV=$RAILS_ENV bin/background_jobs start &
+    RAILS_ENV=$RAILS_ENV SIDEKIQ_WORKERS=$SIDEKIQ_WORKERS bin/background_jobs start &
   fi
 
   if [ "$gitlab_workhorse_status" = "0" ]; then
@@ -334,7 +330,7 @@ start_gitlab() {
       echo "Gitaly is already running with pid $gapid, not restarting"
     else
       $app_root/bin/daemon_with_pidfile $gitaly_pid_path \
-          $gitaly_dir/gitaly $gitaly_dir/config.toml >> $gitaly_log 2>&1 &
+        $gitaly_dir/_build/bin/gitaly $gitaly_dir/config.toml >> $gitaly_log 2>&1 &
     fi
   fi
 
@@ -350,11 +346,11 @@ stop_gitlab() {
 
   if [ "$web_status" = "0" ]; then
     echo "Shutting down GitLab web server"
-    RAILS_ENV=$RAILS_ENV USE_WEB_SERVER=$use_web_server bin/web stop
+    RAILS_ENV=$RAILS_ENV bin/web stop
   fi
   if [ "$sidekiq_status" = "0" ]; then
     echo "Shutting down GitLab Sidekiq"
-    RAILS_ENV=$RAILS_ENV bin/background_jobs stop
+    RAILS_ENV=$RAILS_ENV SIDEKIQ_WORKERS=$SIDEKIQ_WORKERS bin/background_jobs stop
   fi
   if [ "$gitlab_workhorse_status" = "0" ]; then
     echo "Shutting down GitLab Workhorse"
@@ -406,39 +402,39 @@ print_status() {
     return
   fi
   if [ "$web_status" = "0" ]; then
-      echo "The GitLab web server with pid $wpid is running."
+    echo "The GitLab web server with pid $wpid is running."
   else
-      printf "The GitLab web server is \033[31mnot running\033[0m.\n"
+    printf "The GitLab web server is \033[31mnot running\033[0m.\n"
   fi
   if [ "$sidekiq_status" = "0" ]; then
-      echo "The GitLab Sidekiq job dispatcher with pid $spid is running."
+    echo "The GitLab Sidekiq job dispatcher with pid $spid is running."
   else
-      printf "The GitLab Sidekiq job dispatcher is \033[31mnot running\033[0m.\n"
+    printf "The GitLab Sidekiq job dispatcher is \033[31mnot running\033[0m.\n"
   fi
   if [ "$gitlab_workhorse_status" = "0" ]; then
-      echo "The GitLab Workhorse with pid $hpid is running."
+    echo "The GitLab Workhorse with pid $hpid is running."
   else
-      printf "The GitLab Workhorse is \033[31mnot running\033[0m.\n"
+    printf "The GitLab Workhorse is \033[31mnot running\033[0m.\n"
   fi
   if [ "$mail_room_enabled" = true ]; then
     if [ "$mail_room_status" = "0" ]; then
-        echo "The GitLab MailRoom email processor with pid $mpid is running."
+      echo "The GitLab MailRoom email processor with pid $mpid is running."
     else
-        printf "The GitLab MailRoom email processor is \033[31mnot running\033[0m.\n"
+      printf "The GitLab MailRoom email processor is \033[31mnot running\033[0m.\n"
     fi
   fi
   if [ "$gitlab_pages_enabled" = true ]; then
     if [ "$gitlab_pages_status" = "0" ]; then
-        echo "The GitLab Pages with pid $gppid is running."
+      echo "The GitLab Pages with pid $gppid is running."
     else
-        printf "The GitLab Pages is \033[31mnot running\033[0m.\n"
+      printf "The GitLab Pages is \033[31mnot running\033[0m.\n"
     fi
   fi
   if [ "$gitaly_enabled" = true ]; then
     if [ "$gitaly_status" = "0" ]; then
-        echo "Gitaly with pid $gapid is running."
+      echo "Gitaly with pid $gapid is running."
     else
-        printf "Gitaly is \033[31mnot running\033[0m.\n"
+      printf "Gitaly is \033[31mnot running\033[0m.\n"
     fi
   fi
   if [ "$web_status" = "0" ] && [ "$sidekiq_status" = "0" ] && [ "$gitlab_workhorse_status" = "0" ] && { [ "$mail_room_enabled" != true ] || [ "$mail_room_status" = "0" ]; } && { [ "$gitlab_pages_enabled" != true ] || [ "$gitlab_pages_status" = "0" ]; } && { [ "$gitaly_enabled" != true ] || [ "$gitaly_status" = "0" ]; }; then
@@ -454,11 +450,11 @@ reload_gitlab(){
     exit 1
   fi
   printf "Reloading GitLab web server configuration... "
-  RAILS_ENV=$RAILS_ENV USE_WEB_SERVER=$use_web_server bin/web reload
+  RAILS_ENV=$RAILS_ENV bin/web reload
   echo "Done."
 
   echo "Restarting GitLab Sidekiq since it isn't capable of reloading its config..."
-  RAILS_ENV=$RAILS_ENV bin/background_jobs restart
+  RAILS_ENV=$RAILS_ENV SIDEKIQ_WORKERS=$SIDEKIQ_WORKERS bin/background_jobs restart
 
   if [ "$mail_room_enabled" != true ]; then
     echo "Restarting GitLab MailRoom since it isn't capable of reloading its config..."
@@ -483,25 +479,25 @@ restart_gitlab(){
 
 case "$1" in
   start)
-        start_gitlab
-        ;;
+    start_gitlab
+    ;;
   stop)
-        stop_gitlab
-        ;;
+    stop_gitlab
+    ;;
   restart)
-        restart_gitlab
-        ;;
+    restart_gitlab
+    ;;
   reload|force-reload)
-	reload_gitlab
-        ;;
+    reload_gitlab
+    ;;
   status)
-        print_status
-        exit $gitlab_status
-        ;;
+    print_status
+    exit $gitlab_status
+    ;;
   *)
-        echo "Usage: service gitlab {start|stop|restart|reload|status}"
-        exit 1
-        ;;
+    echo "Usage: service gitlab {start|stop|restart|reload|status}"
+    exit 1
+    ;;
 esac
 
 exit

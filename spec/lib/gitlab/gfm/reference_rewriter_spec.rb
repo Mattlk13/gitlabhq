@@ -2,12 +2,12 @@
 
 require 'spec_helper'
 
-describe Gitlab::Gfm::ReferenceRewriter do
-  let(:group) { create(:group) }
-  let(:old_project) { create(:project, name: 'old-project', group: group) }
-  let(:new_project) { create(:project, name: 'new-project', group: group) }
-  let(:user) { create(:user) }
+RSpec.describe Gitlab::Gfm::ReferenceRewriter do
+  let_it_be(:group) { create(:group) }
+  let_it_be(:user) { create(:user) }
 
+  let(:new_project) { create(:project, name: 'new-project', group: group) }
+  let(:old_project) { create(:project, name: 'old-project', group: group) }
   let(:old_project_ref) { old_project.to_reference_base(new_project) }
   let(:text) { 'some text' }
 
@@ -110,6 +110,20 @@ describe Gitlab::Gfm::ReferenceRewriter do
       end
     end
 
+    context 'when description contains a local reference' do
+      let(:local_issue) { create(:issue, project: old_project) }
+      let(:text) { "See ##{local_issue.iid}" }
+
+      it { is_expected.to eq("See #{old_project.path}##{local_issue.iid}") }
+    end
+
+    context 'when description contains a cross reference' do
+      let(:merge_request) { create(:merge_request) }
+      let(:text) { "See #{merge_request.project.full_path}!#{merge_request.iid}" }
+
+      it { is_expected.to eq(text) }
+    end
+
     context 'with a commit' do
       let(:old_project) { create(:project, :repository, name: 'old-project', group: group) }
       let(:commit) { old_project.commit }
@@ -143,6 +157,18 @@ describe Gitlab::Gfm::ReferenceRewriter do
       end
 
       let(:text) { 'milestone %"10.0"' }
+
+      it { is_expected.to eq text }
+    end
+
+    context 'when referring to a group' do
+      let(:text) { "group @#{group.full_path}" }
+
+      it { is_expected.to eq text }
+    end
+
+    context 'when referring to a user' do
+      let(:text) { "user @#{user.full_path}" }
 
       it { is_expected.to eq text }
     end

@@ -2,7 +2,7 @@
 
 require 'spec_helper'
 
-describe 'forked project import' do
+RSpec.describe 'forked project import' do
   include ProjectForksHelper
 
   let(:user) { create(:user) }
@@ -12,11 +12,11 @@ describe 'forked project import' do
   let(:shared) { project.import_export_shared }
   let(:forked_from_project) { create(:project, :repository) }
   let(:forked_project) { fork_project(project_with_repo, nil, repository: true) }
-  let(:repo_saver) { Gitlab::ImportExport::RepoSaver.new(project: project_with_repo, shared: shared) }
+  let(:repo_saver) { Gitlab::ImportExport::RepoSaver.new(exportable: project_with_repo, shared: shared) }
   let(:bundle_path) { File.join(shared.export_path, Gitlab::ImportExport.project_bundle_filename) }
 
   let(:repo_restorer) do
-    Gitlab::ImportExport::RepoRestorer.new(path_to_bundle: bundle_path, shared: shared, project: project)
+    Gitlab::ImportExport::RepoRestorer.new(path_to_bundle: bundle_path, shared: shared, importable: project)
   end
 
   let!(:merge_request) do
@@ -32,6 +32,8 @@ describe 'forked project import' do
   end
 
   before do
+    stub_feature_flags(project_export_as_ndjson: false)
+
     allow_next_instance_of(Gitlab::ImportExport) do |instance|
       allow(instance).to receive(:storage_path).and_return(export_path)
     end

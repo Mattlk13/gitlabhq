@@ -11,7 +11,7 @@ module IssuableCollectionsAction
               .non_archived
               .page(params[:page])
 
-    @issuable_meta_data = issuable_meta_data(@issues, collection_type, current_user)
+    @issuable_meta_data = Gitlab::IssuableMetadata.new(current_user, @issues).data
 
     respond_to do |format|
       format.html
@@ -22,7 +22,7 @@ module IssuableCollectionsAction
   def merge_requests
     @merge_requests = issuables_collection.page(params[:page])
 
-    @issuable_meta_data = issuable_meta_data(@merge_requests, collection_type, current_user)
+    @issuable_meta_data = Gitlab::IssuableMetadata.new(current_user, @merge_requests).data
   end
   # rubocop:enable Gitlab/ModuleWithInstanceVariables
 
@@ -55,6 +55,9 @@ module IssuableCollectionsAction
   end
 
   def finder_options
-    super.merge(non_archived: true)
+    super.merge(
+      non_archived: true,
+      issue_types: Issue::TYPES_FOR_LIST
+    )
   end
 end

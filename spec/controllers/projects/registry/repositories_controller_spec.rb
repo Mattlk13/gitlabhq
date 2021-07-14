@@ -2,9 +2,9 @@
 
 require 'spec_helper'
 
-describe Projects::Registry::RepositoriesController do
-  let(:user) { create(:user) }
-  let(:project) { create(:project, :private) }
+RSpec.describe Projects::Registry::RepositoriesController do
+  let_it_be(:user) { create(:user) }
+  let_it_be(:project) { create(:project, :private) }
 
   before do
     sign_in(user)
@@ -14,6 +14,22 @@ describe Projects::Registry::RepositoriesController do
   context 'when user has access to registry' do
     before do
       project.add_developer(user)
+    end
+
+    shared_examples 'renders 200 for html and 404 for json' do
+      it 'successfully renders container repositories', :snowplow do
+        go_to_index
+
+        expect(response).to have_gitlab_http_status(:ok)
+        # event tracked in GraphQL API: https://gitlab.com/gitlab-org/gitlab/-/merge_requests/44926
+        expect_no_snowplow_event
+      end
+
+      it 'returns 404 for request in json format' do
+        go_to_index(format: :json)
+
+        expect(response).to have_gitlab_http_status(:not_found)
+      end
     end
 
     shared_examples 'renders a list of repositories' do
@@ -30,22 +46,8 @@ describe Projects::Registry::RepositoriesController do
       context 'when root container repository is not created' do
         context 'when there are tags for this repository' do
           before do
-            stub_container_registry_tags(repository: project.full_path,
+            stub_container_registry_tags(repository: :any,
                                          tags: %w[rc1 latest])
-          end
-
-          it 'successfully renders container repositories' do
-            expect(Gitlab::Tracking).not_to receive(:event)
-
-            go_to_index
-
-            expect(response).to have_gitlab_http_status(:ok)
-          end
-
-          it 'tracks the event' do
-            expect(Gitlab::Tracking).to receive(:event).with(anything, 'list_repositories', {})
-
-            go_to_index(format: :json)
           end
 
           it 'creates a root container repository' do
@@ -53,13 +55,7 @@ describe Projects::Registry::RepositoriesController do
             expect(ContainerRepository.first).to be_root_repository
           end
 
-          it 'json has a list of projects' do
-            go_to_index(format: :json)
-
-            expect(response).to have_gitlab_http_status(:ok)
-            expect(response).to match_response_schema('registry/repositories')
-            expect(response).to include_pagination_headers
-          end
+          it_behaves_like 'renders 200 for html and 404 for json'
         end
 
         context 'when there are no tags for this repository' do
@@ -67,38 +63,11 @@ describe Projects::Registry::RepositoriesController do
             stub_container_registry_tags(repository: :any, tags: [])
           end
 
-          it 'successfully renders container repositories' do
-            go_to_index
-
-            expect(response).to have_gitlab_http_status(:ok)
-          end
-
           it 'does not ensure root container repository' do
             expect { go_to_index }.not_to change { ContainerRepository.all.count }
           end
 
-          it 'responds with json if asked' do
-            go_to_index(format: :json)
-
-            expect(response).to have_gitlab_http_status(:ok)
-            expect(json_response).to be_kind_of(Array)
-          end
-        end
-      end
-
-      context 'with :vue_container_registry_explorer feature flag disabled' do
-        before do
-          stub_feature_flags(vue_container_registry_explorer: { enabled: false, thing: project.group })
-          stub_container_registry_tags(repository: project.full_path,
-                                       tags: %w[rc1 latest])
-        end
-
-        it 'json has a list of projects' do
-          go_to_index(format: :json)
-
-          expect(response).to have_gitlab_http_status(:ok)
-          expect(response).to match_response_schema('registry/repositories')
-          expect(response).not_to include_pagination_headers
+          it_behaves_like 'renders 200 for html and 404 for json'
         end
       end
     end
@@ -126,14 +95,16 @@ describe Projects::Registry::RepositoriesController do
 
           delete_repository(repository)
 
+          expect(repository.reload).to be_delete_scheduled
           expect(response).to have_gitlab_http_status(:no_content)
         end
 
-        it 'tracks the event' do
-          expect(Gitlab::Tracking).to receive(:event).with(anything, 'delete_repository', {})
+        it 'tracks the event', :snowplow do
           allow(DeleteContainerRepositoryWorker).to receive(:perform_async).with(user.id, repository.id)
 
           delete_repository(repository)
+
+          expect_snowplow_event(category: anything, action: 'delete_repository')
         end
       end
     end
@@ -153,11 +124,11 @@ describe Projects::Registry::RepositoriesController do
     end
   end
 
-  def go_to_index(format: :html)
-    get :index, params: {
+  def go_to_index(format: :html, params: {} )
+    get :index, params: params.merge({
                   namespace_id: project.namespace,
                   project_id: project
-                },
+                }),
                 format: format
   end
 

@@ -1,9 +1,9 @@
 # frozen_string_literal: true
 
 require 'spec_helper'
-require Rails.root.join('db', 'post_migrate', '20200206091544_migrate_create_commit_signature_worker_sidekiq_queue.rb')
+require_migration!
 
-describe MigrateCreateCommitSignatureWorkerSidekiqQueue, :sidekiq, :redis do
+RSpec.describe MigrateCreateCommitSignatureWorkerSidekiqQueue, :sidekiq, :redis do
   include Gitlab::Database::MigrationHelpers
   include StubWorker
 

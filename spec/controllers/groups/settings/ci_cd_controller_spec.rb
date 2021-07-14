@@ -2,11 +2,18 @@
 
 require 'spec_helper'
 
-describe Groups::Settings::CiCdController do
+RSpec.describe Groups::Settings::CiCdController do
   include ExternalAuthorizationServiceHelpers
 
-  let(:group) { create(:group) }
-  let(:user) { create(:user) }
+  let_it_be(:group) { create(:group) }
+  let_it_be(:sub_group) { create(:group, parent: group) }
+  let_it_be(:user) { create(:user) }
+  let_it_be(:project) { create(:project, group: group) }
+  let_it_be(:project_2) { create(:project, group: sub_group) }
+  let_it_be(:runner_group) { create(:ci_runner, :group, groups: [group]) }
+  let_it_be(:runner_project_1) { create(:ci_runner, :project, projects: [project])}
+  let_it_be(:runner_project_2) { create(:ci_runner, :project, projects: [project_2])}
+  let_it_be(:runner_project_3) { create(:ci_runner, :project, projects: [project, project_2])}
 
   before do
     sign_in(user)
@@ -18,11 +25,23 @@ describe Groups::Settings::CiCdController do
         group.add_owner(user)
       end
 
-      it 'renders show with 200 status code' do
+      it 'renders show with 200 status code and correct runners' do
         get :show, params: { group_id: group }
 
         expect(response).to have_gitlab_http_status(:ok)
         expect(response).to render_template(:show)
+        expect(assigns(:group_runners)).to match_array([runner_group, runner_project_1, runner_project_2, runner_project_3])
+      end
+
+      it 'paginates runners' do
+        stub_const("Groups::Settings::CiCdController::NUMBER_OF_RUNNERS_PER_PAGE", 1)
+
+        create(:ci_runner)
+
+        get :show, params: { group_id: group }
+
+        expect(response).to have_gitlab_http_status(:ok)
+        expect(assigns(:group_runners).count).to be(1)
       end
     end
 
@@ -35,6 +54,7 @@ describe Groups::Settings::CiCdController do
         get :show, params: { group_id: group }
 
         expect(response).to have_gitlab_http_status(:not_found)
+        expect(assigns(:group_runners)).to be_nil
       end
     end
 
@@ -119,7 +139,7 @@ describe Groups::Settings::CiCdController do
         end
 
         it 'returns a flash alert' do
-          expect(response).to set_flash[:alert]
+          expect(controller).to set_flash[:alert]
             .to eq("There was a problem updating Auto DevOps pipeline: [\"Error 1\"].")
         end
       end
@@ -128,7 +148,7 @@ describe Groups::Settings::CiCdController do
         it 'returns a flash notice' do
           subject
 
-          expect(response).to set_flash[:notice]
+          expect(controller).to set_flash[:notice]
             .to eq('Auto DevOps pipeline was updated for the group')
         end
       end
@@ -180,46 +200,61 @@ describe Groups::Settings::CiCdController do
         group.add_owner(user)
       end
 
-      it { is_expected.to redirect_to(group_settings_ci_cd_path) }
-
-      context 'when service execution went wrong' do
-        let(:update_service) { double }
-
-        before do
-          allow(Groups::UpdateService).to receive(:new).and_return(update_service)
-          allow(update_service).to receive(:execute).and_return(false)
-          allow_any_instance_of(Group).to receive_message_chain(:errors, :full_messages)
-            .and_return(['Error 1'])
-
-          subject
-        end
-
-        it 'returns a flash alert' do
-          expect(response).to set_flash[:alert]
-            .to eq("There was a problem updating the pipeline settings: [\"Error 1\"].")
-        end
+      context 'when admin mode is disabled' do
+        it { is_expected.to have_gitlab_http_status(:not_found) }
       end
 
-      context 'when service execution was successful' do
-        it 'returns a flash notice' do
-          subject
+      context 'when admin mode is enabled', :enable_admin_mode do
+        it { is_expected.to redirect_to(group_settings_ci_cd_path) }
 
-          expect(response).to set_flash[:notice]
-            .to eq('Pipeline settings was updated for the group')
+        context 'when service execution went wrong' do
+          let(:update_service) { double }
+
+          before do
+            allow(Groups::UpdateService).to receive(:new).and_return(update_service)
+            allow(update_service).to receive(:execute).and_return(false)
+            allow_any_instance_of(Group).to receive_message_chain(:errors, :full_messages)
+              .and_return(['Error 1'])
+
+            subject
+          end
+
+          it 'returns a flash alert' do
+            expect(controller).to set_flash[:alert]
+              .to eq("There was a problem updating the pipeline settings: [\"Error 1\"].")
+          end
+        end
+
+        context 'when service execution was successful' do
+          it 'returns a flash notice' do
+            subject
+
+            expect(controller).to set_flash[:notice]
+              .to eq('Pipeline settings was updated for the group')
+          end
         end
       end
     end
   end
 
-  describe 'POST create_deploy_token' do
-    it_behaves_like 'a created deploy token' do
-      let(:entity) { group }
-      let(:create_entity_params) { { group_id: group } }
-      let(:deploy_token_type) { DeployToken.deploy_token_types[:group_type] }
+  describe 'GET #runner_setup_scripts' do
+    before do
+      group.add_owner(user)
+    end
 
-      before do
-        entity.add_owner(user)
-      end
+    it 'renders the setup scripts' do
+      get :runner_setup_scripts, params: { os: 'linux', arch: 'amd64', group_id: group }
+
+      expect(response).to have_gitlab_http_status(:ok)
+      expect(json_response).to have_key("install")
+      expect(json_response).to have_key("register")
+    end
+
+    it 'renders errors if they occur' do
+      get :runner_setup_scripts, params: { os: 'foo', arch: 'bar', group_id: group }
+
+      expect(response).to have_gitlab_http_status(:bad_request)
+      expect(json_response).to have_key("errors")
     end
   end
 end

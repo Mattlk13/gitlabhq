@@ -3,18 +3,18 @@
 module Gitlab
   module Email
     module Handler
-      prepend_if_ee('::EE::Gitlab::Email::Handler') # rubocop: disable Cop/InjectEnterpriseEditionModule
-
       def self.handlers
         @handlers ||= load_handlers
       end
 
       def self.load_handlers
         [
-          UnsubscribeHandler,
           CreateNoteHandler,
+          CreateIssueHandler,
+          CreateNoteOnIssuableHandler,
+          UnsubscribeHandler,
           CreateMergeRequestHandler,
-          CreateIssueHandler
+          ServiceDeskHandler
         ]
       end
 

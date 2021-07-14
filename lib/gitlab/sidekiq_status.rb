@@ -50,7 +50,7 @@ module Gitlab
     #
     # Returns true or false.
     def self.all_completed?(job_ids)
-      self.num_running(job_ids).zero?
+      self.num_running(job_ids) == 0
     end
 
     # Returns true if the given job is running or enqueued.
@@ -66,7 +66,7 @@ module Gitlab
     def self.num_running(job_ids)
       responses = self.job_status(job_ids)
 
-      responses.select(&:present?).count
+      responses.count(&:present?)
     end
 
     # Returns the number of jobs that have completed.

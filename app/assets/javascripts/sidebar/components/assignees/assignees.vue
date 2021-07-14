@@ -1,20 +1,16 @@
 <script>
-import CollapsedAssigneeList from '../assignees/collapsed_assignee_list.vue';
-import UncollapsedAssigneeList from '../assignees/uncollapsed_assignee_list.vue';
+import CollapsedAssigneeList from './collapsed_assignee_list.vue';
+import UncollapsedAssigneeList from './uncollapsed_assignee_list.vue';
 
 export default {
   // name: 'Assignees' is a false positive: https://gitlab.com/gitlab-org/frontend/eslint-plugin-i18n/issues/26#possible-false-positives
-  // eslint-disable-next-line @gitlab/i18n/no-non-i18n-strings
+  // eslint-disable-next-line @gitlab/require-i18n-strings
   name: 'Assignees',
   components: {
     CollapsedAssigneeList,
     UncollapsedAssigneeList,
   },
   props: {
-    rootPath: {
-      type: String,
-      required: true,
-    },
     users: {
       type: Array,
       required: true,
@@ -34,9 +30,8 @@ export default {
       return !this.users.length;
     },
     sortedAssigness() {
-      const canMergeUsers = this.users.filter(user => user.can_merge);
-      const canNotMergeUsers = this.users.filter(user => !user.can_merge);
-
+      const canMergeUsers = this.users.filter((user) => user.can_merge);
+      const canNotMergeUsers = this.users.filter((user) => !user.can_merge);
       return [...canMergeUsers, ...canNotMergeUsers];
     },
   },
@@ -52,25 +47,18 @@ export default {
   <div>
     <collapsed-assignee-list :users="sortedAssigness" :issuable-type="issuableType" />
 
-    <div class="value hide-collapsed">
-      <template v-if="hasNoUsers">
-        <span class="assign-yourself no-value qa-assign-yourself">
-          {{ __('None') }}
-          <template v-if="editable">
-            -
-            <button type="button" class="btn-link" @click="assignSelf">
-              {{ __('assign yourself') }}
-            </button>
-          </template>
-        </span>
-      </template>
+    <div data-testid="expanded-assignee" class="value hide-collapsed">
+      <span v-if="hasNoUsers" class="no-value" data-testid="no-value">
+        {{ __('None') }}
+        <template v-if="editable">
+          -
+          <button type="button" class="btn-link" data-testid="assign-yourself" @click="assignSelf">
+            {{ __('assign yourself') }}
+          </button>
+        </template>
+      </span>
 
-      <uncollapsed-assignee-list
-        v-else
-        :users="sortedAssigness"
-        :root-path="rootPath"
-        :issuable-type="issuableType"
-      />
+      <uncollapsed-assignee-list v-else :users="sortedAssigness" :issuable-type="issuableType" />
     </div>
   </div>
 </template>

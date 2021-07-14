@@ -2,7 +2,7 @@
 
 require 'spec_helper'
 
-describe Gitlab::LegacyGithubImport::Importer do
+RSpec.describe Gitlab::LegacyGithubImport::Importer do
   shared_examples 'Gitlab::LegacyGithubImport::Importer#execute' do
     let(:expected_not_called) { [] }
 
@@ -45,14 +45,14 @@ describe Gitlab::LegacyGithubImport::Importer do
       allow(Rails).to receive(:cache).and_return(ActiveSupport::Cache::MemoryStore.new)
 
       allow_any_instance_of(Octokit::Client).to receive(:rate_limit!).and_raise(Octokit::NotFound)
-      allow_any_instance_of(Gitlab::Shell).to receive(:import_repository).and_raise(Gitlab::Shell::Error)
+      allow(project.wiki.repository).to receive(:import_repository).and_raise(Gitlab::Git::CommandError)
 
       allow_any_instance_of(Octokit::Client).to receive(:user).and_return(octocat)
       allow_any_instance_of(Octokit::Client).to receive(:labels).and_return([label1, label2])
       allow_any_instance_of(Octokit::Client).to receive(:milestones).and_return([milestone, milestone])
       allow_any_instance_of(Octokit::Client).to receive(:issues).and_return([issue1, issue2])
       allow_any_instance_of(Octokit::Client).to receive(:pull_requests).and_return([pull_request, pull_request])
-      allow_any_instance_of(Octokit::Client).to receive(:issues_comments).and_return([])
+      allow_any_instance_of(Octokit::Client).to receive(:issues_comments).and_raise(Octokit::NotFound)
       allow_any_instance_of(Octokit::Client).to receive(:pull_requests_comments).and_return([])
       allow_any_instance_of(Octokit::Client).to receive(:last_response).and_return(double(rels: { next: nil }))
       allow_any_instance_of(Octokit::Client).to receive(:releases).and_return([release1, release2])
@@ -169,13 +169,10 @@ describe Gitlab::LegacyGithubImport::Importer do
         errors: [
           { type: :label, url: "#{api_root}/repos/octocat/Hello-World/labels/bug", errors: "Validation failed: Title can't be blank, Title is invalid" },
           { type: :issue, url: "#{api_root}/repos/octocat/Hello-World/issues/1348", errors: "Validation failed: Title can't be blank" },
-          { type: :wiki, errors: "Gitlab::Shell::Error" }
+          { type: :issues_comments, errors: 'Octokit::NotFound' },
+          { type: :wiki, errors: "Gitlab::Git::CommandError" }
         ]
       }
-
-      unless project.gitea_import?
-        error[:errors] << { type: :release, url: "#{api_root}/repos/octocat/Hello-World/releases/2", errors: "Validation failed: Description can't be blank" }
-      end
 
       described_class.new(project).execute
 
@@ -242,6 +239,7 @@ describe Gitlab::LegacyGithubImport::Importer do
       labels: [double(name: 'Label #2')]
     )
   end
+
   let(:closed_pull_request) do
     double(
       number: 1347,
@@ -277,7 +275,7 @@ describe Gitlab::LegacyGithubImport::Importer do
         allow(project).to receive(:import_data).and_return(double(credentials: credentials))
         expect(Gitlab::LegacyGithubImport::Client).to receive(:new).with(
           credentials[:user],
-          {}
+          **{}
         )
 
         subject.client
@@ -292,12 +290,13 @@ describe Gitlab::LegacyGithubImport::Importer do
     subject { described_class.new(project) }
 
     before do
-      project.update(import_type: 'gitea', import_url: "#{repo_root}/foo/group/project.git")
+      project.update!(import_type: 'gitea', import_url: "#{repo_root}/foo/group/project.git")
     end
 
     it_behaves_like 'Gitlab::LegacyGithubImport::Importer#execute' do
       let(:expected_not_called) { [:import_releases, [:import_comments, :pull_requests]] }
     end
+
     it_behaves_like 'Gitlab::LegacyGithubImport::Importer#execute an error occurs'
     it_behaves_like 'Gitlab::LegacyGithubImport unit-testing'
 

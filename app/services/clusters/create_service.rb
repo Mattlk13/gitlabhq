@@ -5,7 +5,8 @@ module Clusters
     attr_reader :current_user, :params
 
     def initialize(user = nil, params = {})
-      @current_user, @params = user, params.dup
+      @current_user = user
+      @params = params.dup
     end
 
     def execute(access_token: nil)
@@ -19,9 +20,7 @@ module Clusters
 
       cluster = Clusters::Cluster.new(cluster_params)
 
-      unless can_create_cluster?
-        cluster.errors.add(:base, _('Instance does not support multiple Kubernetes clusters'))
-      end
+      validate_management_project_permissions(cluster)
 
       return cluster if cluster.errors.present?
 
@@ -53,11 +52,9 @@ module Clusters
       end
     end
 
-    # EE would override this method
-    def can_create_cluster?
-      clusterable.clusters.empty?
+    def validate_management_project_permissions(cluster)
+      Clusters::Management::ValidateManagementProjectPermissionsService.new(current_user)
+        .execute(cluster, params[:management_project_id])
     end
   end
 end
-
-Clusters::CreateService.prepend_if_ee('EE::Clusters::CreateService')

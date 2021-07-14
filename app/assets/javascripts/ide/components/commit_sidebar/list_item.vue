@@ -1,18 +1,17 @@
 <script>
+import { GlIcon, GlTooltipDirective } from '@gitlab/ui';
 import { mapActions } from 'vuex';
-import tooltip from '~/vue_shared/directives/tooltip';
-import Icon from '~/vue_shared/components/icon.vue';
 import FileIcon from '~/vue_shared/components/file_icon.vue';
+import getCommitIconMap from '../../commit_icon';
 import { viewerTypes } from '../../constants';
-import { getCommitIconMap } from '../../utils';
 
 export default {
   components: {
-    Icon,
+    GlIcon,
     FileIcon,
   },
   directives: {
-    tooltip,
+    GlTooltip: GlTooltipDirective,
   },
   props: {
     file: {
@@ -38,7 +37,7 @@ export default {
   computed: {
     iconName() {
       // name: '-solid' is a false positive: https://gitlab.com/gitlab-org/frontend/eslint-plugin-i18n/issues/26#possible-false-positives
-      // eslint-disable-next-line @gitlab/i18n/no-non-i18n-strings
+      // eslint-disable-next-line @gitlab/require-i18n-strings
       const suffix = this.stagedList ? '-solid' : '';
 
       return `${getCommitIconMap(this.file).icon}${suffix}`;
@@ -57,31 +56,18 @@ export default {
     },
   },
   methods: {
-    ...mapActions([
-      'discardFileChanges',
-      'updateViewer',
-      'openPendingTab',
-      'unstageChange',
-      'stageChange',
-    ]),
+    ...mapActions(['discardFileChanges', 'updateViewer', 'openPendingTab']),
     openFileInEditor() {
       if (this.file.type === 'tree') return null;
 
       return this.openPendingTab({
         file: this.file,
         keyPrefix: this.keyPrefix,
-      }).then(changeViewer => {
+      }).then((changeViewer) => {
         if (changeViewer) {
           this.updateViewer(viewerTypes.diff);
         }
       });
-    },
-    fileAction() {
-      if (this.file.staged) {
-        this.unstageChange(this.file.path);
-      } else {
-        this.stageChange(this.file.path);
-      }
     },
   },
 };
@@ -90,18 +76,21 @@ export default {
 <template>
   <div class="multi-file-commit-list-item position-relative">
     <div
-      v-tooltip
+      v-gl-tooltip
       :title="tooltipTitle"
       :class="{
         'is-active': isActive,
       }"
       class="multi-file-commit-list-path w-100 border-0 ml-0 mr-0"
       role="button"
-      @dblclick="fileAction"
       @click="openFileInEditor"
     >
-      <span class="multi-file-commit-list-file-path d-flex align-items-center">
-        <file-icon :file-name="file.name" class="append-right-8" />
+      <span
+        class="multi-file-commit-list-file-path d-flex align-items-center"
+        data-qa-selector="file_to_commit_content"
+        :data-qa-file-name="file.name"
+      >
+        <file-icon :file-name="file.name" class="gl-mr-3" />
         <template v-if="file.prevName && file.prevName !== file.name">
           {{ file.prevName }} &#x2192;
         </template>
@@ -109,7 +98,7 @@ export default {
       </span>
       <div class="ml-auto d-flex align-items-center">
         <div class="d-flex align-items-center ide-commit-list-changed-icon">
-          <icon :name="iconName" :size="16" :class="iconClass" />
+          <gl-icon :name="iconName" :size="16" :class="iconClass" />
         </div>
       </div>
     </div>

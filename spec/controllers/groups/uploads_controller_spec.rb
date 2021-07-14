@@ -2,7 +2,7 @@
 
 require 'spec_helper'
 
-describe Groups::UploadsController do
+RSpec.describe Groups::UploadsController do
   include WorkhorseHelpers
 
   let(:model) { create(:group, :public) }
@@ -23,7 +23,7 @@ describe Groups::UploadsController do
     let!(:upload) { create(:upload, :issuable_upload, :with_file, model: model) }
     let(:group) { model }
     let(:old_path) { group.to_param + 'old' }
-    let!(:redirect_route) { model.redirect_routes.create(path: old_path) }
+    let!(:redirect_route) { model.redirect_routes.create!(path: old_path) }
     let(:upload_path) { File.basename(upload.path) }
 
     it 'redirects to a file with the proper extension' do

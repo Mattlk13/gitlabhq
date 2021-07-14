@@ -25,13 +25,15 @@ module Gitlab
       #
       # If this value ever changes, make sure to create a migration to update
       # current records, and default of `ApplicationSettings#diff_max_patch_bytes`.
-      DEFAULT_MAX_PATCH_BYTES = 100.kilobytes
+      DEFAULT_MAX_PATCH_BYTES = 200.kilobytes
 
       # This is a limitation applied on the source (Gitaly), therefore we don't allow
       # persisting limits over that.
       MAX_PATCH_BYTES_UPPER_BOUND = 500.kilobytes
 
       SERIALIZE_KEYS = %i(diff new_path old_path a_mode b_mode new_file renamed_file deleted_file too_large).freeze
+
+      BINARY_NOTICE_PATTERN = %r(Binary files a\/(.*) and b\/(.*) differ).freeze
 
       class << self
         def between(repo, head, base, options = {}, *paths)
@@ -120,8 +122,8 @@ module Gitlab
         # default.
         #
         # Patches surpassing this limit should still be persisted in the database.
-        def patch_safe_limit_bytes
-          patch_hard_limit_bytes / 10
+        def patch_safe_limit_bytes(limit = patch_hard_limit_bytes)
+          limit / 10
         end
 
         # Returns the limit for a single diff file (patch).
@@ -131,8 +133,13 @@ module Gitlab
         def patch_hard_limit_bytes
           Gitlab::CurrentSettings.diff_max_patch_bytes
         end
-      end
 
+        def has_binary_notice?(text)
+          return false unless text.present?
+
+          text.start_with?(BINARY_NOTICE_PATTERN)
+        end
+      end
       def initialize(raw_diff, expanded: true)
         @expanded = expanded
 
@@ -174,9 +181,13 @@ module Gitlab
         @line_count ||= Util.count_lines(@diff)
       end
 
+      def diff_bytesize
+        @diff_bytesize ||= @diff.bytesize
+      end
+
       def too_large?
         if @too_large.nil?
-          @too_large = @diff.bytesize >= self.class.patch_hard_limit_bytes
+          @too_large = diff_bytesize >= self.class.patch_hard_limit_bytes
         else
           @too_large
         end
@@ -194,7 +205,7 @@ module Gitlab
       def collapsed?
         return @collapsed if defined?(@collapsed)
 
-        @collapsed = !expanded && @diff.bytesize >= self.class.patch_safe_limit_bytes
+        @collapsed = !expanded && diff_bytesize >= self.class.patch_safe_limit_bytes
       end
 
       def collapse!
@@ -211,7 +222,7 @@ module Gitlab
       end
 
       def has_binary_notice?
-        @diff.start_with?('Binary')
+        self.class.has_binary_notice?(@diff)
       end
 
       private
@@ -224,22 +235,24 @@ module Gitlab
         end
       end
 
-      def init_from_gitaly(diff)
-        @diff = encode!(diff.patch) if diff.respond_to?(:patch)
-        @new_path = encode!(diff.to_path.dup)
-        @old_path = encode!(diff.from_path.dup)
-        @a_mode = diff.old_mode.to_s(8)
-        @b_mode = diff.new_mode.to_s(8)
-        @new_file = diff.from_id == BLANK_SHA
-        @renamed_file = diff.from_path != diff.to_path
-        @deleted_file = diff.to_id == BLANK_SHA
-        @too_large = diff.too_large if diff.respond_to?(:too_large)
+      def init_from_gitaly(gitaly_diff)
+        @diff = gitaly_diff.respond_to?(:patch) ? encode!(gitaly_diff.patch) : ''
+        @new_path = encode!(gitaly_diff.to_path.dup)
+        @old_path = encode!(gitaly_diff.from_path.dup)
+        @a_mode = gitaly_diff.old_mode.to_s(8)
+        @b_mode = gitaly_diff.new_mode.to_s(8)
+        @new_file = gitaly_diff.from_id == BLANK_SHA
+        @renamed_file = gitaly_diff.from_path != gitaly_diff.to_path
+        @deleted_file = gitaly_diff.to_id == BLANK_SHA
+        @too_large = gitaly_diff.too_large if gitaly_diff.respond_to?(:too_large)
 
-        collapse! if diff.respond_to?(:collapsed) && diff.collapsed
+        collapse! if gitaly_diff.respond_to?(:collapsed) && gitaly_diff.collapsed
       end
 
       def prune_diff_if_eligible
         if too_large?
+          ::Gitlab::Metrics.add_event(:patch_hard_limit_bytes_hit)
+
           too_large!
         elsif collapsed?
           collapse!

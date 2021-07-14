@@ -1,12 +1,11 @@
 import { shallowMount } from '@vue/test-utils';
 import BlobHeaderFilepath from '~/blob/components/blob_header_filepath.vue';
+import { numberToHumanSize } from '~/lib/utils/number_utils';
 import ClipboardButton from '~/vue_shared/components/clipboard_button.vue';
 import { Blob as MockBlob } from './mock_data';
-import { numberToHumanSize } from '~/lib/utils/number_utils';
 
-const mockHumanReadableSize = 'a lot';
 jest.mock('~/lib/utils/number_utils', () => ({
-  numberToHumanSize: jest.fn(() => mockHumanReadableSize),
+  numberToHumanSize: jest.fn(() => 'a lot'),
 }));
 
 describe('Blob Header Filepath', () => {
@@ -15,7 +14,7 @@ describe('Blob Header Filepath', () => {
   function createComponent(blobProps = {}, options = {}) {
     wrapper = shallowMount(BlobHeaderFilepath, {
       propsData: {
-        blob: Object.assign({}, MockBlob, blobProps),
+        blob: { ...MockBlob, ...blobProps },
       },
       ...options,
     });
@@ -33,17 +32,12 @@ describe('Blob Header Filepath', () => {
 
     it('renders regular name', () => {
       createComponent();
-      expect(
-        wrapper
-          .find('.js-blob-header-filepath')
-          .text()
-          .trim(),
-      ).toBe(MockBlob.name);
+      expect(wrapper.find('.js-blob-header-filepath').text().trim()).toBe(MockBlob.path);
     });
 
     it('does not fail if the name is empty', () => {
-      const emptyName = '';
-      createComponent({ name: emptyName });
+      const emptyPath = '';
+      createComponent({ path: emptyPath });
       expect(wrapper.find('.js-blob-header-filepath').exists()).toBe(false);
     });
 
@@ -57,7 +51,7 @@ describe('Blob Header Filepath', () => {
     it('renders filesize in a human-friendly format', () => {
       createComponent();
       expect(numberToHumanSize).toHaveBeenCalled();
-      expect(wrapper.vm.blobSize).toBe(mockHumanReadableSize);
+      expect(wrapper.vm.blobSize).toBe('a lot');
     });
 
     it('renders a slot and prepends its contents to the existing one', () => {
@@ -66,25 +60,20 @@ describe('Blob Header Filepath', () => {
         {},
         {
           scopedSlots: {
-            filepathPrepend: `<span>${slotContent}</span>`,
+            'filepath-prepend': `<span>${slotContent}</span>`,
           },
         },
       );
 
       expect(wrapper.text()).toContain(slotContent);
-      expect(
-        wrapper
-          .text()
-          .trim()
-          .substring(0, slotContent.length),
-      ).toBe(slotContent);
+      expect(wrapper.text().trim().substring(0, slotContent.length)).toBe(slotContent);
     });
   });
 
   describe('functionality', () => {
     it('sets gfm value correctly on the clipboard-button', () => {
       createComponent();
-      expect(wrapper.vm.gfmCopyText).toBe('`dummy.md`');
+      expect(wrapper.vm.gfmCopyText).toBe(`\`${MockBlob.path}\``);
     });
   });
 });

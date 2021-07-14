@@ -6,18 +6,18 @@
   .settings-header
     %h4
       = _('Visibility and access controls')
-    %button.btn.js-settings-toggle{ type: 'button' }
+    %button.btn.gl-button.btn-default.js-settings-toggle{ type: 'button' }
       = expanded_by_default? ? _('Collapse') : _('Expand')
     %p
       = _('Set default and restrict visibility levels. Configure import sources and git access protocol.')
   .settings-content
     = render 'visibility_and_access'
 
-%section.settings.qa-account-and-limit-settings.as-account-limit.no-animate#js-account-settings{ class: ('expanded' if expanded_by_default?) }
+%section.settings.as-account-limit.no-animate#js-account-settings{ class: ('expanded' if expanded_by_default?), data: { qa_selector: 'account_and_limit_settings_content' } }
   .settings-header
     %h4
       = _('Account and limit')
-    %button.btn.js-settings-toggle{ type: 'button' }
+    %button.btn.gl-button.btn-default.js-settings-toggle{ type: 'button' }
       = expanded_by_default? ? _('Collapse') : _('Expand')
     %p
       = _('Set projects and maximum size limits, session duration, user options, and check feature availability for namespace plan.')
@@ -28,18 +28,18 @@
   .settings-header
     %h4
       = _('Diff limits')
-    %button.btn.js-settings-toggle{ type: 'button' }
+    %button.btn.gl-button.btn-default.js-settings-toggle{ type: 'button' }
       = expanded_by_default? ? _('Collapse') : _('Expand')
     %p
-      = _('Diff content limits')
+      = _('Set size limits for displaying diffs in the browser.')
   .settings-content
     = render 'diff_limits'
 
-%section.settings.as-signup.no-animate#js-signup-settings{ class: ('expanded' if expanded_by_default?) }
+%section.settings.as-signup.no-animate#js-signup-settings{ class: ('expanded' if expanded_by_default?), data: { qa_selector: 'sign_up_restrictions_settings_content' } }
   .settings-header
     %h4
       = _('Sign-up restrictions')
-    %button.btn.js-settings-toggle{ type: 'button' }
+    %button.btn.gl-button.btn-default.js-settings-toggle{ type: 'button' }
       = expanded_by_default? ? _('Collapse') : _('Expand')
     %p
       = _('Configure the way a user creates a new account.')
@@ -50,7 +50,7 @@
   .settings-header
     %h4
       = _('Sign-in restrictions')
-    %button.btn.js-settings-toggle{ type: 'button' }
+    %button.btn.gl-button.btn-default.js-settings-toggle{ type: 'button' }
       = expanded_by_default? ? _('Collapse') : _('Expand')
     %p
       = _('Set requirements for a user to sign-in. Enable mandatory two-factor authentication.')
@@ -61,7 +61,7 @@
   .settings-header
     %h4
       = _('Terms of Service and Privacy Policy')
-    %button.btn.btn-default.js-settings-toggle{ type: 'button' }
+    %button.btn.gl-button.btn-default.js-settings-toggle{ type: 'button' }
       = expanded_by_default? ? _('Collapse') : _('Expand')
     %p
       = _('Include a Terms of Service agreement and Privacy Policy that all users must accept.')
@@ -74,7 +74,7 @@
   .settings-header
     %h4
       = _('Web terminal')
-    %button.btn.btn-default.js-settings-toggle{ type: 'button' }
+    %button.btn.gl-button.btn-default.js-settings-toggle{ type: 'button' }
       = expanded_by_default? ? _('Collapse') : _('Expand')
     %p
       = _('Set max session time for web terminal.')
@@ -85,12 +85,12 @@
   .settings-header
     %h4
       = _('Web IDE')
-    %button.btn.btn-default.js-settings-toggle{ type: 'button' }
+    %button.btn.gl-button.btn-default.js-settings-toggle{ type: 'button' }
       = expanded_by_default? ? _('Collapse') : _('Expand')
     %p
-      = _('Manage Web IDE features')
+      = _('Manage Web IDE features.')
   .settings-content
-    = form_for @application_setting, url: general_admin_application_settings_path(anchor: "#js-web-ide-settings"), html: { class: 'fieldset-form' } do |f|
+    = form_for @application_setting, url: general_admin_application_settings_path(anchor: "#js-web-ide-settings"), html: { class: 'fieldset-form', id: 'web-ide-settings' } do |f|
       = form_errors(@application_setting)
 
       %fieldset
@@ -98,8 +98,20 @@
           .form-check
             = f.check_box :web_ide_clientside_preview_enabled, class: 'form-check-input'
             = f.label :web_ide_clientside_preview_enabled, class: 'form-check-label' do
-              = s_('IDE|Client side evaluation')
+              = s_('IDE|Live Preview')
             %span.form-text.text-muted
-              = s_('IDE|Allow live previews of JavaScript projects in the Web IDE using CodeSandbox client side evaluation.')
+              - link_start = '<a href="%{url}">'.html_safe % { url: help_page_path('user/project/web_ide/index', anchor: 'enable-live-preview') }
+              = s_('Preview JavaScript projects in the Web IDE with CodeSandbox Live Preview. %{link_start}Learn more.%{link_end} ').html_safe % { link_start: link_start, link_end: '</a>'.html_safe }
+      = f.submit _('Save changes'), class: "gl-button btn btn-confirm"
 
-      = f.submit _('Save changes'), class: "btn btn-success"
+= render_if_exists 'admin/application_settings/maintenance_mode_settings_form'
+= render 'admin/application_settings/gitpod'
+= render 'admin/application_settings/kroki'
+= render 'admin/application_settings/mailgun'
+= render 'admin/application_settings/plantuml'
+= render 'admin/application_settings/sourcegraph'
+= render_if_exists 'admin/application_settings/slack'
+= render 'admin/application_settings/third_party_offers'
+= render 'admin/application_settings/snowplow'
+= render 'admin/application_settings/eks'
+= render 'admin/application_settings/floc'

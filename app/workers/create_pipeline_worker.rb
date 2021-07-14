@@ -2,12 +2,15 @@
 
 class CreatePipelineWorker # rubocop:disable Scalability/IdempotentWorker
   include ApplicationWorker
+
+  sidekiq_options retry: 3
   include PipelineQueue
 
   queue_namespace :pipeline_creation
   feature_category :continuous_integration
-  latency_sensitive_worker!
+  urgency :high
   worker_resource_boundary :cpu
+  loggable_arguments 2, 3, 4
 
   def perform(project_id, user_id, ref, source, params = {})
     project = Project.find(project_id)

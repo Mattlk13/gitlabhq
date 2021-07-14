@@ -2,7 +2,7 @@
 
 require 'spec_helper'
 
-describe AutocompleteController do
+RSpec.describe AutocompleteController do
   let(:project) { create(:project) }
   let(:user) { project.owner }
 
@@ -173,7 +173,7 @@ describe AutocompleteController do
         it 'gives an array of users' do
           get :users, params: { todo_filter: true }
 
-          expect(response.status).to eq 200
+          expect(response).to have_gitlab_http_status(:ok)
           expect(json_response).to be_kind_of(Array)
         end
       end
@@ -192,9 +192,9 @@ describe AutocompleteController do
         end
 
         it 'rejects non existent user ids' do
-          get(:users, params: { author_id: 99999 })
+          get(:users, params: { author_id: non_existing_record_id })
 
-          expect(json_response.collect { |u| u['id'] }).not_to include(99999)
+          expect(json_response.collect { |u| u['id'] }).not_to include(non_existing_record_id)
         end
       end
 
@@ -361,6 +361,67 @@ describe AutocompleteController do
         expect(json_response[1]).to match('name' => 'thumbsup')
         expect(json_response[2]).to match('name' => 'tea')
         expect(json_response[3]).to match('name' => 'thumbsdown')
+      end
+    end
+  end
+
+  context 'GET deploy_keys_with_owners' do
+    let!(:deploy_key) { create(:deploy_key, user: user) }
+    let!(:deploy_keys_project) { create(:deploy_keys_project, :write_access, project: project, deploy_key: deploy_key) }
+
+    context 'unauthorized user' do
+      it 'returns a not found response' do
+        get(:deploy_keys_with_owners, params: { project_id: project.id })
+
+        expect(response).to have_gitlab_http_status(:redirect)
+      end
+    end
+
+    context 'when the user who can read the project is logged in' do
+      before do
+        sign_in(user)
+      end
+
+      context 'and they cannot read the project' do
+        it 'returns a not found response' do
+          allow(Ability).to receive(:allowed?).and_call_original
+          allow(Ability).to receive(:allowed?).with(user, :read_project, project).and_return(false)
+
+          get(:deploy_keys_with_owners, params: { project_id: project.id })
+
+          expect(response).to have_gitlab_http_status(:not_found)
+        end
+      end
+
+      it 'renders the deploy key in a json payload, with its owner' do
+        get(:deploy_keys_with_owners, params: { project_id: project.id })
+
+        expect(json_response.count).to eq(1)
+        expect(json_response.first['title']).to eq(deploy_key.title)
+        expect(json_response.first['owner']['id']).to eq(deploy_key.user.id)
+      end
+
+      context 'with an unknown project' do
+        it 'returns a not found response' do
+          get(:deploy_keys_with_owners, params: { project_id: 9999 })
+
+          expect(response).to have_gitlab_http_status(:not_found)
+        end
+      end
+
+      context 'and the user cannot read the owner of the key' do
+        before do
+          allow(Ability).to receive(:allowed?).and_call_original
+          allow(Ability).to receive(:allowed?).with(user, :read_user, deploy_key.user).and_return(false)
+        end
+
+        it 'returns a payload without owner' do
+          get(:deploy_keys_with_owners, params: { project_id: project.id })
+
+          expect(json_response.count).to eq(1)
+          expect(json_response.first['title']).to eq(deploy_key.title)
+          expect(json_response.first['owner']).to be_nil
+        end
       end
     end
   end

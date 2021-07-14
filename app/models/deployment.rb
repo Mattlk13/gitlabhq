@@ -7,6 +7,10 @@ class Deployment < ApplicationRecord
   include UpdatedAtFilterable
   include Importable
   include Gitlab::Utils::StrongMemoize
+  include FastDestroyAll
+  include IgnorableColumns
+
+  ignore_column :deployable_id_convert_to_bigint, remove_with: '14.2', remove_after: '2021-08-22'
 
   belongs_to :project, required: true
   belongs_to :environment, required: true
@@ -20,9 +24,7 @@ class Deployment < ApplicationRecord
 
   has_one :deployment_cluster
 
-  has_internal_id :iid, scope: :project, track_if: -> { !importing? }, init: ->(s) do
-    Deployment.where(project: s.project).maximum(:iid) if s&.project
-  end
+  has_internal_id :iid, scope: :project, track_if: -> { !importing? }
 
   validates :sha, presence: true
   validates :ref, presence: true
@@ -33,17 +35,26 @@ class Deployment < ApplicationRecord
   delegate :kubernetes_namespace, to: :deployment_cluster, allow_nil: true
 
   scope :for_environment, -> (environment) { where(environment_id: environment) }
-  scope :for_environment_name, -> (name) do
-    joins(:environment).where(environments: { name: name })
+  scope :for_environment_name, -> (project, name) do
+    where('deployments.environment_id = (?)',
+      Environment.select(:id).where(project: project, name: name).limit(1))
   end
 
   scope :for_status, -> (status) { where(status: status) }
+  scope :for_project, -> (project_id) { where(project_id: project_id) }
+  scope :for_projects, -> (projects) { where(project: projects) }
 
   scope :visible, -> { where(status: %i[running success failed canceled]) }
   scope :stoppable, -> { where.not(on_stop: nil).where.not(deployable_id: nil).success }
   scope :active, -> { where(status: %i[created running]) }
-  scope :older_than, -> (deployment) { where('id < ?', deployment.id) }
-  scope :with_deployable, -> { includes(:deployable).where('deployable_id IS NOT NULL') }
+  scope :older_than, -> (deployment) { where('deployments.id < ?', deployment.id) }
+  scope :with_deployable, -> { joins('INNER JOIN ci_builds ON ci_builds.id = deployments.deployable_id').preload(:deployable) }
+  scope :with_api_entity_associations, -> { preload({ deployable: { runner: [], tags: [], user: [], job_artifacts_archive: [] } }) }
+
+  scope :finished_after, ->(date) { where('finished_at >= ?', date) }
+  scope :finished_before, ->(date) { where('finished_at < ?', date) }
+
+  FINISHED_STATUSES = %i[success failed canceled].freeze
 
   state_machine :status, initial: :created do
     event :run do
@@ -62,28 +73,53 @@ class Deployment < ApplicationRecord
       transition any - [:canceled] => :canceled
     end
 
-    before_transition any => [:success, :failed, :canceled] do |deployment|
-      deployment.finished_at = Time.now
+    event :skip do
+      transition any - [:skipped] => :skipped
     end
 
-    after_transition any => :success do |deployment|
-      deployment.run_after_commit do
-        Deployments::SuccessWorker.perform_async(id)
-      end
+    before_transition any => FINISHED_STATUSES do |deployment|
+      deployment.finished_at = Time.current
     end
 
-    after_transition any => [:success, :failed, :canceled] do |deployment|
+    after_transition any => :running do |deployment|
+      next unless deployment.project.ci_forward_deployment_enabled?
+
       deployment.run_after_commit do
-        Deployments::FinishedWorker.perform_async(id)
+        Deployments::DropOlderDeploymentsWorker.perform_async(id)
       end
     end
 
     after_transition any => :running do |deployment|
-      next unless deployment.project.forward_deployment_enabled?
+      deployment.run_after_commit do
+        Deployments::HooksWorker.perform_async(deployment_id: id, status_changed_at: Time.current)
+      end
+    end
+
+    after_transition any => :success do |deployment|
+      deployment.run_after_commit do
+        Deployments::UpdateEnvironmentWorker.perform_async(id)
+        Deployments::LinkMergeRequestWorker.perform_async(id)
+      end
+    end
+
+    after_transition any => FINISHED_STATUSES do |deployment|
+      deployment.run_after_commit do
+        Deployments::HooksWorker.perform_async(deployment_id: id, status_changed_at: Time.current)
+      end
+    end
+
+    after_transition any => any - [:skipped] do |deployment, transition|
+      next if transition.loopback?
 
       deployment.run_after_commit do
-        Deployments::ForwardDeploymentWorker.perform_async(id)
+        ::JiraConnect::SyncDeploymentsWorker.perform_async(id)
       end
+    end
+  end
+
+  after_create unless: :importing? do |deployment|
+    run_after_commit do
+      ::JiraConnect::SyncDeploymentsWorker.perform_async(deployment.id)
     end
   end
 
@@ -92,7 +128,8 @@ class Deployment < ApplicationRecord
     running: 1,
     success: 2,
     failed: 3,
-    canceled: 4
+    canceled: 4,
+    skipped: 5
   }
 
   def self.last_for_environment(environment)
@@ -113,8 +150,32 @@ class Deployment < ApplicationRecord
     success.find_by!(iid: iid)
   end
 
+  class << self
+    ##
+    # FastDestroyAll concerns
+    def begin_fast_destroy
+      preload(:project).find_each.map do |deployment|
+        [deployment.project, deployment.ref_path]
+      end
+    end
+
+    ##
+    # FastDestroyAll concerns
+    def finalize_fast_destroy(params)
+      by_project = params.group_by(&:shift)
+
+      by_project.each do |project, ref_paths|
+        project.repository.delete_refs(*ref_paths.flatten)
+      end
+    end
+
+    def latest_for_sha(sha)
+      where(sha: sha).order(id: :desc).take
+    end
+  end
+
   def commit
-    project.commit(sha)
+    @commit ||= project.commit(sha)
   end
 
   def commit_title
@@ -125,9 +186,10 @@ class Deployment < ApplicationRecord
     Commit.truncate_sha(sha)
   end
 
-  def execute_hooks
-    deployment_data = Gitlab::DataBuilder::Deployment.build(self)
-    project.execute_services(deployment_data, :deployment_hooks)
+  def execute_hooks(status_changed_at)
+    deployment_data = Gitlab::DataBuilder::Deployment.build(self, status_changed_at)
+    project.execute_hooks(deployment_data, :deployment_hooks)
+    project.execute_integrations(deployment_data, :deployment_hooks)
   end
 
   def last?
@@ -135,7 +197,7 @@ class Deployment < ApplicationRecord
   end
 
   def create_ref
-    project.repository.create_ref(ref, ref_path)
+    project.repository.create_ref(sha, ref_path)
   end
 
   def invalidate_cache
@@ -163,7 +225,7 @@ class Deployment < ApplicationRecord
   end
 
   def update_merge_request_metrics!
-    return unless environment.update_merge_request_metrics? && success?
+    return unless environment.production? && success?
 
     merge_requests = project.merge_requests
                      .joins(:metrics)
@@ -181,29 +243,18 @@ class Deployment < ApplicationRecord
 
   def previous_deployment
     @previous_deployment ||=
-      project.deployments.joins(:environment)
-      .where(environments: { name: self.environment.name }, ref: self.ref)
-      .where.not(id: self.id)
-      .order(id: :desc)
-      .take
-  end
-
-  def previous_environment_deployment
-    project
-      .deployments
-      .success
-      .joins(:environment)
-      .where(environments: { name: environment.name })
-      .where.not(id: self.id)
-      .order(id: :desc)
-      .take
+      self.class.for_environment(environment_id)
+        .success
+        .where('id < ?', id)
+        .order(id: :desc)
+        .take
   end
 
   def stop_action
     return unless on_stop.present?
     return unless manual_actions
 
-    @stop_action ||= manual_actions.find_by(name: on_stop)
+    @stop_action ||= manual_actions.find { |action| action.name == self.on_stop }
   end
 
   def finished_at
@@ -251,7 +302,7 @@ class Deployment < ApplicationRecord
     SQL
   end
 
-  # Changes the status of a deployment and triggers the correspinding state
+  # Changes the status of a deployment and triggers the corresponding state
   # machine events.
   def update_status(status)
     case status
@@ -263,6 +314,8 @@ class Deployment < ApplicationRecord
       drop
     when 'canceled'
       cancel
+    when 'skipped'
+      skip
     else
       raise ArgumentError, "The status #{status.inspect} is invalid"
     end
@@ -280,15 +333,22 @@ class Deployment < ApplicationRecord
     errors.add(:ref, _('The branch or tag does not exist'))
   end
 
-  private
-
   def ref_path
     File.join(environment.ref_path, 'deployments', iid.to_s)
   end
+
+  def equal_to?(params)
+    ref == params[:ref] &&
+      tag == params[:tag] &&
+      sha == params[:sha] &&
+      status == params[:status]
+  end
+
+  private
 
   def legacy_finished_at
     self.created_at if success? && !read_attribute(:finished_at)
   end
 end
 
-Deployment.prepend_if_ee('EE::Deployment')
+Deployment.prepend_mod_with('Deployment')

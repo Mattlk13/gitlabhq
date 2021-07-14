@@ -1,8 +1,8 @@
-import Vuex from 'vuex';
 import { shallowMount, createLocalVue } from '@vue/test-utils';
-import createState from '~/code_navigation/store/state';
+import Vuex from 'vuex';
 import App from '~/code_navigation/components/app.vue';
 import Popover from '~/code_navigation/components/popover.vue';
+import createState from '~/code_navigation/store/state';
 
 const localVue = createLocalVue();
 const fetchData = jest.fn();
@@ -16,6 +16,7 @@ function factory(initialState = {}) {
     state: {
       ...createState(),
       ...initialState,
+      definitionPathPrefix: 'https://test.com/blob/main',
     },
     actions: {
       fetchData,
@@ -47,6 +48,7 @@ describe('Code navigation app component', () => {
     factory({
       currentDefinition: { hover: 'console' },
       currentDefinitionPosition: { x: 0 },
+      currentBlobPath: 'index.js',
     });
 
     expect(wrapper.find(Popover).exists()).toBe(true);

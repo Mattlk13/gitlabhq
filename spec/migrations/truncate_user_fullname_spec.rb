@@ -1,9 +1,9 @@
 # frozen_string_literal: true
 
 require 'spec_helper'
-require Rails.root.join('db', 'migrate', '20190325080727_truncate_user_fullname.rb')
+require_migration!
 
-describe TruncateUserFullname, :migration do
+RSpec.describe TruncateUserFullname do
   let(:users) { table(:users) }
 
   let(:user_short) { create_user(name: 'abc', email: 'test_short@example.com') }

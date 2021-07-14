@@ -4,12 +4,14 @@ class Projects::GrafanaApiController < Projects::ApplicationController
   include RenderServiceResults
   include MetricsDashboard
 
+  feature_category :metrics
+
   def proxy
     result = ::Grafana::ProxyService.new(
       project,
       params[:datasource_id],
       params[:proxy_path],
-      query_params.to_h
+      prometheus_params
     ).execute
 
     return continue_polling_response if result.nil?
@@ -25,6 +27,15 @@ class Projects::GrafanaApiController < Projects::ApplicationController
   end
 
   def query_params
-    params.permit(:query, :start, :end, :step)
+    params.permit(:query, :start_time, :end_time, :step)
+  end
+
+  def prometheus_params
+    query_params.to_h
+      .except(:start_time, :end_time)
+      .merge(
+        start: query_params[:start_time],
+        end: query_params[:end_time]
+      )
   end
 end

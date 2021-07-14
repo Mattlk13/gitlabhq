@@ -1,37 +1,36 @@
-/* eslint-disable consistent-return */
-
 import $ from 'jquery';
+import { joinPaths } from '~/lib/utils/url_utility';
+import CreateMergeRequestDropdown from './create_merge_request_dropdown';
+import createFlash from './flash';
+import { EVENT_ISSUABLE_VUE_APP_CHANGE } from './issuable/constants';
 import axios from './lib/utils/axios_utils';
 import { addDelimiter } from './lib/utils/text_utility';
-import flash from './flash';
-import CreateMergeRequestDropdown from './create_merge_request_dropdown';
-import IssuablesHelper from './helpers/issuables_helper';
 import { __ } from './locale';
 
 export default class Issue {
   constructor() {
-    if ($('a.btn-close').length) this.initIssueBtnEventListeners();
-
-    Issue.$btnNewBranch = $('#new-branch');
-    Issue.createMrDropdownWrap = document.querySelector('.create-mr-dropdown-wrap');
+    if ($('.js-alert-moved-from-service-desk-warning').length) {
+      Issue.initIssueMovedFromServiceDeskDismissHandler();
+    }
 
     if (document.querySelector('#related-branches')) {
       Issue.initRelatedBranches();
     }
 
-    this.closeButtons = $('a.btn-close');
-    this.reopenButtons = $('a.btn-reopen');
-
-    this.initCloseReopenReport();
+    Issue.createMrDropdownWrap = document.querySelector('.create-mr-dropdown-wrap');
 
     if (Issue.createMrDropdownWrap) {
       this.createMergeRequestDropdown = new CreateMergeRequestDropdown(Issue.createMrDropdownWrap);
     }
 
     // Listen to state changes in the Vue app
-    document.addEventListener('issuable_vue_app:change', event => {
+    this.issuableVueAppChangeHandler = (event) =>
       this.updateTopState(event.detail.isClosed, event.detail.data);
-    });
+    document.addEventListener(EVENT_ISSUABLE_VUE_APP_CHANGE, this.issuableVueAppChangeHandler);
+  }
+
+  dispose() {
+    document.removeEventListener(EVENT_ISSUABLE_VUE_APP_CHANGE, this.issuableVueAppChangeHandler);
   }
 
   /**
@@ -58,101 +57,57 @@ export default class Issue {
       isOpenBadge.toggleClass('hidden', isClosed);
 
       $(document).trigger('issuable:change', isClosed);
-      this.toggleCloseReopenButton(isClosed);
 
       let numProjectIssues = Number(
-        projectIssuesCounter
-          .first()
-          .text()
-          .trim()
-          .replace(/[^\d]/, ''),
+        projectIssuesCounter.first().text().trim().replace(/[^\d]/, ''),
       );
       numProjectIssues = isClosed ? numProjectIssues - 1 : numProjectIssues + 1;
       projectIssuesCounter.text(addDelimiter(numProjectIssues));
 
       if (this.createMergeRequestDropdown) {
-        if (isClosed) {
-          this.createMergeRequestDropdown.unavailable();
-          this.createMergeRequestDropdown.disable();
-        } else {
-          // We should check in case a branch was created in another tab
-          this.createMergeRequestDropdown.checkAbilityToCreateBranch();
-        }
+        this.createMergeRequestDropdown.checkAbilityToCreateBranch();
       }
     } else {
-      flash(issueFailMessage);
+      createFlash({
+        message: issueFailMessage,
+      });
     }
   }
 
-  initIssueBtnEventListeners() {
-    const issueFailMessage = __('Unable to update this issue at this time.');
+  static initIssueMovedFromServiceDeskDismissHandler() {
+    const alertMovedFromServiceDeskWarning = $('.js-alert-moved-from-service-desk-warning');
 
-    return $(document).on(
-      'click',
-      '.js-issuable-actions a.btn-close, .js-issuable-actions a.btn-reopen',
-      e => {
-        e.preventDefault();
-        e.stopImmediatePropagation();
-        const $button = $(e.currentTarget);
-        const shouldSubmit = $button.hasClass('btn-comment');
-        if (shouldSubmit) {
-          Issue.submitNoteForm($button.closest('form'));
-        }
-
-        this.disableCloseReopenButton($button);
-
-        const url = $button.attr('href');
-        return axios
-          .put(url)
-          .then(({ data }) => {
-            const isClosed = $button.hasClass('btn-close');
-            this.updateTopState(isClosed, data);
-          })
-          .catch(() => flash(issueFailMessage))
-          .then(() => {
-            this.disableCloseReopenButton($button, false);
-          });
-      },
+    const trimmedPathname = window.location.pathname.slice(1);
+    const alertMovedFromServiceDeskDismissedKey = joinPaths(
+      trimmedPathname,
+      'alert-issue-moved-from-service-desk-dismissed',
     );
-  }
 
-  initCloseReopenReport() {
-    this.closeReopenReportToggle = IssuablesHelper.initCloseReopenReport();
-
-    if (this.closeButtons) this.closeButtons = this.closeButtons.not('.issuable-close-button');
-    if (this.reopenButtons) this.reopenButtons = this.reopenButtons.not('.issuable-close-button');
-  }
-
-  disableCloseReopenButton($button, shouldDisable) {
-    if (this.closeReopenReportToggle) {
-      this.closeReopenReportToggle.setDisable(shouldDisable);
-    } else {
-      $button.prop('disabled', shouldDisable);
+    if (!localStorage.getItem(alertMovedFromServiceDeskDismissedKey)) {
+      alertMovedFromServiceDeskWarning.show();
     }
-  }
 
-  toggleCloseReopenButton(isClosed) {
-    if (this.closeReopenReportToggle) this.closeReopenReportToggle.updateButton(isClosed);
-    this.closeButtons.toggleClass('hidden', isClosed);
-    this.reopenButtons.toggleClass('hidden', !isClosed);
-  }
-
-  static submitNoteForm(form) {
-    const noteText = form.find('textarea.js-note-text').val();
-    if (noteText && noteText.trim().length > 0) {
-      return form.submit();
-    }
+    alertMovedFromServiceDeskWarning.on('click', '.js-close', (e) => {
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      alertMovedFromServiceDeskWarning.remove();
+      localStorage.setItem(alertMovedFromServiceDeskDismissedKey, true);
+    });
   }
 
   static initRelatedBranches() {
     const $container = $('#related-branches');
-    return axios
+    axios
       .get($container.data('url'))
       .then(({ data }) => {
         if ('html' in data) {
           $container.html(data.html);
         }
       })
-      .catch(() => flash(__('Failed to load related branches')));
+      .catch(() =>
+        createFlash({
+          message: __('Failed to load related branches'),
+        }),
+      );
   }
 }

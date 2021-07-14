@@ -5,11 +5,11 @@ require 'spec_helper'
 RSpec.describe Oauth::TokenInfoController do
   describe '#show' do
     context 'when the user is not authenticated' do
-      it 'responds with a 401' do
+      it 'responds with a 400' do
         get :show
 
-        expect(response.status).to eq 401
-        expect(JSON.parse(response.body)).to include('error' => 'invalid_request')
+        expect(response).to have_gitlab_http_status(:bad_request)
+        expect(Gitlab::Json.parse(response.body)).to include('error' => 'invalid_request')
       end
     end
 
@@ -22,8 +22,8 @@ RSpec.describe Oauth::TokenInfoController do
       it 'responds with the token info' do
         get :show, params: { access_token: access_token.token }
 
-        expect(response.status).to eq 200
-        expect(JSON.parse(response.body)).to eq(
+        expect(response).to have_gitlab_http_status(:ok)
+        expect(Gitlab::Json.parse(response.body)).to eq(
           'scope'              => %w[api],
           'scopes'             => %w[api],
           'created_at'         => access_token.created_at.to_i,
@@ -36,11 +36,11 @@ RSpec.describe Oauth::TokenInfoController do
     end
 
     context 'when the doorkeeper_token is not recognised' do
-      it 'responds with a 401' do
+      it 'responds with a 400' do
         get :show, params: { access_token: 'unknown_token' }
 
-        expect(response.status).to eq 401
-        expect(JSON.parse(response.body)).to include('error' => 'invalid_request')
+        expect(response).to have_gitlab_http_status(:bad_request)
+        expect(Gitlab::Json.parse(response.body)).to include('error' => 'invalid_request')
       end
     end
 
@@ -49,23 +49,27 @@ RSpec.describe Oauth::TokenInfoController do
         create(:oauth_access_token, created_at: 2.days.ago, expires_in: 10.minutes)
       end
 
-      it 'responds with a 401' do
+      it 'responds with a 400' do
         get :show, params: { access_token: access_token.token }
 
-        expect(response.status).to eq 401
-        expect(JSON.parse(response.body)).to include('error' => 'invalid_request')
+        expect(response).to have_gitlab_http_status(:bad_request)
+        expect(Gitlab::Json.parse(response.body)).to include('error' => 'invalid_request')
       end
     end
 
     context 'when the token is revoked' do
       let(:access_token) { create(:oauth_access_token, revoked_at: 2.days.ago) }
 
-      it 'responds with a 401' do
+      it 'responds with a 400' do
         get :show, params: { access_token: access_token.token }
 
-        expect(response.status).to eq 401
-        expect(JSON.parse(response.body)).to include('error' => 'invalid_request')
+        expect(response).to have_gitlab_http_status(:bad_request)
+        expect(Gitlab::Json.parse(response.body)).to include('error' => 'invalid_request')
       end
     end
+  end
+
+  it 'includes Two-factor enforcement concern' do
+    expect(described_class.included_modules.include?(EnforcesTwoFactorAuthentication)).to eq(true)
   end
 end

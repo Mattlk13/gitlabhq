@@ -1,12 +1,12 @@
 <script>
+import { GlIcon } from '@gitlab/ui';
 import { mapActions } from 'vuex';
-import Icon from '~/vue_shared/components/icon.vue';
 import noteableDiscussion from '../../notes/components/noteable_discussion.vue';
 
 export default {
   components: {
     noteableDiscussion,
-    Icon,
+    GlIcon,
   },
   props: {
     discussions: {
@@ -68,9 +68,10 @@ export default {
             }"
             type="button"
             class="js-diff-notes-toggle"
+            :aria-label="__('Show comments')"
             @click="toggleDiscussion({ discussionId: discussion.id })"
           >
-            <icon v-if="discussion.expanded" name="collapse" class="collapse-icon" />
+            <gl-icon v-if="discussion.expanded" name="collapse" class="collapse-icon" />
             <template v-else>
               {{ index + 1 }}
             </template>
@@ -85,9 +86,11 @@ export default {
           :help-page-path="helpPagePath"
           @noteDeleted="deleteNoteHandler"
         >
-          <span v-if="renderAvatarBadge" slot="avatar-badge" class="badge badge-pill">
-            {{ index + 1 }}
-          </span>
+          <template v-if="renderAvatarBadge" #avatar-badge>
+            <span class="badge badge-pill">
+              {{ index + 1 }}
+            </span>
+          </template>
         </noteable-discussion>
       </ul>
     </div>

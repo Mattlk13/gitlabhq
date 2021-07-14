@@ -4,8 +4,10 @@ require 'spec_helper'
 
 # For easier debugging set `PUMA_DEBUG=1`
 
-describe Gitlab::Cluster::Mixins::PumaCluster do
-  PUMA_STARTUP_TIMEOUT = 30
+RSpec.describe Gitlab::Cluster::Mixins::PumaCluster do
+  before do
+    stub_const('PUMA_STARTUP_TIMEOUT', 30)
+  end
 
   context 'when running Puma in Cluster-mode' do
     using RSpec::Parameterized::TableSyntax
@@ -107,7 +109,7 @@ describe Gitlab::Cluster::Mixins::PumaCluster do
         line = process.readline
         puts "PUMA_DEBUG: #{line}" if ENV['PUMA_DEBUG']
       end
-    rescue
+    rescue StandardError
     end
   end
 end

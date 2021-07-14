@@ -2,7 +2,7 @@
 
 require 'spec_helper'
 
-describe Projects::NotesController do
+RSpec.describe Projects::NotesController do
   include ProjectForksHelper
 
   let(:user)    { create(:user) }
@@ -37,13 +37,17 @@ describe Projects::NotesController do
       project.add_developer(user)
     end
 
-    it 'passes last_fetched_at from headers to NotesFinder' do
-      last_fetched_at = 3.hours.ago.to_i
+    it 'passes last_fetched_at from headers to NotesFinder and MergeIntoNotesService' do
+      last_fetched_at = Time.zone.at(3.hours.ago.to_i) # remove nanoseconds
 
-      request.headers['X-Last-Fetched-At'] = last_fetched_at
+      request.headers['X-Last-Fetched-At'] = microseconds(last_fetched_at)
 
       expect(NotesFinder).to receive(:new)
         .with(anything, hash_including(last_fetched_at: last_fetched_at))
+        .and_call_original
+
+      expect(ResourceEvents::MergeIntoNotesService).to receive(:new)
+        .with(anything, anything, hash_including(last_fetched_at: last_fetched_at))
         .and_call_original
 
       get :index, params: request_params
@@ -77,6 +81,100 @@ describe Projects::NotesController do
         expect(ResourceEvents::MergeIntoNotesService).not_to receive(:new)
 
         get :index, params: request_params
+      end
+    end
+
+    context 'for multiple pages of notes', :aggregate_failures do
+      # 3 pages worth: 1 normal page, 1 oversized due to clashing updated_at,
+      # and a final, short page
+      let!(:page_1) { create_list(:note, 2, noteable: issue, project: project, updated_at: 3.days.ago) }
+      let!(:page_2) { create_list(:note, 3, noteable: issue, project: project, updated_at: 2.days.ago) }
+      let!(:page_3) { create_list(:note, 2, noteable: issue, project: project, updated_at: 1.day.ago) }
+
+      # Include a resource event in the middle page as well
+      let!(:resource_event) { create(:resource_state_event, issue: issue, user: user, created_at: 2.days.ago) }
+
+      let(:page_1_boundary) { microseconds(page_1.last.updated_at + NotesFinder::FETCH_OVERLAP) }
+      let(:page_2_boundary) { microseconds(page_2.last.updated_at + NotesFinder::FETCH_OVERLAP) }
+
+      around do |example|
+        freeze_time do
+          example.run
+        end
+      end
+
+      before do
+        stub_const('Gitlab::UpdatedNotesPaginator::LIMIT', 2)
+      end
+
+      context 'feature flag enabled' do
+        before do
+          stub_feature_flags(paginated_notes: true)
+        end
+
+        it 'returns the first page of notes' do
+          expect(Gitlab::EtagCaching::Middleware).to receive(:skip!)
+
+          get :index, params: request_params
+
+          expect(json_response['notes'].count).to eq(page_1.count)
+          expect(json_response['more']).to be_truthy
+          expect(json_response['last_fetched_at']).to eq(page_1_boundary)
+          expect(response.headers['Poll-Interval'].to_i).to eq(1)
+        end
+
+        it 'returns the second page of notes' do
+          expect(Gitlab::EtagCaching::Middleware).to receive(:skip!)
+
+          request.headers['X-Last-Fetched-At'] = page_1_boundary
+
+          get :index, params: request_params
+
+          expect(json_response['notes'].count).to eq(page_2.count + 1) # resource event
+          expect(json_response['more']).to be_truthy
+          expect(json_response['last_fetched_at']).to eq(page_2_boundary)
+          expect(response.headers['Poll-Interval'].to_i).to eq(1)
+        end
+
+        it 'returns the final page of notes' do
+          expect(Gitlab::EtagCaching::Middleware).to receive(:skip!)
+
+          request.headers['X-Last-Fetched-At'] = page_2_boundary
+
+          get :index, params: request_params
+
+          expect(json_response['notes'].count).to eq(page_3.count)
+          expect(json_response['more']).to be_falsy
+          expect(json_response['last_fetched_at']).to eq(microseconds(Time.zone.now))
+          expect(response.headers['Poll-Interval'].to_i).to be > 1
+        end
+
+        it 'returns an empty page of notes' do
+          expect(Gitlab::EtagCaching::Middleware).not_to receive(:skip!)
+
+          request.headers['X-Last-Fetched-At'] = microseconds(Time.zone.now)
+
+          get :index, params: request_params
+
+          expect(json_response['notes']).to be_empty
+          expect(json_response['more']).to be_falsy
+          expect(json_response['last_fetched_at']).to eq(microseconds(Time.zone.now))
+          expect(response.headers['Poll-Interval'].to_i).to be > 1
+        end
+      end
+
+      context 'feature flag disabled' do
+        before do
+          stub_feature_flags(paginated_notes: false)
+        end
+
+        it 'returns all notes' do
+          get :index, params: request_params
+
+          expect(json_response['notes'].count).to eq((page_1 + page_2 + page_3).size + 1)
+          expect(json_response['more']).to be_falsy
+          expect(json_response['last_fetched_at']).to eq(microseconds(Time.zone.now))
+        end
       end
     end
 
@@ -215,7 +313,7 @@ describe Projects::NotesController do
     let(:note_text) { 'some note' }
     let(:request_params) do
       {
-        note: { note: note_text, noteable_id: merge_request.id, noteable_type: 'MergeRequest' },
+        note: { note: note_text, noteable_id: merge_request.id, noteable_type: 'MergeRequest' }.merge(extra_note_params),
         namespace_id: project.namespace,
         project_id: project,
         merge_request_diff_head_sha: 'sha',
@@ -223,7 +321,9 @@ describe Projects::NotesController do
         target_id: merge_request.id
       }.merge(extra_request_params)
     end
+
     let(:extra_request_params) { {} }
+    let(:extra_note_params) { {} }
 
     let(:project_visibility) { Gitlab::VisibilityLevel::PUBLIC }
     let(:merge_requests_access_level) { ProjectFeature::ENABLED }
@@ -234,7 +334,7 @@ describe Projects::NotesController do
 
     before do
       project.update_attribute(:visibility_level, project_visibility)
-      project.project_feature.update(merge_requests_access_level: merge_requests_access_level)
+      project.project_feature.update!(merge_requests_access_level: merge_requests_access_level)
       sign_in(user)
     end
 
@@ -322,12 +422,47 @@ describe Projects::NotesController do
         end
       end
 
+      context 'when creating a confidential note' do
+        let(:extra_request_params) { { format: :json } }
+
+        context 'when `confidential` parameter is not provided' do
+          it 'sets `confidential` to `false` in JSON response' do
+            create!
+
+            expect(response).to have_gitlab_http_status(:ok)
+            expect(json_response['confidential']).to be false
+          end
+        end
+
+        context 'when `confidential` parameter is `false`' do
+          let(:extra_note_params) { { confidential: false } }
+
+          it 'sets `confidential` to `false` in JSON response' do
+            create!
+
+            expect(response).to have_gitlab_http_status(:ok)
+            expect(json_response['confidential']).to be false
+          end
+        end
+
+        context 'when `confidential` parameter is `true`' do
+          let(:extra_note_params) { { confidential: true } }
+
+          it 'sets `confidential` to `true` in JSON response' do
+            create!
+
+            expect(response).to have_gitlab_http_status(:ok)
+            expect(json_response['confidential']).to be true
+          end
+        end
+      end
+
       context 'when creating a note with quick actions' do
         context 'with commands that return changes' do
           let(:note_text) { "/award :thumbsup:\n/estimate 1d\n/spend 3h" }
           let(:extra_request_params) { { format: :json } }
 
-          it 'includes changes in commands_changes ' do
+          it 'includes changes in commands_changes' do
             create!
 
             expect(response).to have_gitlab_http_status(:ok)
@@ -585,7 +720,7 @@ describe Projects::NotesController do
 
       context 'when a noteable is not found' do
         it 'returns 404 status' do
-          request_params[:target_id] = 9999
+          request_params[:target_id] = non_existing_record_id
           post :create, params: request_params.merge(format: :json)
 
           expect(response).to have_gitlab_http_status(:not_found)
@@ -625,6 +760,11 @@ describe Projects::NotesController do
           expect { post :create, params: request_params }.not_to change { Note.count }
         end
       end
+    end
+
+    it_behaves_like 'request exceeding rate limit', :clean_gitlab_redis_cache do
+      let(:params) { request_params.except(:format) }
+      let(:request_full_path) { project_notes_path(project) }
     end
   end
 
@@ -777,7 +917,7 @@ describe Projects::NotesController do
 
         context "when the note is not resolvable" do
           before do
-            note.update(system: true)
+            note.update!(system: true)
           end
 
           it "returns status 404" do
@@ -840,7 +980,7 @@ describe Projects::NotesController do
 
         context "when the note is not resolvable" do
           before do
-            note.update(system: true)
+            note.update!(system: true)
           end
 
           it "returns status 404" do
@@ -865,5 +1005,10 @@ describe Projects::NotesController do
         end
       end
     end
+  end
+
+  # Convert a time to an integer number of microseconds
+  def microseconds(time)
+    (time.to_i * 1_000_000) + time.usec
   end
 end

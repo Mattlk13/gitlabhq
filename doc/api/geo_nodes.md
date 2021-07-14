@@ -1,7 +1,13 @@
-# Geo Nodes API **(PREMIUM ONLY)**
+---
+stage: Enablement
+group: Geo
+info: To determine the technical writer assigned to the Stage/Group associated with this page, see https://about.gitlab.com/handbook/engineering/ux/technical-writing/#assignments
+---
 
-In order to interact with Geo node endpoints, you need to authenticate yourself
-as an admin.
+# Geo Nodes API **(PREMIUM SELF)**
+
+To interact with Geo node endpoints, you need to authenticate yourself as an
+administrator.
 
 ## Create a new Geo node
 
@@ -12,7 +18,7 @@ POST /geo_nodes
 ```
 
 ```shell
-curl --header "PRIVATE-TOKEN: <your_access_token>" https://primary.example.com/api/v4/geo_nodes \
+curl --header "PRIVATE-TOKEN: <your_access_token>" "https://primary.example.com/api/v4/geo_nodes" \
      --request POST \
      -d "name=himynameissomething" \
      -d "url=https://another-node.example.com/"
@@ -73,7 +79,7 @@ GET /geo_nodes
 ```
 
 ```shell
-curl --header "PRIVATE-TOKEN: <your_access_token>" https://primary.example.com/api/v4/geo_nodes
+curl --header "PRIVATE-TOKEN: <your_access_token>" "https://primary.example.com/api/v4/geo_nodes"
 ```
 
 Example response:
@@ -140,7 +146,7 @@ GET /geo_nodes/:id
 ```
 
 ```shell
-curl --header "PRIVATE-TOKEN: <your_access_token>" https://primary.example.com/api/v4/geo_nodes/1
+curl --header "PRIVATE-TOKEN: <your_access_token>" "https://primary.example.com/api/v4/geo_nodes/1"
 ```
 
 Example response:
@@ -234,7 +240,7 @@ Example response:
 
 Removes the Geo node.
 
-NOTE: **Note:**
+NOTE:
 Only a Geo primary node will accept this request.
 
 ```plaintext
@@ -287,7 +293,7 @@ GET /geo_nodes/status
 ```
 
 ```shell
-curl --header "PRIVATE-TOKEN: <your_access_token>" https://primary.example.com/api/v4/geo_nodes/status
+curl --header "PRIVATE-TOKEN: <your_access_token>" "https://primary.example.com/api/v4/geo_nodes/status"
 ```
 
 Example response:
@@ -301,35 +307,37 @@ Example response:
     "health_status": "Healthy",
     "missing_oauth_application": false,
     "attachments_count": 1,
-    "attachments_synced_count": nil,
-    "attachments_failed_count": nil,
+    "attachments_synced_count": null,
+    "attachments_failed_count": null,
     "attachments_synced_missing_on_primary_count": 0,
     "attachments_synced_in_percentage": "0.00%",
-    "db_replication_lag_seconds": nil,
+    "db_replication_lag_seconds": null,
     "lfs_objects_count": 0,
-    "lfs_objects_synced_count": nil,
-    "lfs_objects_failed_count": nil,
+    "lfs_objects_synced_count": null,
+    "lfs_objects_failed_count": null,
     "lfs_objects_synced_missing_on_primary_count": 0,
     "lfs_objects_synced_in_percentage": "0.00%",
     "job_artifacts_count": 2,
-    "job_artifacts_synced_count": nil,
-    "job_artifacts_failed_count": nil,
+    "job_artifacts_synced_count": null,
+    "job_artifacts_failed_count": null,
     "job_artifacts_synced_missing_on_primary_count": 0,
     "job_artifacts_synced_in_percentage": "0.00%",
     "container_repositories_count": 3,
-    "container_repositories_synced_count": nil,
-    "container_repositories_failed_count": nil,
+    "container_repositories_synced_count": null,
+    "container_repositories_failed_count": null,
     "container_repositories_synced_in_percentage": "0.00%",
     "design_repositories_count": 3,
-    "design_repositories_synced_count": nil,
-    "design_repositories_failed_count": nil,
+    "design_repositories_synced_count": null,
+    "design_repositories_failed_count": null,
     "design_repositories_synced_in_percentage": "0.00%",
     "projects_count": 41,
-    "repositories_failed_count": nil,
-    "repositories_synced_count": nil,
+    "repositories_count": 41,
+    "repositories_failed_count": null,
+    "repositories_synced_count": null,
     "repositories_synced_in_percentage": "0.00%",
-    "wikis_failed_count": nil,
-    "wikis_synced_count": nil,
+    "wikis_count": 41,
+    "wikis_failed_count": null,
+    "wikis_synced_count": null,
     "wikis_synced_in_percentage": "0.00%",
     "replication_slots_count": 1,
     "replication_slots_used_count": 1,
@@ -354,16 +362,85 @@ Example response:
     "wikis_checksum_mismatch_count": 1,
     "repositories_retrying_verification_count": 1,
     "wikis_retrying_verification_count": 3,
-    "repositories_checked_count": 7,
-    "repositories_checked_failed_count": 2,
-    "repositories_checked_in_percentage": "17.07%",
     "last_event_id": 23,
     "last_event_timestamp": 1509681166,
-    "cursor_last_event_id": nil,
+    "cursor_last_event_id": null,
     "cursor_last_event_timestamp": 0,
     "last_successful_status_check_timestamp": 1510125024,
     "version": "10.3.0",
     "revision": "33d33a096a",
+    "merge_request_diffs_count": 5,
+    "merge_request_diffs_checksum_total_count": 5,
+    "merge_request_diffs_checksummed_count": 5,
+    "merge_request_diffs_checksum_failed_count": 0,
+    "merge_request_diffs_synced_count": null,
+    "merge_request_diffs_failed_count": null,
+    "merge_request_diffs_registry_count": null,
+    "merge_request_diffs_verification_total_count": null,
+    "merge_request_diffs_verified_count": null,
+    "merge_request_diffs_verification_failed_count": null,
+    "merge_request_diffs_synced_in_percentage": "0.00%",
+    "merge_request_diffs_verified_in_percentage": "0.00%",
+    "package_files_count": 5,
+    "package_files_checksum_total_count": 5,
+    "package_files_checksummed_count": 5,
+    "package_files_checksum_failed_count": 0,
+    "package_files_synced_count": null,
+    "package_files_failed_count": null,
+    "package_files_registry_count": null,
+    "package_files_verification_total_count": null,
+    "package_files_verified_count": null,
+    "package_files_verification_failed_count": null,
+    "package_files_synced_in_percentage": "0.00%",
+    "package_files_verified_in_percentage": "0.00%",
+    "terraform_state_versions_count": 5,
+    "terraform_state_versions_checksum_total_count": 5,
+    "terraform_state_versions_checksummed_count": 5,
+    "terraform_state_versions_checksum_failed_count": 0,
+    "terraform_state_versions_synced_count": null,
+    "terraform_state_versions_failed_count": null,
+    "terraform_state_versions_registry_count": null,
+    "terraform_state_versions_verification_total_count": null,
+    "terraform_state_versions_verified_count": null,
+    "terraform_state_versions_verification_failed_count": null,
+    "terraform_state_versions_synced_in_percentage": "0.00%",
+    "terraform_state_versions_verified_in_percentage": "0.00%",
+    "snippet_repositories_count": 5,
+    "snippet_repositories_checksum_total_count": 5,
+    "snippet_repositories_checksummed_count": 5,
+    "snippet_repositories_checksum_failed_count": 0,
+    "snippet_repositories_synced_count": null,
+    "snippet_repositories_failed_count": null,
+    "snippet_repositories_registry_count": null,
+    "snippet_repositories_verification_total_count": null,
+    "snippet_repositories_verified_count": null,
+    "snippet_repositories_verification_failed_count": null,
+    "snippet_repositories_synced_in_percentage": "0.00%",
+    "snippet_repositories_verified_in_percentage": "0.00%",
+    "group_wiki_repositories_count": 5,
+    "group_wiki_repositories_checksum_total_count": 5,
+    "group_wiki_repositories_checksummed_count": 5,
+    "group_wiki_repositories_checksum_failed_count": 0,
+    "group_wiki_repositories_synced_count": null,
+    "group_wiki_repositories_failed_count": null,
+    "group_wiki_repositories_registry_count": null,
+    "group_wiki_repositories_verification_total_count": null,
+    "group_wiki_repositories_verified_count": null,
+    "group_wiki_repositories_verification_failed_count": null,
+    "group_wiki_repositories_synced_in_percentage": "0.00%",
+    "group_wiki_repositories_verified_in_percentage": "0.00%",
+    "pipeline_artifacts_count": 5,
+    "pipeline_artifacts_checksum_total_count": 5,
+    "pipeline_artifacts_checksummed_count": 5,
+    "pipeline_artifacts_checksum_failed_count": 0,
+    "pipeline_artifacts_synced_count": null,
+    "pipeline_artifacts_failed_count": null,
+    "pipeline_artifacts_registry_count": null,
+    "pipeline_artifacts_verification_total_count": null,
+    "pipeline_artifacts_verified_count": null,
+    "pipeline_artifacts_verification_failed_count": null,
+    "pipeline_artifacts_synced_in_percentage": "0.00%",
+    "pipeline_artifacts_verified_in_percentage": "0.00%",
   },
   {
     "geo_node_id": 2,
@@ -388,24 +465,26 @@ Example response:
     "job_artifacts_synced_missing_on_primary_count": 0,
     "job_artifacts_synced_in_percentage": "50.00%",
     "container_repositories_count": 3,
-    "container_repositories_synced_count": nil,
-    "container_repositories_failed_count": nil,
+    "container_repositories_synced_count": null,
+    "container_repositories_failed_count": null,
     "container_repositories_synced_in_percentage": "0.00%",
     "design_repositories_count": 3,
-    "design_repositories_synced_count": nil,
-    "design_repositories_failed_count": nil,
+    "design_repositories_synced_count": null,
+    "design_repositories_failed_count": null,
     "design_repositories_synced_in_percentage": "0.00%",
     "projects_count": 41,
+    "repositories_count": 41,
     "repositories_failed_count": 1,
     "repositories_synced_count": 40,
     "repositories_synced_in_percentage": "97.56%",
+    "wikis_count": 41,
     "wikis_failed_count": 0,
     "wikis_synced_count": 41,
     "wikis_synced_in_percentage": "100.00%",
-    "replication_slots_count": nil,
-    "replication_slots_used_count": nil,
+    "replication_slots_count": null,
+    "replication_slots_used_count": null,
     "replication_slots_used_in_percentage": "0.00%",
-    "replication_slots_max_retained_wal_bytes": nil,
+    "replication_slots_max_retained_wal_bytes": null,
     "repositories_checksummed_count": 20,
     "repositories_checksum_failed_count": 5,
     "repositories_checksummed_in_percentage": "48.78%",
@@ -431,13 +510,82 @@ Example response:
     "cursor_last_event_timestamp": 1509681166,
     "last_successful_status_check_timestamp": 1510125024,
     "version": "10.3.0",
-    "revision": "33d33a096a"
+    "revision": "33d33a096a",
+    "merge_request_diffs_count": 5,
+    "merge_request_diffs_checksum_total_count": 5,
+    "merge_request_diffs_checksummed_count": 5,
+    "merge_request_diffs_checksum_failed_count": 0,
+    "merge_request_diffs_synced_count": 5,
+    "merge_request_diffs_failed_count": 0,
+    "merge_request_diffs_registry_count": 5,
+    "merge_request_diffs_verification_total_count": 5,
+    "merge_request_diffs_verified_count": 5,
+    "merge_request_diffs_verification_failed_count": 0,
+    "merge_request_diffs_synced_in_percentage": "100.00%",
+    "merge_request_diffs_verified_in_percentage": "100.00%",
+    "package_files_count": 5,
+    "package_files_checksum_total_count": 5,
+    "package_files_checksummed_count": 5,
+    "package_files_checksum_failed_count": 0,
+    "package_files_synced_count": 5,
+    "package_files_failed_count": 0,
+    "package_files_registry_count": 5,
+    "package_files_verification_total_count": 5,
+    "package_files_verified_count": 5,
+    "package_files_verification_failed_count": 0,
+    "package_files_synced_in_percentage": "100.00%",
+    "package_files_verified_in_percentage": "100.00%",
+    "terraform_state_versions_count": 5,
+    "terraform_state_versions_checksum_total_count": 5,
+    "terraform_state_versions_checksummed_count": 5,
+    "terraform_state_versions_checksum_failed_count": 0,
+    "terraform_state_versions_synced_count": 5,
+    "terraform_state_versions_failed_count": 0,
+    "terraform_state_versions_registry_count": 5,
+    "terraform_state_versions_verification_total_count": 5,
+    "terraform_state_versions_verified_count": 5,
+    "terraform_state_versions_verification_failed_count": 0,
+    "terraform_state_versions_synced_in_percentage": "100.00%",
+    "terraform_state_versions_verified_in_percentage": "100.00%",
+    "snippet_repositories_count": 5,
+    "snippet_repositories_checksum_total_count": 5,
+    "snippet_repositories_checksummed_count": 5,
+    "snippet_repositories_checksum_failed_count": 0,
+    "snippet_repositories_synced_count": 5,
+    "snippet_repositories_failed_count": 0,
+    "snippet_repositories_registry_count": 5,
+    "snippet_repositories_verification_total_count": 5,
+    "snippet_repositories_verified_count": 5,
+    "snippet_repositories_verification_failed_count": 0,
+    "snippet_repositories_synced_in_percentage": "100.00%",
+    "snippet_repositories_verified_in_percentage": "100.00%",
+    "group_wiki_repositories_count": 5,
+    "group_wiki_repositories_checksum_total_count": 5,
+    "group_wiki_repositories_checksummed_count": 5,
+    "group_wiki_repositories_checksum_failed_count": 0,
+    "group_wiki_repositories_synced_count": 5,
+    "group_wiki_repositories_failed_count": 0,
+    "group_wiki_repositories_registry_count": 5,
+    "group_wiki_repositories_verification_total_count": 5,
+    "group_wiki_repositories_verified_count": 5,
+    "group_wiki_repositories_verification_failed_count": 0,
+    "group_wiki_repositories_synced_in_percentage": "100.00%",
+    "group_wiki_repositories_verified_in_percentage": "100.00%",
+    "pipeline_artifacts_count": 5,
+    "pipeline_artifacts_checksum_total_count": 5,
+    "pipeline_artifacts_checksummed_count": 5,
+    "pipeline_artifacts_checksum_failed_count": 0,
+    "pipeline_artifacts_synced_count": 5,
+    "pipeline_artifacts_failed_count": 0,
+    "pipeline_artifacts_registry_count": 5,
+    "pipeline_artifacts_verification_total_count": 5,
+    "pipeline_artifacts_verified_count": 5,
+    "pipeline_artifacts_verification_failed_count": 0,
+    "pipeline_artifacts_synced_in_percentage": "100.00%",
+    "pipeline_artifacts_verified_in_percentage": "100.00%",
   }
 ]
 ```
-
-NOTE: **Note:**
-In GitLab 12.0, deprecated fields `wikis_count` and `repositories_count` were removed. Use `projects_count` instead.
 
 ## Retrieve status about a specific Geo node
 
@@ -446,7 +594,7 @@ GET /geo_nodes/:id/status
 ```
 
 ```shell
-curl --header "PRIVATE-TOKEN: <your_access_token>" https://primary.example.com/api/v4/geo_nodes/2/status
+curl --header "PRIVATE-TOKEN: <your_access_token>" "https://primary.example.com/api/v4/geo_nodes/2/status"
 ```
 
 Example response:
@@ -475,38 +623,110 @@ Example response:
   "job_artifacts_synced_missing_on_primary_count": 0,
   "job_artifacts_synced_in_percentage": "50.00%",
   "container_repositories_count": 3,
-  "container_repositories_synced_count": nil,
-  "container_repositories_failed_count": nil,
+  "container_repositories_synced_count": null,
+  "container_repositories_failed_count": null,
   "container_repositories_synced_in_percentage": "0.00%",
   "design_repositories_count": 3,
-  "design_repositories_synced_count": nil,
-  "design_repositories_failed_count": nil,
+  "design_repositories_synced_count": null,
+  "design_repositories_failed_count": null,
   "design_repositories_synced_in_percentage": "0.00%",
   "projects_count": 41,
+  "repositories_count": 41,
   "repositories_failed_count": 1,
   "repositories_synced_count": 40,
   "repositories_synced_in_percentage": "97.56%",
+  "wikis_count": 41,
   "wikis_failed_count": 0,
   "wikis_synced_count": 41,
   "wikis_synced_in_percentage": "100.00%",
-  "replication_slots_count": nil,
-  "replication_slots_used_count": nil,
+  "replication_slots_count": null,
+  "replication_slots_used_count": null,
   "replication_slots_used_in_percentage": "0.00%",
-  "replication_slots_max_retained_wal_bytes": nil,
+  "replication_slots_max_retained_wal_bytes": null,
   "last_event_id": 23,
   "last_event_timestamp": 1509681166,
   "cursor_last_event_id": 23,
   "cursor_last_event_timestamp": 1509681166,
   "last_successful_status_check_timestamp": 1510125268,
   "version": "10.3.0",
-  "revision": "33d33a096a"
+  "revision": "33d33a096a",
+  "merge_request_diffs_count": 5,
+  "merge_request_diffs_checksum_total_count": 5,
+  "merge_request_diffs_checksummed_count": 5,
+  "merge_request_diffs_checksum_failed_count": 0,
+  "merge_request_diffs_synced_count": 5,
+  "merge_request_diffs_failed_count": 0,
+  "merge_request_diffs_registry_count": 5,
+  "merge_request_diffs_verification_total_count": 5,
+  "merge_request_diffs_verified_count": 5,
+  "merge_request_diffs_verification_failed_count": 0,
+  "merge_request_diffs_synced_in_percentage": "100.00%",
+  "merge_request_diffs_verified_in_percentage": "100.00%",
+  "package_files_count": 5,
+  "package_files_checksum_total_count": 5,
+  "package_files_checksummed_count": 5,
+  "package_files_checksum_failed_count": 0,
+  "package_files_synced_count": 5,
+  "package_files_failed_count": 0,
+  "package_files_registry_count": 5,
+  "package_files_verification_total_count": 5,
+  "package_files_verified_count": 5,
+  "package_files_verification_failed_count": 0,
+  "package_files_synced_in_percentage": "100.00%",
+  "package_files_verified_in_percentage": "100.00%",
+  "terraform_state_versions_count": 5,
+  "terraform_state_versions_checksum_total_count": 5,
+  "terraform_state_versions_checksummed_count": 5,
+  "terraform_state_versions_checksum_failed_count": 0,
+  "terraform_state_versions_synced_count": 5,
+  "terraform_state_versions_failed_count": 0,
+  "terraform_state_versions_registry_count": 5,
+  "terraform_state_versions_verification_total_count": 5,
+  "terraform_state_versions_verified_count": 5,
+  "terraform_state_versions_verification_failed_count": 0,
+  "terraform_state_versions_synced_in_percentage": "100.00%",
+  "terraform_state_versions_verified_in_percentage": "100.00%",
+  "snippet_repositories_count": 5,
+  "snippet_repositories_checksum_total_count": 5,
+  "snippet_repositories_checksummed_count": 5,
+  "snippet_repositories_checksum_failed_count": 0,
+  "snippet_repositories_synced_count": 5,
+  "snippet_repositories_failed_count": 0,
+  "snippet_repositories_registry_count": 5,
+  "snippet_repositories_verification_total_count": 5,
+  "snippet_repositories_verified_count": 5,
+  "snippet_repositories_verification_failed_count": 0,
+  "snippet_repositories_synced_in_percentage": "100.00%",
+  "snippet_repositories_verified_in_percentage": "100.00%",
+  "group_wiki_repositories_count": 5,
+  "group_wiki_repositories_checksum_total_count": 5,
+  "group_wiki_repositories_checksummed_count": 5,
+  "group_wiki_repositories_checksum_failed_count": 0,
+  "group_wiki_repositories_synced_count": 5,
+  "group_wiki_repositories_failed_count": 0,
+  "group_wiki_repositories_registry_count": 5,
+  "group_wiki_repositories_verification_total_count": 5,
+  "group_wiki_repositories_verified_count": 5,
+  "group_wiki_repositories_verification_failed_count": 0,
+  "group_wiki_repositories_synced_in_percentage": "100.00%",
+  "group_wiki_repositories_verified_in_percentage": "100.00%",
+  "pipeline_artifacts_count": 5,
+  "pipeline_artifacts_checksum_total_count": 5,
+  "pipeline_artifacts_checksummed_count": 5,
+  "pipeline_artifacts_checksum_failed_count": 0,
+  "pipeline_artifacts_synced_count": 5,
+  "pipeline_artifacts_failed_count": 0,
+  "pipeline_artifacts_registry_count": 5,
+  "pipeline_artifacts_verification_total_count": 5,
+  "pipeline_artifacts_verified_count": 5,
+  "pipeline_artifacts_verification_failed_count": 0,
+  "pipeline_artifacts_synced_in_percentage": "100.00%",
+  "pipeline_artifacts_verified_in_percentage": "100.00%",
 }
 ```
 
-Note: The `health_status` parameter can only be in an "Healthy" or "Unhealthy" state, while the `health` parameter can be empty, "Healthy", or contain the actual error message.
-
-NOTE: **Note:**
-In GitLab 12.0, deprecated fields `wikis_count` and `repositories_count` were removed. Use `projects_count` instead.
+NOTE:
+The `health_status` parameter can only be in an "Healthy" or "Unhealthy" state, while the `health` parameter can be empty, "Healthy", or contain the actual error message.
 
 ## Retrieve project sync or verification failures that occurred on the current node
 
@@ -521,10 +741,10 @@ GET /geo_nodes/current/failures
 | `type`         | string  | no | Type of failed objects (`repository`/`wiki`) |
 | `failure_type` | string | no | Type of failures (`sync`/`checksum_mismatch`/`verification`) |
 
-This endpoint uses [Pagination](README.md#pagination).
+This endpoint uses [Pagination](index.md#pagination).
 
 ```shell
-curl --header "PRIVATE-TOKEN: <your_access_token>" https://primary.example.com/api/v4/geo_nodes/current/failures
+curl --header "PRIVATE-TOKEN: <your_access_token>" "https://primary.example.com/api/v4/geo_nodes/current/failures"
 ```
 
 Example response:

@@ -2,7 +2,7 @@
 
 require 'spec_helper'
 
-describe AwardEmoji do
+RSpec.describe AwardEmoji do
   describe 'Associations' do
     it { is_expected.to belong_to(:awardable) }
     it { is_expected.to belong_to(:user) }
@@ -40,6 +40,22 @@ describe AwardEmoji do
         new_award = build(:award_emoji, user: user, awardable: issue)
 
         expect(new_award).to be_valid
+      end
+
+      # Similar to allowing duplicate award emojis for ghost users,
+      # when Importing a project that has duplicate award emoji placed by
+      # ghost user we change the author to be importer user and allow
+      # duplicates, otherwise relation containing such duplicates
+      # fails to be created
+      context 'when importing' do
+        it 'allows duplicate award emoji' do
+          user  = create(:user)
+          issue = create(:issue)
+          create(:award_emoji, user: user, awardable: issue)
+          new_award = build(:award_emoji, user: user, awardable: issue, importing: true)
+
+          expect(new_award).to be_valid
+        end
       end
     end
   end
@@ -103,6 +119,36 @@ describe AwardEmoji do
     end
   end
 
+  describe 'bumping updated at' do
+    let(:note) { create(:note_on_issue) }
+    let(:award_emoji) { build(:award_emoji, user: build(:user), awardable: note) }
+
+    it 'calls bump_updated_at on the note when saved' do
+      expect(note).to receive(:bump_updated_at)
+
+      award_emoji.save!
+    end
+
+    it 'calls bump_updated_at on the note when destroyed' do
+      expect(note).to receive(:bump_updated_at)
+
+      award_emoji.destroy!
+    end
+
+    context 'on another awardable' do
+      let(:issue) { create(:issue) }
+      let(:award_emoji) { build(:award_emoji, user: build(:user), awardable: issue) }
+
+      it 'does not error out when saved' do
+        expect { award_emoji.save! }.not_to raise_error
+      end
+
+      it 'does not error out when destroy' do
+        expect { award_emoji.destroy! }.not_to raise_error
+      end
+    end
+  end
+
   describe '.award_counts_for_user' do
     let(:user) { create(:user) }
 
@@ -123,6 +169,45 @@ describe AwardEmoji do
       awards = described_class.award_counts_for_user(user, 1)
 
       expect(awards).to eq('thumbsup' => 2)
+    end
+  end
+
+  describe 'updating upvotes_count' do
+    context 'on an issue' do
+      let(:issue) { create(:issue) }
+      let(:upvote) { build(:award_emoji, :upvote, user: build(:user), awardable: issue) }
+      let(:downvote) { build(:award_emoji, :downvote, user: build(:user), awardable: issue) }
+
+      it 'updates upvotes_count on the issue when saved' do
+        expect(issue).to receive(:update_column).with(:upvotes_count, 1).once
+
+        upvote.save!
+        downvote.save!
+      end
+
+      it 'updates upvotes_count on the issue when destroyed' do
+        expect(issue).to receive(:update_column).with(:upvotes_count, 0).once
+
+        upvote.destroy!
+        downvote.destroy!
+      end
+    end
+
+    context 'on another awardable' do
+      let(:merge_request) { create(:merge_request) }
+      let(:award_emoji) { build(:award_emoji, user: build(:user), awardable: merge_request) }
+
+      it 'does not update upvotes_count on the merge_request when saved' do
+        expect(merge_request).not_to receive(:update_column)
+
+        award_emoji.save!
+      end
+
+      it 'does not update upvotes_count on the merge_request when destroyed' do
+        expect(merge_request).not_to receive(:update_column)
+
+        award_emoji.destroy!
+      end
     end
   end
 end

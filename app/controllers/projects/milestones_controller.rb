@@ -5,18 +5,20 @@ class Projects::MilestonesController < Projects::ApplicationController
   include MilestoneActions
 
   before_action :check_issuables_available!
-  before_action :milestone, only: [:edit, :update, :destroy, :show, :merge_requests, :participants, :labels, :promote]
+  before_action :milestone, only: [:edit, :update, :destroy, :show, :issues, :merge_requests, :participants, :labels, :promote]
 
   # Allow read any milestone
   before_action :authorize_read_milestone!
 
   # Allow admin milestone
-  before_action :authorize_admin_milestone!, except: [:index, :show, :merge_requests, :participants, :labels]
+  before_action :authorize_admin_milestone!, except: [:index, :show, :issues, :merge_requests, :participants, :labels]
 
   # Allow to promote milestone
   before_action :authorize_promote_milestone!, only: :promote
 
   respond_to :html
+
+  feature_category :issue_tracking
 
   def index
     @sort = params[:sort] || 'due_date_asc'
@@ -24,7 +26,6 @@ class Projects::MilestonesController < Projects::ApplicationController
 
     respond_to do |format|
       format.html do
-        @project_namespace = @project.namespace.becomes(Namespace)
         # We need to show group milestones in the JSON response
         # so that people can filter by and assign group milestones,
         # but we don't need to show them on the project milestones page itself.
@@ -32,13 +33,13 @@ class Projects::MilestonesController < Projects::ApplicationController
         @milestones = @milestones.page(params[:page])
       end
       format.json do
-        render json: @milestones.to_json(methods: :name)
+        render json: @milestones.to_json(only: [:id, :title, :due_date], methods: :name)
       end
     end
   end
 
   def new
-    @milestone = @project.milestones.new
+    @noteable = @milestone = @project.milestones.new
     respond_with(@milestone)
   end
 
@@ -47,8 +48,6 @@ class Projects::MilestonesController < Projects::ApplicationController
   end
 
   def show
-    @project_namespace = @project.namespace.becomes(Namespace)
-
     respond_to do |format|
       format.html
     end
@@ -126,7 +125,7 @@ class Projects::MilestonesController < Projects::ApplicationController
 
   # rubocop: disable CodeReuse/ActiveRecord
   def milestone
-    @milestone ||= @project.milestones.find_by!(iid: params[:id])
+    @noteable = @milestone ||= @project.milestones.find_by!(iid: params[:id])
   end
   # rubocop: enable CodeReuse/ActiveRecord
 

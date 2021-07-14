@@ -2,7 +2,7 @@
 
 require 'spec_helper'
 
-describe 'User browses commits' do
+RSpec.describe 'User browses commits' do
   include RepoHelpers
 
   let(:user) { create(:user) }
@@ -20,9 +20,14 @@ describe 'User browses commits' do
       .and have_content('Side-by-side')
   end
 
-  it 'fill commit sha when click new tag from commit page' do
+  it 'fill commit sha when click new tag from commit page', :js do
+    dropdown_selector = '[data-testid="commit-options-dropdown"]'
     visit project_commit_path(project, sample_commit.id)
-    click_link 'Tag'
+    find(dropdown_selector).click
+
+    page.within(dropdown_selector) do
+      click_link 'Tag'
+    end
 
     expect(page).to have_selector("input[value='#{sample_commit.id}']", visible: false)
   end
@@ -41,7 +46,7 @@ describe 'User browses commits' do
       .and have_selector('ul.breadcrumb a', count: 4)
   end
 
-  it 'renders diff links to both the previous and current image' do
+  it 'renders diff links to both the previous and current image', :js do
     visit project_commit_path(project, sample_image_commit.id)
 
     links = page.all('.file-actions a')
@@ -137,6 +142,33 @@ describe 'User browses commits' do
         .and have_selector('entry summary', text: commit.description[0..10].delete("\r\n"))
     end
 
+    context "when commit has a filename with pathspec characters" do
+      let(:path) { ':wq' }
+      let(:filename) { File.join(path, 'test.txt') }
+      let(:ref) { project.repository.root_ref }
+      let(:newrev) { project.repository.commit('master').sha }
+      let(:short_newrev) { project.repository.commit('master').short_id }
+      let(:message) { 'Glob characters'}
+
+      before do
+        create_file_in_repo(project, ref, ref, filename, 'Test file', commit_message: message)
+        visit project_commits_path(project, "#{ref}/#{path}", limit: 1)
+        wait_for_requests
+      end
+
+      it 'searches commit', :js do
+        expect(page).to have_content(message)
+
+        fill_in 'commits-search', with: 'bogus12345'
+
+        expect(page).to have_content "Your search didn't match any commits"
+
+        fill_in 'commits-search', with: 'Glob'
+
+        expect(page).to have_content message
+      end
+    end
+
     context 'when a commit links to a confidential issue' do
       let(:confidential_issue) { create(:issue, confidential: true, title: 'Secret issue!', project: project) }
 
@@ -176,10 +208,11 @@ describe 'User browses commits' do
 
       context 'when click the compare tab' do
         before do
+          wait_for_requests
           click_link('Compare')
         end
 
-        it 'does not render create merge request button' do
+        it 'does not render create merge request button', :js do
           expect(page).not_to have_link 'Create merge request'
         end
       end
@@ -209,10 +242,11 @@ describe 'User browses commits' do
 
         context 'when click the compare tab' do
           before do
+            wait_for_requests
             click_link('Compare')
           end
 
-          it 'renders create merge request button' do
+          it 'renders create merge request button', :js do
             expect(page).to have_link 'Create merge request'
           end
         end
@@ -249,10 +283,11 @@ describe 'User browses commits' do
 
         context 'when click the compare tab' do
           before do
+            wait_for_requests
             click_link('Compare')
           end
 
-          it 'renders button to the merge request' do
+          it 'renders button to the merge request', :js do
             expect(page).not_to have_link 'Create merge request'
             expect(page).to have_link 'View open merge request', href: project_merge_request_path(project, merge_request)
           end

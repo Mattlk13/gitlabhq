@@ -48,7 +48,7 @@ class SentNotification < ApplicationRecord
     end
 
     def record_note(note, recipient_id, reply_key = self.reply_key, attrs = {})
-      attrs[:in_reply_to_discussion_id] = note.discussion_id if note.part_of_discussion?
+      attrs[:in_reply_to_discussion_id] = note.discussion_id if note.part_of_discussion? || note.can_be_discussion_note?
 
       record(note.noteable, recipient_id, reply_key, attrs)
     end
@@ -76,12 +76,14 @@ class SentNotification < ApplicationRecord
 
   def position=(new_position)
     if new_position.is_a?(String)
-      new_position = JSON.parse(new_position) rescue nil
+      new_position = Gitlab::Json.parse(new_position) rescue nil
     end
 
     if new_position.is_a?(Hash)
       new_position = new_position.with_indifferent_access
       new_position = Gitlab::Diff::Position.new(new_position)
+    else
+      new_position = nil
     end
 
     super(new_position)
@@ -111,7 +113,10 @@ class SentNotification < ApplicationRecord
     note = create_reply('Test', dryrun: true)
 
     unless note.valid?
-      self.errors.add(:base, "Note parameters are invalid: #{note.errors.full_messages.to_sentence}")
+      self.errors.add(
+        :base, _("Note parameters are invalid: %{errors}") %
+          { errors: note.errors.full_messages.to_sentence }
+      )
     end
   end
 

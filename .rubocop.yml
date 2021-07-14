@@ -2,14 +2,27 @@ inherit_gem:
   gitlab-styles:
     - rubocop-default.yml
 
-inherit_from: .rubocop_todo.yml
 require:
   - ./rubocop/rubocop
   - rubocop-rspec
 
+inherit_from:
+  <% unless ENV['REVEAL_RUBOCOP_TODO'] == '1' %>
+  - '.rubocop_manual_todo.yml'
+  - '.rubocop_todo.yml'
+  <% end %>
+  - ./rubocop/rubocop-migrations.yml
+  - ./rubocop/rubocop-usage-data.yml
+  - ./rubocop/rubocop-code_reuse.yml
+
+inherit_mode:
+  merge:
+    - Include
+    - Exclude
+
 AllCops:
-  TargetRubyVersion: 2.6
-  TargetRailsVersion: 5.0
+  TargetRubyVersion: 2.7
+  TargetRailsVersion: 6.0
   Exclude:
     - 'vendor/**/*'
     - 'node_modules/**/*'
@@ -21,7 +34,32 @@ AllCops:
     - 'generator_templates/**/*'
     - 'builds/**/*'
     - 'plugins/**/*'
+    - 'file_hooks/**/*'
+    - 'workhorse/**/*'
+    - 'spec/support/*.git/**/*'  # e.g. spec/support/gitlab-git-test.git
   CacheRootDirectory: tmp
+  MaxFilesInCache: 25000
+
+Cop/AvoidKeywordArgumentsInSidekiqWorkers:
+  Enabled: true
+  Include:
+    - 'app/workers/**/*'
+    - 'ee/app/workers/**/*'
+
+Cop/StaticTranslationDefinition:
+  Enabled: true
+  Exclude:
+    - 'spec/**/*'
+    - 'ee/spec/**/*'
+
+InternalAffairs/DeprecateCopHelper:
+  Enabled: true
+  Include:
+    - spec/rubocop/**/*.rb
+
+Lint/LastKeywordArgument:
+  Enabled: true
+  Safe: false
 
 # This cop checks whether some constant value isn't a
 # mutable literal (e.g. array or hash).
@@ -38,24 +76,13 @@ Style/MutableConstant:
 Style/SafeNavigation:
   Enabled: false
 
+Style/AccessModifierDeclarations:
+  AllowModifiersOnSymbols: true
+
 # Frozen String Literal
 Style/FrozenStringLiteralComment:
   Enabled: true
-  Exclude:
-    - 'config.ru'
-    - 'Dangerfile'
-    - 'Gemfile'
-    - 'Rakefile'
-    - 'app/views/**/*'
-    - 'config/**/*'
-    - 'danger/**/*'
-    - 'db/**/*'
-    - 'ee/db/**/*'
-    - 'ee/lib/tasks/**/*'
-    - 'lib/tasks/**/*'
-    - 'qa/**/*'
-    - 'rubocop/**/*'
-    - 'scripts/**/*'
+  EnforcedStyle: always_true
 
 RSpec/FilePath:
   Exclude:
@@ -63,6 +90,18 @@ RSpec/FilePath:
     - 'spec/frontend/fixtures/*'
     - 'ee/spec/frontend/fixtures/*'
     - 'spec/requests/api/v3/*'
+    - 'spec/fixtures/**/*'
+
+# Configuration parameters: AllowSubject.
+RSpec/MultipleMemoizedHelpers:
+  Max: 28
+  AllowSubject: true
+  Exclude:
+    - 'spec/migrations/**/*.rb'
+    - 'spec/lib/gitlab/background_migration/populate_project_snippet_statistics_spec.rb'
+    - 'spec/lib/gitlab/background_migration/populate_finding_uuid_for_vulnerability_feedback_spec.rb'
+    - 'ee/spec/lib/ee/gitlab/background_migration/populate_uuids_for_security_findings_spec.rb'
+    - 'ee/spec/lib/gitlab/background_migration/user_mentions/create_resource_user_mention_spec.rb'
 
 Naming/FileName:
   ExpectMatchingDefinition: true
@@ -161,6 +200,25 @@ Rails/ApplicationRecord:
     - ee/db/**/*.rb
     - ee/spec/**/*.rb
 
+Cop/DefaultScope:
+  Enabled: true
+
+Rails/FindBy:
+  Enabled: true
+  Include:
+    - 'ee/app/**/*.rb'
+    - 'ee/lib/**/*.rb'
+    - 'spec/**/*.rb'
+    - 'ee/spec/**/*.rb'
+
+# This is currently exiting with a rubocop exception error and should be
+# resolved hopefully a future update
+# An error occurred while Rails/UniqueValidationWithoutIndex cop was inspecting
+# app/models/abuse_report.rb:15:2.
+# To see the complete backtrace run rubocop -d.
+Rails/UniqueValidationWithoutIndex:
+  Enabled: false
+
 # GitLab ###################################################################
 
 Gitlab/ModuleWithInstanceVariables:
@@ -181,9 +239,31 @@ Gitlab/ConstGetInheritFalse:
   Exclude:
     - 'qa/bin/*'
 
+Gitlab/ChangeTimezone:
+  Enabled: true
+  Exclude:
+    - config/initializers/time_zone.rb
+
 Gitlab/HTTParty:
   Enabled: true
   Exclude:
+    - 'spec/**/*'
+    - 'ee/spec/**/*'
+
+Gitlab/Json:
+  Enabled: true
+  Exclude:
+    - 'db/**/*'
+    - 'qa/**/*'
+    - 'scripts/**/*'
+    - 'tooling/rspec_flaky/**/*'
+    - 'lib/quality/**/*'
+    - 'tooling/danger/**/*'
+
+Gitlab/AvoidUploadedFileFromParams:
+  Enabled: true
+  Exclude:
+    - 'lib/gitlab/middleware/multipart.rb'
     - 'spec/**/*'
     - 'ee/spec/**/*'
 
@@ -200,6 +280,15 @@ GitlabSecurity/PublicSend:
     - 'ee/lib/**/*.rake'
     - 'ee/spec/**/*'
 
+Gitlab/DuplicateSpecLocation:
+  Enabled: true
+
+Gitlab/PolicyRuleBoolean:
+  Enabled: true
+  Include:
+    - 'app/policies/**/*'
+    - 'ee/app/policies/**/*'
+
 Cop/InjectEnterpriseEditionModule:
   Enabled: true
   Exclude:
@@ -214,11 +303,41 @@ Style/ReturnNil:
 Performance/RegexpMatch:
   Enabled: false
 
-ActiveRecordAssociationReload:
+Cop/ActiveRecordAssociationReload:
   Enabled: true
   Exclude:
     - 'spec/**/*'
     - 'ee/spec/**/*'
+
+Cop/ActiveModelErrorsDirectManipulation:
+  Enabled: true
+
+Gitlab/AvoidFeatureGet:
+  Enabled: true
+
+RSpec/TimecopFreeze:
+  Enabled: true
+  AutoCorrect: true
+  Include:
+    - 'spec/**/*.rb'
+    - 'ee/spec/**/*.rb'
+    - 'qa/spec/**/*.rb'
+
+RSpec/TimecopTravel:
+  Enabled: true
+  AutoCorrect: true
+  Include:
+    - 'spec/**/*.rb'
+    - 'ee/spec/**/*.rb'
+    - 'qa/spec/**/*.rb'
+
+RSpec/WebMockEnable:
+  Enabled: true
+  Include:
+    - 'spec/**/*.rb'
+    - 'ee/spec/**/*.rb'
+  Exclude:
+    - 'spec/support/webmock.rb'
 
 Naming/PredicateName:
   Enabled: true
@@ -247,14 +366,61 @@ Gitlab/Union:
     - 'spec/**/*'
     - 'ee/spec/**/*'
 
+API/Base:
+  Enabled: true
+  Include:
+    - 'lib/**/api/**/*.rb'
+    - 'ee/**/api/**/*.rb'
+
+API/GrapeArrayMissingCoerce:
+  Enabled: true
+  Include:
+    - 'lib/**/api/**/*.rb'
+    - 'ee/**/api/**/*.rb'
+
 Cop/SidekiqOptionsQueue:
   Enabled: true
   Exclude:
     - 'spec/**/*.rb'
     - 'ee/spec/**/*.rb'
 
+Graphql/ResolverType:
+  Enabled: true
+  Exclude:
+    - 'app/graphql/resolvers/base_resolver.rb'
+  Include:
+    - 'app/graphql/resolvers/**/*'
+    - 'ee/app/graphql/resolvers/**/*'
+
 Graphql/AuthorizeTypes:
   Enabled: true
+  Include:
+    - 'app/graphql/types/**/*'
+    - 'ee/app/graphql/types/**/*'
+  Exclude:
+    - 'spec/**/*.rb'
+    - 'ee/spec/**/*.rb'
+
+Graphql/GIDExpectedType:
+  Enabled: true
+  Include:
+    - 'app/graphql/**/*'
+    - 'ee/app/graphql/**/*'
+  Exclude:
+    - 'spec/**/*.rb'
+    - 'ee/spec/**/*.rb'
+
+Graphql/IDType:
+  Enabled: true
+  Include:
+    - 'app/graphql/**/*'
+    - 'ee/app/graphql/**/*'
+
+Graphql/JSONType:
+  Enabled: true
+  Include:
+    - 'app/graphql/**/*'
+    - 'ee/app/graphql/**/*'
   Exclude:
     - 'spec/**/*.rb'
     - 'ee/spec/**/*.rb'
@@ -287,19 +453,32 @@ Scalability/FileUploads:
 
 Graphql/Descriptions:
   Enabled: true
+  AutoCorrect: true
   Include:
     - 'app/graphql/**/*'
     - 'ee/app/graphql/**/*'
-
-RSpec/AnyInstanceOf:
-  Enabled: false
 
 # Cops for upgrade to gitlab-styles 3.1.0
 RSpec/ImplicitSubject:
   Enabled: false
 
+# WIP See https://gitlab.com/gitlab-org/gitlab/-/issues/211580
 RSpec/LeakyConstantDeclaration:
-  Enabled: false
+  Enabled: true
+  Exclude:
+    - 'spec/db/schema_spec.rb'
+    - 'spec/lib/feature_spec.rb'
+    - 'spec/lib/gitlab/config/entry/simplifiable_spec.rb'
+    - 'spec/lib/gitlab/quick_actions/dsl_spec.rb'
+    - 'spec/lib/marginalia_spec.rb'
+    - 'spec/mailers/notify_spec.rb'
+    - 'spec/models/concerns/batch_destroy_dependent_associations_spec.rb'
+    - 'spec/models/concerns/bulk_insert_safe_spec.rb'
+    - 'spec/models/concerns/bulk_insertable_associations_spec.rb'
+    - 'spec/models/concerns/triggerable_hooks_spec.rb'
+    - 'spec/models/repository_spec.rb'
+    - 'spec/services/clusters/applications/check_installation_progress_service_spec.rb'
+    - 'spec/support/shared_examples/quick_actions/issuable/issuable_quick_actions_shared_examples.rb'
 
 RSpec/EmptyLineAfterHook:
   Enabled: false
@@ -331,29 +510,169 @@ RSpec/MissingExampleGroupArgument:
 RSpec/UnspecifiedException:
   Enabled: false
 
-# Work in progress. See https://gitlab.com/gitlab-org/gitlab/issues/196163
 RSpec/HaveGitlabHttpStatus:
   Enabled: true
   Exclude:
     - 'spec/support/matchers/have_gitlab_http_status.rb'
   Include:
-    - 'spec/support/**/*'
-    - 'ee/spec/support/**/*'
-    - 'spec/features/**/*'
-    - 'ee/spec/features/**/*'
-    - 'spec/controllers/**/*'
-    - 'ee/spec/controllers/**/*'
-    - 'spec/requests/*.rb'
-    - 'ee/spec/requests/*.rb'
-    - 'spec/requests/{groups,projects,repositories}/**/*'
-    - 'ee/spec/requests/{groups,projects,repositories}/**/*'
-    - 'spec/requests/api/*/**/*.rb'
-    - 'ee/spec/requests/api/*/**/*.rb'
-    - 'spec/requests/api/[a-p]*.rb'
-    - 'ee/spec/requests/api/[a-p]*.rb'
+    - 'spec/**/*'
+    - 'ee/spec/**/*'
 
 Style/MultilineWhenThen:
   Enabled: false
 
+# We use EnforcedStyle of comparison here due to it being better
+# performing code as seen in https://gitlab.com/gitlab-org/gitlab/-/merge_requests/36221#note_375659681
+Style/NumericPredicate:
+  EnforcedStyle: comparison
+
 Style/FloatDivision:
   Enabled: false
+
+Cop/BanCatchThrow:
+  Enabled: true
+
+Performance/ReadlinesEach:
+  Enabled: true
+
+Performance/ChainArrayAllocation:
+  Enabled: true
+  Include:
+    - 'lib/gitlab/import_export/**/*'
+    - 'ee/lib/gitlab/import_export/**/*'
+    - 'ee/lib/ee/gitlab/import_export/**/*'
+
+Rails/TimeZone:
+  Enabled: true
+  EnforcedStyle: 'flexible'
+  Include:
+    - 'app/controllers/**/*'
+    - 'app/services/**/*'
+    - 'lib/**/*'
+    - 'spec/controllers/**/*'
+    - 'spec/services/**/*'
+    - 'spec/lib/**/*'
+    - 'ee/app/controllers/**/*'
+    - 'ee/app/services/**/*'
+    - 'ee/spec/controllers/**/*'
+    - 'ee/spec/services/**/*'
+    - 'app/models/**/*'
+    - 'spec/models/**/*'
+    - 'ee/app/models/**/*'
+    - 'ee/spec/models/**/*'
+    - 'app/workers/**/*'
+    - 'spec/workers/**/*'
+    - 'ee/app/workers/**/*'
+    - 'ee/spec/workers/**/*'
+    - 'ee/lib/**/*'
+    - 'ee/spec/lib/**/*'
+
+# WIP: See https://gitlab.com/gitlab-org/gitlab/-/issues/220040
+Rails/SaveBang:
+  Enabled: true
+  AllowImplicitReturn: false
+  AllowedReceivers: ['ActionDispatch::TestRequest']
+  Include:
+    - 'spec/**/*.rb'
+    - 'ee/spec/**/*.rb'
+    - 'qa/spec/**/*.rb'
+    - 'qa/qa/specs/**/*.rb'
+  Exclude:
+  - spec/models/wiki_page/**/*
+  - spec/models/wiki_page_spec.rb
+
+Cop/PutProjectRoutesUnderScope:
+  Include:
+    - 'config/routes/project.rb'
+    - 'ee/config/routes/project.rb'
+
+Cop/PutGroupRoutesUnderScope:
+  Include:
+    - 'config/routes/group.rb'
+    - 'ee/config/routes/group.rb'
+
+Migration/ComplexIndexesRequireName:
+  Exclude:
+    - !ruby/regexp /\Adb\/(post_)?migrate\/201.*\.rb\z/
+    - !ruby/regexp /\Adb\/(post_)?migrate\/20200[1-7].*\.rb\z/
+
+Migration/ReferToIndexByName:
+  Exclude:
+    - !ruby/regexp /\Adb\/(post_)?migrate\/201.*\.rb\z/
+    - !ruby/regexp /\Adb\/(post_)?migrate\/20200[1-7].*\.rb\z/
+    - !ruby/regexp /\Aee\/db\/geo\/(post_)?migrate\/201.*\.rb\z/
+
+Migration/CreateTableWithForeignKeys:
+  # Disable this cop for all the existing migrations
+  Exclude:
+    - !ruby/regexp /\Adb\/(?:post_)?migrate\/(?:201[0-9]\d+|20200[0-8][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9])_.+\.rb\z/
+
+Migration/PreventIndexCreation:
+  Exclude:
+    - !ruby/regexp /\Adb\/(post_)?migrate\/201.*\.rb\z/
+    - !ruby/regexp /\Adb\/(post_)?migrate\/2020.*\.rb\z/
+    - !ruby/regexp /\Adb\/(post_)?migrate\/20210[1-6].*\.rb\z/
+
+Gitlab/RailsLogger:
+  Exclude:
+    - 'spec/**/*.rb'
+    - 'ee/spec/**/*.rb'
+
+# WIP See https://gitlab.com/gitlab-org/gitlab/-/issues/267606
+FactoryBot/InlineAssociation:
+  Include:
+    - 'spec/factories/**/*.rb'
+    - 'ee/spec/factories/**/*.rb'
+
+# WIP: https://gitlab.com/gitlab-org/gitlab/-/issues/321982
+Gitlab/NamespacedClass:
+  Exclude:
+    - 'config/**/*.rb'
+    - 'db/**/*.rb'
+    - 'ee/bin/**/*'
+    - 'ee/db/**/*.rb'
+    - 'ee/elastic/**/*.rb'
+    - 'scripts/**/*'
+    - 'spec/migrations/**/*.rb'
+
+Lint/HashCompareByIdentity:
+  Enabled: true
+
+Lint/RedundantSafeNavigation:
+  Enabled: true
+
+Style/ClassEqualityComparison:
+  Enabled: true
+
+# WIP See https://gitlab.com/gitlab-org/gitlab/-/issues/207950
+Cop/UserAdmin:
+  Enabled: true
+  Exclude:
+    - 'app/controllers/admin/sessions_controller.rb'
+    - 'app/controllers/concerns/enforces_admin_authentication.rb'
+    - 'app/policies/base_policy.rb'
+    - 'lib/gitlab/auth/current_user_mode.rb'
+    - 'spec/**/*.rb'
+    - 'ee/spec/**/*.rb'
+
+Performance/OpenStruct:
+  Exclude:
+    - 'ee/spec/**/*.rb'
+
+# See https://gitlab.com/gitlab-org/gitlab/-/issues/327495
+Style/RegexpLiteral:
+  Enabled: false
+
+Style/RegexpLiteralMixedPreserve:
+  Enabled: true
+  SupportedStyles:
+    - slashes
+    - percent_r
+    - mixed
+    - mixed_preserve
+  EnforcedStyle: mixed_preserve
+
+RSpec/TopLevelDescribePath:
+  Exclude:
+    - 'spec/fixtures/**/*.rb'
+    - 'ee/spec/fixtures/**/*.rb'

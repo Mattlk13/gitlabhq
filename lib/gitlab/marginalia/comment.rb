@@ -26,9 +26,9 @@ module Gitlab
         job = ::Marginalia::Comment.marginalia_job
 
         # We are using 'Marginalia::SidekiqInstrumentation' which does not support 'ActiveJob::Base'.
-        # Gitlab also uses 'ActionMailer::DeliveryJob' which inherits from ActiveJob::Base.
+        # Gitlab also uses 'ActionMailer::MailDeliveryJob' which inherits from ActiveJob::Base.
         # So below condition is used to return metadata for such jobs.
-        if job && job.is_a?(ActionMailer::DeliveryJob)
+        if job.is_a?(ActionMailer::MailDeliveryJob)
           {
             "class" => job.arguments.first,
             "jid"   => job.job_id
@@ -36,6 +36,10 @@ module Gitlab
         else
           job
         end
+      end
+
+      def endpoint_id
+        Labkit::Context.current&.get_attribute(:caller_id)
       end
     end
   end

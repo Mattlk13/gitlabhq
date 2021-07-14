@@ -1,17 +1,18 @@
 import { debounce } from 'lodash';
-import InputValidator from '~/validators/input_validator';
 
-import fetchGroupPathAvailability from './fetch_group_path_availability';
-import flash from '~/flash';
+import createFlash from '~/flash';
 import { __ } from '~/locale';
+import InputValidator from '~/validators/input_validator';
+import fetchGroupPathAvailability from './fetch_group_path_availability';
 
 const debounceTimeoutDuration = 1000;
 const invalidInputClass = 'gl-field-error-outline';
 const successInputClass = 'gl-field-success-outline';
+const parentIdSelector = 'group_parent_id';
 const successMessageSelector = '.validation-success';
 const pendingMessageSelector = '.validation-pending';
 const unavailableMessageSelector = '.validation-error';
-const suggestionsMessageSelector = '.gl-path-suggestions';
+const inputGroupSelector = '.input-group';
 
 export default class GroupPathValidator extends InputValidator {
   constructor(opts = {}) {
@@ -19,12 +20,13 @@ export default class GroupPathValidator extends InputValidator {
 
     const container = opts.container || '';
     const validateElements = document.querySelectorAll(`${container} .js-validate-group-path`);
+    const parentIdElement = document.getElementById(parentIdSelector);
 
-    this.debounceValidateInput = debounce(inputDomElement => {
-      GroupPathValidator.validateGroupPathInput(inputDomElement);
+    this.debounceValidateInput = debounce((inputDomElement) => {
+      GroupPathValidator.validateGroupPathInput(inputDomElement, parentIdElement);
     }, debounceTimeoutDuration);
 
-    validateElements.forEach(element =>
+    validateElements.forEach((element) =>
       element.addEventListener('input', this.eventHandler.bind(this)),
     );
   }
@@ -36,15 +38,16 @@ export default class GroupPathValidator extends InputValidator {
     this.debounceValidateInput(inputDomElement);
   }
 
-  static validateGroupPathInput(inputDomElement) {
+  static validateGroupPathInput(inputDomElement, parentIdElement) {
     const groupPath = inputDomElement.value;
+    const parentId = parentIdElement.value;
 
-    if (inputDomElement.checkValidity() && groupPath.length > 0) {
+    if (inputDomElement.checkValidity() && groupPath.length > 1) {
       GroupPathValidator.setMessageVisibility(inputDomElement, pendingMessageSelector);
 
-      fetchGroupPathAvailability(groupPath)
+      fetchGroupPathAvailability(groupPath, parentId)
         .then(({ data }) => data)
-        .then(data => {
+        .then((data) => {
           GroupPathValidator.setInputState(inputDomElement, !data.exists);
           GroupPathValidator.setMessageVisibility(inputDomElement, pendingMessageSelector, false);
           GroupPathValidator.setMessageVisibility(
@@ -53,25 +56,24 @@ export default class GroupPathValidator extends InputValidator {
           );
 
           if (data.exists) {
-            GroupPathValidator.showSuggestions(inputDomElement, data.suggests);
+            const [suggestedSlug] = data.suggests;
+            const targetDomElement = document.querySelector('.js-autofill-group-path');
+            targetDomElement.value = suggestedSlug;
           }
         })
-        .catch(() => flash(__('An error occurred while validating group path')));
+        .catch(() =>
+          createFlash({
+            message: __('An error occurred while validating group path'),
+          }),
+        );
     }
   }
 
-  static showSuggestions(inputDomElement, suggestions) {
-    const messageElement = inputDomElement.parentElement.parentElement.querySelector(
-      suggestionsMessageSelector,
-    );
-    const textSuggestions = suggestions && suggestions.length > 0 ? suggestions.join(', ') : 'none';
-    messageElement.textContent = textSuggestions;
-  }
-
   static setMessageVisibility(inputDomElement, messageSelector, isVisible = true) {
-    const messageElement = inputDomElement.parentElement.parentElement.querySelector(
-      messageSelector,
-    );
+    const messageElement = inputDomElement
+      .closest(inputGroupSelector)
+      .parentElement.querySelector(messageSelector);
+
     messageElement.classList.toggle('hide', !isVisible);
   }
 

@@ -1,6 +1,20 @@
 # frozen_string_literal: true
 
 RSpec.shared_examples 'model with repository' do
+  let(:container) { raise NotImplementedError }
+  let(:stubbed_container) { raise NotImplementedError }
+  let(:expected_full_path) { raise NotImplementedError }
+  let(:expected_web_url_path) { expected_full_path }
+  let(:expected_repo_url_path) { expected_full_path }
+  let(:expected_lfs_enabled) { false }
+
+  it 'container class includes HasRepository' do
+    # NOTE: This is not enforced at runtime, since we also need to support Geo::DeletedProject
+    expect(described_class).to include_module(HasRepository)
+    expect(container).to be_kind_of(HasRepository)
+    expect(stubbed_container).to be_kind_of(HasRepository)
+  end
+
   describe '#commits_by' do
     let(:commits) { container.repository.commits('HEAD', limit: 3).commits }
     let(:commit_shas) { commits.map(&:id) }
@@ -46,80 +60,53 @@ RSpec.shared_examples 'model with repository' do
     end
   end
 
+  describe '#url_to_repo' do
+    it 'returns the SSH URL to the repository' do
+      expect(container.url_to_repo).to eq(container.ssh_url_to_repo)
+    end
+  end
+
   describe '#ssh_url_to_repo' do
-    it 'returns container ssh address' do
-      expect(container.ssh_url_to_repo).to eq container.url_to_repo
+    it 'returns the SSH URL to the repository' do
+      expect(container.ssh_url_to_repo).to eq("#{Gitlab.config.gitlab_shell.ssh_path_prefix}#{expected_repo_url_path}.git")
     end
   end
 
   describe '#http_url_to_repo' do
-    subject { container.http_url_to_repo }
-
-    context 'when a custom HTTP clone URL root is not set' do
-      it 'returns the url to the repo without a username' do
-        expect(subject).to eq("#{container.web_url}.git")
-        expect(subject).not_to include('@')
-      end
-    end
-
-    context 'when a custom HTTP clone URL root is set' do
-      before do
-        stub_application_setting(custom_http_clone_url_root: custom_http_clone_url_root)
-      end
-
-      context 'when custom HTTP clone URL root has a relative URL root' do
-        context 'when custom HTTP clone URL root ends with a slash' do
-          let(:custom_http_clone_url_root) { 'https://git.example.com:51234/mygitlab/' }
-
-          it 'returns the url to the repo, with the root replaced with the custom one' do
-            expect(subject).to eq("#{custom_http_clone_url_root}#{expected_web_url_path}.git")
-          end
-        end
-
-        context 'when custom HTTP clone URL root does not end with a slash' do
-          let(:custom_http_clone_url_root) { 'https://git.example.com:51234/mygitlab' }
-
-          it 'returns the url to the repo, with the root replaced with the custom one' do
-            expect(subject).to eq("#{custom_http_clone_url_root}/#{expected_web_url_path}.git")
-          end
-        end
-      end
-
-      context 'when custom HTTP clone URL root does not have a relative URL root' do
-        context 'when custom HTTP clone URL root ends with a slash' do
-          let(:custom_http_clone_url_root) { 'https://git.example.com:51234/' }
-
-          it 'returns the url to the repo, with the root replaced with the custom one' do
-            expect(subject).to eq("#{custom_http_clone_url_root}#{expected_web_url_path}.git")
-          end
-        end
-
-        context 'when custom HTTP clone URL root does not end with a slash' do
-          let(:custom_http_clone_url_root) { 'https://git.example.com:51234' }
-
-          it 'returns the url to the repo, with the root replaced with the custom one' do
-            expect(subject).to eq("#{custom_http_clone_url_root}/#{expected_web_url_path}.git")
-          end
-        end
-      end
+    it 'returns the HTTP URL to the repository' do
+      expect(container.http_url_to_repo).to eq("#{Gitlab.config.gitlab.url}/#{expected_repo_url_path}.git")
     end
   end
 
   describe '#repository' do
     it 'returns valid repo' do
-      expect(container.repository).to be_kind_of(expected_repository_klass)
+      expect(container.repository).to be_kind_of(Repository)
+    end
+
+    it 'uses the same container' do
+      expect(container.repository.container).to be(container)
     end
   end
 
   describe '#storage' do
     it 'returns valid storage' do
-      expect(container.storage).to be_kind_of(expected_storage_klass)
+      expect(container.storage).to be_kind_of(Storage::Hashed)
     end
   end
 
   describe '#full_path' do
     it 'returns valid full_path' do
       expect(container.full_path).to eq(expected_full_path)
+    end
+  end
+
+  describe '#lfs_enabled?' do
+    before do
+      stub_lfs_setting(enabled: true)
+    end
+
+    it 'returns the expected value' do
+      expect(container.lfs_enabled?).to eq(expected_lfs_enabled)
     end
   end
 
@@ -131,12 +118,8 @@ RSpec.shared_examples 'model with repository' do
     end
 
     context 'when the repo exists' do
-      it { expect(container.empty_repo?).to be(false) }
-
-      it 'returns true when repository is empty' do
-        allow(container.repository).to receive(:empty?).and_return(true)
-
-        expect(container.empty_repo?).to be(true)
+      it 'returns the empty state of the repository' do
+        expect(container.empty_repo?).to be(container.repository.empty?)
       end
     end
   end
@@ -167,5 +150,6 @@ RSpec.shared_examples 'model with repository' do
   describe 'Respond to' do
     it { is_expected.to respond_to(:base_dir) }
     it { is_expected.to respond_to(:disk_path) }
+    it { is_expected.to respond_to(:gitlab_shell) }
   end
 end

@@ -23,15 +23,31 @@ module Gitlab
 
       class << self
         # Admin mode activation requires storing a flag in the user session. Using this
-        # method when scheduling jobs in Sidekiq will bypass the session check for a
-        # user that was already in admin mode
+        # method when scheduling jobs in sessionless environments (e.g. Sidekiq, API)
+        # will bypass the session check for a user that was already in admin mode
+        #
+        # If passed a block, it will surround the block execution and reset the session
+        # bypass at the end; otherwise you must remember to call '.reset_bypass_session!'
         def bypass_session!(admin_id)
           Gitlab::SafeRequestStore[CURRENT_REQUEST_BYPASS_SESSION_ADMIN_ID_RS_KEY] = admin_id
+          # Bypassing the session invalidates the cached value of admin_mode?
+          # Any new calls need to be re-computed.
+          uncache_admin_mode_state(admin_id)
 
           Gitlab::AppLogger.debug("Bypassing session in admin mode for: #{admin_id}")
 
-          yield
-        ensure
+          return unless block_given?
+
+          begin
+            yield
+          ensure
+            reset_bypass_session!(admin_id)
+          end
+        end
+
+        def reset_bypass_session!(admin_id = nil)
+          # Restoring the session bypass invalidates the cached value of admin_mode?
+          uncache_admin_mode_state(admin_id)
           Gitlab::SafeRequestStore.delete(CURRENT_REQUEST_BYPASS_SESSION_ADMIN_ID_RS_KEY)
         end
 
@@ -39,10 +55,21 @@ module Gitlab
           Gitlab::SafeRequestStore[CURRENT_REQUEST_BYPASS_SESSION_ADMIN_ID_RS_KEY]
         end
 
+        def uncache_admin_mode_state(admin_id = nil)
+          if admin_id
+            key = { res: :current_user_mode, user: admin_id, method: :admin_mode? }
+            Gitlab::SafeRequestStore.delete(key)
+          else
+            Gitlab::SafeRequestStore.delete_if do |key|
+              key.is_a?(Hash) && key[:res] == :current_user_mode && key[:method] == :admin_mode?
+            end
+          end
+        end
+
         # Store in the current request the provided user model (only if in admin mode)
         # and yield
         def with_current_admin(admin)
-          return yield unless self.new(admin).admin_mode?
+          return yield unless new(admin).admin_mode?
 
           Gitlab::SafeRequestStore[CURRENT_REQUEST_ADMIN_MODE_USER_RS_KEY] = admin
 
@@ -66,7 +93,7 @@ module Gitlab
         return false unless user
 
         Gitlab::SafeRequestStore.fetch(admin_mode_rs_key) do
-          user.admin? && any_session_with_admin_mode?
+          user.admin? && (privileged_runtime? || session_with_admin_mode?)
         end
       end
 
@@ -88,10 +115,6 @@ module Gitlab
 
         current_session_data[ADMIN_MODE_REQUESTED_TIME_KEY] = nil
         current_session_data[ADMIN_MODE_START_TIME_KEY] = Time.now
-      end
-
-      def enable_sessionless_admin_mode!
-        request_admin_mode! && enable_admin_mode!(skip_password_validation: true)
       end
 
       def disable_admin_mode!
@@ -129,19 +152,10 @@ module Gitlab
         @current_session ||= Gitlab::NamespacedSessionStore.new(SESSION_STORE_KEY)
       end
 
-      def any_session_with_admin_mode?
+      def session_with_admin_mode?
         return true if bypass_session?
-        return true if current_session_data.initiated? && current_session_data[ADMIN_MODE_START_TIME_KEY].to_i > MAX_ADMIN_MODE_TIME.ago.to_i
 
-        all_sessions.any? do |session|
-          session[ADMIN_MODE_START_TIME_KEY].to_i > MAX_ADMIN_MODE_TIME.ago.to_i
-        end
-      end
-
-      def all_sessions
-        @all_sessions ||= ActiveSession.list_sessions(user).lazy.map do |session|
-          Gitlab::NamespacedSessionStore.new(SESSION_STORE_KEY, session.with_indifferent_access )
-        end
+        current_session_data.initiated? && current_session_data[ADMIN_MODE_START_TIME_KEY].to_i > MAX_ADMIN_MODE_TIME.ago.to_i
       end
 
       def admin_mode_requested_in_grace_period?
@@ -155,6 +169,11 @@ module Gitlab
       def reset_request_store_cache_entries
         Gitlab::SafeRequestStore.delete(admin_mode_rs_key)
         Gitlab::SafeRequestStore.delete(admin_mode_requested_rs_key)
+      end
+
+      # Runtimes which imply shell access get admin mode automatically, see Gitlab::Runtime
+      def privileged_runtime?
+        Gitlab::Runtime.rake? || Gitlab::Runtime.rails_runner? || Gitlab::Runtime.console?
       end
     end
   end

@@ -2,13 +2,13 @@
 
 require 'spec_helper'
 
-describe Projects::ServicesController, '(JavaScript fixtures)', type: :controller do
+RSpec.describe Projects::ServicesController, '(JavaScript fixtures)', type: :controller do
   include JavaScriptFixturesHelpers
 
-  let(:admin)     { create(:admin) }
   let(:namespace) { create(:namespace, name: 'frontend-fixtures' )}
   let(:project)   { create(:project_empty_repo, namespace: namespace, path: 'services-project') }
-  let!(:service)  { create(:prometheus_service, project: project) }
+  let!(:integration) { create(:prometheus_integration, project: project) }
+  let(:user) { project.owner }
 
   render_views
 
@@ -17,7 +17,7 @@ describe Projects::ServicesController, '(JavaScript fixtures)', type: :controlle
   end
 
   before do
-    sign_in(admin)
+    sign_in(user)
   end
 
   after do
@@ -28,7 +28,7 @@ describe Projects::ServicesController, '(JavaScript fixtures)', type: :controlle
     get :edit, params: {
       namespace_id: namespace,
       project_id: project,
-      id: service.to_param
+      id: integration.to_param
     }
 
     expect(response).to be_successful

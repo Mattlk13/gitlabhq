@@ -13,21 +13,23 @@ module Gitlab
               @paths = local_cache.delete(:paths)
               @policy = local_cache.delete(:policy)
               @untracked = local_cache.delete(:untracked)
+              @when = local_cache.delete(:when)
 
               raise ArgumentError, "unknown cache keys: #{local_cache.keys}" if local_cache.any?
             end
 
-            def build_attributes
+            def attributes
               {
-                options: {
-                  cache: {
-                    key: key_string,
-                    paths: @paths,
-                    policy: @policy,
-                    untracked: @untracked
-                  }.compact.presence
-                }.compact
-              }
+                key: key_string,
+                paths: @paths,
+                policy: @policy,
+                untracked: @untracked,
+                when: @when
+              }.compact
+            end
+
+            def build_attributes
+              { options: { cache: attributes.presence }.compact }
             end
 
             private
@@ -51,8 +53,6 @@ module Gitlab
             end
 
             def hash_of_the_latest_changes
-              return unless Feature.enabled?(:ci_file_based_cache, @pipeline.project, default_enabled: true)
-
               ids = files.map { |path| last_commit_id_for_path(path) }
               ids = ids.compact.sort.uniq
 

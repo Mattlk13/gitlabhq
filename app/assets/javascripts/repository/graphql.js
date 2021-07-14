@@ -1,8 +1,8 @@
+import { IntrospectionFragmentMatcher } from 'apollo-cache-inmemory';
 import Vue from 'vue';
 import VueApollo from 'vue-apollo';
-import { IntrospectionFragmentMatcher } from 'apollo-cache-inmemory';
-import axios from '~/lib/utils/axios_utils';
 import createDefaultClient from '~/lib/graphql';
+import axios from '~/lib/utils/axios_utils';
 import introspectionQueryResultData from './fragmentTypes.json';
 import { fetchLogsTree } from './log_tree';
 
@@ -17,20 +17,26 @@ const fragmentMatcher = new IntrospectionFragmentMatcher({
 const defaultClient = createDefaultClient(
   {
     Query: {
-      commit(_, { path, fileName, type }) {
-        return new Promise(resolve => {
-          fetchLogsTree(defaultClient, path, '0', {
-            resolve,
-            entry: {
-              name: fileName,
-              type,
+      commit(_, { path, fileName, type, maxOffset }) {
+        return new Promise((resolve) => {
+          fetchLogsTree(
+            defaultClient,
+            path,
+            '0',
+            {
+              resolve,
+              entry: {
+                name: fileName,
+                type,
+              },
             },
-          });
+            maxOffset,
+          );
         });
       },
       readme(_, { url }) {
         return axios
-          .get(url, { params: { viewer: 'rich', format: 'json' } })
+          .get(url, { params: { format: 'json', viewer: 'rich' } })
           .then(({ data }) => ({ ...data, __typename: 'ReadmeFile' }));
       },
     },
@@ -38,8 +44,8 @@ const defaultClient = createDefaultClient(
   {
     cacheConfig: {
       fragmentMatcher,
-      dataIdFromObject: obj => {
-        /* eslint-disable @gitlab/i18n/no-non-i18n-strings */
+      dataIdFromObject: (obj) => {
+        /* eslint-disable @gitlab/require-i18n-strings */
         // eslint-disable-next-line no-underscore-dangle
         switch (obj.__typename) {
           // We need to create a dynamic ID for each entry
@@ -48,16 +54,17 @@ const defaultClient = createDefaultClient(
           case 'TreeEntry':
           case 'Submodule':
           case 'Blob':
-            return `${escape(obj.flatPath)}-${obj.id}`;
+            return `${encodeURIComponent(obj.flatPath)}-${obj.id}`;
           default:
             // If the type doesn't match any of the above we fallback
             // to using the default Apollo ID
             // eslint-disable-next-line no-underscore-dangle
             return obj.id || obj._id;
         }
-        /* eslint-enable @gitlab/i18n/no-non-i18n-strings */
+        /* eslint-enable @gitlab/require-i18n-strings */
       },
     },
+    assumeImmutableResults: true,
   },
 );
 

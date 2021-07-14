@@ -7,7 +7,8 @@ class DeployToken < ApplicationRecord
   include Gitlab::Utils::StrongMemoize
   add_authentication_token_field :token, encrypted: :optional
 
-  AVAILABLE_SCOPES = %i(read_repository read_registry).freeze
+  AVAILABLE_SCOPES = %i(read_repository read_registry write_registry
+                        read_package_registry write_package_registry).freeze
   GITLAB_DEPLOY_TOKEN_NAME = 'gitlab-deploy-token'
 
   default_value_for(:expires_at) { Forever.date }
@@ -53,6 +54,10 @@ class DeployToken < ApplicationRecord
     !revoked && !expired?
   end
 
+  def deactivated?
+    !active?
+  end
+
   def scopes
     AVAILABLE_SCOPES.select { |token_scope| read_attribute(token_scope) }
   end
@@ -74,6 +79,20 @@ class DeployToken < ApplicationRecord
   def project
     strong_memoize(:project) do
       projects.first
+    end
+  end
+
+  def group
+    strong_memoize(:group) do
+      groups.first
+    end
+  end
+
+  def accessible_projects
+    if project_type?
+      projects
+    elsif group_type?
+      group.all_projects
     end
   end
 
@@ -105,7 +124,7 @@ class DeployToken < ApplicationRecord
   end
 
   def ensure_at_least_one_scope
-    errors.add(:base, "Scopes can't be blank") unless read_repository || read_registry
+    errors.add(:base, _("Scopes can't be blank")) unless scopes.any?
   end
 
   def default_username

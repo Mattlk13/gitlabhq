@@ -22,7 +22,7 @@ module Gitlab
       attr_reader :batch_size, :dry_run
       attr_accessor :artifact_files
 
-      def initialize(batch_size:, dry_run: true, logger: Rails.logger) # rubocop:disable Gitlab/RailsLogger
+      def initialize(batch_size:, dry_run: true, logger: Gitlab::AppLogger)
         @batch_size = batch_size
         @dry_run = dry_run
         @logger = logger
@@ -79,4 +79,4 @@ module Gitlab
   end
 end
 
-Gitlab::Cleanup::OrphanJobArtifactFilesBatch.prepend_if_ee('EE::Gitlab::Cleanup::OrphanJobArtifactFilesBatch')
+Gitlab::Cleanup::OrphanJobArtifactFilesBatch.prepend_mod_with('Gitlab::Cleanup::OrphanJobArtifactFilesBatch')

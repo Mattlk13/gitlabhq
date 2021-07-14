@@ -1,17 +1,23 @@
 import Vue from 'vue';
-import ReleaseEditApp from './components/app_edit.vue';
+import Vuex from 'vuex';
+import ReleaseEditNewApp from './components/app_edit_new.vue';
 import createStore from './stores';
-import detailModule from './stores/modules/detail';
+import createEditNewModule from './stores/modules/edit_new';
+
+Vue.use(Vuex);
 
 export default () => {
   const el = document.getElementById('js-edit-release-page');
 
-  const store = createStore({ detail: detailModule });
-  store.dispatch('detail/setInitialState', el.dataset);
+  const store = createStore({
+    modules: {
+      editNew: createEditNewModule(el.dataset),
+    },
+  });
 
   return new Vue({
     el,
     store,
-    render: h => h(ReleaseEditApp),
+    render: (h) => h(ReleaseEditNewApp),
   });
 };

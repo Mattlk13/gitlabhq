@@ -2,8 +2,10 @@ import { shallowMount } from '@vue/test-utils';
 import MockAdapter from 'axios-mock-adapter';
 import axios from '~/lib/utils/axios_utils';
 import Dashboard from '~/monitoring/components/dashboard.vue';
+import DashboardHeader from '~/monitoring/components/dashboard_header.vue';
 import { createStore } from '~/monitoring/stores';
-import { propsData } from '../init_utils';
+import { dashboardProps } from '../fixture_data';
+import { setupAllDashboards } from '../store_utils';
 
 jest.mock('~/lib/utils/url_utility');
 
@@ -13,25 +15,25 @@ describe('Dashboard template', () => {
   let mock;
 
   beforeEach(() => {
-    store = createStore();
+    store = createStore({
+      currentEnvironmentName: 'production',
+    });
     mock = new MockAdapter(axios);
+
+    setupAllDashboards(store);
   });
 
   afterEach(() => {
-    if (wrapper) {
-      wrapper.destroy();
-      wrapper = null;
-    }
     mock.restore();
   });
 
   it('matches the default snapshot', () => {
     wrapper = shallowMount(Dashboard, {
-      propsData: { ...propsData },
-      methods: {
-        fetchData: jest.fn(),
-      },
+      propsData: { ...dashboardProps },
       store,
+      stubs: {
+        DashboardHeader,
+      },
     });
 
     expect(wrapper.element).toMatchSnapshot();

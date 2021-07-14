@@ -1,18 +1,38 @@
 # frozen_string_literal: true
 
 module API
-  class Issues < Grape::API
+  class Issues < ::API::Base
     include PaginationParams
     helpers Helpers::IssuesHelpers
-    helpers ::Gitlab::IssuableMetadata
+    helpers Helpers::RateLimiter
 
     before { authenticate_non_get! }
 
+    feature_category :issue_tracking
+
     helpers do
       params :negatable_issue_filter_params do
-        optional :labels, type: Array[String], coerce_with: Validations::Types::LabelsList.coerce, desc: 'Comma-separated list of label names'
+        optional :labels, type: Array[String], coerce_with: ::API::Validations::Types::CommaSeparatedToArray.coerce, desc: 'Comma-separated list of label names'
         optional :milestone, type: String, desc: 'Milestone title'
-        optional :iids, type: Array[Integer], desc: 'The IID array of issues'
+        optional :iids, type: Array[Integer], coerce_with: ::API::Validations::Types::CommaSeparatedToIntegerArray.coerce, desc: 'The IID array of issues'
+
+        optional :author_id, type: Integer, desc: 'Return issues which are not authored by the user with the given ID'
+        optional :author_username, type: String, desc: 'Return issues which are not authored by the user with the given username'
+        mutually_exclusive :author_id, :author_username
+
+        optional :assignee_id, type: Integer, desc: 'Return issues which are not assigned to the user with the given ID'
+        optional :assignee_username, type: Array[String], check_assignees_count: true,
+                 coerce_with: Validations::Validators::CheckAssigneesCount.coerce,
+                 desc: 'Return issues which are not assigned to the user with the given username'
+        mutually_exclusive :assignee_id, :assignee_username
+
+        use :negatable_issue_filter_params_ee
+      end
+
+      params :issues_stats_params do
+        optional :labels, type: Array[String], coerce_with: ::API::Validations::Types::CommaSeparatedToArray.coerce, desc: 'Comma-separated list of label names'
+        optional :milestone, type: String, desc: 'Milestone title'
+        optional :iids, type: Array[Integer], coerce_with: ::API::Validations::Types::CommaSeparatedToIntegerArray.coerce, desc: 'The IID array of issues'
         optional :search, type: String, desc: 'Search issues for text present in the title, description, or any combination of these'
         optional :in, type: String, desc: '`title`, `description`, or a string joining them with comma'
 
@@ -23,13 +43,10 @@ module API
         optional :assignee_id, types: [Integer, String], integer_none_any: true,
                  desc: 'Return issues which are assigned to the user with the given ID'
         optional :assignee_username, type: Array[String], check_assignees_count: true,
-                 coerce_with: Validations::CheckAssigneesCount.coerce,
+                 coerce_with: Validations::Validators::CheckAssigneesCount.coerce,
                  desc: 'Return issues which are assigned to the user with the given username'
         mutually_exclusive :assignee_id, :assignee_username
-      end
 
-      params :issues_stats_params do
-        use :negatable_issue_filter_params
         optional :created_after, type: DateTime, desc: 'Return issues created after the specified time'
         optional :created_before, type: DateTime, desc: 'Return issues created before the specified time'
         optional :updated_after, type: DateTime, desc: 'Return issues updated after the specified time'
@@ -44,7 +61,7 @@ module API
         optional :my_reaction_emoji, type: String, desc: 'Return issues reacted by the authenticated user by the given emoji'
         optional :confidential, type: Boolean, desc: 'Filter confidential or public issues'
 
-        use :optional_issues_params_ee
+        use :issues_stats_params_ee
       end
 
       params :issues_params do
@@ -55,6 +72,9 @@ module API
                  desc: 'Return issues ordered by `created_at` or `updated_at` fields.'
         optional :sort, type: String, values: %w[asc desc], default: 'desc',
                  desc: 'Return issues sorted in `asc` or `desc` order.'
+        optional :due_date, type: String, values: %w[0 overdue week month next_month_and_previous_two_weeks] << '',
+                 desc: 'Return issues that have no due date (`0`), or whose due date is this week, this month, between two weeks ago and next month, or which are overdue. Accepts: `overdue`, `week`, `month`, `next_month_and_previous_two_weeks`, `0`'
+        optional :issue_type, type: String, values: Issue.issue_types.keys, desc: "The type of the issue. Accepts: #{Issue.issue_types.keys.join(', ')}"
 
         use :issues_stats_params
         use :pagination
@@ -62,13 +82,16 @@ module API
 
       params :issue_params do
         optional :description, type: String, desc: 'The description of an issue'
-        optional :assignee_ids, type: Array[Integer], desc: 'The array of user IDs to assign issue'
+        optional :assignee_ids, type: Array[Integer], coerce_with: ::API::Validations::Types::CommaSeparatedToIntegerArray.coerce, desc: 'The array of user IDs to assign issue'
         optional :assignee_id,  type: Integer, desc: '[Deprecated] The ID of a user to assign issue'
         optional :milestone_id, type: Integer, desc: 'The ID of a milestone to assign issue'
-        optional :labels, type: Array[String], coerce_with: Validations::Types::LabelsList.coerce, desc: 'Comma-separated list of label names'
+        optional :labels, type: Array[String], coerce_with: ::API::Validations::Types::CommaSeparatedToArray.coerce, desc: 'Comma-separated list of label names'
+        optional :add_labels, type: Array[String], coerce_with: ::API::Validations::Types::CommaSeparatedToArray.coerce, desc: 'Comma-separated list of label names'
+        optional :remove_labels, type: Array[String], coerce_with: ::API::Validations::Types::CommaSeparatedToArray.coerce, desc: 'Comma-separated list of label names'
         optional :due_date, type: String, desc: 'Date string in the format YEAR-MONTH-DAY'
         optional :confidential, type: Boolean, desc: 'Boolean parameter if the issue should be confidential'
         optional :discussion_locked, type: Boolean, desc: " Boolean parameter indicating if the issue's discussion is locked"
+        optional :issue_type, type: String, values: Issue.issue_types.keys, desc: "The type of the issue. Accepts: #{Issue.issue_types.keys.join(', ')}"
 
         use :optional_issue_params_ee
       end
@@ -94,6 +117,8 @@ module API
         use :issues_params
         optional :scope, type: String, values: %w[created-by-me assigned-to-me created_by_me assigned_to_me all], default: 'created_by_me',
                          desc: 'Return issues for the given scope: `created_by_me`, `assigned_to_me` or `all`'
+        optional :non_archived, type: Boolean, default: true,
+                                desc: 'Return issues from non archived projects'
       end
       get do
         authenticate! unless params[:scope] == 'all'
@@ -103,11 +128,23 @@ module API
           with: Entities::Issue,
           with_labels_details: declared_params[:with_labels_details],
           current_user: current_user,
-          issuable_metadata: issuable_meta_data(issues, 'Issue', current_user),
           include_subscribed: false
         }
 
         present issues, options
+      end
+
+      desc "Get specified issue (admin only)" do
+        success Entities::Issue
+      end
+      params do
+        requires :id, type: String, desc: 'The ID of the Issue'
+      end
+      get ":id" do
+        authenticated_as_admin!
+        issue = Issue.find(params['id'])
+
+        present issue, with: Entities::Issue, current_user: current_user, project: issue.project
       end
     end
 
@@ -129,7 +166,6 @@ module API
           with: Entities::Issue,
           with_labels_details: declared_params[:with_labels_details],
           current_user: current_user,
-          issuable_metadata: issuable_meta_data(issues, 'Issue', current_user),
           include_subscribed: false,
           group: user_group
         }
@@ -166,7 +202,6 @@ module API
           with_labels_details: declared_params[:with_labels_details],
           current_user: current_user,
           project: user_project,
-          issuable_metadata: issuable_meta_data(issues, 'Issue', current_user),
           include_subscribed: false
         }
 
@@ -209,22 +244,22 @@ module API
         use :issue_params
       end
       post ':id/issues' do
-        Gitlab::QueryLimiting.whitelist('https://gitlab.com/gitlab-org/gitlab-foss/issues/42320')
+        Gitlab::QueryLimiting.disable!('https://gitlab.com/gitlab-org/gitlab/-/issues/21140')
+
+        check_rate_limit! :issues_create, [current_user]
 
         authorize! :create_issue, user_project
 
-        params.delete(:created_at) unless current_user.can?(:set_issue_created_at, user_project)
-        params.delete(:iid) unless current_user.can?(:set_issue_iid, user_project)
-
         issue_params = declared_params(include_missing: false)
-        issue_params[:system_note_timestamp] = params[:created_at]
 
         issue_params = convert_parameters_from_legacy_format(issue_params)
 
         begin
-          issue = ::Issues::CreateService.new(user_project,
-                                              current_user,
-                                              issue_params.merge(request: request, api: true)).execute
+          spam_params = ::Spam::SpamParams.new_from_request(request: request)
+          issue = ::Issues::CreateService.new(project: user_project,
+                                              current_user: current_user,
+                                              params: issue_params,
+                                              spam_params: spam_params).execute
 
           if issue.spam?
             render_api_error!({ error: 'Spam detected' }, 400)
@@ -256,22 +291,20 @@ module API
       end
       # rubocop: disable CodeReuse/ActiveRecord
       put ':id/issues/:issue_iid' do
-        Gitlab::QueryLimiting.whitelist('https://gitlab.com/gitlab-org/gitlab-foss/issues/42322')
+        Gitlab::QueryLimiting.disable!('https://gitlab.com/gitlab-org/gitlab/-/issues/20775')
 
         issue = user_project.issues.find_by!(iid: params.delete(:issue_iid))
         authorize! :update_issue, issue
 
-        # Setting updated_at is allowed only for admins and owners
-        params.delete(:updated_at) unless current_user.can?(:set_issue_updated_at, user_project)
-        issue.system_note_timestamp = params[:updated_at]
-
-        update_params = declared_params(include_missing: false).merge(request: request, api: true)
+        update_params = declared_params(include_missing: false)
 
         update_params = convert_parameters_from_legacy_format(update_params)
 
-        issue = ::Issues::UpdateService.new(user_project,
-                                            current_user,
-                                            update_params).execute(issue)
+        spam_params = ::Spam::SpamParams.new_from_request(request: request)
+        issue = ::Issues::UpdateService.new(project: user_project,
+                                            current_user: current_user,
+                                            params: update_params,
+                                            spam_params: spam_params).execute(issue)
 
         render_spam_error! if issue.spam?
 
@@ -279,6 +312,30 @@ module API
           present issue, with: Entities::Issue, current_user: current_user, project: user_project
         else
           render_validation_error!(issue)
+        end
+      end
+      # rubocop: enable CodeReuse/ActiveRecord
+
+      desc 'Reorder an existing issue' do
+        success Entities::Issue
+      end
+      params do
+        requires :issue_iid, type: Integer, desc: 'The internal ID of a project issue'
+        optional :move_after_id, type: Integer, desc: 'The ID of the issue we want to be after'
+        optional :move_before_id, type: Integer, desc: 'The ID of the issue we want to be before'
+        at_least_one_of :move_after_id, :move_before_id
+      end
+      # rubocop: disable CodeReuse/ActiveRecord
+      put ':id/issues/:issue_iid/reorder' do
+        issue = user_project.issues.find_by(iid: params[:issue_iid])
+        not_found!('Issue') unless issue
+
+        authorize! :update_issue, issue
+
+        if ::Issues::ReorderService.new(project: user_project, current_user: current_user, params: params).execute(issue)
+          present issue, with: Entities::Issue, current_user: current_user, project: user_project
+        else
+          render_api_error!({ error: 'Unprocessable Entity' }, 422)
         end
       end
       # rubocop: enable CodeReuse/ActiveRecord
@@ -292,7 +349,7 @@ module API
       end
       # rubocop: disable CodeReuse/ActiveRecord
       post ':id/issues/:issue_iid/move' do
-        Gitlab::QueryLimiting.whitelist('https://gitlab.com/gitlab-org/gitlab-foss/issues/42323')
+        Gitlab::QueryLimiting.disable!('https://gitlab.com/gitlab-org/gitlab/-/issues/20776')
 
         issue = user_project.issues.find_by(iid: params[:issue_iid])
         not_found!('Issue') unless issue
@@ -301,7 +358,7 @@ module API
         not_found!('Project') unless new_project
 
         begin
-          issue = ::Issues::MoveService.new(user_project, current_user).execute(issue, new_project)
+          issue = ::Issues::MoveService.new(project: user_project, current_user: current_user).execute(issue, new_project)
           present issue, with: Entities::Issue, current_user: current_user, project: user_project
         rescue ::Issues::MoveService::MoveError => error
           render_api_error!(error.message, 400)
@@ -321,7 +378,7 @@ module API
         authorize!(:destroy_issue, issue)
 
         destroy_conditionally!(issue) do |issue|
-          Issuable::DestroyService.new(user_project, current_user).execute(issue)
+          Issuable::DestroyService.new(project: user_project, current_user: current_user).execute(issue)
         end
       end
       # rubocop: enable CodeReuse/ActiveRecord
@@ -335,7 +392,7 @@ module API
       get ':id/issues/:issue_iid/related_merge_requests' do
         issue = find_project_issue(params[:issue_iid])
 
-        merge_requests = ::Issues::ReferencedMergeRequestsService.new(user_project, current_user)
+        merge_requests = ::Issues::ReferencedMergeRequestsService.new(project: user_project, current_user: current_user)
           .execute(issue)
           .first
 
@@ -394,3 +451,5 @@ module API
     end
   end
 end
+
+API::Issues.prepend_mod_with('API::Issues')

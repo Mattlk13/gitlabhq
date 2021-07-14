@@ -2,15 +2,15 @@
 
 require 'spec_helper'
 
-describe 'User views diffs', :js do
+RSpec.describe 'User views diffs', :js do
   let(:merge_request) do
     create(:merge_request_with_diffs, source_project: project, target_project: project, source_branch: 'merge-test')
   end
+
   let(:project) { create(:project, :public, :repository) }
   let(:view) { 'inline' }
 
   before do
-    stub_feature_flags(diffs_batch_load: false)
     visit(diffs_project_merge_request_path(project, merge_request, view: view))
 
     wait_for_requests
@@ -22,9 +22,9 @@ describe 'User views diffs', :js do
     it 'unfolds diffs upwards' do
       first('.js-unfold').click
 
-      page.within('.file-holder[id="a5cc2925ca8258af241be7e5b0381edf30266302"]') do
-        expect(find('.text-file')).to have_content('.bundle')
-        expect(page).to have_selector('.new_line [data-linenumber="1"]', count: 1)
+      page.within('.file-holder[id="2f6fcd96b88b36ce98c38da085c795a27d92a3dd"]') do
+        expect(find('.text-file')).to have_content('fileutils')
+        expect(page).to have_selector('[data-interop-type="new"] [data-linenumber="1"]')
       end
     end
 
@@ -32,8 +32,8 @@ describe 'User views diffs', :js do
       page.within('.file-holder[id="2f6fcd96b88b36ce98c38da085c795a27d92a3dd"]') do
         all('.js-unfold-all')[1].click
 
-        expect(page).to have_selector('.new_line [data-linenumber="24"]', count: 1)
-        expect(page).not_to have_selector('.new_line [data-linenumber="1"]')
+        expect(page).to have_selector('[data-interop-type="new"] [data-linenumber="24"]', count: 1)
+        expect(page).not_to have_selector('[data-interop-type="new"] [data-linenumber="1"]')
       end
     end
 
@@ -61,11 +61,12 @@ describe 'User views diffs', :js do
   end
 
   it 'expands all diffs' do
-    first('#a5cc2925ca8258af241be7e5b0381edf30266302 .js-file-title').click
+    first('.diff-toggle-caret').click
 
     expect(page).to have_button('Expand all')
 
     click_button 'Expand all'
+    wait_for_requests
 
     expect(page).not_to have_button('Expand all')
   end

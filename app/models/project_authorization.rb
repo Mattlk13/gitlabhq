@@ -1,8 +1,8 @@
 # frozen_string_literal: true
 
 class ProjectAuthorization < ApplicationRecord
+  extend SuppressCompositePrimaryKeyWarning
   include FromUnion
-  prepend_if_ee('::EE::ProjectAuthorization') # rubocop: disable Cop/InjectEnterpriseEditionModule
 
   belongs_to :user
   belongs_to :project
@@ -29,4 +29,15 @@ class ProjectAuthorization < ApplicationRecord
       EOF
     end
   end
+
+  # This method overrides its ActiveRecord's version in order to work correctly
+  # with composite primary keys and fix the tests for Rails 6.1
+  #
+  # Consider using BulkInsertSafe module instead since we plan to refactor it in
+  # https://gitlab.com/gitlab-org/gitlab/-/issues/331264
+  def self.insert_all(attributes)
+    super(attributes, unique_by: connection.schema_cache.primary_keys(table_name))
+  end
 end
+
+ProjectAuthorization.prepend_mod_with('ProjectAuthorization')

@@ -10,12 +10,17 @@ class Projects::PipelineSchedulesController < Projects::ApplicationController
   before_action :authorize_update_pipeline_schedule!, except: [:index, :new, :create, :play]
   before_action :authorize_admin_pipeline_schedule!, only: [:destroy]
 
+  before_action do
+    push_frontend_feature_flag(:ci_daily_limit_for_pipeline_schedules, @project, default_enabled: :yaml)
+  end
+
+  feature_category :continuous_integration
+
   # rubocop: disable CodeReuse/ActiveRecord
   def index
     @scope = params[:scope]
-    @all_schedules = PipelineSchedulesFinder.new(@project).execute
-    @schedules = PipelineSchedulesFinder.new(@project).execute(scope: params[:scope])
-      .includes(:last_pipeline)
+    @all_schedules = Ci::PipelineSchedulesFinder.new(@project).execute
+    @schedules = Ci::PipelineSchedulesFinder.new(@project).execute(scope: params[:scope])
   end
   # rubocop: enable CodeReuse/ActiveRecord
 

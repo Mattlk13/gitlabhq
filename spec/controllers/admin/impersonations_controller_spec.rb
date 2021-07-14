@@ -2,7 +2,7 @@
 
 require 'spec_helper'
 
-describe Admin::ImpersonationsController do
+RSpec.describe Admin::ImpersonationsController do
   let(:impersonator) { create(:admin) }
   let(:user) { create(:user) }
 
@@ -42,7 +42,7 @@ describe Admin::ImpersonationsController do
         context "when the impersonator is not admin (anymore)" do
           before do
             impersonator.admin = false
-            impersonator.save
+            impersonator.save!
           end
 
           it "responds with status 404" do

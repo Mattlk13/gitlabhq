@@ -2,22 +2,25 @@
 
 module RuboCop
   module Cop
-    # Cop that blacklists the injecting of EE specific modules anywhere but on
-    # the last line of a file. Injecting a module in the middle of a file will
-    # cause merge conflicts, while placing it on the last line will not.
+    # Cop that blacklists the injecting of extension specific modules before any lines which are not already injecting another module.
+    # It allows multiple module injections as long as they're all at the end.
     class InjectEnterpriseEditionModule < RuboCop::Cop::Cop
-      INVALID_LINE = 'Injecting EE modules must be done on the last line of this file' \
+      INVALID_LINE = 'Injecting extension modules must be done on the last line of this file' \
           ', outside of any class or module definitions'
 
       DISALLOWED_METHOD =
-        'EE modules must be injected using `include_if_ee`, `extend_if_ee`, or `prepend_if_ee`'
+        'EE modules must be injected using `include_mod_with`, `extend_mod_with`, or `prepend_mod_with`'
 
-      INVALID_ARGUMENT = 'EE modules to inject must be specified as a String'
+      INVALID_ARGUMENT = 'extension modules to inject must be specified as a String'
 
       CHECK_LINE_METHODS =
-        Set.new(%i[include_if_ee extend_if_ee prepend_if_ee]).freeze
+        Set.new(%i[include_mod_with extend_mod_with prepend_mod_with]).freeze
 
       DISALLOW_METHODS = Set.new(%i[include extend prepend]).freeze
+
+      COMMENT_OR_EMPTY_LINE = /^\s*(#.*|$)/.freeze
+
+      CHECK_LINE_METHODS_REGEXP = Regexp.union((CHECK_LINE_METHODS + DISALLOW_METHODS).map(&:to_s) + [COMMENT_OR_EMPTY_LINE]).freeze
 
       def ee_const?(node)
         line = node.location.expression.source_line
@@ -42,13 +45,15 @@ module RuboCop
         line = node.location.line
         buffer = node.location.expression.source_buffer
         last_line = buffer.last_line
+        lines = buffer.source.split("\n")
+        # We allow multiple includes, extends and prepends as long as they're all at the end.
+        allowed_line = (line...last_line).all? { |i| CHECK_LINE_METHODS_REGEXP.match?(lines[i - 1]) }
 
-        # Parser treats the final newline (if present) as a separate line,
-        # meaning that a simple `line < last_line` would yield true even though
-        # the expression is the last line _of code_.
-        last_line -= 1 if buffer.source.end_with?("\n")
-
-        add_offense(node, message: INVALID_LINE) if line < last_line
+        if allowed_line
+          ignore_node(node)
+        elsif line < last_line
+          add_offense(node, message: INVALID_LINE)
+        end
       end
 
       def verify_argument_type(node)
@@ -62,10 +67,10 @@ module RuboCop
       def check_method?(node)
         name = node.children[1]
 
-        if CHECK_LINE_METHODS.include?(name) || DISALLOW_METHODS.include?(name)
+        if DISALLOW_METHODS.include?(name)
           ee_const?(node.children[2])
         else
-          false
+          CHECK_LINE_METHODS.include?(name)
         end
       end
 

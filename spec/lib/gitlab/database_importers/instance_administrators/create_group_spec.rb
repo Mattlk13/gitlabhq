@@ -2,7 +2,7 @@
 
 require 'spec_helper'
 
-describe Gitlab::DatabaseImporters::InstanceAdministrators::CreateGroup do
+RSpec.describe Gitlab::DatabaseImporters::InstanceAdministrators::CreateGroup do
   describe '#execute' do
     let(:result) { subject.execute }
 
@@ -38,7 +38,7 @@ describe Gitlab::DatabaseImporters::InstanceAdministrators::CreateGroup do
       end
     end
 
-    context 'with application settings and admin users' do
+    context 'with application settings and admin users', :do_not_mock_admin_mode_setting do
       let(:group) { result[:group] }
       let(:application_setting) { Gitlab::CurrentSettings.current_application_settings }
 
@@ -56,17 +56,17 @@ describe Gitlab::DatabaseImporters::InstanceAdministrators::CreateGroup do
 
       it "tracks successful install" do
         expect(::Gitlab::Tracking).to receive(:event).with(
-          'instance_administrators_group', 'group_created'
+          'instance_administrators_group', 'group_created', namespace: group
         )
 
-        result
+        subject.execute
       end
 
       it 'creates group' do
         expect(result[:status]).to eq(:success)
         expect(group).to be_persisted
-        expect(group.name).to eq('GitLab Instance Administrators')
-        expect(group.path).to start_with('gitlab-instance-administrators')
+        expect(group.name).to eq('GitLab Instance')
+        expect(group.path).to start_with('gitlab-instance')
         expect(group.path.split('-').last.length).to eq(8)
         expect(group.visibility_level).to eq(described_class::VISIBILITY_LEVEL)
       end

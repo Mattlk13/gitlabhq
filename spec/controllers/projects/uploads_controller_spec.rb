@@ -2,7 +2,7 @@
 
 require 'spec_helper'
 
-describe Projects::UploadsController do
+RSpec.describe Projects::UploadsController do
   include WorkhorseHelpers
 
   let(:model) { create(:project, :public) }
@@ -29,7 +29,7 @@ describe Projects::UploadsController do
     let!(:upload) { create(:upload, :issuable_upload, :with_file, model: model) }
     let(:project) { model }
     let(:upload_path) { File.basename(upload.path) }
-    let!(:redirect_route) { project.redirect_routes.create(path: project.full_path + 'old') }
+    let!(:redirect_route) { project.redirect_routes.create!(path: project.full_path + 'old') }
 
     it 'redirects to a file with the proper extension' do
       get :show, params: { namespace_id: project.namespace, project_id: project.to_param + 'old', filename: File.basename(upload.path), secret: upload.secret }

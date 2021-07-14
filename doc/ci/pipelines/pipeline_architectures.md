@@ -1,8 +1,11 @@
 ---
+stage: Verify
+group: Pipeline Execution
+info: To determine the technical writer assigned to the Stage/Group associated with this page, see https://about.gitlab.com/handbook/engineering/ux/technical-writing/#assignments
 type: reference
 ---
 
-# Pipeline Architecture
+# Pipeline architecture **(FREE)**
 
 Pipelines are the fundamental building blocks for CI/CD in GitLab. This page documents
 some of the important concepts related to them.
@@ -11,16 +14,16 @@ There are three main ways to structure your pipelines, each with their
 own advantages. These methods can be mixed and matched if needed:
 
 - [Basic](#basic-pipelines): Good for straightforward projects where all the configuration is in one easy to find place.
-- [Directed Acylic Graph](#directed-acyclic-graph-pipelines): Good for large, complex projects that need efficient execution.
+- [Directed Acyclic Graph](#directed-acyclic-graph-pipelines): Good for large, complex projects that need efficient execution.
 - [Child/Parent Pipelines](#child--parent-pipelines): Good for monorepos and projects with lots of independently defined components.
 
 For more details about
-any of the keywords used below, check out our [CI YAML reference](../yaml/README.md) for details.
+any of the keywords used below, check out our [CI YAML reference](../yaml/index.md) for details.
 
 ## Basic Pipelines
 
-This is the simplest pipeline in GitLab. It will run everything in the build stage concurrently,
-and once all of those finish, it will run everything in the test stage the same way, and so on.
+This is the simplest pipeline in GitLab. It runs everything in the build stage concurrently,
+and once all of those finish, it runs everything in the test stage the same way, and so on.
 It's not the most efficient, and if you have lots of steps it can grow quite complex, but it's
 easier to maintain:
 
@@ -92,13 +95,13 @@ deploy_b:
 ## Directed Acyclic Graph Pipelines
 
 If efficiency is important to you and you want everything to run as quickly as possible,
-you can use [Directed Acylic Graphs (DAG)](../directed_acyclic_graph/index.md). Use the
-[`needs` keyword](../yaml/README.md#needs) to define dependency relationships between
+you can use [Directed Acyclic Graphs (DAG)](../directed_acyclic_graph/index.md). Use the
+[`needs` keyword](../yaml/index.md#needs) to define dependency relationships between
 your jobs. When GitLab knows the relationships between your jobs, it can run everything
 as fast as possible, and even skips into subsequent stages when possible.
 
 In the example below, if `build_a` and `test_a` are much faster than `build_b` and
-`test_b`, GitLab will start `deploy_a` even if `build_b` is still running.
+`test_b`, GitLab starts `deploy_a` even if `build_b` is still running.
 
 ```mermaid
 graph LR
@@ -130,28 +133,28 @@ build_b:
 
 test_a:
   stage: test
-  needs: build_a
+  needs: [build_a]
   script:
     - echo "This test job will start as soon as build_a finishes."
     - echo "It will not wait for build_b, or other jobs in the build stage, to finish."
 
 test_b:
   stage: test
-  needs: build_b
+  needs: [build_b]
   script:
     - echo "This test job will start as soon as build_b finishes."
     - echo "It will not wait for other jobs in the build stage to finish."
 
 deploy_a:
   stage: deploy
-  needs: test_a
+  needs: [test_a]
   script:
     - echo "Since build_a and test_a run quickly, this deploy job can run much earlier."
     - echo "It does not need to wait for build_b or test_b."
 
 deploy_b:
   stage: deploy
-  needs: test_b
+  needs: [test_b]
   script:
     - echo "Since build_b and test_b run slowly, this deploy job will run much later."
 ```
@@ -159,13 +162,13 @@ deploy_b:
 ## Child / Parent Pipelines
 
 In the examples above, it's clear we've got two types of things that could be built independently.
-This is an ideal case for using [Child / Parent Pipelines](../parent_child_pipelines.md)) via
-the [`trigger` keyword](../yaml/README.md#trigger). It will separate out the configuration
+This is an ideal case for using [Child / Parent Pipelines](parent_child_pipelines.md)) via
+the [`trigger` keyword](../yaml/index.md#trigger). It separates out the configuration
 into multiple files, keeping things very simple. You can also combine this with:
 
-- The [`rules` keyword](../yaml/README.md#rules): For example, have the child pipelines triggered only
+- The [`rules` keyword](../yaml/index.md#rules): For example, have the child pipelines triggered only
   when there are changes to that area.
-- The [`include` keyword](../yaml/README.md#include): Bring in common behaviors, ensuring
+- The [`include` keyword](../yaml/index.md#include): Bring in common behaviors, ensuring
   you are not repeating yourself.
 - [DAG pipelines](#directed-acyclic-graph-pipelines) inside of child pipelines, achieving the benefits of both.
 
@@ -196,7 +199,7 @@ trigger_a:
     include: a/.gitlab-ci.yml
   rules:
     - changes:
-      - a/*
+        - a/*
 
 trigger_b:
   stage: triggers
@@ -204,7 +207,7 @@ trigger_b:
     include: b/.gitlab-ci.yml
   rules:
     - changes:
-      - b/*
+        - b/*
 ```
 
 Example child `a` pipeline configuration, located in `/a/.gitlab-ci.yml`, making
@@ -225,13 +228,13 @@ build_a:
 
 test_a:
   stage: test
-  needs: build_a
+  needs: [build_a]
   script:
     - echo "This job tests something."
 
 deploy_a:
   stage: deploy
-  needs: test_a
+  needs: [test_a]
   script:
     - echo "This job deploys something."
 ```
@@ -254,13 +257,13 @@ build_b:
 
 test_b:
   stage: test
-  needs: build_b
+  needs: [build_b]
   script:
     - echo "This job tests something else."
 
 deploy_b:
   stage: deploy
-  needs: test_b
+  needs: [test_b]
   script:
     - echo "This job deploys something else."
 ```

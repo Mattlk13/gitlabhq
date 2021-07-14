@@ -2,153 +2,145 @@
 
 # == Experimentation
 #
-# Utility module used for A/B testing experimental features. Define your experiments in the `EXPERIMENTS` constant.
-# The feature_toggle and environment keys are optional. If the feature_toggle is not set, a feature with the name of
-# the experiment will be checked, with a default value of true. The enabled_ratio is required and should be
-# the ratio for the number of users for which this experiment is enabled. For example: a ratio of 0.1 will
-# enable the experiment for 10% of the users (determined by the `experimentation_subject_index`).
+# Utility module for A/B testing experimental features. Define your experiments in the `EXPERIMENTS` constant.
+# Experiment options:
+# - tracking_category (optional, used to set the category when tracking an experiment event)
+# - use_backwards_compatible_subject_index (optional, set this to true if you need backwards compatibility -- you likely do not need this, see note in the next paragraph.)
+# - rollout_strategy: default is `:cookie` based rollout. We may also set it to `:user` based rollout
 #
+# Using the backwards-compatible subject index (use_backwards_compatible_subject_index option):
+# This option was added when [the calculation of experimentation_subject_index was changed](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/45733/diffs#41af4a6fa5a10c7068559ce21c5188483751d934_157_173). It is not intended to be used by new experiments, it exists merely for the segmentation integrity of in-flight experiments at the time the change was deployed. That is, we want users who were assigned to the "experimental" group or the "control" group before the change to still be in those same groups after the change. See [the original issue](https://gitlab.com/gitlab-org/gitlab/-/issues/270858) and [this related comment](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/48110#note_458223745) for more information.
+#
+# The experiment is controlled by a Feature Flag (https://docs.gitlab.com/ee/development/feature_flags/controls.html),
+# which is named "#{experiment_key}_experiment_percentage" and *must* be set with a percentage and not be used for other purposes.
+#
+# To enable the experiment for 10% of the users:
+#
+# chatops: `/chatops run feature set experiment_key_experiment_percentage 10`
+# console: `Feature.enable_percentage_of_time(:experiment_key_experiment_percentage, 10)`
+#
+# To disable the experiment:
+#
+# chatops: `/chatops run feature delete experiment_key_experiment_percentage`
+# console: `Feature.remove(:experiment_key_experiment_percentage)`
+#
+# To check the current rollout percentage:
+#
+# chatops: `/chatops run feature get experiment_key_experiment_percentage`
+# console: `Feature.get(:experiment_key_experiment_percentage).percentage_of_time_value`
+#
+
+# TODO: see https://gitlab.com/gitlab-org/gitlab/-/issues/217490
 module Gitlab
   module Experimentation
     EXPERIMENTS = {
-      signup_flow: {
-        feature_toggle: :experimental_separate_sign_up_flow,
-        environment: ::Gitlab.dev_env_or_com?,
-        enabled_ratio: 1,
-        tracking_category: 'Growth::Acquisition::Experiment::SignUpFlow'
+      invite_members_empty_group_version_a: {
+        tracking_category: 'Growth::Expansion::Experiment::InviteMembersEmptyGroupVersionA',
+        use_backwards_compatible_subject_index: true
       },
-      paid_signup_flow: {
-        feature_toggle: :paid_signup_flow,
-        environment: ::Gitlab.dev_env_or_com?,
-        enabled_ratio: 0.5,
-        tracking_category: 'Growth::Acquisition::Experiment::PaidSignUpFlow'
+      contact_sales_btn_in_app: {
+        tracking_category: 'Growth::Conversion::Experiment::ContactSalesInApp',
+        use_backwards_compatible_subject_index: true
       },
-      suggest_pipeline: {
-        feature_toggle: :suggest_pipeline,
-        environment: ::Gitlab.dev_env_or_com?,
-        enabled_ratio: 0.1,
-        tracking_category: 'Growth::Expansion::Experiment::SuggestPipeline'
+      remove_known_trial_form_fields: {
+        tracking_category: 'Growth::Conversion::Experiment::RemoveKnownTrialFormFields'
+      },
+      invite_members_new_dropdown: {
+        tracking_category: 'Growth::Expansion::Experiment::InviteMembersNewDropdown'
+      },
+      show_trial_status_in_sidebar: {
+        tracking_category: 'Growth::Conversion::Experiment::ShowTrialStatusInSidebar',
+        rollout_strategy: :group
+      },
+      trial_onboarding_issues: {
+        tracking_category: 'Growth::Conversion::Experiment::TrialOnboardingIssues'
+      },
+      learn_gitlab_a: {
+        tracking_category: 'Growth::Conversion::Experiment::LearnGitLabA',
+        rollout_strategy: :user
+      },
+      learn_gitlab_b: {
+        tracking_category: 'Growth::Activation::Experiment::LearnGitLabB',
+        rollout_strategy: :user
       }
     }.freeze
 
-    # Controller concern that checks if an experimentation_subject_id cookie is present and sets it if absent.
-    # Used for A/B testing of experimental features. Exposes the `experiment_enabled?(experiment_name)` method
-    # to controllers and views. It returns true when the experiment is enabled and the user is selected as part
-    # of the experimental group.
-    #
-    module ControllerConcern
-      extend ActiveSupport::Concern
+    class << self
+      def get_experiment(experiment_key)
+        return unless EXPERIMENTS.key?(experiment_key)
 
-      included do
-        before_action :set_experimentation_subject_id_cookie
-        helper_method :experiment_enabled?
+        ::Gitlab::Experimentation::Experiment.new(experiment_key, **EXPERIMENTS[experiment_key])
       end
 
-      def set_experimentation_subject_id_cookie
-        return if cookies[:experimentation_subject_id].present?
+      def active?(experiment_key)
+        experiment = get_experiment(experiment_key)
+        return false unless experiment
 
-        cookies.permanent.signed[:experimentation_subject_id] = {
-          value: SecureRandom.uuid,
-          domain: :all,
-          secure: ::Gitlab.config.gitlab.https,
-          httponly: true
-        }
+        experiment.active?
       end
 
-      def experiment_enabled?(experiment_key)
-        Experimentation.enabled_for_user?(experiment_key, experimentation_subject_index) || forced_enabled?(experiment_key)
+      def in_experiment_group?(experiment_key, subject:)
+        return false if subject.blank?
+        return false unless active?(experiment_key)
+
+        log_invalid_rollout(experiment_key, subject)
+
+        experiment = get_experiment(experiment_key)
+        return false unless experiment
+
+        experiment.enabled_for_index?(index_for_subject(experiment, subject))
       end
 
-      def track_experiment_event(experiment_key, action, value = nil)
-        track_experiment_event_for(experiment_key, action, value) do |tracking_data|
-          ::Gitlab::Tracking.event(tracking_data.delete(:category), tracking_data.delete(:action), tracking_data)
-        end
+      def rollout_strategy(experiment_key)
+        experiment = get_experiment(experiment_key)
+        return unless experiment
+
+        experiment.rollout_strategy
       end
 
-      def frontend_experimentation_tracking_data(experiment_key, action, value = nil)
-        track_experiment_event_for(experiment_key, action, value) do |tracking_data|
-          gon.push(tracking_data: tracking_data)
+      def log_invalid_rollout(experiment_key, subject)
+        return if valid_subject_for_rollout_strategy?(experiment_key, subject)
+
+        logger = Gitlab::ExperimentationLogger.build
+        logger.warn message: 'Subject must conform to the rollout strategy',
+                     experiment_key: experiment_key,
+                     subject: subject.class.to_s,
+                     rollout_strategy: rollout_strategy(experiment_key)
+      end
+
+      def valid_subject_for_rollout_strategy?(experiment_key, subject)
+        case rollout_strategy(experiment_key)
+        when :user
+          subject.is_a?(User)
+        when :group
+          subject.is_a?(Group)
+        when :cookie
+          subject.nil? || subject.is_a?(String)
+        else
+          false
         end
       end
 
       private
 
-      def experimentation_subject_id
-        cookies.signed[:experimentation_subject_id]
+      def index_for_subject(experiment, subject)
+        index = if experiment.use_backwards_compatible_subject_index
+                  Digest::SHA1.hexdigest(subject_id(subject)).hex
+                else
+                  Zlib.crc32("#{experiment.key}#{subject_id(subject)}")
+                end
+
+        index % 100
       end
 
-      def experimentation_subject_index
-        return if experimentation_subject_id.blank?
-
-        experimentation_subject_id.delete('-').hex % 100
-      end
-
-      def track_experiment_event_for(experiment_key, action, value)
-        return unless Experimentation.enabled?(experiment_key)
-
-        yield experimentation_tracking_data(experiment_key, action, value)
-      end
-
-      def experimentation_tracking_data(experiment_key, action, value)
-        {
-          category: tracking_category(experiment_key),
-          action: action,
-          property: tracking_group(experiment_key),
-          label: experimentation_subject_id,
-          value: value
-        }.compact
-      end
-
-      def tracking_category(experiment_key)
-        Experimentation.experiment(experiment_key).tracking_category
-      end
-
-      def tracking_group(experiment_key)
-        return unless Experimentation.enabled?(experiment_key)
-
-        experiment_enabled?(experiment_key) ? 'experimental_group' : 'control_group'
-      end
-
-      def forced_enabled?(experiment_key)
-        params.has_key?(:force_experiment) && params[:force_experiment] == experiment_key.to_s
-      end
-    end
-
-    class << self
-      def experiment(key)
-        Experiment.new(EXPERIMENTS[key].merge(key: key))
-      end
-
-      def enabled?(experiment_key)
-        return false unless EXPERIMENTS.key?(experiment_key)
-
-        experiment = experiment(experiment_key)
-        experiment.feature_toggle_enabled? && experiment.enabled_for_environment?
-      end
-
-      def enabled_for_user?(experiment_key, experimentation_subject_index)
-        enabled?(experiment_key) &&
-          experiment(experiment_key).enabled_for_experimentation_subject?(experimentation_subject_index)
-      end
-    end
-
-    Experiment = Struct.new(:key, :feature_toggle, :environment, :enabled_ratio, :tracking_category, keyword_init: true) do
-      def feature_toggle_enabled?
-        return Feature.enabled?(key, default_enabled: true) if feature_toggle.nil?
-
-        Feature.enabled?(feature_toggle)
-      end
-
-      def enabled_for_environment?
-        return true if environment.nil?
-
-        environment
-      end
-
-      def enabled_for_experimentation_subject?(experimentation_subject_index)
-        return false if enabled_ratio.nil? || experimentation_subject_index.blank?
-
-        experimentation_subject_index <= enabled_ratio * 100
+      def subject_id(subject)
+        if subject.respond_to?(:to_global_id)
+          subject.to_global_id.to_s
+        elsif subject.respond_to?(:to_s)
+          subject.to_s
+        else
+          raise ArgumentError, 'Subject must respond to `to_global_id` or `to_s`'
+        end
       end
     end
   end

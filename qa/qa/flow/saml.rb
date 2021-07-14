@@ -18,7 +18,9 @@ module QA
         end
       end
 
-      def enable_saml_sso(group, saml_idp_service)
+      def enable_saml_sso(group, saml_idp_service, enforce_sso: false, default_membership_role: 'Guest')
+        Runtime::Feature.enable(:group_administration_nav_item)
+
         page.visit Runtime::Scenario.gitlab_address
 
         Page::Main::Login.perform(&:sign_in_using_credentials) unless Page::Main::Menu.perform(&:signed_in?)
@@ -27,8 +29,10 @@ module QA
 
         Support::Retrier.retry_on_exception do
           EE::Page::Group::Settings::SamlSSO.perform do |saml_sso|
+            saml_sso.enforce_sso if enforce_sso
             saml_sso.set_id_provider_sso_url(saml_idp_service.idp_sso_url)
             saml_sso.set_cert_fingerprint(saml_idp_service.idp_certificate_fingerprint)
+            saml_sso.set_default_membership_role(default_membership_role)
             saml_sso.click_save_changes
 
             saml_sso.user_login_url_link_text
@@ -52,12 +56,10 @@ module QA
       end
 
       def run_saml_idp_service(group_name)
-        service = Service::DockerRun::SamlIdp.new(Runtime::Scenario.gitlab_address, group_name).tap do |runner|
+        Service::DockerRun::SamlIdp.new(Runtime::Scenario.gitlab_address, group_name).tap do |runner|
           runner.pull
           runner.register!
         end
-
-        service
       end
 
       def remove_saml_idp_service(saml_idp_service)

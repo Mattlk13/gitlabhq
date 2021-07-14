@@ -2,7 +2,7 @@
 
 require 'spec_helper'
 
-describe RepositoryCheck::DispatchWorker do
+RSpec.describe RepositoryCheck::DispatchWorker do
   subject { described_class.new }
 
   it 'does nothing when repository checks are disabled' do
@@ -39,6 +39,13 @@ describe RepositoryCheck::DispatchWorker do
 
     it 'only triggers RepositoryCheck::BatchWorker for healthy shards' do
       expect(RepositoryCheck::BatchWorker).to receive(:perform_async).with('default')
+
+      subject.perform
+    end
+
+    it 'logs unhealthy shards' do
+      log_data = { message: "Excluding unhealthy shards", failed_checks: [{ labels: { shard: unhealthy_shard_name }, message: '14:Connect Failed', status: 'failed' }], class: described_class.name }
+      expect(Gitlab::AppLogger).to receive(:error).with(a_hash_including(log_data))
 
       subject.perform
     end

@@ -1,10 +1,27 @@
-.milestone-row {
-  @include str-truncated(90%);
-}
-
 .dashboard .side .card .card-header .input-group {
   .form-control {
     height: 42px;
+  }
+}
+
+.groups-list {
+  @include basic-list;
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+
+  li {
+    .title {
+      font-weight: 600;
+    }
+
+    a {
+      text-decoration: none;
+
+      &:hover {
+        text-decoration: underline;
+      }
+    }
   }
 }
 
@@ -15,158 +32,17 @@
   word-wrap: nowrap;
 }
 
-.content-list .group-name {
-  font-weight: $gl-font-weight-bold;
-  color: $pages-group-name-color;
-}
-
 .group-row {
-  @include basic-list-stats;
-
   .description p {
     margin-bottom: 0;
     color: $gl-text-color-secondary;
   }
 }
 
-.ldap-group-links {
-  .form-actions {
-    margin-bottom: $gl-padding;
-  }
-}
-
-.group-nav-container .nav-controls {
-  .group-filter-form {
-    flex: 1 1 auto;
-    margin-right: $gl-padding-8;
-  }
-
-  .dropdown-menu-right {
-    margin-top: 0;
-  }
-
-  @include media-breakpoint-down(sm) {
-    .dropdown,
-    .dropdown .dropdown-toggle,
-    .btn-success {
-      display: block;
-    }
-
-    .group-filter-form,
-    .dropdown {
-      margin-bottom: 10px;
-      margin-right: 0;
-    }
-
-    &,
-    .group-filter-form,
-    .group-filter-form-field,
-    .dropdown,
-    .dropdown .dropdown-toggle,
-    .btn-success {
-      width: 100%;
-    }
-
-    .dropdown .dropdown-toggle .fa-chevron-down {
-      position: absolute;
-      top: 11px;
-      right: 8px;
-    }
-  }
-}
-
-.home-panel-buttons {
-  .home-panel-action-button {
-    vertical-align: top;
-  }
-
-
-  .notification-dropdown {
-    .dropdown-menu {
-      @extend .dropdown-menu-right;
-    }
-
-    .icon {
-      fill: $gl-text-color-secondary;
-    }
-  }
-
-  .new-project-subgroup {
-    .dropdown-primary {
-      min-width: 115px;
-    }
-
-    .dropdown-toggle {
-      .dropdown-btn-icon {
-        pointer-events: none;
-        color: inherit;
-        margin-left: 0;
-      }
-    }
-
-    .dropdown-menu {
-      min-width: 280px;
-      margin-top: 2px;
-    }
-
-    li:not(.divider) {
-      padding: 0;
-
-      &.droplab-item-selected {
-        .icon-container {
-          .list-item-checkmark {
-            visibility: visible;
-          }
-        }
-      }
-
-      .menu-item {
-        padding: 8px 4px;
-
-        &:hover {
-          background-color: $gray-darker;
-          color: $gray-900;
-        }
-      }
-
-      .icon-container {
-        float: left;
-        padding-left: 6px;
-
-        .list-item-checkmark {
-          visibility: hidden;
-        }
-      }
-
-      .description {
-        font-size: 14px;
-
-        strong {
-          display: block;
-          font-weight: $gl-font-weight-bold;
-        }
-      }
-
-      @include media-breakpoint-down(sm) {
-        display: flex;
-        align-items: flex-start;
-
-        .dropdown-primary {
-          flex: 1;
-        }
-
-        .dropdown-toggle {
-          width: auto;
-        }
-
-        .dropdown-menu {
-          width: 100%;
-          max-width: inherit;
-          min-width: inherit;
-        }
-      }
-    }
-  }
+.save-group-loader {
+  margin-top: $gl-padding-50;
+  margin-bottom: $gl-padding-50;
+  color: $gray-700;
 }
 
 .card {
@@ -180,7 +56,6 @@
 }
 
 .pipeline-quota {
-  border-top: 1px solid $table-border-color;
   border-bottom: 1px solid $table-border-color;
   margin: 0 0 $gl-padding;
 
@@ -201,32 +76,8 @@
   }
 }
 
-.user-settings-pipeline-quota {
-  margin-top: $gl-padding;
-
-  .pipeline-quota {
-    border-top: 0;
-  }
-}
-
 table.pipeline-project-metrics tr td {
   padding: $gl-padding;
-}
-
-.mattermost-icon svg {
-  width: 16px;
-  height: 16px;
-  vertical-align: text-bottom;
-}
-
-.mattermost-team-name {
-  color: $gl-text-color-secondary;
-}
-
-.mattermost-info {
-  display: block;
-  color: $gl-text-color-secondary;
-  margin-top: 10px;
 }
 
 .explore-groups.landing {
@@ -251,11 +102,11 @@ table.pipeline-project-metrics tr td {
 }
 
 .user-access-role {
+  @include gl-px-3;
   display: inline-block;
   color: $gl-text-color-secondary;
   font-size: 12px;
   line-height: 20px;
-  padding: 0 $label-padding;
   border: 1px solid $border-color;
   border-radius: $label-border-radius;
   font-weight: $gl-font-weight-normal;
@@ -305,10 +156,6 @@ table.pipeline-project-metrics tr td {
 
   .folder-caret {
     width: $gl-font-size-large;
-
-    svg {
-      margin-bottom: 2px;
-    }
   }
 
   .item-type-icon {
@@ -320,10 +167,6 @@ table.pipeline-project-metrics tr td {
     .folder-caret {
       opacity: 0;
     }
-  }
-
-  .content-list li:last-child {
-    padding-bottom: 0;
   }
 
   .group-list-tree {
@@ -357,7 +200,7 @@ table.pipeline-project-metrics tr td {
       }
 
       &:last-child::before {
-        background: $white-light;
+        background: $white;
         height: auto;
         top: 30px;
         bottom: 0;
@@ -420,7 +263,7 @@ table.pipeline-project-metrics tr td {
       p {
         @include str-truncated;
 
-        max-width: none;
+        max-width: 100%;
       }
     }
 
@@ -437,27 +280,8 @@ table.pipeline-project-metrics tr td {
         min-width: 30px;
       }
 
-      > span:last-child {
-        margin-right: 0;
-      }
-
       .stat-value {
         margin: 2px 0 0 5px;
-      }
-    }
-
-    .controls {
-      flex-basis: 90px;
-
-      > .btn {
-        margin: 0 $btn-side-margin 0 0;
-        color: $gl-text-color-secondary;
-      }
-    }
-
-    .metadata {
-      @include media-breakpoint-up(md) {
-        flex-basis: 240px;
       }
     }
   }
@@ -467,10 +291,6 @@ table.pipeline-project-metrics tr td {
 
     > span:first-child {
       margin-left: 25px;
-    }
-
-    .item-visibility {
-      margin-right: 0;
     }
 
     .last-updated {

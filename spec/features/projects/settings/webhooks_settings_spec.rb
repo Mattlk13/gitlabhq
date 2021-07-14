@@ -2,7 +2,7 @@
 
 require 'spec_helper'
 
-describe 'Projects > Settings > Webhook Settings' do
+RSpec.describe 'Projects > Settings > Webhook Settings' do
   let(:project) { create(:project) }
   let(:user) { create(:user) }
   let(:webhooks_path) { project_hooks_path(project) }
@@ -45,6 +45,7 @@ describe 'Projects > Settings > Webhook Settings' do
         expect(page).to have_content('Merge requests events')
         expect(page).to have_content('Pipeline events')
         expect(page).to have_content('Wiki page events')
+        expect(page).to have_content('Releases events')
       end
 
       it 'create webhook' do

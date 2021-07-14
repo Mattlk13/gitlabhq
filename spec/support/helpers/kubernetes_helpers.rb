@@ -3,12 +3,22 @@
 module KubernetesHelpers
   include Gitlab::Kubernetes
 
+  NODE_NAME = "gke-cluster-applications-default-pool-49b7f225-v527"
+
   def kube_response(body)
     { body: body.to_json }
   end
 
   def kube_pods_response
     kube_response(kube_pods_body)
+  end
+
+  def nodes_response
+    kube_response(nodes_body)
+  end
+
+  def nodes_metrics_response
+    kube_response(nodes_metrics_body)
   end
 
   def kube_pod_response
@@ -23,6 +33,10 @@ module KubernetesHelpers
     kube_response(kube_deployments_body)
   end
 
+  def kube_ingresses_response(with_canary: false)
+    kube_response(kube_ingresses_body(with_canary: with_canary))
+  end
+
   def stub_kubeclient_discover_base(api_url)
     WebMock.stub_request(:get, api_url + '/api/v1').to_return(kube_response(kube_v1_discovery_body))
     WebMock
@@ -34,6 +48,9 @@ module KubernetesHelpers
     WebMock
       .stub_request(:get, api_url + '/apis/rbac.authorization.k8s.io/v1')
       .to_return(kube_response(kube_v1_rbac_authorization_discovery_body))
+    WebMock
+      .stub_request(:get, api_url + '/apis/metrics.k8s.io/v1beta1')
+      .to_return(kube_response(kube_metrics_v1beta1_discovery_body))
   end
 
   def stub_kubeclient_discover_istio(api_url)
@@ -50,6 +67,9 @@ module KubernetesHelpers
     WebMock
       .stub_request(:get, api_url + '/apis/serving.knative.dev/v1alpha1')
       .to_return(kube_response(kube_v1alpha1_serving_knative_discovery_body))
+    WebMock
+      .stub_request(:get, api_url + '/apis/networking.k8s.io/v1')
+      .to_return(kube_response(kube_v1_networking_discovery_body))
   end
 
   def stub_kubeclient_discover_knative_not_found(api_url)
@@ -74,6 +94,22 @@ module KubernetesHelpers
     pods_url = service.api_url + "/api/v1/#{namespace_path}pods"
 
     WebMock.stub_request(:get, pods_url).to_return(response || kube_pods_response)
+  end
+
+  def stub_kubeclient_nodes(api_url)
+    stub_kubeclient_discover_base(api_url)
+
+    nodes_url = api_url + "/api/v1/nodes"
+
+    WebMock.stub_request(:get, nodes_url).to_return(nodes_response)
+  end
+
+  def stub_kubeclient_nodes_and_nodes_metrics(api_url)
+    stub_kubeclient_nodes(api_url)
+
+    nodes_url = api_url + "/apis/metrics.k8s.io/v1beta1/nodes"
+
+    WebMock.stub_request(:get, nodes_url).to_return(nodes_metrics_response)
   end
 
   def stub_kubeclient_pods(namespace, status: nil)
@@ -119,12 +155,20 @@ module KubernetesHelpers
     WebMock.stub_request(:get, deployments_url).to_return(response || kube_deployments_response)
   end
 
+  def stub_kubeclient_ingresses(namespace, status: nil, method: :get, resource_path: "", response: kube_ingresses_response)
+    stub_kubeclient_discover(service.api_url)
+    ingresses_url = service.api_url + "/apis/extensions/v1beta1/namespaces/#{namespace}/ingresses#{resource_path}"
+    response = { status: status } if status
+
+    WebMock.stub_request(method, ingresses_url).to_return(response)
+  end
+
   def stub_kubeclient_knative_services(options = {})
     namespace_path = options[:namespace].present? ? "namespaces/#{options[:namespace]}/" : ""
 
     options[:name] ||= "kubetest"
     options[:domain] ||= "example.com"
-    options[:response] ||= kube_response(kube_knative_services_body(options))
+    options[:response] ||= kube_response(kube_knative_services_body(**options))
 
     stub_kubeclient_discover(service.api_url)
 
@@ -201,28 +245,13 @@ module KubernetesHelpers
       .to_return(kube_response({}))
   end
 
-  def stub_kubeclient_get_cluster_role_binding_error(api_url, name, status: 404)
-    WebMock.stub_request(:get, api_url + "/apis/rbac.authorization.k8s.io/v1/clusterrolebindings/#{name}")
-      .to_return(status: [status, "Internal Server Error"])
-  end
-
-  def stub_kubeclient_create_cluster_role_binding(api_url)
-    WebMock.stub_request(:post, api_url + '/apis/rbac.authorization.k8s.io/v1/clusterrolebindings')
+  def stub_kubeclient_put_cluster_role_binding(api_url, name)
+    WebMock.stub_request(:put, api_url + "/apis/rbac.authorization.k8s.io/v1/clusterrolebindings/#{name}")
       .to_return(kube_response({}))
   end
 
-  def stub_kubeclient_get_role_binding(api_url, name, namespace: 'default')
-    WebMock.stub_request(:get, api_url + "/apis/rbac.authorization.k8s.io/v1/namespaces/#{namespace}/rolebindings/#{name}")
-      .to_return(kube_response({}))
-  end
-
-  def stub_kubeclient_get_role_binding_error(api_url, name, namespace: 'default', status: 404)
-    WebMock.stub_request(:get, api_url + "/apis/rbac.authorization.k8s.io/v1/namespaces/#{namespace}/rolebindings/#{name}")
-      .to_return(status: [status, "Internal Server Error"])
-  end
-
-  def stub_kubeclient_create_role_binding(api_url, namespace: 'default')
-    WebMock.stub_request(:post, api_url + "/apis/rbac.authorization.k8s.io/v1/namespaces/#{namespace}/rolebindings")
+  def stub_kubeclient_delete_role_binding(api_url, name, namespace: 'default')
+    WebMock.stub_request(:delete, api_url + "/apis/rbac.authorization.k8s.io/v1/namespaces/#{namespace}/rolebindings/#{name}")
       .to_return(kube_response({}))
   end
 
@@ -256,7 +285,7 @@ module KubernetesHelpers
       .to_return(kube_response({}))
   end
 
-  def kube_v1_secret_body(**options)
+  def kube_v1_secret_body(options)
     {
       "kind" => "SecretList",
       "apiVersion": "v1",
@@ -274,6 +303,7 @@ module KubernetesHelpers
     {
       "kind" => "APIResourceList",
       "resources" => [
+        { "name" => "nodes", "namespaced" => false, "kind" => "Node" },
         { "name" => "pods", "namespaced" => true, "kind" => "Pod" },
         { "name" => "deployments", "namespaced" => true, "kind" => "Deployment" },
         { "name" => "secrets", "namespaced" => true, "kind" => "Secret" },
@@ -291,6 +321,14 @@ module KubernetesHelpers
       "resources" => [
         { "name" => "ingresses", "namespaced" => true, "kind" => "Deployment" }
       ]
+    }
+  end
+
+  # From Kubernetes 1.22+ Ingresses are no longer served from apis/extensions
+  def kube_1_22_extensions_v1beta1_discovery_body
+    {
+      "kind" => "APIResourceList",
+      "resources" => []
     }
   end
 
@@ -330,6 +368,16 @@ module KubernetesHelpers
         { "name" => "clusterroles", "namespaced" => false, "kind" => "ClusterRole" },
         { "name" => "rolebindings", "namespaced" => true, "kind" => "RoleBinding" },
         { "name" => "roles", "namespaced" => true, "kind" => "Role" }
+      ]
+    }
+  end
+
+  def kube_metrics_v1beta1_discovery_body
+    {
+      "kind" => "APIResourceList",
+      "resources" => [
+        { "name" => "nodes", "namespaced" => false, "kind" => "NodeMetrics" },
+        { "name" => "pods", "namespaced" => true, "kind" => "PodMetrics" }
       ]
     }
   end
@@ -392,6 +440,17 @@ module KubernetesHelpers
           "shortNames" => %w[vs],
           "categories" => %w[istio-io networking-istio-io]
         }
+      ]
+    }
+  end
+
+  def kube_v1_networking_discovery_body
+    {
+      "kind" => "APIResourceList",
+      "apiVersion" => "v1",
+      "groupVersion" => "networking.k8s.io/v1",
+      "resources" => [
+        { "name" => "ingresses", "namespaced" => true, "kind" => "Ingress" }
       ]
     }
   end
@@ -462,6 +521,20 @@ module KubernetesHelpers
     }
   end
 
+  def nodes_body
+    {
+      "kind" => "NodeList",
+      "items" => [kube_node]
+    }
+  end
+
+  def nodes_metrics_body
+    {
+      "kind" => "List",
+      "items" => [kube_node_metrics]
+    }
+  end
+
   def kube_logs_body
     "2019-12-13T14:04:22.123456Z Log 1\n2019-12-13T14:04:23.123456Z Log 2\n2019-12-13T14:04:24.123456Z Log 3"
   end
@@ -470,6 +543,15 @@ module KubernetesHelpers
     {
       "kind" => "DeploymentList",
       "items" => [kube_deployment]
+    }
+  end
+
+  def kube_ingresses_body(with_canary: false)
+    items = with_canary ? [kube_ingress, kube_ingress(track: :canary)] : [kube_ingress]
+
+    {
+      "kind" => "List",
+      "items" => items
     }
   end
 
@@ -483,13 +565,13 @@ module KubernetesHelpers
   def kube_knative_services_body(**options)
     {
       "kind" => "List",
-      "items" => [knative_09_service(options)]
+      "items" => [knative_09_service(**options)]
     }
   end
 
   # This is a partial response, it will have many more elements in reality but
   # these are the ones we care about at the moment
-  def kube_pod(name: "kube-pod", environment_slug: "production", namespace: "project-namespace", project_slug: "project-path-slug", status: "Running", track: nil)
+  def kube_pod(name: "kube-pod", container_name: "container-0", environment_slug: "production", namespace: "project-namespace", project_slug: "project-path-slug", status: "Running", track: nil)
     {
       "metadata" => {
         "name" => name,
@@ -506,11 +588,77 @@ module KubernetesHelpers
       },
       "spec" => {
         "containers" => [
-          { "name" => "container-0" },
-          { "name" => "container-1" }
+          { "name" => "#{container_name}" },
+          { "name" => "#{container_name}-1" }
         ]
       },
       "status" => { "phase" => status }
+    }
+  end
+
+  def kube_ingress(track: :stable)
+    additional_annotations =
+      if track == :canary
+        {
+          "nginx.ingress.kubernetes.io/canary" => "true",
+          "nginx.ingress.kubernetes.io/canary-by-header" => "canary",
+          "nginx.ingress.kubernetes.io/canary-weight" => "50"
+        }
+      else
+        {}
+      end
+
+    {
+      "metadata" => {
+        "name" => "production-auto-deploy",
+        "labels" => {
+          "app" => "production",
+          "app.kubernetes.io/managed-by" => "Helm",
+          "chart" => "auto-deploy-app-2.0.0-beta.2",
+          "heritage" => "Helm",
+          "release" => "production"
+        },
+        "annotations" => {
+          "kubernetes.io/ingress.class" => "nginx",
+          "kubernetes.io/tls-acme" => "true",
+          "meta.helm.sh/release-name" => "production",
+          "meta.helm.sh/release-namespace" => "awesome-app-1-production"
+        }.merge(additional_annotations)
+      }
+    }
+  end
+
+  # This is a partial response, it will have many more elements in reality but
+  # these are the ones we care about at the moment
+  def kube_node
+    {
+      "metadata" => {
+        "name" => NODE_NAME
+      },
+      "status" => {
+        "capacity" => {
+          "cpu" => "2",
+          "memory" => "7657228Ki"
+        },
+        "allocatable" => {
+          "cpu" => "1930m",
+          "memory" => "5777164Ki"
+        }
+      }
+    }
+  end
+
+  # This is a partial response, it will have many more elements in reality but
+  # these are the ones we care about at the moment
+  def kube_node_metrics
+    {
+      "metadata" => {
+        "name" => NODE_NAME
+      },
+      "usage" => {
+        "cpu" => "144208668n",
+        "memory" => "1789048Ki"
+      }
     }
   end
 
@@ -536,7 +684,7 @@ module KubernetesHelpers
     }
   end
 
-  def kube_deployment(name: "kube-deployment", environment_slug: "production", project_slug: "project-path-slug", track: nil)
+  def kube_deployment(name: "kube-deployment", environment_slug: "production", project_slug: "project-path-slug", track: nil, replicas: 3)
     {
       "metadata" => {
         "name" => name,
@@ -549,7 +697,7 @@ module KubernetesHelpers
           "track" => track
         }.compact
       },
-      "spec" => { "replicas" => 3 },
+      "spec" => { "replicas" => replicas },
       "status" => {
         "observedGeneration" => 4
       }
@@ -794,8 +942,8 @@ module KubernetesHelpers
     end
   end
 
-  def kube_deployment_rollout_status
-    ::Gitlab::Kubernetes::RolloutStatus.from_deployments(kube_deployment)
+  def kube_deployment_rollout_status(ingresses: [])
+    ::Gitlab::Kubernetes::RolloutStatus.from_deployments(kube_deployment, ingresses: ingresses)
   end
 
   def empty_deployment_rollout_status

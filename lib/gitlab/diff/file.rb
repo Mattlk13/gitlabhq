@@ -225,20 +225,32 @@ module Gitlab
         new_path.presence || old_path
       end
 
+      def file_hash
+        Digest::SHA1.hexdigest(file_path)
+      end
+
       def added_lines
-        @stats&.additions || diff_lines.count(&:added?)
+        strong_memoize(:added_lines) do
+          @stats&.additions || diff_lines.count(&:added?)
+        end
       end
 
       def removed_lines
-        @stats&.deletions || diff_lines.count(&:removed?)
+        strong_memoize(:removed_lines) do
+          @stats&.deletions || diff_lines.count(&:removed?)
+        end
       end
 
       def file_identifier
         "#{file_path}-#{new_file?}-#{deleted_file?}-#{renamed_file?}"
       end
 
+      def file_identifier_hash
+        Digest::SHA1.hexdigest(file_identifier)
+      end
+
       def diffable?
-        repository.attributes(file_path).fetch('diff') { true }
+        diffable_by_attribute? && !text_with_binary_notice?
       end
 
       def binary_in_repo?
@@ -314,6 +326,10 @@ module Gitlab
         @rich_viewer = rich_viewer_class&.new(self)
       end
 
+      def alternate_viewer
+        alternate_viewer_class&.new(self)
+      end
+
       def rendered_as_text?(ignore_errors: true)
         simple_viewer.is_a?(DiffViewer::Text) && (ignore_errors || simple_viewer.render_error.nil?)
       end
@@ -350,10 +366,19 @@ module Gitlab
 
       private
 
+      def diffable_by_attribute?
+        repository.attributes(file_path).fetch('diff') { true }
+      end
+
+      # NOTE: Files with unsupported encodings (e.g. UTF-16) are treated as binary by git, but they are recognized as text files during encoding detection. These files have `Binary files a/filename and b/filename differ' as their raw diff content which cannot be used. We need to handle this special case and avoid displaying incorrect diff.
+      def text_with_binary_notice?
+        text? && has_binary_notice?
+      end
+
       def fetch_blob(sha, path)
         return unless sha
 
-        Blob.lazy(repository.project, sha, path)
+        Blob.lazy(repository, sha, path)
       end
 
       def total_blob_lines(blob)
@@ -419,6 +444,17 @@ module Gitlab
         return if collapsed?
         return unless diffable?
         return unless modified_file?
+
+        find_renderable_viewer_class(classes)
+      end
+
+      def alternate_viewer_class
+        return unless viewer.instance_of?(DiffViewer::Renamed)
+
+        find_renderable_viewer_class(RICH_VIEWERS) || (DiffViewer::Text if text?)
+      end
+
+      def find_renderable_viewer_class(classes)
         return if different_type? || external_storage_error?
 
         verify_binary = !stored_externally?

@@ -5,36 +5,89 @@
 module Metrics
   module Dashboard
     class CloneDashboardService < ::BaseService
+      include Stepable
+      include Gitlab::Utils::StrongMemoize
+
       ALLOWED_FILE_TYPE = '.yml'
-      USER_DASHBOARDS_DIR = ::Metrics::Dashboard::ProjectDashboardService::DASHBOARD_ROOT
+      USER_DASHBOARDS_DIR = ::Gitlab::Metrics::Dashboard::RepoDashboardFinder::DASHBOARD_ROOT
+      SEQUENCES = {
+        ::Metrics::Dashboard::SystemDashboardService::DASHBOARD_PATH => [
+          ::Gitlab::Metrics::Dashboard::Stages::CommonMetricsInserter,
+          ::Gitlab::Metrics::Dashboard::Stages::CustomMetricsInserter
+        ].freeze,
 
-      class << self
-        def allowed_dashboard_templates
-          @allowed_dashboard_templates ||= Set[::Metrics::Dashboard::SystemDashboardService::DASHBOARD_PATH].freeze
-        end
+        ::Metrics::Dashboard::SelfMonitoringDashboardService::DASHBOARD_PATH => [
+          ::Gitlab::Metrics::Dashboard::Stages::CustomMetricsInserter
+        ].freeze,
 
-        def sequences
-          @sequences ||= {
-            ::Metrics::Dashboard::SystemDashboardService::DASHBOARD_PATH => [::Gitlab::Metrics::Dashboard::Stages::CommonMetricsInserter,
-                                                                             ::Gitlab::Metrics::Dashboard::Stages::ProjectMetricsInserter,
-                                                                             ::Gitlab::Metrics::Dashboard::Stages::Sorter].freeze
-          }.freeze
-        end
-      end
+        ::Metrics::Dashboard::ClusterDashboardService::DASHBOARD_PATH => [
+          ::Gitlab::Metrics::Dashboard::Stages::CommonMetricsInserter
+        ].freeze
+      }.freeze
+
+      steps :check_push_authorized,
+            :check_branch_name,
+            :check_file_type,
+            :check_dashboard_template,
+            :create_file,
+            :refresh_repository_method_caches
 
       def execute
-        catch(:error) do
-          throw(:error, error(_(%q(You can't commit to this project)), :forbidden)) unless push_authorized?
-
-          result = ::Files::CreateService.new(project, current_user, dashboard_attrs).execute
-          throw(:error, wrap_error(result)) unless result[:status] == :success
-
-          repository.refresh_method_caches([:metrics_dashboard])
-          success(result.merge(http_status: :created, dashboard: dashboard_details))
-        end
+        execute_steps
       end
 
       private
+
+      def check_push_authorized(result)
+        return error(_('You are not allowed to push into this branch. Create another branch or open a merge request.'), :forbidden) unless push_authorized?
+
+        success(result)
+      end
+
+      def check_branch_name(result)
+        return error(_('There was an error creating the dashboard, branch name is invalid.'), :bad_request) unless valid_branch_name?
+        return error(_('There was an error creating the dashboard, branch named: %{branch} already exists.') % { branch: params[:branch] }, :bad_request) unless new_or_default_branch?
+
+        success(result)
+      end
+
+      def check_file_type(result)
+        return error(_('The file name should have a .yml extension'), :bad_request) unless target_file_type_valid?
+
+        success(result)
+      end
+
+      # Only allow out of the box metrics dashboards to be cloned. This can be
+      # changed to allow cloning of any metrics dashboard, if desired.
+      # However, only metrics dashboards should be allowed. If any file is
+      # allowed to be cloned, this will become a security risk.
+      def check_dashboard_template(result)
+        return error(_('Not found.'), :not_found) unless dashboard_service&.out_of_the_box_dashboard?
+
+        success(result)
+      end
+
+      def create_file(result)
+        create_file_response = ::Files::CreateService.new(project, current_user, dashboard_attrs).execute
+
+        if create_file_response[:status] == :success
+          success(result.merge(create_file_response))
+        else
+          wrap_error(create_file_response)
+        end
+      end
+
+      def refresh_repository_method_caches(result)
+        repository.refresh_method_caches([:metrics_dashboard])
+
+        success(result.merge(http_status: :created, dashboard: dashboard_details))
+      end
+
+      def dashboard_service
+        strong_memoize(:dashboard_service) do
+          Gitlab::Metrics::Dashboard::ServiceSelector.call(dashboard_service_options)
+        end
+      end
 
       def dashboard_attrs
         {
@@ -50,31 +103,22 @@ module Metrics
       def dashboard_details
         {
           path: new_dashboard_path,
-          display_name: ::Metrics::Dashboard::ProjectDashboardService.name_for_path(new_dashboard_path),
+          display_name: ::Metrics::Dashboard::CustomDashboardService.name_for_path(new_dashboard_path),
           default: false,
           system_dashboard: false
         }
       end
 
       def push_authorized?
-        Gitlab::UserAccess.new(current_user, project: project).can_push_to_branch?(branch)
+        Gitlab::UserAccess.new(current_user, container: project).can_push_to_branch?(branch)
       end
 
       def dashboard_template
-        @dashboard_template ||= begin
-          throw(:error, error(_('Not found.'), :not_found)) unless self.class.allowed_dashboard_templates.include?(params[:dashboard])
-
-          params[:dashboard]
-        end
+        @dashboard_template ||= params[:dashboard]
       end
 
       def branch
-        @branch ||= begin
-          throw(:error, error(_('There was an error creating the dashboard, branch name is invalid.'), :bad_request)) unless valid_branch_name?
-          throw(:error, error(_('There was an error creating the dashboard, branch named: %{branch} already exists.') % { branch: params[:branch] }, :bad_request)) unless new_or_default_branch? # temporary validation for first UI iteration
-
-          params[:branch]
-        end
+        @branch ||= params[:branch]
       end
 
       def new_or_default_branch?
@@ -90,15 +134,19 @@ module Metrics
       end
 
       def file_name
-        @file_name ||= begin
-          throw(:error, error(_('The file name should have a .yml extension'), :bad_request)) unless target_file_type_valid?
-
-          File.basename(params[:file_name])
-        end
+        @file_name ||= File.basename(params[:file_name])
       end
 
       def target_file_type_valid?
         File.extname(params[:file_name]) == ALLOWED_FILE_TYPE
+      end
+
+      def wrap_error(result)
+        if result[:message] == 'A file with this name already exists'
+          error(_("A file with '%{file_name}' already exists in %{branch} branch") % { file_name: file_name, branch: branch }, :bad_request)
+        else
+          result
+        end
       end
 
       def new_dashboard_content
@@ -111,23 +159,20 @@ module Metrics
         @repository ||= project.repository
       end
 
-      def wrap_error(result)
-        if result[:message] == 'A file with this name already exists'
-          error(_("A file with '%{file_name}' already exists in %{branch} branch") % { file_name: file_name, branch: branch }, :bad_request)
-        else
-          result
-        end
+      def raw_dashboard
+        dashboard_service.new(project, current_user, dashboard_service_options).raw_dashboard
       end
 
-      def raw_dashboard
-        YAML.safe_load(File.read(Rails.root.join(dashboard_template)))
+      def dashboard_service_options
+        {
+          embedded: false,
+          dashboard_path: dashboard_template
+        }
       end
 
       def sequence
-        self.class.sequences[dashboard_template]
+        SEQUENCES[dashboard_template] || []
       end
     end
   end
 end
-
-Metrics::Dashboard::CloneDashboardService.prepend_if_ee('EE::Metrics::Dashboard::CloneDashboardService')

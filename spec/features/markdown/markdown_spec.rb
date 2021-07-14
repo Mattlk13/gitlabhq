@@ -26,7 +26,7 @@ require 'erb'
 #
 # See the MarkdownFeature class for setup details.
 
-describe 'GitLab Markdown', :aggregate_failures do
+RSpec.describe 'GitLab Markdown', :aggregate_failures do
   include Capybara::Node::Matchers
   include MarkupHelper
   include MarkdownMatchers
@@ -63,8 +63,8 @@ describe 'GitLab Markdown', :aggregate_failures do
       end
 
       aggregate_failures 'parses fenced code blocks' do
-        expect(doc).to have_selector('pre.code.highlight.js-syntax-highlight.c')
-        expect(doc).to have_selector('pre.code.highlight.js-syntax-highlight.python')
+        expect(doc).to have_selector('pre.code.highlight.js-syntax-highlight.language-c')
+        expect(doc).to have_selector('pre.code.highlight.js-syntax-highlight.language-python')
       end
 
       aggregate_failures 'parses mermaid code block' do
@@ -206,6 +206,9 @@ describe 'GitLab Markdown', :aggregate_failures do
     # `markdown` helper expects a `@project` and `@group` variable
     @project = @feat.project
     @group = @feat.group
+
+    stub_application_setting(plantuml_enabled: true, plantuml_url: 'http://localhost:8080')
+    stub_application_setting(kroki_enabled: true, kroki_url: 'http://localhost:8000')
   end
 
   let(:project) { @feat.project } # Shadow this so matchers can use it
@@ -247,6 +250,7 @@ describe 'GitLab Markdown', :aggregate_failures do
         expect(doc).to reference_commits
         expect(doc).to reference_labels
         expect(doc).to reference_milestones
+        expect(doc).to reference_alerts
       end
 
       aggregate_failures 'TaskListFilter' do
@@ -264,20 +268,33 @@ describe 'GitLab Markdown', :aggregate_failures do
       aggregate_failures 'ColorFilter' do
         expect(doc).to parse_colors
       end
+
+      aggregate_failures 'MermaidFilter' do
+        expect(doc).to parse_mermaid
+      end
+
+      aggregate_failures 'PlantumlFilter' do
+        expect(doc).to parse_plantuml
+      end
+
+      aggregate_failures 'KrokiFilter' do
+        expect(doc).to parse_kroki
+      end
     end
   end
 
   context 'wiki pipeline' do
     before do
-      @project_wiki = @feat.project_wiki
-      @project_wiki_page = @feat.project_wiki_page
+      @wiki = @feat.wiki
+      @wiki_page = @feat.wiki_page
 
-      path = 'images/example.jpg'
-      gitaly_wiki_file = Gitlab::GitalyClient::WikiFile.new(path: path)
-      expect(@project_wiki).to receive(:find_file).with(path).and_return(Gitlab::Git::WikiFile.new(gitaly_wiki_file))
-      allow(@project_wiki).to receive(:wiki_base_path) { '/namespace1/gitlabhq/wikis' }
+      name = 'example.jpg'
+      path = "images/#{name}"
+      blob = double(name: name, path: path, mime_type: 'image/jpeg', data: nil)
+      expect(@wiki).to receive(:find_file).with(path, load_content: false).and_return(Gitlab::Git::WikiFile.new(blob))
+      allow(@wiki).to receive(:wiki_base_path) { '/namespace1/gitlabhq/wikis' }
 
-      @html = markdown(@feat.raw_markdown, { pipeline: :wiki, project_wiki: @project_wiki, page_slug: @project_wiki_page.slug })
+      @html = markdown(@feat.raw_markdown, { pipeline: :wiki, wiki: @wiki, page_slug: @wiki_page.slug })
     end
 
     it_behaves_like 'all pipelines'
@@ -336,6 +353,18 @@ describe 'GitLab Markdown', :aggregate_failures do
 
       aggregate_failures 'ColorFilter' do
         expect(doc).to parse_colors
+      end
+
+      aggregate_failures 'MermaidFilter' do
+        expect(doc).to parse_mermaid
+      end
+
+      aggregate_failures 'PlantumlFilter' do
+        expect(doc).to parse_plantuml
+      end
+
+      aggregate_failures 'KrokiFilter' do
+        expect(doc).to parse_kroki
       end
     end
   end

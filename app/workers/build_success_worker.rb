@@ -2,10 +2,12 @@
 
 class BuildSuccessWorker # rubocop:disable Scalability/IdempotentWorker
   include ApplicationWorker
+
+  sidekiq_options retry: 3
   include PipelineQueue
 
   queue_namespace :pipeline_processing
-  latency_sensitive_worker!
+  urgency :high
 
   # rubocop: disable CodeReuse/ActiveRecord
   def perform(build_id)

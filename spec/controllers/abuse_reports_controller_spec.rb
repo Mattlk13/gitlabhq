@@ -2,7 +2,7 @@
 
 require 'spec_helper'
 
-describe AbuseReportsController do
+RSpec.describe AbuseReportsController do
   let(:reporter) { create(:user) }
   let(:user)     { create(:user) }
   let(:attrs) do
@@ -56,10 +56,10 @@ describe AbuseReportsController do
         post :create, params: { abuse_report: attrs }
       end
 
-      it 'redirects back to the reported user' do
+      it 'redirects back to root' do
         post :create, params: { abuse_report: attrs }
 
-        expect(response).to redirect_to user
+        expect(response).to redirect_to root_path
       end
     end
 

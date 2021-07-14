@@ -27,15 +27,15 @@ module Ci
 
       stop_actions.each do |stop_action|
         stop_action.play(stop_action.user)
-      rescue => e
-        Gitlab::ErrorTracking.track_error(e, deployable_id: stop_action.id)
+      rescue StandardError => e
+        Gitlab::ErrorTracking.track_exception(e, deployable_id: stop_action.id)
       end
     end
 
     private
 
     def environments
-      @environments ||= EnvironmentsFinder
+      @environments ||= Environments::EnvironmentsByDeploymentsFinder
         .new(project, current_user, ref: @ref, recently_updated: true)
         .execute
     end

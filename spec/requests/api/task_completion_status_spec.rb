@@ -2,7 +2,7 @@
 
 require 'spec_helper'
 
-describe 'task completion status response' do
+RSpec.describe 'task completion status response' do
   let_it_be(:user) { create(:user) }
   let_it_be(:project) do
     create(:project, :public, creator_id: user.id, namespace: user.namespace)
@@ -57,7 +57,7 @@ describe 'task completion status response' do
           get api("#{path}?iids[]=#{taskable.iid}", user)
         end
 
-        it { expect(response).to have_gitlab_http_status(200) }
+        it { expect(response).to have_gitlab_http_status(:ok) }
 
         it 'returns the expected results' do
           expect(json_response).to be_an Array

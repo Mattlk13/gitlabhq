@@ -3,7 +3,7 @@
 require 'spec_helper'
 require 'mime/types'
 
-describe API::Commits do
+RSpec.describe API::Commits do
   include ProjectForksHelper
 
   let(:user) { create(:user) }
@@ -36,13 +36,9 @@ describe API::Commits do
       end
 
       it 'include correct pagination headers' do
-        commit_count = project.repository.count_commits(ref: 'master').to_s
-
         get api(route, current_user)
 
-        expect(response).to include_pagination_headers
-        expect(response.headers['X-Total']).to eq(commit_count)
-        expect(response.headers['X-Page']).to eql('1')
+        expect(response).to include_limited_pagination_headers
       end
     end
 
@@ -79,12 +75,10 @@ describe API::Commits do
         it 'include correct pagination headers' do
           commits = project.repository.commits("master", limit: 2)
           after = commits.second.created_at
-          commit_count = project.repository.count_commits(ref: 'master', after: after).to_s
 
           get api("/projects/#{project_id}/repository/commits?since=#{after.utc.iso8601}", user)
 
-          expect(response).to include_pagination_headers
-          expect(response.headers['X-Total']).to eq(commit_count)
+          expect(response).to include_limited_pagination_headers
           expect(response.headers['X-Page']).to eql('1')
         end
       end
@@ -109,12 +103,10 @@ describe API::Commits do
         it 'include correct pagination headers' do
           commits = project.repository.commits("master", limit: 2)
           before = commits.second.created_at
-          commit_count = project.repository.count_commits(ref: 'master', before: before).to_s
 
           get api("/projects/#{project_id}/repository/commits?until=#{before.utc.iso8601}", user)
 
-          expect(response).to include_pagination_headers
-          expect(response.headers['X-Total']).to eq(commit_count)
+          expect(response).to include_limited_pagination_headers
           expect(response.headers['X-Page']).to eql('1')
         end
       end
@@ -137,49 +129,49 @@ describe API::Commits do
       context "path optional parameter" do
         it "returns project commits matching provided path parameter" do
           path = 'files/ruby/popen.rb'
-          commit_count = project.repository.count_commits(ref: 'master', path: path).to_s
 
           get api("/projects/#{project_id}/repository/commits?path=#{path}", user)
 
           expect(json_response.size).to eq(3)
           expect(json_response.first["id"]).to eq("570e7b2abdd848b95f2f578043fc23bd6f6fd24d")
-          expect(response).to include_pagination_headers
-          expect(response.headers['X-Total']).to eq(commit_count)
+          expect(response).to include_limited_pagination_headers
         end
 
         it 'include correct pagination headers' do
           path = 'files/ruby/popen.rb'
-          commit_count = project.repository.count_commits(ref: 'master', path: path).to_s
 
           get api("/projects/#{project_id}/repository/commits?path=#{path}", user)
 
-          expect(response).to include_pagination_headers
-          expect(response.headers['X-Total']).to eq(commit_count)
+          expect(response).to include_limited_pagination_headers
           expect(response.headers['X-Page']).to eql('1')
         end
       end
 
       context 'all optional parameter' do
         it 'returns all project commits' do
-          commit_count = project.repository.count_commits(all: true)
+          expected_commit_ids = project.repository.commits(nil, all: true, limit: 50).map(&:id)
 
-          get api("/projects/#{project_id}/repository/commits?all=true", user)
+          get api("/projects/#{project_id}/repository/commits?all=true&per_page=50", user)
 
-          expect(response).to include_pagination_headers
-          expect(response.headers['X-Total']).to eq(commit_count.to_s)
+          commit_ids = json_response.map { |c| c['id'] }
+
+          expect(response).to include_limited_pagination_headers
+          expect(commit_ids).to eq(expected_commit_ids)
           expect(response.headers['X-Page']).to eql('1')
         end
       end
 
       context 'first_parent optional parameter' do
         it 'returns all first_parent commits' do
-          commit_count = project.repository.count_commits(ref: SeedRepo::Commit::ID, first_parent: true)
+          expected_commit_ids = project.repository.commits(SeedRepo::Commit::ID, limit: 50, first_parent: true).map(&:id)
 
-          get api("/projects/#{project_id}/repository/commits", user), params: { ref_name: SeedRepo::Commit::ID, first_parent: 'true' }
+          get api("/projects/#{project_id}/repository/commits?per_page=50", user), params: { ref_name: SeedRepo::Commit::ID, first_parent: 'true' }
 
-          expect(response).to include_pagination_headers
-          expect(commit_count).to eq(12)
-          expect(response.headers['X-Total']).to eq(commit_count.to_s)
+          commit_ids = json_response.map { |c| c['id'] }
+
+          expect(response).to include_limited_pagination_headers
+          expect(expected_commit_ids.size).to eq(12)
+          expect(commit_ids).to eq(expected_commit_ids)
         end
       end
 
@@ -209,11 +201,7 @@ describe API::Commits do
         end
 
         it 'returns correct headers' do
-          commit_count = project.repository.count_commits(ref: ref_name).to_s
-
-          expect(response).to include_pagination_headers
-          expect(response.headers['X-Total']).to eq(commit_count)
-          expect(response.headers['X-Page']).to eq('1')
+          expect(response).to include_limited_pagination_headers
           expect(response.headers['Link']).to match(/page=1&per_page=5/)
           expect(response.headers['Link']).to match(/page=2&per_page=5/)
         end
@@ -296,6 +284,18 @@ describe API::Commits do
           end
         end
       end
+
+      context 'with the optional trailers parameter' do
+        it 'includes the Git trailers' do
+          get api("/projects/#{project_id}/repository/commits?ref_name=6d394385cf567f80a8fd85055db1ab4c5295806f&trailers=true", current_user)
+
+          commit = json_response[0]
+
+          expect(commit['trailers']).to eq(
+            'Signed-off-by' => 'Dmitriy Zaporozhets <dmitriy.zaporozhets@gmail.com>'
+          )
+        end
+      end
     end
   end
 
@@ -329,6 +329,7 @@ describe API::Commits do
           ]
         }
       end
+
       let(:valid_c_params) do
         {
           branch: 'master',
@@ -342,6 +343,7 @@ describe API::Commits do
           ]
         }
       end
+
       let(:valid_utf8_c_params) do
         {
           branch: 'master',
@@ -356,28 +358,56 @@ describe API::Commits do
         }
       end
 
-      it 'does not increment the usage counters using access token authentication' do
-        expect(::Gitlab::UsageDataCounters::WebIdeCounter).not_to receive(:increment_commits_count)
-
-        post api(url, user), params: valid_c_params
+      shared_examples_for "successfully creates the commit" do
+        it "creates the commit" do
+          expect(response).to have_gitlab_http_status(:created)
+          expect(json_response['title']).to eq(message)
+          expect(json_response['committer_name']).to eq(user.name)
+          expect(json_response['committer_email']).to eq(user.email)
+        end
       end
 
-      it 'a new file in project repo' do
-        post api(url, user), params: valid_c_params
+      context 'when using access token authentication' do
+        it 'does not increment the usage counters' do
+          expect(::Gitlab::UsageDataCounters::WebIdeCounter).not_to receive(:increment_commits_count)
+          expect(::Gitlab::UsageDataCounters::EditorUniqueCounter).not_to receive(:track_web_ide_edit_action)
 
-        expect(response).to have_gitlab_http_status(:created)
-        expect(json_response['title']).to eq(message)
-        expect(json_response['committer_name']).to eq(user.name)
-        expect(json_response['committer_email']).to eq(user.email)
+          post api(url, user), params: valid_c_params
+        end
       end
 
-      it 'a new file with utf8 chars in project repo' do
-        post api(url, user), params: valid_utf8_c_params
+      context 'when using warden' do
+        it 'increments usage counters', :clean_gitlab_redis_shared_state do
+          session_id = Rack::Session::SessionId.new('6919a6f1bb119dd7396fadc38fd18d0d')
+          session_hash = { 'warden.user.user.key' => [[user.id], user.encrypted_password[0, 29]] }
 
-        expect(response).to have_gitlab_http_status(:created)
-        expect(json_response['title']).to eq(message)
-        expect(json_response['committer_name']).to eq(user.name)
-        expect(json_response['committer_email']).to eq(user.email)
+          Gitlab::Redis::SharedState.with do |redis|
+            redis.set("session:gitlab:#{session_id.private_id}", Marshal.dump(session_hash))
+          end
+
+          cookies[Gitlab::Application.config.session_options[:key]] = session_id.public_id
+
+          expect(::Gitlab::UsageDataCounters::WebIdeCounter).to receive(:increment_commits_count)
+          expect(::Gitlab::UsageDataCounters::EditorUniqueCounter).to receive(:track_web_ide_edit_action)
+
+          post api(url), params: valid_c_params
+        end
+      end
+
+      context 'a new file in project repo' do
+        before do
+          post api(url, user), params: valid_c_params
+        end
+
+        it_behaves_like "successfully creates the commit"
+      end
+
+      context 'a new file with utf8 chars in project repo' do
+        before do
+          post api(url, user), params: valid_utf8_c_params
+        end
+
+        it_behaves_like "successfully creates the commit"
       end
 
       it 'returns a 400 bad request if file exists' do
@@ -614,6 +644,7 @@ describe API::Commits do
           ]
         }
       end
+
       let(:valid_d_params) do
         {
           branch: 'markdown',
@@ -657,6 +688,7 @@ describe API::Commits do
           ]
         }
       end
+
       let(:valid_m_params) do
         {
           branch: 'feature',
@@ -701,6 +733,7 @@ describe API::Commits do
           ]
         }
       end
+
       let(:valid_u_params) do
         {
           branch: 'master',
@@ -812,6 +845,7 @@ describe API::Commits do
           ]
         }
       end
+
       let(:valid_mo_params) do
         {
           branch: 'master',
@@ -938,7 +972,7 @@ describe API::Commits do
         refs.concat(project.repository.tag_names_contains(commit_id).map {|name| ['tag', name]})
 
         expect(response).to have_gitlab_http_status(:ok)
-        expect(response).to include_pagination_headers
+        expect(response).to include_limited_pagination_headers
         expect(json_response).to be_an Array
         expect(json_response.map { |r| [r['type'], r['name']] }.compact).to eq(refs)
       end
@@ -1228,7 +1262,7 @@ describe API::Commits do
         get api(route, current_user)
 
         expect(response).to have_gitlab_http_status(:ok)
-        expect(response).to include_pagination_headers
+        expect(response).to include_limited_pagination_headers
         expect(json_response.size).to be >= 1
         expect(json_response.first.keys).to include 'diff'
       end
@@ -1242,7 +1276,7 @@ describe API::Commits do
           get api(route, current_user)
 
           expect(response).to have_gitlab_http_status(:ok)
-          expect(response).to include_pagination_headers
+          expect(response).to include_limited_pagination_headers
           expect(json_response.size).to be <= 1
         end
       end
@@ -1417,6 +1451,22 @@ describe API::Commits do
           it_behaves_like 'ref comments'
         end
       end
+
+      context 'multiple notes' do
+        let!(:note) { create(:diff_note_on_commit, project: project) }
+        let(:commit) { note.commit }
+        let(:commit_id) { note.commit_id }
+
+        it 'are returned without N + 1' do
+          get api(route, current_user) # warm up the cache
+
+          control_count = ActiveRecord::QueryRecorder.new { get api(route, current_user) }.count
+
+          create(:diff_note_on_commit, project: project, author: create(:user))
+
+          expect { get api(route, current_user) }.not_to exceed_query_limit(control_count)
+        end
+      end
     end
 
     context 'when the commit is present on two projects' do
@@ -1454,6 +1504,23 @@ describe API::Commits do
           expect(json_response['message']).to eq(commit.cherry_pick_message(user))
           expect(json_response['author_name']).to eq(commit.author_name)
           expect(json_response['committer_name']).to eq(user.name)
+        end
+
+        it 'supports dry-run without applying changes' do
+          head = project.commit(branch)
+
+          post api(route, current_user), params: { branch: branch, dry_run: true }
+
+          expect(response).to have_gitlab_http_status(:ok)
+          expect(json_response).to eq("dry_run" => "success")
+          expect(project.commit(branch)).to eq(head)
+        end
+
+        it 'supports the use of a custom commit message' do
+          post api(route, user), params: { branch: branch, message: 'foo' }
+
+          expect(response).to have_gitlab_http_status(:created)
+          expect(json_response["message"]).to eq('foo')
         end
       end
 
@@ -1525,6 +1592,14 @@ describe API::Commits do
           post api(route, current_user), params: { branch: 'markdown' }
 
           expect(json_response['error_code']).to eq 'empty'
+        end
+
+        it 'includes an additional dry_run error field when enabled' do
+          post api(route, current_user), params: { branch: 'markdown', dry_run: true }
+
+          expect(response).to have_gitlab_http_status(:bad_request)
+          expect(json_response['error_code']).to eq 'empty'
+          expect(json_response['dry_run']).to eq 'error'
         end
       end
 
@@ -1616,6 +1691,16 @@ describe API::Commits do
           expect(json_response['committer_name']).to eq(user.name)
           expect(json_response['parent_ids']).to contain_exactly(commit_id)
         end
+
+        it 'supports dry-run without applying changes' do
+          head = project.commit(branch)
+
+          post api(route, current_user), params: { branch: branch, dry_run: true }
+
+          expect(response).to have_gitlab_http_status(:ok)
+          expect(json_response).to eq("dry_run" => "success")
+          expect(project.commit(branch)).to eq(head)
+        end
       end
 
       context 'when repository is disabled' do
@@ -1696,6 +1781,18 @@ describe API::Commits do
 
           expect(response).to have_gitlab_http_status(:bad_request)
           expect(json_response['error_code']).to eq 'empty'
+        end
+
+        it 'includes an additional dry_run error field when enabled' do
+          # First one actually reverts
+          post api(route, current_user), params: { branch: 'markdown' }
+
+          # Second one is redundant and should be empty
+          post api(route, current_user), params: { branch: 'markdown', dry_run: true }
+
+          expect(response).to have_gitlab_http_status(:bad_request)
+          expect(json_response['error_code']).to eq 'empty'
+          expect(json_response['dry_run']).to eq 'error'
         end
       end
     end
@@ -1836,11 +1933,15 @@ describe API::Commits do
     let(:merged_mr) { create(:merge_request, source_project: project, source_branch: 'master', target_branch: 'feature') }
     let(:commit) { merged_mr.merge_request_diff.commits.last }
 
-    it 'returns the correct merge request' do
+    def perform_request(user)
       get api("/projects/#{project.id}/repository/commits/#{commit.id}/merge_requests", user)
+    end
+
+    it 'returns the correct merge request' do
+      perform_request(user)
 
       expect(response).to have_gitlab_http_status(:ok)
-      expect(response).to include_pagination_headers
+      expect(response).to include_limited_pagination_headers
       expect(json_response.length).to eq(1)
       expect(json_response[0]['id']).to eq(merged_mr.id)
     end
@@ -1848,7 +1949,7 @@ describe API::Commits do
     it 'returns 403 for an unauthorized user' do
       project.add_guest(user)
 
-      get api("/projects/#{project.id}/repository/commits/#{commit.id}/merge_requests", user)
+      perform_request(user)
 
       expect(response).to have_gitlab_http_status(:forbidden)
     end
@@ -1864,10 +1965,20 @@ describe API::Commits do
       let(:non_member) { create(:user) }
 
       it 'responds 403 when only members are allowed to read merge requests' do
-        get api("/projects/#{project.id}/repository/commits/#{commit.id}/merge_requests", non_member)
+        perform_request(non_member)
 
         expect(response).to have_gitlab_http_status(:forbidden)
       end
+    end
+
+    it 'returns multiple merge requests without N + 1' do
+      perform_request(user)
+
+      control_count = ActiveRecord::QueryRecorder.new { perform_request(user) }.count
+
+      create(:merge_request, :closed, source_project: project, source_branch: 'master', target_branch: 'feature')
+
+      expect { perform_request(user) }.not_to exceed_query_limit(control_count)
     end
   end
 
@@ -1889,11 +2000,11 @@ describe API::Commits do
     context 'unsigned commit' do
       it_behaves_like '404 response' do
         let(:request) { get api(route, current_user) }
-        let(:message) { '404 GPG Signature Not Found'}
+        let(:message) { '404 Signature Not Found'}
       end
     end
 
-    context 'signed commit' do
+    context 'gpg signed commit' do
       let(:commit) { project.repository.commit(GpgHelpers::SIGNED_COMMIT_SHA) }
       let(:commit_id) { commit.id }
 
@@ -1901,10 +2012,45 @@ describe API::Commits do
         get api(route, current_user)
 
         expect(response).to have_gitlab_http_status(:ok)
+        expect(json_response['signature_type']).to eq('PGP')
         expect(json_response['gpg_key_id']).to eq(commit.signature.gpg_key_id)
         expect(json_response['gpg_key_subkey_id']).to eq(commit.signature.gpg_key_subkey_id)
         expect(json_response['gpg_key_primary_keyid']).to eq(commit.signature.gpg_key_primary_keyid)
         expect(json_response['verification_status']).to eq(commit.signature.verification_status)
+      end
+    end
+
+    context 'x509 signed commit' do
+      let(:commit) { project.repository.commit_by(oid: '189a6c924013fc3fe40d6f1ec1dc20214183bc97') }
+      let(:commit_id) { commit.id }
+
+      it 'returns correct JSON' do
+        get api(route, current_user)
+
+        expect(response).to have_gitlab_http_status(:ok)
+        expect(json_response['signature_type']).to eq('X509')
+        expect(json_response['verification_status']).to eq(commit.signature.verification_status)
+        expect(json_response['x509_certificate']['id']).to eq(commit.signature.x509_certificate.id)
+        expect(json_response['x509_certificate']['subject']).to eq(commit.signature.x509_certificate.subject)
+        expect(json_response['x509_certificate']['subject_key_identifier']).to eq(commit.signature.x509_certificate.subject_key_identifier)
+        expect(json_response['x509_certificate']['email']).to eq(commit.signature.x509_certificate.email)
+        expect(json_response['x509_certificate']['serial_number']).to eq(commit.signature.x509_certificate.serial_number)
+        expect(json_response['x509_certificate']['certificate_status']).to eq(commit.signature.x509_certificate.certificate_status)
+        expect(json_response['x509_certificate']['x509_issuer']['id']).to eq(commit.signature.x509_certificate.x509_issuer.id)
+        expect(json_response['x509_certificate']['x509_issuer']['subject']).to eq(commit.signature.x509_certificate.x509_issuer.subject)
+        expect(json_response['x509_certificate']['x509_issuer']['subject_key_identifier']).to eq(commit.signature.x509_certificate.x509_issuer.subject_key_identifier)
+        expect(json_response['x509_certificate']['x509_issuer']['crl_url']).to eq(commit.signature.x509_certificate.x509_issuer.crl_url)
+        expect(json_response['commit_source']).to eq('gitaly')
+      end
+
+      context 'with Rugged enabled', :enable_rugged do
+        it 'returns correct JSON' do
+          get api(route, current_user)
+
+          expect(response).to have_gitlab_http_status(:ok)
+          expect(json_response['signature_type']).to eq('PGP')
+          expect(json_response['commit_source']).to eq('rugged')
+        end
       end
     end
   end

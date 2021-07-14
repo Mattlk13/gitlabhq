@@ -2,7 +2,7 @@
 
 require 'spec_helper'
 
-describe Milestones::DestroyService do
+RSpec.describe Milestones::DestroyService do
   let(:user) { create(:user) }
   let(:project) { create(:project, :repository) }
   let(:milestone) { create(:milestone, title: 'Milestone v1.0', project: project) }
@@ -22,14 +22,16 @@ describe Milestones::DestroyService do
       expect { milestone.reload }.to raise_error ActiveRecord::RecordNotFound
     end
 
-    it 'deletes milestone id from issuables' do
-      issue = create(:issue, project: project, milestone: milestone)
-      merge_request = create(:merge_request, source_project: project, milestone: milestone)
+    context 'with an existing merge request' do
+      let!(:issue) { create(:issue, project: project, milestone: milestone) }
+      let!(:merge_request) { create(:merge_request, source_project: project, milestone: milestone) }
 
-      service.execute(milestone)
+      it 'deletes milestone id from issuables' do
+        service.execute(milestone)
 
-      expect(issue.reload.milestone).to be_nil
-      expect(merge_request.reload.milestone).to be_nil
+        expect(issue.reload.milestone).to be_nil
+        expect(merge_request.reload.milestone).to be_nil
+      end
     end
 
     it 'logs destroy event' do
@@ -45,7 +47,7 @@ describe Milestones::DestroyService do
       let(:group_milestone) { create(:milestone, group: group) }
 
       before do
-        project.update(namespace: group)
+        project.update!(namespace: group)
         group.add_developer(user)
       end
 

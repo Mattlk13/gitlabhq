@@ -2,7 +2,7 @@
 
 require 'spec_helper'
 
-describe Gitlab::Ci::Config::Entry::Environment do
+RSpec.describe Gitlab::Ci::Config::Entry::Environment do
   let(:entry) { described_class.new(config) }
 
   before do
@@ -102,6 +102,17 @@ describe Gitlab::Ci::Config::Entry::Environment do
     end
   end
 
+  context 'when prepare action is used' do
+    let(:config) do
+      { name: 'production',
+        action: 'prepare' }
+    end
+
+    it 'is valid' do
+      expect(entry).to be_valid
+    end
+  end
+
   context 'when wrong action type is used' do
     let(:config) do
       { name: 'production',
@@ -137,7 +148,7 @@ describe Gitlab::Ci::Config::Entry::Environment do
     describe '#errors' do
       it 'contains error about invalid action' do
         expect(entry.errors)
-          .to include 'environment action should be start or stop'
+          .to include 'environment action should be start, stop or prepare'
       end
     end
   end
@@ -292,6 +303,39 @@ describe Gitlab::Ci::Config::Entry::Environment do
       let(:kubernetes_config) { nil }
 
       it { expect(entry).to be_valid }
+    end
+  end
+
+  describe 'deployment_tier' do
+    let(:config) do
+      { name: 'customer-portal', deployment_tier: deployment_tier }
+    end
+
+    context 'is a string' do
+      let(:deployment_tier) { 'production' }
+
+      it { expect(entry).to be_valid }
+    end
+
+    context 'is a hash' do
+      let(:deployment_tier) { Hash(tier: 'production') }
+
+      it { expect(entry).not_to be_valid }
+    end
+
+    context 'is nil' do
+      let(:deployment_tier) { nil }
+
+      it { expect(entry).to be_valid }
+    end
+
+    context 'is unknown value' do
+      let(:deployment_tier) { 'unknown' }
+
+      it 'is invalid and adds an error' do
+        expect(entry).not_to be_valid
+        expect(entry.errors).to include("environment deployment tier must be one of #{::Environment.tiers.keys.join(', ')}")
+      end
     end
   end
 end

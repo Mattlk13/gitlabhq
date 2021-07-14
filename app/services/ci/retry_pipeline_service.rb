@@ -11,8 +11,10 @@ module Ci
 
       needs = Set.new
 
-      pipeline.retryable_builds.preload_needs.find_each do |build|
-        next unless can?(current_user, :update_build, build)
+      pipeline.ensure_scheduling_type!
+
+      builds_relation(pipeline).find_each do |build|
+        next unless can_be_retried?(build)
 
         Ci::RetryBuildService.new(project, current_user)
           .reprocess!(build)
@@ -20,23 +22,31 @@ module Ci
         needs += build.needs.map(&:name)
       end
 
-      # In a DAG, the dependencies may have already completed. Figure out
-      # which builds have succeeded and use them to update the pipeline. If we don't
-      # do this, then builds will be stuck in the created state since their dependencies
-      # will never run.
-      completed_build_ids = pipeline.find_successful_build_ids_by_names(needs) if needs.any?
-
       pipeline.builds.latest.skipped.find_each do |skipped|
-        retry_optimistic_lock(skipped) { |build| build.process }
+        retry_optimistic_lock(skipped, name: 'ci_retry_pipeline') { |build| build.process(current_user) }
       end
 
-      MergeRequests::AddTodoWhenBuildFailsService
-        .new(project, current_user)
+      pipeline.reset_source_bridge!(current_user)
+
+      ::MergeRequests::AddTodoWhenBuildFailsService
+        .new(project: project, current_user: current_user)
         .close_all(pipeline)
 
       Ci::ProcessPipelineService
         .new(pipeline)
-        .execute(completed_build_ids, initial_process: true)
+        .execute
+    end
+
+    private
+
+    def builds_relation(pipeline)
+      pipeline.retryable_builds.preload_needs
+    end
+
+    def can_be_retried?(build)
+      can?(current_user, :update_build, build)
     end
   end
 end
+
+Ci::RetryPipelineService.prepend_mod_with('Ci::RetryPipelineService')

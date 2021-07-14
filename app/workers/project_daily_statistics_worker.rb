@@ -1,7 +1,10 @@
 # frozen_string_literal: true
 
+# Deprecated: https://gitlab.com/gitlab-org/gitlab/-/issues/214585
 class ProjectDailyStatisticsWorker # rubocop:disable Scalability/IdempotentWorker
   include ApplicationWorker
+
+  sidekiq_options retry: 3
 
   feature_category :source_code_management
 

@@ -16,10 +16,21 @@ RSpec.describe "projects/artifacts/_artifact.html.haml" do
     context 'with admin' do
       let(:user) { build(:admin) }
 
-      it 'has a delete button' do
-        render_partial
+      context 'when admin mode is enabled', :enable_admin_mode do
+        it 'has a delete button' do
+          render_partial
 
-        expect(rendered).to have_link('Delete artifacts', href: project_artifact_path(project, project.job_artifacts.first))
+          expect(rendered).to have_link('Delete artifacts', href: project_artifact_path(project, project.job_artifacts.first))
+        end
+      end
+
+      context 'when admin mode is disabled' do
+        it 'has no delete button' do
+          project.add_reporter(user)
+          render_partial
+
+          expect(rendered).not_to have_link('Delete artifacts')
+        end
       end
     end
 
@@ -38,7 +49,7 @@ RSpec.describe "projects/artifacts/_artifact.html.haml" do
       let(:user) { create(:user) }
 
       it 'has a delete button' do
-        allow_any_instance_of(ProjectTeam).to receive(:max_member_access).and_return(Gitlab::Access::MASTER)
+        allow_any_instance_of(ProjectTeam).to receive(:max_member_access).and_return(Gitlab::Access::MAINTAINER)
         render_partial
 
         expect(rendered).to have_link('Delete artifacts', href: project_artifact_path(project, project.job_artifacts.first))

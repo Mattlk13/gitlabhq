@@ -30,7 +30,7 @@ module Banzai
     # Note: the table of contents tag is now handled by TableOfContentsTagFilter
     #
     # Context options:
-    #   :project_wiki (required) - Current project wiki.
+    #   :wiki [Wiki] (required) - Current wiki instance.
     #
     class GollumTagsFilter < HTML::Pipeline::Filter
       include ActionView::Helpers::TagHelper
@@ -60,11 +60,11 @@ module Banzai
       IGNORED_ANCESTOR_TAGS = %w(pre code tt).to_set
 
       def call
-        doc.search(".//text()").each do |node|
+        doc.xpath('descendant-or-self::text()').each do |node|
           next if has_ancestor?(node, IGNORED_ANCESTOR_TAGS)
           next unless node.content =~ TAGS_PATTERN
 
-          html = process_tag($1)
+          html = process_tag(Regexp.last_match(1))
 
           node.replace(html) if html && html != node.content
         end
@@ -82,7 +82,7 @@ module Banzai
       def process_tag(tag)
         parts = tag.split('|')
 
-        return if parts.size.zero?
+        return if parts.empty?
 
         process_image_tag(parts) || process_page_link_tag(parts)
       end
@@ -98,14 +98,15 @@ module Banzai
 
         return unless image?(content)
 
-        if url?(content)
-          path = content
-        elsif file = project_wiki.find_file(content)
-          path = ::File.join project_wiki_base_path, file.path
-        end
+        path =
+          if url?(content)
+            content
+          elsif file = wiki.find_file(content, load_content: false)
+            file.path
+          end
 
         if path
-          content_tag(:img, nil, data: { src: path }, class: 'gfm')
+          content_tag(:img, nil, src: path, class: 'gfm')
         end
       end
 
@@ -134,25 +135,25 @@ module Banzai
           if url?(reference)
             reference
           else
-            ::File.join(project_wiki_base_path, reference)
+            ::File.join(wiki_base_path, reference)
           end
 
         content_tag(:a, name || reference, href: href, class: 'gfm')
       end
 
-      def project_wiki
-        context[:project_wiki]
+      def wiki
+        context[:wiki]
       end
 
-      def project_wiki_base_path
-        project_wiki && project_wiki.wiki_base_path
+      def wiki_base_path
+        wiki&.wiki_base_path
       end
 
-      # Ensure that a :project_wiki key exists in context
+      # Ensure that a :wiki key exists in context
       #
       # Note that while the key might exist, its value could be nil!
       def validate
-        needs :project_wiki
+        needs :wiki
       end
     end
   end

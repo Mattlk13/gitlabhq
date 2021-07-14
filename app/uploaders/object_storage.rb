@@ -30,6 +30,8 @@ module ObjectStorage
     REMOTE = 2
   end
 
+  SUPPORTED_STORES = [Store::LOCAL, Store::REMOTE].freeze
+
   module Extension
     # this extension is the glue between the ObjectStorage::Concern and RecordsUploads::Concern
     module RecordsUploads
@@ -137,8 +139,6 @@ module ObjectStorage
     included do |base|
       base.include(ObjectStorage)
 
-      include_if_ee('::EE::ObjectStorage::Concern') # rubocop: disable Cop/InjectEnterpriseEditionModule
-
       after :migrate, :delete_migrated_file
     end
 
@@ -180,15 +180,23 @@ module ObjectStorage
       end
 
       def workhorse_authorize(has_length:, maximum_size: nil)
-        if self.object_store_enabled? && self.direct_upload_enabled?
-          { RemoteObject: workhorse_remote_upload_options(has_length: has_length, maximum_size: maximum_size) }
-        else
-          { TempPath: workhorse_local_upload_path }
+        {}.tap do |hash|
+          if self.object_store_enabled? && self.direct_upload_enabled?
+            hash[:RemoteObject] = workhorse_remote_upload_options(has_length: has_length, maximum_size: maximum_size)
+          else
+            hash[:TempPath] = workhorse_local_upload_path
+          end
+
+          hash[:MaximumSize] = maximum_size if maximum_size.present?
         end
       end
 
       def workhorse_local_upload_path
         File.join(self.root, TMP_UPLOAD_PATH)
+      end
+
+      def object_store_config
+        ObjectStorage::Config.new(object_store_options)
       end
 
       def workhorse_remote_upload_options(has_length:, maximum_size: nil)
@@ -197,10 +205,24 @@ module ObjectStorage
 
         id = [CarrierWave.generate_cache_id, SecureRandom.hex].join('-')
         upload_path = File.join(TMP_UPLOAD_PATH, id)
-        direct_upload = ObjectStorage::DirectUpload.new(self.object_store_credentials, remote_store_path, upload_path,
+        direct_upload = ObjectStorage::DirectUpload.new(self.object_store_config, upload_path,
           has_length: has_length, maximum_size: maximum_size)
 
         direct_upload.to_hash.merge(ID: id)
+      end
+    end
+
+    class OpenFile
+      extend Forwardable
+
+      # Explicitly exclude :path, because rubyzip uses that to detect "real" files.
+      def_delegators :@file, *(Zip::File::IO_METHODS - [:path])
+
+      # Even though :size is not in IO_METHODS, we do need it.
+      def_delegators :@file, :size
+
+      def initialize(file)
+        @file = file
       end
     end
 
@@ -253,6 +275,25 @@ module ObjectStorage
       end
     end
 
+    def use_open_file(&blk)
+      Tempfile.open(path) do |file|
+        file.unlink
+        file.binmode
+
+        if file_storage?
+          IO.copy_stream(path, file)
+        else
+          Faraday.get(url) do |req|
+            req.options.on_data = proc { |chunk, _| file.write(chunk) }
+          end
+        end
+
+        file.seek(0, IO::SEEK_SET)
+
+        yield OpenFile.new(file)
+      end
+    end
+
     #
     # Move the file to another store
     #
@@ -279,6 +320,10 @@ module ObjectStorage
 
     def fog_credentials
       self.class.object_store_credentials
+    end
+
+    def fog_attributes
+      @fog_attributes ||= self.class.object_store_config.fog_attributes
     end
 
     # Set ACL of uploaded objects to not-public (fog-aws)[1] or no ACL at all
@@ -318,7 +363,7 @@ module ObjectStorage
     def cache!(new_file = sanitized_file)
       # We intercept ::UploadedFile which might be stored on remote storage
       # We use that for "accelerated" uploads, where we store result on remote storage
-      if new_file.is_a?(::UploadedFile) && new_file.remote_id
+      if new_file.is_a?(::UploadedFile) && new_file.remote_id.present?
         return cache_remote_file!(new_file.remote_id, new_file.original_filename)
       end
 
@@ -394,7 +439,7 @@ module ObjectStorage
     def storage_for(store)
       case store
       when Store::REMOTE
-        raise 'Object Storage is not enabled' unless self.class.object_store_enabled?
+        raise "Object Storage is not enabled for #{self.class}" unless self.class.object_store_enabled?
 
         CarrierWave::Storage::Fog.new(self)
       when Store::LOCAL
@@ -407,7 +452,7 @@ module ObjectStorage
     def with_exclusive_lease
       lease_key = exclusive_lease_key
       uuid = Gitlab::ExclusiveLease.new(lease_key, timeout: 1.hour.to_i).try_obtain
-      raise ExclusiveLeaseTaken.new(lease_key) unless uuid
+      raise ExclusiveLeaseTaken, lease_key unless uuid
 
       yield uuid
     ensure
@@ -439,7 +484,7 @@ module ObjectStorage
       end
 
       file
-    rescue => e
+    rescue StandardError => e
       # in case of failure delete new file
       new_file.delete unless new_file.nil?
       # revert back to the old file
@@ -463,3 +508,5 @@ module ObjectStorage
     end
   end
 end
+
+ObjectStorage::Concern.include_mod_with('ObjectStorage::Concern')

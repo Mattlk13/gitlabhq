@@ -1,12 +1,13 @@
 <script>
-/* eslint-disable @gitlab/vue-i18n/no-bare-strings */
+/* eslint-disable vue/no-v-html */
+import { GlDeprecatedSkeletonLoading as GlSkeletonLoading } from '@gitlab/ui';
 import { mapState, mapActions } from 'vuex';
-import { GlSkeletonLoading } from '@gitlab/ui';
 import DiffFileHeader from '~/diffs/components/diff_file_header.vue';
-import DiffViewer from '~/vue_shared/components/diff_viewer/diff_viewer.vue';
 import ImageDiffOverlay from '~/diffs/components/image_diff_overlay.vue';
 import { getDiffMode } from '~/diffs/store/utils';
 import { diffViewerModes } from '~/ide/constants';
+import DiffViewer from '~/vue_shared/components/diff_viewer/diff_viewer.vue';
+import { isCollapsed } from '../../diffs/utils/diff_file';
 
 const FIRST_CHAR_REGEX = /^(\+|-| )/;
 
@@ -30,7 +31,7 @@ export default {
   },
   computed: {
     ...mapState({
-      projectPath: state => state.diffs.projectPath,
+      projectPath: (state) => state.diffs.projectPath,
     }),
     diffMode() {
       return getDiffMode(this.discussion.diff_file);
@@ -46,9 +47,12 @@ export default {
         this.discussion.truncated_diff_lines && this.discussion.truncated_diff_lines.length !== 0
       );
     },
+    isCollapsed() {
+      return isCollapsed(this.discussion.diff_file);
+    },
   },
   mounted() {
-    if (!this.hasTruncatedDiffLines) {
+    if (this.isTextFile && !this.hasTruncatedDiffLines) {
       this.fetchDiff();
     }
   },
@@ -76,7 +80,7 @@ export default {
       :discussion-path="discussion.discussion_path"
       :diff-file="discussion.diff_file"
       :can-current-user-fork="false"
-      :expanded="!discussion.diff_file.viewer.collapsed"
+      :expanded="!isCollapsed"
     />
     <div v-if="isTextFile" class="diff-content">
       <table class="code js-syntax-highlight" :class="$options.userColorSchemeClass">
@@ -96,7 +100,7 @@ export default {
           <td class="old_line diff-line-num"></td>
           <td class="new_line diff-line-num"></td>
           <td v-if="error" class="js-error-lazy-load-diff diff-loading-error-block">
-            {{ error }} Unable to load the diff
+            {{ __('Unable to load the diff') }}
             <button
               class="btn-link btn-link-retry btn-no-padding js-toggle-lazy-diff-retry-button"
               @click="fetchDiff"
@@ -117,6 +121,7 @@ export default {
     </div>
     <div v-else>
       <diff-viewer
+        :diff-file="discussion.diff_file"
         :diff-mode="diffMode"
         :diff-viewer-mode="diffViewerMode"
         :new-path="discussion.diff_file.new_path"
@@ -126,14 +131,18 @@ export default {
         :file-hash="discussion.diff_file.file_hash"
         :project-path="projectPath"
       >
-        <image-diff-overlay
-          slot="image-overlay"
-          :discussions="discussion"
-          :file-hash="discussion.diff_file.file_hash"
-          :show-comment-icon="true"
-          :should-toggle-discussion="false"
-          badge-class="image-comment-badge"
-        />
+        <template #image-overlay="{ renderedWidth, renderedHeight }">
+          <image-diff-overlay
+            v-if="renderedWidth"
+            :rendered-width="renderedWidth"
+            :rendered-height="renderedHeight"
+            :discussions="discussion"
+            :file-hash="discussion.diff_file.file_hash"
+            :show-comment-icon="true"
+            :should-toggle-discussion="false"
+            badge-class="image-comment-badge gl-text-gray-500"
+          />
+        </template>
       </diff-viewer>
       <slot></slot>
     </div>

@@ -1,6 +1,12 @@
-export default () => ({
-  endpoint: '',
+export default ({ blobPath = '', summaryEndpoint = '', suiteEndpoint = '' }) => ({
+  blobPath,
+  summaryEndpoint,
+  suiteEndpoint,
   testReports: {},
-  selectedSuite: {},
+  selectedSuiteIndex: null,
   isLoading: false,
+  pageInfo: {
+    page: 1,
+    perPage: 20,
+  },
 });

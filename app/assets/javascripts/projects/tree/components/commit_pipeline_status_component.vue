@@ -1,16 +1,15 @@
 <script>
+import { GlLoadingIcon, GlTooltipDirective } from '@gitlab/ui';
 import Visibility from 'visibilityjs';
-import { GlLoadingIcon } from '@gitlab/ui';
-import ciIcon from '~/vue_shared/components/ci_icon.vue';
+import createFlash from '~/flash';
 import Poll from '~/lib/utils/poll';
-import Flash from '~/flash';
 import { __, s__, sprintf } from '~/locale';
-import tooltip from '~/vue_shared/directives/tooltip';
+import ciIcon from '~/vue_shared/components/ci_icon.vue';
 import CommitPipelineService from '../services/commit_pipeline_service';
 
 export default {
   directives: {
-    tooltip,
+    GlTooltip: GlTooltipDirective,
   },
   components: {
     ciIcon,
@@ -58,13 +57,15 @@ export default {
         group: 'notfound',
       };
       this.isLoading = false;
-      Flash(s__('Something went wrong on our end'));
+      createFlash({
+        message: s__('Something went wrong on our end'),
+      });
     },
     initPolling() {
       this.poll = new Poll({
         resource: this.service,
         method: 'fetchData',
-        successCallback: response => this.successCallback(response),
+        successCallback: (response) => this.successCallback(response),
         errorCallback: this.errorCallback,
       });
 
@@ -84,20 +85,17 @@ export default {
       });
     },
     fetchPipelineCommitData() {
-      this.service
-        .fetchData()
-        .then(this.successCallback)
-        .catch(this.errorCallback);
+      this.service.fetchData().then(this.successCallback).catch(this.errorCallback);
     },
   },
 };
 </script>
 <template>
   <div class="ci-status-link">
-    <gl-loading-icon v-if="isLoading" :size="3" label="Loading pipeline status" />
+    <gl-loading-icon v-if="isLoading" size="lg" label="Loading pipeline status" />
     <a v-else :href="ciStatus.details_path">
       <ci-icon
-        v-tooltip
+        v-gl-tooltip
         :title="statusTitle"
         :aria-label="statusTitle"
         :status="ciStatus"

@@ -1,6 +1,10 @@
 # frozen_string_literal: true
 
 class PagesDomain < ApplicationRecord
+  include Presentable
+  include FromUnion
+  include AfterCommitQueue
+
   VERIFICATION_KEY = 'gitlab-pages-verification-code'
   VERIFICATION_THRESHOLD = 3.days.freeze
   SSL_RENEWAL_THRESHOLD = 30.days.freeze
@@ -12,6 +16,8 @@ class PagesDomain < ApplicationRecord
   belongs_to :project
   has_many :acme_orders, class_name: "PagesDomainAcmeOrder"
   has_many :serverless_domain_clusters, class_name: 'Serverless::DomainCluster', inverse_of: :pages_domain
+
+  before_validation :clear_auto_ssl_failure, unless: :auto_ssl_enabled
 
   validates :domain, hostname: { allow_numeric_hostname: true }
   validates :domain, uniqueness: { case_sensitive: false }
@@ -28,10 +34,10 @@ class PagesDomain < ApplicationRecord
   validate :validate_matching_key, if: ->(domain) { domain.certificate.present? || domain.key.present? }
   validate :validate_intermediates, if: ->(domain) { domain.certificate.present? && domain.certificate_changed? }
 
-  default_value_for(:auto_ssl_enabled, allow_nil: false) { ::Gitlab::LetsEncrypt.enabled? }
-  default_value_for :scope, allow_nil: false, value: :project
-  default_value_for :wildcard, allow_nil: false, value: false
-  default_value_for :usage, allow_nil: false, value: :pages
+  default_value_for(:auto_ssl_enabled, allows_nil: false) { ::Gitlab::LetsEncrypt.enabled? }
+  default_value_for :scope, allows_nil: false, value: :project
+  default_value_for :wildcard, allows_nil: false, value: false
+  default_value_for :usage, allows_nil: false, value: :pages
 
   attr_encrypted :key,
     mode: :per_attribute_iv_and_salt,
@@ -44,25 +50,29 @@ class PagesDomain < ApplicationRecord
   after_update :update_daemon, if: :saved_change_to_pages_config?
   after_destroy :update_daemon
 
-  scope :enabled, -> { where('enabled_until >= ?', Time.now ) }
+  scope :for_project, ->(project) { where(project: project) }
+
+  scope :enabled, -> { where('enabled_until >= ?', Time.current ) }
   scope :needs_verification, -> do
     verified_at = arel_table[:verified_at]
     enabled_until = arel_table[:enabled_until]
-    threshold = Time.now + VERIFICATION_THRESHOLD
+    threshold = Time.current + VERIFICATION_THRESHOLD
 
     where(verified_at.eq(nil).or(enabled_until.eq(nil).or(enabled_until.lt(threshold))))
   end
 
   scope :need_auto_ssl_renewal, -> do
-    expiring = where(certificate_valid_not_after: nil).or(
-      where(arel_table[:certificate_valid_not_after].lt(SSL_RENEWAL_THRESHOLD.from_now)))
+    enabled_and_not_failed = where(auto_ssl_enabled: true, auto_ssl_failed: false)
 
-    user_provided_or_expiring = certificate_user_provided.or(expiring)
+    user_provided = enabled_and_not_failed.certificate_user_provided
+    certificate_not_valid = enabled_and_not_failed.where(certificate_valid_not_after: nil)
+    certificate_expiring = enabled_and_not_failed
+                             .where(arel_table[:certificate_valid_not_after].lt(SSL_RENEWAL_THRESHOLD.from_now))
 
-    where(auto_ssl_enabled: true).merge(user_provided_or_expiring)
+    from_union([user_provided, certificate_not_valid, certificate_expiring])
   end
 
-  scope :for_removal, -> { where("remove_at < ?", Time.now) }
+  scope :for_removal, -> { where("remove_at < ?", Time.current) }
 
   scope :with_logging_info, -> { includes(project: [:namespace, :route]) }
 
@@ -134,7 +144,7 @@ class PagesDomain < ApplicationRecord
   def expired?
     return false unless x509
 
-    current = Time.new
+    current = Time.current
     current < x509.not_before || x509.not_after < current
   end
 
@@ -180,7 +190,7 @@ class PagesDomain < ApplicationRecord
 
   def user_provided_key=(key)
     self.key = key
-    self.certificate_source = 'user_provided' if key_changed?
+    self.certificate_source = 'user_provided' if attribute_changed?(:key)
   end
 
   def user_provided_certificate
@@ -199,7 +209,7 @@ class PagesDomain < ApplicationRecord
 
   def gitlab_provided_key=(key)
     self.key = key
-    self.certificate_source = 'gitlab_provided' if key_changed?
+    self.certificate_source = 'gitlab_provided' if attribute_changed?(:key)
   end
 
   def pages_virtual_domain
@@ -208,18 +218,14 @@ class PagesDomain < ApplicationRecord
     Pages::VirtualDomain.new([project], domain: self)
   end
 
+  def clear_auto_ssl_failure
+    self.auto_ssl_failed = false
+  end
+
   private
 
   def pages_deployed?
-    # TODO: remove once `pages_metadatum` is migrated
-    # https://gitlab.com/gitlab-org/gitlab/issues/33106
-    unless project.pages_metadatum
-      Gitlab::BackgroundMigration::MigratePagesMetadata
-        .new
-        .perform_on_relation(Project.where(id: project_id))
-
-      project.reset
-    end
+    return false unless project
 
     project.pages_metadatum&.deployed?
   end
@@ -233,8 +239,9 @@ class PagesDomain < ApplicationRecord
   # rubocop: disable CodeReuse/ServiceClass
   def update_daemon
     return if usage_serverless?
+    return unless pages_deployed?
 
-    ::Projects::UpdatePagesConfigurationService.new(project).execute
+    run_after_commit { PagesUpdateConfigurationWorker.perform_async(project_id) }
   end
   # rubocop: enable CodeReuse/ServiceClass
 
@@ -271,7 +278,7 @@ class PagesDomain < ApplicationRecord
     return unless domain
 
     if domain.downcase.ends_with?(Settings.pages.host.downcase)
-      self.errors.add(:domain, "*.#{Settings.pages.host} is restricted")
+      self.errors.add(:domain, "*.#{Settings.pages.host} is restricted. Please compare our documentation at https://docs.gitlab.com/ee/administration/pages/#advanced-configuration against your configuration.")
     end
   end
 
@@ -296,4 +303,4 @@ class PagesDomain < ApplicationRecord
   end
 end
 
-PagesDomain.prepend_if_ee('::EE::PagesDomain')
+PagesDomain.prepend_mod_with('PagesDomain')

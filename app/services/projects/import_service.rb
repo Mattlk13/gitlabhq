@@ -2,9 +2,8 @@
 
 module Projects
   class ImportService < BaseService
-    include Gitlab::ShellAdapter
-
     Error = Class.new(StandardError)
+    PermissionError = Class.new(StandardError)
 
     # Returns true if this importer is supposed to perform its work in the
     # background.
@@ -23,12 +22,14 @@ module Projects
 
       import_data
 
+      after_execute_hook
+
       success
     rescue Gitlab::UrlBlocker::BlockedUrlError => e
       Gitlab::ErrorTracking.track_exception(e, project_path: project.full_path, importer: project.import_type)
 
       error(s_("ImportProjects|Error importing repository %{project_safe_import_url} into %{project_full_path} - %{message}") % { project_safe_import_url: project.safe_import_url, project_full_path: project.full_path, message: e.message })
-    rescue => e
+    rescue StandardError => e
       message = Projects::ImportErrorFilter.filter_message(e.message)
 
       Gitlab::ErrorTracking.track_exception(e, project_path: project.full_path, importer: project.import_type)
@@ -36,7 +37,22 @@ module Projects
       error(s_("ImportProjects|Error importing repository %{project_safe_import_url} into %{project_full_path} - %{message}") % { project_safe_import_url: project.safe_import_url, project_full_path: project.full_path, message: message })
     end
 
+    protected
+
+    def extra_attributes_for_measurement
+      {
+        current_user: current_user&.name,
+        project_full_path: project&.full_path,
+        import_type: project&.import_type,
+        file_path: project&.import_source
+      }
+    end
+
     private
+
+    def after_execute_hook
+      # Defined in EE::Projects::ImportService
+    end
 
     def add_repository_to_project
       if project.external_import? && !unknown_url?
@@ -72,9 +88,9 @@ module Projects
         project.ensure_repository
         project.repository.fetch_as_mirror(project.import_url, refmap: refmap)
       else
-        gitlab_shell.import_project_repository(project)
+        project.repository.import_repository(project.import_url)
       end
-    rescue Gitlab::Shell::Error => e
+    rescue ::Gitlab::Git::CommandError => e
       # Expire cache to prevent scenarios such as:
       # 1. First import failed, but the repo was imported successfully, so +exists?+ returns true
       # 2. Retried import, repo is broken or not imported but +exists?+ still returns true
@@ -132,3 +148,8 @@ module Projects
     end
   end
 end
+
+Projects::ImportService.prepend_mod_with('Projects::ImportService')
+
+# Measurable should be at the bottom of the ancestor chain, so it will measure execution of EE::Projects::ImportService as well
+Projects::ImportService.prepend(Measurable)

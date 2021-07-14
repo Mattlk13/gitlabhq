@@ -2,7 +2,7 @@
 
 require 'spec_helper'
 
-describe Boards::ListsController do
+RSpec.describe Boards::ListsController do
   let(:project) { create(:project) }
   let(:board)   { create(:board, project: project) }
   let(:user)    { create(:user) }
@@ -22,7 +22,7 @@ describe Boards::ListsController do
       read_board_list user: user, board: board
 
       expect(response).to have_gitlab_http_status(:ok)
-      expect(response.content_type).to eq 'application/json'
+      expect(response.media_type).to eq 'application/json'
     end
 
     it 'returns a list of board lists' do
@@ -85,20 +85,22 @@ describe Boards::ListsController do
 
     context 'with invalid params' do
       context 'when label is nil' do
-        it 'returns a not found 404 response' do
+        it 'returns an unprocessable entity 422 response' do
           create_board_list user: user, board: board, label_id: nil
 
-          expect(response).to have_gitlab_http_status(:not_found)
+          expect(response).to have_gitlab_http_status(:unprocessable_entity)
+          expect(json_response['errors']).to eq(['Label not found'])
         end
       end
 
       context 'when label that does not belongs to project' do
-        it 'returns a not found 404 response' do
+        it 'returns an unprocessable entity 422 response' do
           label = create(:label, name: 'Development')
 
           create_board_list user: user, board: board, label_id: label.id
 
-          expect(response).to have_gitlab_http_status(:not_found)
+          expect(response).to have_gitlab_http_status(:unprocessable_entity)
+          expect(json_response['errors']).to eq(['Label not found'])
         end
       end
     end
@@ -154,7 +156,7 @@ describe Boards::ListsController do
 
     context 'with invalid list id' do
       it 'returns a not found 404 response' do
-        move user: user, board: board, list: 999, position: 1
+        move user: user, board: board, list: non_existing_record_id, position: 1
 
         expect(response).to have_gitlab_http_status(:not_found)
       end
@@ -246,7 +248,7 @@ describe Boards::ListsController do
 
     context 'with invalid list id' do
       it 'returns a not found 404 response' do
-        remove_board_list user: user, board: board, list: 999
+        remove_board_list user: user, board: board, list: non_existing_record_id
 
         expect(response).to have_gitlab_http_status(:not_found)
       end
@@ -257,6 +259,17 @@ describe Boards::ListsController do
         remove_board_list user: guest, board: board, list: planning
 
         expect(response).to have_gitlab_http_status(:forbidden)
+      end
+    end
+
+    context 'with an error service response' do
+      it 'returns an unprocessable entity response' do
+        allow(Boards::Lists::DestroyService).to receive(:new)
+          .and_return(double(execute: ServiceResponse.error(message: 'error')))
+
+        remove_board_list user: user, board: board, list: planning
+
+        expect(response).to have_gitlab_http_status(:unprocessable_entity)
       end
     end
 

@@ -1,10 +1,11 @@
 <script>
-import { roundOffFloat } from '~/lib/utils/common_utils';
-import tooltip from '~/vue_shared/directives/tooltip';
+import { GlTooltipDirective } from '@gitlab/ui';
+import { roundDownFloat } from '~/lib/utils/common_utils';
+import { __ } from '~/locale';
 
 export default {
   directives: {
-    tooltip,
+    GlTooltip: GlTooltipDirective,
   },
   props: {
     cssClass: {
@@ -14,15 +15,23 @@ export default {
     },
     successLabel: {
       type: String,
-      required: true,
+      required: false,
+      default: 'successful',
     },
     failureLabel: {
       type: String,
-      required: true,
+      required: false,
+      default: 'failed',
     },
     neutralLabel: {
       type: String,
-      required: true,
+      required: false,
+      default: 'neutral',
+    },
+    unavailableLabel: {
+      type: String,
+      required: false,
+      default: __('Not available'),
     },
     successCount: {
       type: Number,
@@ -35,6 +44,11 @@ export default {
     totalCount: {
       type: Number,
       required: true,
+    },
+    hideTooltips: {
+      type: Boolean,
+      required: false,
+      default: false,
     },
   },
   computed: {
@@ -75,7 +89,7 @@ export default {
         return 0;
       }
 
-      const percent = roundOffFloat((count / this.totalCount) * 100, 1);
+      const percent = roundDownFloat((count / this.totalCount) * 100, 1);
       if (percent > 0 && percent < 1) {
         return '< 1';
       }
@@ -83,11 +97,11 @@ export default {
     },
     barStyle(percent) {
       // False positive i18n lint: https://gitlab.com/gitlab-org/frontend/eslint-plugin-i18n/issues/26
-      // eslint-disable-next-line @gitlab/i18n/no-non-i18n-strings
+      // eslint-disable-next-line @gitlab/require-i18n-strings
       return `width: ${percent}%;`;
     },
     getTooltip(label, count) {
-      return `${label}: ${count}`;
+      return this.hideTooltips ? '' : `${label}: ${count}`;
     },
   },
 };
@@ -95,10 +109,10 @@ export default {
 
 <template>
   <div :class="cssClass" class="stacked-progress-bar">
-    <span v-if="!totalCount" class="status-unavailable"> {{ __('Not available') }} </span>
+    <span v-if="!totalCount" class="status-unavailable">{{ unavailableLabel }}</span>
     <span
       v-if="successPercent"
-      v-tooltip
+      v-gl-tooltip
       :title="successTooltip"
       :style="successBarStyle"
       class="status-green"
@@ -108,7 +122,7 @@ export default {
     </span>
     <span
       v-if="neutralPercent"
-      v-tooltip
+      v-gl-tooltip
       :title="neutralTooltip"
       :style="neutralBarStyle"
       class="status-neutral"
@@ -118,7 +132,7 @@ export default {
     </span>
     <span
       v-if="failurePercent"
-      v-tooltip
+      v-gl-tooltip
       :title="failureTooltip"
       :style="failureBarStyle"
       class="status-red"

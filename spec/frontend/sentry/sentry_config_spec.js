@@ -4,7 +4,7 @@ import SentryConfig from '~/sentry/sentry_config';
 describe('SentryConfig', () => {
   describe('IGNORE_ERRORS', () => {
     it('should be an array of strings', () => {
-      const areStrings = SentryConfig.IGNORE_ERRORS.every(error => typeof error === 'string');
+      const areStrings = SentryConfig.IGNORE_ERRORS.every((error) => typeof error === 'string');
 
       expect(areStrings).toBe(true);
     });
@@ -12,7 +12,7 @@ describe('SentryConfig', () => {
 
   describe('BLACKLIST_URLS', () => {
     it('should be an array of regexps', () => {
-      const areRegExps = SentryConfig.BLACKLIST_URLS.every(url => url instanceof RegExp);
+      const areRegExps = SentryConfig.BLACKLIST_URLS.every((url) => url instanceof RegExp);
 
       expect(areRegExps).toBe(true);
     });
@@ -72,11 +72,13 @@ describe('SentryConfig', () => {
       release: 'revision',
       tags: {
         revision: 'revision',
+        feature_category: 'my_feature_category',
       },
     };
 
     beforeEach(() => {
       jest.spyOn(Sentry, 'init').mockImplementation();
+      jest.spyOn(Sentry, 'setTags').mockImplementation();
 
       sentryConfig.options = options;
       sentryConfig.IGNORE_ERRORS = 'ignore_errors';
@@ -89,13 +91,16 @@ describe('SentryConfig', () => {
       expect(Sentry.init).toHaveBeenCalledWith({
         dsn: options.dsn,
         release: options.release,
-        tags: options.tags,
         sampleRate: 0.95,
         whitelistUrls: options.whitelistUrls,
         environment: 'test',
         ignoreErrors: sentryConfig.IGNORE_ERRORS,
         blacklistUrls: sentryConfig.BLACKLIST_URLS,
       });
+    });
+
+    it('should call Sentry.setTags', () => {
+      expect(Sentry.setTags).toHaveBeenCalledWith(options.tags);
     });
 
     it('should set environment from options', () => {
@@ -106,7 +111,6 @@ describe('SentryConfig', () => {
       expect(Sentry.init).toHaveBeenCalledWith({
         dsn: options.dsn,
         release: options.release,
-        tags: options.tags,
         sampleRate: 0.95,
         whitelistUrls: options.whitelistUrls,
         environment: 'development',

@@ -1,88 +1,112 @@
 <script>
+import { GlEmptyState, GlLink, GlButton } from '@gitlab/ui';
 import { mapState, mapActions } from 'vuex';
-import { GlSkeletonLoading, GlEmptyState } from '@gitlab/ui';
-import {
-  getParameterByName,
-  historyPushState,
-  buildUrlWithCurrentLocation,
-} from '~/lib/utils/common_utils';
-import TablePagination from '~/vue_shared/components/pagination/table_pagination.vue';
+import { getParameterByName } from '~/lib/utils/url_utility';
+import { __ } from '~/locale';
 import ReleaseBlock from './release_block.vue';
+import ReleaseSkeletonLoader from './release_skeleton_loader.vue';
+import ReleasesPagination from './releases_pagination.vue';
+import ReleasesSort from './releases_sort.vue';
 
 export default {
   name: 'ReleasesApp',
   components: {
-    GlSkeletonLoading,
     GlEmptyState,
+    GlLink,
+    GlButton,
     ReleaseBlock,
-    TablePagination,
-  },
-  props: {
-    projectId: {
-      type: String,
-      required: true,
-    },
-    documentationLink: {
-      type: String,
-      required: true,
-    },
-    illustrationPath: {
-      type: String,
-      required: true,
-    },
+    ReleasesPagination,
+    ReleaseSkeletonLoader,
+    ReleasesSort,
   },
   computed: {
-    ...mapState('list', ['isLoading', 'releases', 'hasError', 'pageInfo']),
+    ...mapState('index', [
+      'documentationPath',
+      'illustrationPath',
+      'newReleasePath',
+      'isLoading',
+      'releases',
+      'hasError',
+    ]),
     shouldRenderEmptyState() {
       return !this.releases.length && !this.hasError && !this.isLoading;
     },
     shouldRenderSuccessState() {
       return this.releases.length && !this.isLoading && !this.hasError;
     },
+    emptyStateText() {
+      return __(
+        "Releases are based on Git tags and mark specific points in a project's development history. They can contain information about the type of changes and can also deliver binaries, like compiled versions of your software.",
+      );
+    },
   },
   created() {
-    this.fetchReleases({
-      page: getParameterByName('page'),
-      projectId: this.projectId,
-    });
+    this.fetchReleases();
+
+    window.addEventListener('popstate', this.fetchReleases);
   },
   methods: {
-    ...mapActions('list', ['fetchReleases']),
-    onChangePage(page) {
-      historyPushState(buildUrlWithCurrentLocation(`?page=${page}`));
-      this.fetchReleases({ page, projectId: this.projectId });
+    ...mapActions('index', {
+      fetchReleasesStoreAction: 'fetchReleases',
+    }),
+    fetchReleases() {
+      this.fetchReleasesStoreAction({
+        before: getParameterByName('before'),
+        after: getParameterByName('after'),
+      });
     },
   },
 };
 </script>
 <template>
-  <div class="prepend-top-default">
-    <gl-skeleton-loading v-if="isLoading" class="js-loading" />
+  <div class="flex flex-column mt-2">
+    <div class="gl-align-self-end gl-mb-3">
+      <releases-sort class="gl-mr-2" @sort:changed="fetchReleases" />
+
+      <gl-button
+        v-if="newReleasePath"
+        :href="newReleasePath"
+        :aria-describedby="shouldRenderEmptyState && 'releases-description'"
+        category="primary"
+        variant="success"
+        data-testid="new-release-button"
+      >
+        {{ __('New release') }}
+      </gl-button>
+    </div>
+
+    <release-skeleton-loader v-if="isLoading" />
 
     <gl-empty-state
       v-else-if="shouldRenderEmptyState"
-      class="js-empty-state"
+      data-testid="empty-state"
       :title="__('Getting started with releases')"
       :svg-path="illustrationPath"
-      :description="
-        __(
-          'Releases are based on Git tags and mark specific points in a project\'s development history. They can contain information about the type of changes and can also deliver binaries, like compiled versions of your software.',
-        )
-      "
-      :primary-button-link="documentationLink"
-      :primary-button-text="__('Open Documentation')"
-    />
+    >
+      <template #description>
+        <span id="releases-description">
+          {{ emptyStateText }}
+          <gl-link
+            :href="documentationPath"
+            :aria-label="__('Releases documentation')"
+            target="_blank"
+          >
+            {{ __('More information') }}
+          </gl-link>
+        </span>
+      </template>
+    </gl-empty-state>
 
-    <div v-else-if="shouldRenderSuccessState" class="js-success-state">
+    <div v-else-if="shouldRenderSuccessState" data-testid="success-state">
       <release-block
         v-for="(release, index) in releases"
-        :key="release.tagName"
+        :key="index"
         :release="release"
         :class="{ 'linked-card': releases.length > 1 && index !== releases.length - 1 }"
       />
     </div>
 
-    <table-pagination v-if="!isLoading" :change="onChangePage" :page-info="pageInfo" />
+    <releases-pagination v-if="!isLoading" />
   </div>
 </template>
 <style>

@@ -2,7 +2,7 @@
 
 require 'spec_helper'
 
-describe RootController do
+RSpec.describe RootController do
   describe 'GET index' do
     context 'when user is not logged in' do
       it 'redirects to the sign-in page' do
@@ -68,6 +68,18 @@ describe RootController do
         end
       end
 
+      context 'who has customized their dashboard setting for followed user activities' do
+        before do
+          user.dashboard = 'followed_user_activity'
+        end
+
+        it 'redirects to the activity list' do
+          get :index
+
+          expect(response).to redirect_to activity_dashboard_path(filter: 'followed')
+        end
+      end
+
       context 'who has customized their dashboard setting for groups' do
         before do
           user.dashboard = 'groups'
@@ -116,11 +128,31 @@ describe RootController do
         end
       end
 
-      context 'who uses the default dashboard setting' do
-        it 'renders the default dashboard' do
-          get :index
+      context 'who uses the default dashboard setting', :aggregate_failures do
+        render_views
 
-          expect(response).to render_template 'dashboard/projects/index'
+        context 'with customize homepage banner' do
+          it 'renders the default dashboard' do
+            get :index
+
+            expect(response).to render_template 'root/index'
+            expect(response.body).to have_css('.js-customize-homepage-banner')
+          end
+        end
+
+        context 'without customize homepage banner' do
+          before do
+            Users::DismissUserCalloutService.new(
+              container: nil, current_user: user, params: { feature_name: UserCalloutsHelper::CUSTOMIZE_HOMEPAGE }
+            ).execute
+          end
+
+          it 'renders the default dashboard' do
+            get :index
+
+            expect(response).to render_template 'root/index'
+            expect(response.body).not_to have_css('.js-customize-homepage-banner')
+          end
         end
       end
     end

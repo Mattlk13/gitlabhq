@@ -2,7 +2,7 @@
 
 require 'spec_helper'
 
-describe 'User searches for comments' do
+RSpec.describe 'User searches for comments' do
   let(:project) { create(:project, :repository) }
   let(:user) { create(:user) }
 
@@ -12,6 +12,8 @@ describe 'User searches for comments' do
 
     visit(project_path(project))
   end
+
+  include_examples 'search timeouts', 'notes'
 
   context 'when a comment is in commits' do
     context 'when comment belongs to an invalid commit' do

@@ -2,7 +2,7 @@
 
 require 'spec_helper'
 
-describe Key, :mailer do
+RSpec.describe Key, :mailer do
   describe "Associations" do
     it { is_expected.to belong_to(:user) }
   end
@@ -75,6 +75,28 @@ describe Key, :mailer do
           .to eq([key_3, key_1, key_2])
       end
     end
+
+    context 'expiration scopes' do
+      let_it_be(:user) { create(:user) }
+      let_it_be(:expired_today_not_notified) { create(:key, expires_at: Time.current, user: user) }
+      let_it_be(:expired_today_already_notified) { create(:key, expires_at: Time.current, user: user, expiry_notification_delivered_at: Time.current) }
+      let_it_be(:expired_yesterday) { create(:key, expires_at: 1.day.ago, user: user) }
+      let_it_be(:expiring_soon_unotified) { create(:key, expires_at: 3.days.from_now, user: user) }
+      let_it_be(:expiring_soon_notified) { create(:key, expires_at: 4.days.from_now, user: user, before_expiry_notification_delivered_at: Time.current) }
+      let_it_be(:future_expiry) { create(:key, expires_at: 1.month.from_now, user: user) }
+
+      describe '.expired_and_not_notified' do
+        it 'returns keys that expire today and in the past' do
+          expect(described_class.expired_and_not_notified).to contain_exactly(expired_today_not_notified, expired_yesterday)
+        end
+      end
+
+      describe '.expiring_soon_and_not_notified' do
+        it 'returns keys that will expire soon' do
+          expect(described_class.expiring_soon_and_not_notified).to contain_exactly(expiring_soon_unotified)
+        end
+      end
+    end
   end
 
   context "validation of uniqueness (based on fingerprint uniqueness)" do
@@ -108,7 +130,7 @@ describe Key, :mailer do
       expect(build(:key, key: 'ssh-rsa an-invalid-key==')).not_to be_valid
     end
 
-    where(:factory, :chars, :expected_sections) do
+    where(:factory, :characters, :expected_sections) do
       [
         [:key,                 ["\n", "\r\n"], 3],
         [:key,                 [' ', ' '],     3],
@@ -117,12 +139,12 @@ describe Key, :mailer do
     end
 
     with_them do
-      let!(:key) { create(factory) }
+      let!(:key) { create(factory) } # rubocop:disable Rails/SaveBang
       let!(:original_fingerprint) { key.fingerprint }
       let!(:original_fingerprint_sha256) { key.fingerprint_sha256 }
 
       it 'accepts a key with blank space characters after stripping them' do
-        modified_key = key.key.insert(100, chars.first).insert(40, chars.last)
+        modified_key = key.key.insert(100, characters.first).insert(40, characters.last)
         _, content = modified_key.split
 
         key.update!(key: modified_key)
@@ -181,16 +203,49 @@ describe Key, :mailer do
   end
 
   context 'callbacks' do
-    it 'adds new key to authorized_file' do
-      key = build(:personal_key, id: 7)
-      expect(GitlabShellWorker).to receive(:perform_async).with(:add_key, key.shell_id, key.key)
-      key.save!
+    let(:key) { build(:personal_key) }
+
+    context 'authorized keys file is enabled' do
+      before do
+        stub_application_setting(authorized_keys_enabled: true)
+      end
+
+      it 'adds new key to authorized_file' do
+        allow(AuthorizedKeysWorker).to receive(:perform_async)
+
+        key.save!
+
+        # Check after the fact so we have access to Key#id
+        expect(AuthorizedKeysWorker).to have_received(:perform_async).with(:add_key, key.shell_id, key.key)
+      end
+
+      it 'removes key from authorized_file' do
+        key.save!
+
+        expect(AuthorizedKeysWorker).to receive(:perform_async).with(:remove_key, key.shell_id)
+
+        key.destroy!
+      end
     end
 
-    it 'removes key from authorized_file' do
-      key = create(:personal_key)
-      expect(GitlabShellWorker).to receive(:perform_async).with(:remove_key, key.shell_id)
-      key.destroy
+    context 'authorized_keys file is disabled' do
+      before do
+        stub_application_setting(authorized_keys_enabled: false)
+      end
+
+      it 'does not add the key on creation' do
+        expect(AuthorizedKeysWorker).not_to receive(:perform_async)
+
+        key.save!
+      end
+
+      it 'does not remove the key on destruction' do
+        key.save!
+
+        expect(AuthorizedKeysWorker).not_to receive(:perform_async)
+
+        key.destroy!
+      end
     end
   end
 

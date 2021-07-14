@@ -1,8 +1,7 @@
 <script>
 import { GlLoadingIcon } from '@gitlab/ui';
-import containerMixin from 'ee_else_ce/environments/mixins/container_mixin';
 import TablePagination from '~/vue_shared/components/pagination/table_pagination.vue';
-import EnvironmentTable from '../components/environments_table.vue';
+import EnvironmentTable from './environments_table.vue';
 
 export default {
   components: {
@@ -10,7 +9,6 @@ export default {
     TablePagination,
     GlLoadingIcon,
   },
-  mixins: [containerMixin],
   props: {
     isLoading: {
       type: Boolean,
@@ -39,26 +37,12 @@ export default {
 
 <template>
   <div class="environments-container">
-    <gl-loading-icon
-      v-if="isLoading"
-      size="md"
-      class="prepend-top-default"
-      label="Loading environments"
-    />
+    <gl-loading-icon v-if="isLoading" size="md" class="gl-mt-3" label="Loading environments" />
 
-    <slot name="emptyState"></slot>
+    <slot name="empty-state"></slot>
 
     <div v-if="!isLoading && environments.length > 0" class="table-holder">
-      <environment-table
-        :environments="environments"
-        :can-read-environment="canReadEnvironment"
-        :canary-deployment-feature-id="canaryDeploymentFeatureId"
-        :show-canary-deployment-callout="showCanaryDeploymentCallout"
-        :user-callouts-path="userCalloutsPath"
-        :lock-promotion-svg-path="lockPromotionSvgPath"
-        :help-canary-deployments-path="helpCanaryDeploymentsPath"
-        :deploy-boards-help-path="deployBoardsHelpPath"
-      />
+      <environment-table :environments="environments" :can-read-environment="canReadEnvironment" />
 
       <table-pagination
         v-if="pagination && pagination.totalPages > 1"

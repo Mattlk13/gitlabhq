@@ -9,7 +9,7 @@ module Repositories
 
     rescue_from Gitlab::GitAccess::ForbiddenError, with: :render_403_with_exception
     rescue_from Gitlab::GitAccess::NotFoundError, with: :render_404_with_exception
-    rescue_from Gitlab::GitAccess::ProjectCreationError, with: :render_422_with_exception
+    rescue_from Gitlab::GitAccessProject::CreationError, with: :render_422_with_exception
     rescue_from Gitlab::GitAccess::TimeoutError, with: :render_503_with_exception
 
     # GET /foo/bar.git/info/refs?service=git-upload-pack (git pull)
@@ -22,7 +22,7 @@ module Repositories
 
     # POST /foo/bar.git/git-upload-pack (git pull)
     def git_upload_pack
-      enqueue_fetch_statistics_update
+      update_fetch_statistics
 
       render_ok
     end
@@ -75,19 +75,22 @@ module Repositories
       render plain: exception.message, status: :service_unavailable
     end
 
-    def enqueue_fetch_statistics_update
+    def update_fetch_statistics
+      return unless project
       return if Gitlab::Database.read_only?
       return unless repo_type.project?
-      return unless project&.daily_statistics_enabled?
 
-      ProjectDailyStatisticsWorker.perform_async(project.id) # rubocop:disable CodeReuse/Worker
+      OnboardingProgressService.async(project.namespace_id).execute(action: :git_pull)
+
+      return if Feature.enabled?(:disable_git_http_fetch_writes)
+
+      Projects::FetchStatisticsIncrementService.new(project).execute
     end
 
     def access
-      @access ||= access_klass.new(access_actor, project, 'http',
+      @access ||= access_klass.new(access_actor, container, 'http',
         authentication_abilities: authentication_abilities,
-        namespace_path: params[:namespace_id],
-        project_path: project_path,
+        repository_path: repository_path,
         redirected_path: redirected_path,
         auth_result_type: auth_result_type)
     end
@@ -99,15 +102,14 @@ module Repositories
 
     def access_check
       access.check(git_command, Gitlab::GitAccess::ANY)
-      @project ||= access.project
+
+      if repo_type.project? && !container
+        @project = @container = access.container
+      end
     end
 
     def access_klass
       @access_klass ||= repo_type.access_checker_class
-    end
-
-    def project_path
-      @project_path ||= params[:repository_id].sub(/\.git$/, '')
     end
 
     def log_user_activity
@@ -116,4 +118,4 @@ module Repositories
   end
 end
 
-Repositories::GitHttpController.prepend_if_ee('EE::Repositories::GitHttpController')
+Repositories::GitHttpController.prepend_mod_with('Repositories::GitHttpController')

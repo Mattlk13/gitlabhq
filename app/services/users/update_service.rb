@@ -17,10 +17,12 @@ module Users
       yield(@user) if block_given?
 
       user_exists = @user.persisted?
+      @user.user_detail # prevent assignment
 
       discard_read_only_attributes
       assign_attributes
       assign_identity
+      build_canonical_email
 
       if @user.save(validate: validate) && update_status
         notify_success(user_exists)
@@ -33,12 +35,18 @@ module Users
     def execute!(*args, &block)
       result = execute(*args, &block)
 
-      raise ActiveRecord::RecordInvalid.new(@user) unless result[:status] == :success
+      raise ActiveRecord::RecordInvalid, @user unless result[:status] == :success
 
       true
     end
 
     private
+
+    def build_canonical_email
+      return unless @user.email_changed?
+
+      Users::UpdateCanonicalEmailService.new(user: @user).execute
+    end
 
     def update_status
       return true unless @status_params
@@ -53,11 +61,7 @@ module Users
     end
 
     def discard_read_only_attributes
-      if Feature.enabled?(:ldap_readonly_attributes, default_enabled: true)
-        params.reject! { |key, _| @user.read_only_attribute?(key.to_sym) }
-      else
-        discard_synced_attributes
-      end
+      discard_synced_attributes
     end
 
     def discard_synced_attributes
@@ -93,4 +97,4 @@ module Users
   end
 end
 
-Users::UpdateService.prepend_if_ee('EE::Users::UpdateService')
+Users::UpdateService.prepend_mod_with('Users::UpdateService')

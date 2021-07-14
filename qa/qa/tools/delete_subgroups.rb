@@ -2,9 +2,9 @@
 
 require_relative '../../qa'
 
-# This script deletes all subgroups of a group specified by ENV['GROUP_NAME_OR_PATH']
+# This script deletes all subgroups of a group specified by ENV['TOP_LEVEL_GROUP_NAME']
 # Required environment variables: GITLAB_QA_ACCESS_TOKEN and GITLAB_ADDRESS
-# Optional environment variable: GROUP_NAME_OR_PATH (defaults to 'gitlab-qa-sandbox-group')
+# Optional environment variable: TOP_LEVEL_GROUP_NAME (defaults to 'gitlab-qa-sandbox-group')
 # Run `rake delete_subgroups`
 
 module QA
@@ -20,7 +20,7 @@ module QA
       end
 
       def run
-        STDOUT.puts 'Running...'
+        $stdout.puts 'Running...'
 
         # Fetch group's id
         group_id = fetch_group_id
@@ -29,16 +29,16 @@ module QA
         total_sub_group_pages = sub_groups_head_response.headers[:x_total_pages]
 
         sub_group_ids = fetch_subgroup_ids(group_id, total_sub_group_pages)
-        STDOUT.puts "Number of Sub Groups not already marked for deletion: #{sub_group_ids.length}"
+        $stdout.puts "Number of Sub Groups not already marked for deletion: #{sub_group_ids.length}"
 
         delete_subgroups(sub_group_ids) unless sub_group_ids.empty?
-        STDOUT.puts "\nDone"
+        $stdout.puts "\nDone"
       end
 
       private
 
       def delete_subgroups(sub_group_ids)
-        STDOUT.puts "Deleting #{sub_group_ids.length} subgroups..."
+        $stdout.puts "Deleting #{sub_group_ids.length} subgroups..."
         sub_group_ids.each do |subgroup_id|
           delete_response = delete Runtime::API::Request.new(@api_client, "/groups/#{subgroup_id}").url
           dot_or_f = delete_response.code == 202 ? "\e[32m.\e[0m" : "\e[31mF\e[0m"
@@ -47,8 +47,9 @@ module QA
       end
 
       def fetch_group_id
-        group_search_response = get Runtime::API::Request.new(@api_client, "/groups", search: ENV['GROUP_NAME_OR_PATH'] || 'gitlab-qa-sandbox-group').url
-        JSON.parse(group_search_response.body).first["id"]
+        group_name = ENV['TOP_LEVEL_GROUP_NAME'] || 'gitlab-qa-sandbox-group'
+        group_search_response = get Runtime::API::Request.new(@api_client, "/groups/#{group_name}" ).url
+        JSON.parse(group_search_response.body)["id"]
       end
 
       def fetch_subgroup_ids(group_id, group_pages)

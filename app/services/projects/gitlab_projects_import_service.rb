@@ -11,7 +11,9 @@ module Projects
     attr_reader :current_user, :params
 
     def initialize(user, import_params, override_params = nil)
-      @current_user, @params, @override_params = user, import_params.dup, override_params
+      @current_user = user
+      @params = import_params.dup
+      @override_params = override_params
     end
 
     def execute
@@ -29,16 +31,20 @@ module Projects
     end
 
     def project_with_same_full_path?
-      Project.find_by_full_path("#{current_namespace.full_path}/#{params[:path]}").present?
+      Project.find_by_full_path(project_path).present?
     end
 
     # rubocop: disable CodeReuse/ActiveRecord
     def current_namespace
       strong_memoize(:current_namespace) do
-        Namespace.find_by(id: params[:namespace_id])
+        Namespace.find_by(id: params[:namespace_id]) || current_user.namespace
       end
     end
     # rubocop: enable CodeReuse/ActiveRecord
+
+    def project_path
+      "#{current_namespace.full_path}/#{params[:path]}"
+    end
 
     def overwrite?
       strong_memoize(:overwrite) do
@@ -62,6 +68,7 @@ module Projects
       end
 
       if template_file
+        data[:sample_data] = params.delete(:sample_data) if params.key?(:sample_data)
         params[:import_type] = 'gitlab_project'
       end
 
@@ -70,4 +77,4 @@ module Projects
   end
 end
 
-Projects::GitlabProjectsImportService.prepend_if_ee('EE::Projects::GitlabProjectsImportService')
+Projects::GitlabProjectsImportService.prepend_mod_with('Projects::GitlabProjectsImportService')

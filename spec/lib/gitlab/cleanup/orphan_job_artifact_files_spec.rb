@@ -2,7 +2,7 @@
 
 require 'spec_helper'
 
-describe Gitlab::Cleanup::OrphanJobArtifactFiles do
+RSpec.describe Gitlab::Cleanup::OrphanJobArtifactFiles do
   let(:null_logger) { Logger.new('/dev/null') }
 
   subject(:cleanup) { described_class.new(logger: null_logger) }
@@ -28,6 +28,12 @@ describe Gitlab::Cleanup::OrphanJobArtifactFiles do
     expect { cleanup.run! }.to raise_error('Invalid niceness')
   end
 
+  it 'passes correct arguments to ionice' do
+    allow(Gitlab::Utils).to receive(:which).with('ionice').and_return('/fake/ionice')
+    expect(Open3).to receive(:popen3).with('/fake/ionice', '-c', any_args)
+    cleanup.run!
+  end
+
   it 'finds artifacts on disk' do
     artifact = create(:ci_job_artifact, :archive)
 
@@ -36,7 +42,8 @@ describe Gitlab::Cleanup::OrphanJobArtifactFiles do
   end
 
   it 'stops when limit is reached' do
-    cleanup = described_class.new(limit: 1)
+    stub_env('LIMIT', 1)
+    cleanup = described_class.new
 
     mock_artifacts_found(cleanup, 'tmp/foo/bar/1', 'tmp/foo/bar/2')
 

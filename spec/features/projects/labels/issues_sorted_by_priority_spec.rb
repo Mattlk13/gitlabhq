@@ -2,7 +2,7 @@
 
 require 'spec_helper'
 
-describe 'Issue prioritization' do
+RSpec.describe 'Issue prioritization' do
   let(:user)    { create(:user) }
   let(:project) { create(:project, name: 'test', namespace: user.namespace) }
 
@@ -14,8 +14,8 @@ describe 'Issue prioritization' do
   let(:label_5) { create(:label, title: 'label_5', project: project) } # no priority
 
   # According to https://gitlab.com/gitlab-org/gitlab-foss/issues/14189#note_4360653
-  context 'when issues have one label' do
-    it 'Are sorted properly' do
+  context 'when issues have one label', :js do
+    it 'are sorted properly' do
       # Issues
       issue_1 = create(:issue, title: 'issue_1', project: project)
       issue_2 = create(:issue, title: 'issue_2', project: project)
@@ -33,19 +33,19 @@ describe 'Issue prioritization' do
       sign_in user
       visit project_issues_path(project, sort: 'label_priority')
 
+      wait_for_requests
+
       # Ensure we are indicating that issues are sorted by priority
-      expect(page).to have_selector('.dropdown', text: 'Label priority')
+      expect(page).to have_button 'Label priority'
 
-      page.within('.issues-holder') do
-        issue_titles = all('.issues-list .issue-title-text').map(&:text)
+      issue_titles = all('.issues-list .issue-title-text').map(&:text)
 
-        expect(issue_titles).to eq(%w(issue_4 issue_3 issue_5 issue_2 issue_1))
-      end
+      expect(issue_titles).to eq(%w(issue_4 issue_3 issue_5 issue_2 issue_1))
     end
   end
 
-  context 'when issues have multiple labels' do
-    it 'Are sorted properly' do
+  context 'when issues have multiple labels', :js do
+    it 'are sorted properly' do
       # Issues
       issue_1 = create(:issue, title: 'issue_1', project: project)
       issue_2 = create(:issue, title: 'issue_2', project: project)
@@ -72,15 +72,15 @@ describe 'Issue prioritization' do
       sign_in user
       visit project_issues_path(project, sort: 'label_priority')
 
-      expect(page).to have_selector('.dropdown', text: 'Label priority')
+      wait_for_requests
 
-      page.within('.issues-holder') do
-        issue_titles = all('.issues-list .issue-title-text').map(&:text)
+      expect(page).to have_button 'Label priority'
 
-        expect(issue_titles[0..1]).to contain_exactly('issue_5', 'issue_8')
-        expect(issue_titles[2..4]).to contain_exactly('issue_1', 'issue_3', 'issue_7')
-        expect(issue_titles[5..-1]).to eq(%w(issue_2 issue_4 issue_6))
-      end
+      issue_titles = all('.issues-list .issue-title-text').map(&:text)
+
+      expect(issue_titles[0..1]).to contain_exactly('issue_5', 'issue_8')
+      expect(issue_titles[2..4]).to contain_exactly('issue_1', 'issue_3', 'issue_7')
+      expect(issue_titles[5..-1]).to eq(%w(issue_2 issue_4 issue_6))
     end
   end
 end
