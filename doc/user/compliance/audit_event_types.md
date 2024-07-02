@@ -18,7 +18,7 @@ info: "To determine the technical writer assigned to the Stage/Group associated 
 
 DETAILS:
 **Tier:** Premium, Ultimate
-**Offering:** GitLab.com, Self-managed
+**Offering:** GitLab.com, Self-managed, GitLab Dedicated
 
 Audit event types are used to filter streamed audit events:
 
@@ -68,10 +68,12 @@ Audit event types belong to the following product categories.
 | [`created_group_audit_event_streaming_destination`](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/147888) | Event triggered when an external audit event destination for a top-level group is created.| **{check-circle}** Yes | **{check-circle}** Yes | GitLab [16.11](https://gitlab.com/gitlab-org/gitlab/-/issues/436610) | Group |
 | [`created_group_namespace_filter`](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/150712) | Event triggered when a namespace filter for an external audit event destination for a top-level group is created.| **{check-circle}** Yes | **{check-circle}** Yes | GitLab [17.0](https://gitlab.com/gitlab-org/gitlab/-/issues/436612) | Group |
 | [`created_instance_audit_event_streaming_destination`](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/148383) | Event triggered when an external audit event destination for a GitLab instance is created.| **{check-circle}** Yes | **{check-circle}** Yes | GitLab [16.11](https://gitlab.com/gitlab-org/gitlab/-/issues/436615) | Instance |
+| [`created_instance_namespace_filter`](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/153156) | Event triggered when a namespace filter for an external audit event destination for an instance is created.| **{check-circle}** Yes | **{check-circle}** Yes | GitLab [17.2](https://gitlab.com/gitlab-org/gitlab/-/issues/436613) | Instance |
 | [`delete_http_namespace_filter`](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/136302) | Event triggered when a namespace filter for an external audit event destination for a top-level group is deleted.| **{check-circle}** Yes | **{check-circle}** Yes | GitLab [16.7](https://gitlab.com/gitlab-org/gitlab/-/issues/424177) | Group |
 | [`deleted_group_audit_event_streaming_destination`](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/148738) | Event triggered when an external audit event destination for a top-level group is deleted.| **{check-circle}** Yes | **{check-circle}** Yes | GitLab [16.11](https://gitlab.com/gitlab-org/gitlab/-/issues/436610) | Group |
 | [`deleted_group_namespace_filter`](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/150712) | Event triggered when a namespace filter for an external audit event destination for a top-level group is deleted.| **{check-circle}** Yes | **{check-circle}** Yes | GitLab [17.0](https://gitlab.com/gitlab-org/gitlab/-/issues/436612) | Group |
 | [`deleted_instance_audit_event_streaming_destination`](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/14910) | Event triggered when an external audit event destination for a GitLab instance is deleted.| **{check-circle}** Yes | **{check-circle}** Yes | GitLab [16.11](https://gitlab.com/gitlab-org/gitlab/-/issues/436615) | Instance |
+| [`deleted_instance_namespace_filter`](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/153156) | Event triggered when a namespace filter for an external audit event destination for an instance is deleted.| **{check-circle}** Yes | **{check-circle}** Yes | GitLab [17.2](https://gitlab.com/gitlab-org/gitlab/-/issues/436613) | Instance |
 | [`destroy_event_streaming_destination`](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/74632) | Event triggered when an external audit event destination is deleted| **{check-circle}** Yes | **{check-circle}** Yes | GitLab [14.6](https://gitlab.com/gitlab-org/gitlab/-/issues/344664) | Group |
 | [`destroy_instance_event_streaming_destination`](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/125846) | Event triggered when an instance level external audit event destination is deleted| **{check-circle}** Yes | **{check-circle}** Yes | GitLab [16.2](https://gitlab.com/gitlab-org/gitlab/-/issues/404730) | Instance |
 | [`event_type_filters_created`](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/113081) | Event triggered when a new audit events streaming event type filter is created| **{check-circle}** Yes | **{check-circle}** Yes | GitLab [15.10](https://gitlab.com/gitlab-org/gitlab/-/issues/344848) | Group |
@@ -183,6 +185,14 @@ Audit event types belong to the following product categories.
 | [`update_approval_rules`](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/89939) | Event triggered on updating a merge approval rule| **{check-circle}** Yes | **{check-circle}** Yes | GitLab [15.2](https://gitlab.com/gitlab-org/gitlab/-/issues/363092) | Project |
 | [`update_compliance_framework`](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/74292) | Triggered when a compliance framework is updated| **{check-circle}** Yes | **{check-circle}** Yes | GitLab [14.6](https://gitlab.com/gitlab-org/gitlab/-/issues/340649) | Group |
 | [`update_status_check`](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/84624) | Event triggered when an external status check is updated| **{check-circle}** Yes | **{check-circle}** Yes | GitLab [15.9](https://gitlab.com/gitlab-org/gitlab/-/issues/355805) | Project |
+
+### Container registry
+
+| Name | Description | Saved to database | Streamed | Introduced in | Scope |
+|:------------|:------------|:------------------|:---------|:--------------|:--------------|
+| [`container_repository_deleted`](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/152967) | Triggered when a project's container registry is deleted| **{check-circle}** Yes | **{check-circle}** Yes | GitLab [17.2](https://gitlab.com/gitlab-org/gitlab/-/issues/362290) | Project |
+| [`container_repository_deletion_marked`](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/152967) | Triggered when a project's container repository is marked for deletion| **{check-circle}** Yes | **{check-circle}** Yes | GitLab [17.2](https://gitlab.com/gitlab-org/gitlab/-/issues/362290) | Project |
+| [`container_repository_tags_deleted`](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/156066) | Triggered when a project's container repository tag is deleted| **{check-circle}** Yes | **{check-circle}** Yes | GitLab [17.2](https://gitlab.com/gitlab-org/gitlab/-/issues/362290) | Project |
 
 ### Continuous delivery
 
@@ -455,6 +465,7 @@ Audit event types belong to the following product categories.
 | [`protected_branch_removed`](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/92074) | Triggered when a protected branch is removed| **{check-circle}** Yes | **{check-circle}** Yes | GitLab [15.2](https://gitlab.com/gitlab-org/gitlab/-/issues/363091) | Project |
 | [`protected_branch_updated`](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/107530) | Event triggered on the setting for protected branches is update| **{check-circle}** Yes | **{check-circle}** Yes | GitLab [15.8](https://gitlab.com/gitlab-org/gitlab/-/issues/369318) | Project |
 | [`repository_git_operation`](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/76719) | Triggered when authenticated users push, pull, or clone a project using SSH, HTTP(S), or the UI| **{dotted-circle}** No | **{check-circle}** Yes | GitLab [14.9](https://gitlab.com/gitlab-org/gitlab/-/issues/373950) | Project |
+| [`require_reauthentication_to_approve_updated`](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/150710) | Logged when the setting for requiring reauthentication for merge requqest approvals is toggled.| **{check-circle}** Yes | **{check-circle}** Yes | GitLab [17.1](https://gitlab.com/gitlab-org/gitlab/-/issues/431346) | Group, Project |
 | [`manually_trigger_housekeeping`](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/112095) | Triggered when manually triggering housekeeping via API or admin UI| **{check-circle}** Yes | **{check-circle}** Yes | GitLab [15.9](https://gitlab.com/gitlab-org/gitlab/-/issues/390761) | Project |
 | [`project_blobs_removal`](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/152522) | Triggered when removing blobs via the GraphQL API or project settings UI| **{check-circle}** Yes | **{check-circle}** Yes | GitLab [17.0](https://gitlab.com/gitlab-org/gitlab/-/issues/450701) | Project |
 | [`project_text_replacement`](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/152522) | Triggered when replacing text via the GraphQL API or project settings UI| **{check-circle}** Yes | **{check-circle}** Yes | GitLab [17.1](https://gitlab.com/gitlab-org/gitlab/-/issues/450701) | Project |

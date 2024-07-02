@@ -66,7 +66,7 @@ export default {
       return `+${this.linkedPipelines.length - this.maxRenderedPipelines}`;
     },
     counterTooltipText() {
-      return sprintf(s__('LinkedPipelines|%{counterLabel} more downstream pipelines'), {
+      return sprintf(s__('Pipelines|%{counterLabel} more downstream pipelines'), {
         counterLabel: this.counterLabel,
       });
     },
@@ -76,6 +76,7 @@ export default {
       const { label } = accessValue(pipeline, this.dataMethod, 'detailedStatus');
 
       return `${pipeline.project.name} - ${label}`;
+      // return `${pipeline?.project?.name} - ${pipeline?.details?.status?.label}`;
     },
     pipelineStatus(pipeline) {
       // detailedStatus is graphQL, details.status is REST
@@ -88,11 +89,7 @@ export default {
 <template>
   <span
     v-if="linkedPipelines"
-    :class="{
-      'is-upstream': isUpstream,
-      'is-downstream': isDownstream,
-    }"
-    class="linked-pipeline-mini-list gl-display-inline-flex gl-gap-2 gl-align-middle"
+    class="linked-pipeline-mini-list gl-inline-flex gl-gap-2 gl-align-middle"
   >
     <ci-icon
       v-for="pipeline in linkedPipelinesTrimmed"
@@ -109,7 +106,7 @@ export default {
       v-gl-tooltip="{ title: counterTooltipText }"
       :title="counterTooltipText"
       :href="pipelinePath"
-      class="gl-align-items-center gl-bg-gray-50 gl-display-inline-flex gl-font-sm gl-h-6 gl-justify-content-center gl-rounded-pill gl-text-decoration-none gl-text-gray-500 gl-w-7 linked-pipelines-counter linked-pipeline-mini-item"
+      class="gl-align-items-center gl-bg-gray-50 gl-inline-flex gl-font-sm gl-h-6 gl-justify-content-center gl-rounded-pill gl-text-decoration-none gl-text-gray-500 gl-w-7 linked-pipelines-counter linked-pipeline-mini-item"
       data-testid="linked-pipeline-counter"
     >
       {{ counterLabel }}

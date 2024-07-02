@@ -76,6 +76,14 @@ those errors are available in the GitLab UI. To view them:
    - A bar graph of error frequency per hour. Hover over a bar to see the total number of errors in that hour.
    - A stack trace.
 
+### Create an issue from an error
+
+If you want to track work related to an error, you can create an issue directly from the error:
+
+- From the **Error details** view, select **Create issue**.
+
+An issue is created. The issue description contains the error stack trace.
+
 ### Analyze an error's details
 
 On the **Error details** page, point to the **Last seen** date to see a full
@@ -124,7 +132,7 @@ Don't expose it to the public. If it is leaked or exposed, rotate the Sentry DSN
 
 Prerequisites:
 
-- You need the numeric [project ID](../user/project/working_with_projects.md#access-the-project-overview-page-by-using-the-project-id)
+- You need the numeric [project ID](../user/project/working_with_projects.md#access-a-project-by-using-the-project-id)
   for your project.
 
 To rotate the Sentry DSN:

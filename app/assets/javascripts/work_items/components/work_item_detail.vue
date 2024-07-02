@@ -19,12 +19,12 @@ import {
   WIDGET_TYPE_AWARD_EMOJI,
   WIDGET_TYPE_HIERARCHY,
   WORK_ITEM_TYPE_VALUE_OBJECTIVE,
-  WORK_ITEM_TYPE_VALUE_EPIC,
   WIDGET_TYPE_NOTES,
   WIDGET_TYPE_LINKED_ITEMS,
   WIDGET_TYPE_DESIGNS,
   LINKED_ITEMS_ANCHOR,
   WORK_ITEM_REFERENCE_CHAR,
+  WORK_ITEM_TYPE_VALUE_TASK,
 } from '../constants';
 
 import workItemUpdatedSubscription from '../graphql/work_item_updated.subscription.graphql';
@@ -185,6 +185,9 @@ export default {
     canUpdate() {
       return this.workItem.userPermissions?.updateWorkItem;
     },
+    canUpdateChildren() {
+      return this.workItem.userPermissions?.adminParentLink;
+    },
     canDelete() {
       return this.workItem.userPermissions?.deleteWorkItem;
     },
@@ -197,14 +200,21 @@ export default {
     isDiscussionLocked() {
       return this.workItemNotes?.discussionLocked;
     },
-    workItemsMvc2Enabled() {
-      return this.glFeatures.workItemsMvc2;
+    workItemsAlphaEnabled() {
+      return this.glFeatures.workItemsAlpha;
     },
     newTodoAndNotificationsEnabled() {
       return this.glFeatures.notificationsTodosButtons;
     },
     parentWorkItem() {
       return this.isWidgetPresent(WIDGET_TYPE_HIERARCHY)?.parent;
+    },
+    showAncestors() {
+      // TODO: This is a temporary check till the issue work item migration is completed
+      // Issue: https://gitlab.com/gitlab-org/gitlab/-/issues/468114
+      return this.workItemType === WORK_ITEM_TYPE_VALUE_TASK
+        ? this.glFeatures.namespaceLevelWorkItems && this.parentWorkItem
+        : this.parentWorkItem;
     },
     parentWorkItemConfidentiality() {
       return this.parentWorkItem?.confidential;
@@ -257,33 +267,37 @@ export default {
       };
     },
     showIntersectionObserver() {
-      return !this.isModal && !this.editMode;
+      return !this.isModal && !this.editMode && !this.isDrawer;
     },
     workItemLinkedItems() {
       return this.isWidgetPresent(WIDGET_TYPE_LINKED_ITEMS);
     },
     showWorkItemTree() {
-      return [WORK_ITEM_TYPE_VALUE_OBJECTIVE, WORK_ITEM_TYPE_VALUE_EPIC].includes(
-        this.workItemType,
-      );
+      return this.isWidgetPresent(WIDGET_TYPE_HIERARCHY);
     },
     titleClassHeader() {
       return {
-        'gl-sm-display-none! gl-mt-3': this.parentWorkItem,
-        'gl-sm-display-block!': !this.parentWorkItem,
-        'gl-w-full': !this.parentWorkItem && !this.editMode,
-        'editable-wi-title': this.editMode && !this.parentWorkItem,
+        'sm:!gl-hidden gl-mt-3': this.showAncestors,
+        'sm:!gl-block': !this.showAncestors,
+        'gl-w-full': !this.showAncestors && !this.editMode,
+        'editable-wi-title': this.editMode && !this.showAncestors,
       };
     },
     titleClassComponent() {
       return {
-        'gl-sm-display-block!': !this.parentWorkItem,
-        'gl-display-none gl-sm-display-block! gl-mt-3': this.parentWorkItem,
-        'editable-wi-title': this.workItemsMvc2Enabled,
+        'sm:!gl-block': !this.showAncestors,
+        'gl-hidden sm:!gl-block gl-mt-3': this.showAncestors,
+        'editable-wi-title': this.workItemsAlphaEnabled,
       };
     },
     shouldShowEditButton() {
       return !this.editMode && this.canUpdate;
+    },
+    modalCloseButtonClass() {
+      return {
+        'sm:gl-hidden': !this.error,
+        'gl-flex': true,
+      };
     },
   },
   mounted() {
@@ -350,7 +364,7 @@ export default {
       });
     },
     openInModal({ event, modalWorkItem, context }) {
-      if (!this.workItemsMvc2Enabled || context === LINKED_ITEMS_ANCHOR) {
+      if (!this.workItemsAlphaEnabled || context === LINKED_ITEMS_ANCHOR) {
         return;
       }
 
@@ -364,9 +378,13 @@ export default {
         this.$emit('update-modal', event, modalWorkItem);
         return;
       }
+
       this.modalWorkItemId = modalWorkItem.id;
       this.modalWorkItemIid = modalWorkItem.iid;
-      this.modalWorkItemNamespaceFullPath = modalWorkItem.namespace?.fullPath;
+      this.modalWorkItemNamespaceFullPath = modalWorkItem?.reference?.replace(
+        `#${modalWorkItem.iid}`,
+        '',
+      );
       this.$refs.modal.show();
     },
     openReportAbuseDrawer(reply) {
@@ -463,6 +481,17 @@ export default {
         </gl-alert>
       </section>
       <section :class="workItemBodyClass">
+        <div :class="modalCloseButtonClass">
+          <gl-button
+            v-if="isModal"
+            class="gl-ml-auto"
+            category="tertiary"
+            data-testid="work-item-close"
+            icon="close"
+            :aria-label="__('Close')"
+            @click="$emit('close')"
+          />
+        </div>
         <work-item-loading v-if="workItemLoading" />
         <gl-empty-state
           v-else-if="error"
@@ -472,21 +501,8 @@ export default {
           :svg-height="null"
         />
         <div v-else data-testid="detail-wrapper">
-          <div class="gl-sm-display-none! gl-display-flex">
-            <gl-button
-              v-if="isModal"
-              class="gl-ml-auto"
-              category="tertiary"
-              data-testid="work-item-close"
-              icon="close"
-              :aria-label="__('Close')"
-              @click="$emit('close')"
-            />
-          </div>
-          <div
-            class="gl-display-block gl-sm-display-flex! gl-align-items-flex-start gl-flex-direction-row gl-gap-3 gl-pt-3"
-          >
-            <work-item-ancestors v-if="parentWorkItem" :work-item="workItem" class="gl-mb-1" />
+          <div class="gl-block sm:!gl-flex gl-items-start gl-flex-row gl-gap-3">
+            <work-item-ancestors v-if="showAncestors" :work-item="workItem" class="gl-mb-1" />
             <div v-if="!error" :class="titleClassHeader" data-testid="work-item-type">
               <work-item-title
                 v-if="workItem.title"
@@ -498,7 +514,7 @@ export default {
                 @error="updateError = $event"
               />
             </div>
-            <div class="gl-display-flex gl-align-self-start gl-ml-auto gl-gap-3">
+            <div class="gl-flex gl-self-start gl-ml-auto gl-gap-3 gl-mt-1">
               <gl-button
                 v-if="shouldShowEditButton"
                 category="secondary"
@@ -550,7 +566,7 @@ export default {
             </div>
             <gl-button
               v-if="isModal"
-              class="gl-display-none gl-sm-display-block!"
+              class="gl-hidden sm:!gl-block"
               category="tertiary"
               data-testid="work-item-close"
               icon="close"
@@ -558,9 +574,9 @@ export default {
               @click="$emit('close')"
             />
           </div>
-          <div>
+          <div :class="{ 'gl-mt-3': !editMode }">
             <work-item-title
-              v-if="workItem.title && parentWorkItem"
+              v-if="workItem.title && showAncestors"
               ref="title"
               :is-editing="editMode"
               :class="titleClassComponent"
@@ -607,6 +623,7 @@ export default {
               :class="{ 'is-modal': isModal }"
             >
               <work-item-attributes-wrapper
+                :class="{ 'gl-top-3': isDrawer }"
                 :full-path="workItemFullPath"
                 :work-item="workItem"
                 :group-path="groupPath"
@@ -623,6 +640,7 @@ export default {
               :work-item-iid="workItemIid"
               :children="children"
               :can-update="canUpdate"
+              :can-update-children="canUpdateChildren"
               :confidential="workItem.confidential"
               @show-modal="openInModal"
               @addChild="$emit('addChild')"

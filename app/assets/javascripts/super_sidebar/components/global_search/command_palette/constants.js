@@ -40,9 +40,9 @@ export const SEARCH_SCOPE_PLACEHOLDER = {
 };
 
 export const SEARCH_SCOPE = {
-  [USER_HANDLE]: 'user',
-  [PROJECT_HANDLE]: 'project',
-  [ISSUE_HANDLE]: 'issue',
+  [USER_HANDLE]: 'users',
+  [PROJECT_HANDLE]: 'projects',
+  [ISSUE_HANDLE]: 'issues',
 };
 
 export const GLOBAL_COMMANDS_GROUP_TITLE = s__('CommandPalette|Global Commands');
@@ -52,6 +52,7 @@ export const PROJECTS_GROUP_TITLE = s__('GlobalSearch|Projects');
 export const GROUPS_GROUP_TITLE = s__('GlobalSearch|Groups');
 export const ISSUES_GROUP_TITLE = s__('GlobalSearch|Issues');
 export const PATH_GROUP_TITLE = s__('CommandPalette|Project files');
+export const SETTINGS_GROUP_TITLE = s__('CommandPalette|Settings');
 
 export const MODAL_CLOSE_ESC = 'esc';
 export const MODAL_CLOSE_BACKGROUND = 'backdrop';
@@ -80,3 +81,6 @@ export const OVERLAY_PROJECT = s__('GlobalSearch|Go to project %{kbdStart}↵%{k
 export const OVERLAY_FILE = s__('GlobalSearch|Go to file %{kbdStart}↵%{kbdEnd}');
 
 export const OVERLAY_GOTO = s__('GlobalSearch|Go to %{kbdStart}↵%{kbdEnd}');
+
+export const FREQUENTLY_VISITED_PROJECTS_HANDLE = 'FREQUENTLY_VISITED_PROJECTS_HANDLE';
+export const FREQUENTLY_VISITED_GROUPS_HANDLE = 'FREQUENTLY_VISITED_GROUPS_HANDLE';

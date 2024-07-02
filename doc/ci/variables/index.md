@@ -1,6 +1,6 @@
 ---
 stage: Verify
-group: Pipeline Security
+group: Pipeline Authoring
 info: To determine the technical writer assigned to the Stage/Group associated with this page, see https://handbook.gitlab.com/handbook/product/ux/technical-writing/#assignments
 ---
 
@@ -305,6 +305,10 @@ the value can contain only:
 - Characters from the Base64 alphabet (RFC4648).
 - The `@`, `:`, `.`, or `~` characters.
 
+Masking a variable automatically masks the value anywhere in a job log. If another
+variable has the same value, that value is also masked, including when a variable
+references a masked variable.
+
 Different versions of [GitLab Runner](../runners/index.md) have different masking limitations:
 
 | Version             | Limitations |
@@ -462,10 +466,11 @@ job_name:
 
 [Service containers](../docker/using_docker_images.md) can use CI/CD variables, but
 by default can only access [variables saved in the `.gitlab-ci.yml` file](#define-a-cicd-variable-in-the-gitlab-ciyml-file).
+Variables [set in the GitLab UI](#define-a-cicd-variable-in-the-ui) are not available to
+service containers, because service containers are not trusted by default.
 
-Variables [set in the GitLab UI](#define-a-cicd-variable-in-the-ui) by default are not available to
-service containers. To make a UI-defined variable available in a service container,
-re-assign it in your `.gitlab-ci.yml`:
+To make a UI-defined variable available in a service container, you can re-assign
+it to another variable in your `.gitlab-ci.yml`:
 
 ```yaml
 variables:
@@ -474,9 +479,9 @@ variables:
 
 ### Pass an environment variable to another job
 
-You can create a new environment variables in a job, and pass it to another job
-in a later stage. These variables cannot be used as CI/CD variables to configure a pipeline,
-but they can be used in job scripts.
+You can create a new environment variable in a job, and pass it to another job
+in a later stage. These variables cannot be used as CI/CD variables to configure a pipeline
+(for example with the [`rules` keyword](../yaml/index.md#rules)), but they can be used in job scripts.
 
 To pass a job-created environment variable to other jobs:
 
@@ -739,7 +744,7 @@ You can override the value of a variable, including [predefined variables](prede
 
 - [Run a pipeline manually](../pipelines/index.md#run-a-pipeline-manually) in the UI.
 - Create a pipeline by using [the `pipelines` API endpoint](../../api/pipelines.md#create-a-new-pipeline).
-- Use [push options](../../user/project/push_options.md#push-options-for-gitlab-cicd).
+- Use [push options](../../gitlab-basics/add-file.md#push-options-for-gitlab-cicd).
 - Trigger a pipeline by using [the `triggers` API endpoint](../triggers/index.md#pass-cicd-variables-in-the-api-call).
 - Pass variables to a downstream pipeline [by using the `variable` keyword](../pipelines/downstream_pipelines.md#pass-cicd-variables-to-a-downstream-pipeline)
   or [by using `dotenv` variables](../pipelines/downstream_pipelines.md#pass-dotenv-variables-created-in-a-job).
@@ -761,7 +766,7 @@ use this setting for control over the environment the pipeline runs in.
 
 #### By minimum role
 
-> - [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/440338) in GitLab 17.1 [with a flag](../../administration/feature_flags.md) named `allow_user_variables_by_minimum_role`. Disabled by default.
+> - [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/440338) in GitLab 17.1 
 
 When the `restrict_user_defined_variables` option is enabled, you can specify which
 [roles](../../user/permissions.md#roles) can override variables with the

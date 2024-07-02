@@ -1018,8 +1018,37 @@ Supported attributes:
 
 | Attribute           | Type              | Required | Description |
 |---------------------|-------------------|----------|-------------|
-| `id`                | integer or string | Yes      | The ID or [URL-encoded path of the project](rest/index.md#namespaced-path-encoding) owned by the authenticated user. |
-| `merge_request_iid` | integer           | Yes      | The internal ID of the merge request. |
+| `id`                | integer or string | Yes      | ID or [URL-encoded path of the project](rest/index.md#namespaced-path-encoding) owned by the authenticated user. |
+| `merge_request_iid` | integer           | Yes      | Internal ID of the merge request. |
+
+If successful, returns [`200 OK`](rest/index.md#status-codes) and the following
+response attributes:
+
+| Attribute                     | Type         | Description |
+|-------------------------------|--------------|-------------|
+| `commits`                     | object array | Commits in the merge request. |
+| `commits[].id`                | string       | ID of the commit. |
+| `commits[].short_id`          | string       | Short ID of the commit. |
+| `commits[].created_at`        | datetime     | Identical to the `committed_date` field. |
+| `commits[].parent_ids`        | array        | IDs of the parent commits. |
+| `commits[].title`             | string       | Commit title. |
+| `commits[].message`           | string       | Commit message. |
+| `commits[].author_name`       | string       | Commit author's name. |
+| `commits[].author_email`      | string       | Commit author's email address. |
+| `commits[].authored_date`     | datetime     | Commit authored date. |
+| `commits[].committer_name`    | string       | Name of the committer. |
+| `commits[].committer_email`   | string       | Email address of the committer. |
+| `commits[].committed_date`    | datetime     | Commit date. |
+| `commits[].trailers`          | object       | Git trailers parsed for the commit. Duplicate keys include the last value only. |
+| `commits[].extended_trailers` | object       | Git trailers parsed for the commit. |
+| `commits[].web_url`           | string       | Web URL of the merge request. |
+
+Example request:
+
+```shell
+curl --header "PRIVATE-TOKEN: <your_access_token>" \
+  --url "https://gitlab.example.com/api/v4/projects/1/merge_requests/1/commits"
+```
 
 Example response:
 
@@ -1031,8 +1060,15 @@ Example response:
     "title": "Replace sanitize with escape once",
     "author_name": "Example User",
     "author_email": "user@example.com",
+    "authored_date": "2012-09-20T11:50:22+03:00",
+    "committer_name": "Example User",
+    "committer_email": "user@example.com",
+    "committed_date": "2012-09-20T11:50:22+03:00",
     "created_at": "2012-09-20T11:50:22+03:00",
-    "message": "Replace sanitize with escape once"
+    "message": "Replace sanitize with escape once",
+    "trailers": {},
+    "extended_trailers": {},
+    "web_url": "https://gitlab.example.com/project/-/commit/ed899a2f4b50b4370feeea94676502b42383c746"
   },
   {
     "id": "6104942438c14ec7bd21c6cd5bd995272b3faff6",
@@ -1040,8 +1076,15 @@ Example response:
     "title": "Sanitize for network graph",
     "author_name": "Example User",
     "author_email": "user@example.com",
+    "authored_date": "2012-09-20T09:06:12+03:00",
+    "committer_name": "Example User",
+    "committer_email": "user@example.com",
+    "committed_date": "2012-09-20T09:06:12+03:00",
     "created_at": "2012-09-20T09:06:12+03:00",
-    "message": "Sanitize for network graph"
+    "message": "Sanitize for network graph",
+    "trailers": {},
+    "extended_trailers": {},
+    "web_url": "https://gitlab.example.com/project/-/commit/6104942438c14ec7bd21c6cd5bd995272b3faff6"
   }
 ]
 ```
@@ -2168,6 +2211,82 @@ GET /projects/:id/merge_requests/:merge_request_iid/closes_issues
 ```shell
 curl --header "PRIVATE-TOKEN: <your_access_token>" \
   --url "https://gitlab.example.com/api/v4/projects/76/merge_requests/1/closes_issues"
+```
+
+Example response when you use the GitLab issue tracker:
+
+```json
+[
+   {
+      "state" : "opened",
+      "description" : "Ratione dolores corrupti mollitia soluta quia.",
+      "author" : {
+         "state" : "active",
+         "id" : 18,
+         "web_url" : "https://gitlab.example.com/eileen.lowe",
+         "name" : "Alexandra Bashirian",
+         "avatar_url" : null,
+         "username" : "eileen.lowe"
+      },
+      "milestone" : {
+         "project_id" : 1,
+         "description" : "Ducimus nam enim ex consequatur cumque ratione.",
+         "state" : "closed",
+         "due_date" : null,
+         "iid" : 2,
+         "created_at" : "2016-01-04T15:31:39.996Z",
+         "title" : "v4.0",
+         "id" : 17,
+         "updated_at" : "2016-01-04T15:31:39.996Z"
+      },
+      "project_id" : 1,
+      "assignee" : {
+         "state" : "active",
+         "id" : 1,
+         "name" : "Administrator",
+         "web_url" : "https://gitlab.example.com/root",
+         "avatar_url" : null,
+         "username" : "root"
+      },
+      "updated_at" : "2016-01-04T15:31:51.081Z",
+      "id" : 76,
+      "title" : "Consequatur vero maxime deserunt laboriosam est voluptas dolorem.",
+      "created_at" : "2016-01-04T15:31:51.081Z",
+      "iid" : 6,
+      "labels" : [],
+      "user_notes_count": 1,
+      "changes_count": "1"
+   }
+]
+```
+
+Example response when you use an external issue tracker, like Jira:
+
+```json
+[
+   {
+       "id" : "PROJECT-123",
+       "title" : "Title of this issue"
+   }
+]
+```
+
+## List issues related to the merge request
+
+Get all the related issues from title, description, commit messages, comments, and discussions of the merge request.
+
+```plaintext
+GET /projects/:id/merge_requests/:merge_request_iid/related_issues
+```
+
+| Attribute           | Type           | Required | Description |
+|---------------------|----------------|----------|-------------|
+| `id`                | integer or string | Yes      | The ID or [URL-encoded path of the project](rest/index.md#namespaced-path-encoding) owned by the authenticated user. |
+| `merge_request_iid` | integer        | Yes      | The internal ID of the merge request. |
+
+```shell
+curl --header "PRIVATE-TOKEN: <your_access_token>" \
+  --url "https://gitlab.example.com/api/v4/projects/76/merge_requests/1/related_issues"
 ```
 
 Example response when you use the GitLab issue tracker:

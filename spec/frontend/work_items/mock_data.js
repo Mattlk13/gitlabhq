@@ -685,6 +685,202 @@ export const mockLinkedItems = {
   __typename: 'WorkItemWidgetLinkedItems',
 };
 
+export const workItemDevelopmentNodes = [
+  {
+    fromMrDescription: true,
+    mergeRequest: {
+      iid: '13',
+      id: 'gid://gitlab/MergeRequest/121',
+      title: 'Karma configuration',
+      webUrl: 'http://127.0.0.1:3000/flightjs/Flight/-/merge_requests/13',
+      state: 'opened',
+      project: {
+        name: 'Flight',
+        id: 'gid://gitlab/Project/1',
+        namespace: {
+          path: 'flightjs',
+          __typename: 'Namespace',
+        },
+        __typename: 'Project',
+      },
+      assignees: {
+        nodes: [
+          {
+            webUrl: 'http://127.0.0.1:3000/root',
+            id: 'gid://gitlab/User/1',
+            name: 'Administrator',
+            webPath: '/root',
+            avatarUrl:
+              'https://www.gravatar.com/avatar/258d8dc916db8cea2cafb6c3cd0cb0246efe061421dbd83ec3a350428cabda4f?s=80&d=identicon',
+            __typename: 'MergeRequestAssignee',
+          },
+        ],
+        __typename: 'MergeRequestAssigneeConnection',
+      },
+      __typename: 'MergeRequest',
+    },
+    __typename: 'WorkItemClosingMergeRequest',
+  },
+  {
+    fromMrDescription: true,
+    mergeRequest: {
+      iid: '15',
+      id: 'gid://gitlab/MergeRequest/123',
+      title: 'got immutability working end to end.  Scope for some cleanup/optimization',
+      webUrl: 'http://127.0.0.1:3000/flightjs/Flight/-/merge_requests/15',
+      state: 'opened',
+      project: {
+        id: 'gid://gitlab/Project/1',
+        name: 'Flight',
+        namespace: {
+          path: 'flightjs',
+          __typename: 'Namespace',
+        },
+        __typename: 'Project',
+      },
+      assignees: {
+        nodes: [],
+        __typename: 'MergeRequestAssigneeConnection',
+      },
+      __typename: 'MergeRequest',
+    },
+    __typename: 'WorkItemClosingMergeRequest',
+  },
+  {
+    fromMrDescription: true,
+    mergeRequest: {
+      iid: '14',
+      id: 'gid://gitlab/MergeRequest/122',
+      title: "Draft: Always call registry's trigger method from withRegistration",
+      webUrl: 'http://127.0.0.1:3000/flightjs/Flight/-/merge_requests/14',
+      state: 'opened',
+      project: {
+        id: 'gid://gitlab/Project/1',
+        name: 'Flight',
+        namespace: {
+          path: 'flightjs',
+          __typename: 'Namespace',
+        },
+        __typename: 'Project',
+      },
+      assignees: {
+        nodes: [],
+        __typename: 'MergeRequestAssigneeConnection',
+      },
+      __typename: 'MergeRequest',
+    },
+    __typename: 'WorkItemClosingMergeRequest',
+  },
+  {
+    fromMrDescription: true,
+    mergeRequest: {
+      iid: '12',
+      id: 'gid://gitlab/MergeRequest/120',
+      title: 'got immutability working and other changes and end to end',
+      webUrl: 'http://127.0.0.1:3000/flightjs/Flight/-/merge_requests/12',
+      state: 'closed',
+      project: {
+        id: 'gid://gitlab/Project/1',
+        name: 'Flight',
+        namespace: {
+          path: 'flightjs',
+          __typename: 'Namespace',
+        },
+        __typename: 'Project',
+      },
+      assignees: {
+        nodes: [
+          {
+            webUrl: 'http://127.0.0.1:3000/root',
+            id: 'gid://gitlab/User/1',
+            name: 'Administrator',
+            webPath: '/root',
+            avatarUrl:
+              'https://www.gravatar.com/avatar/258d8dc916db8cea2cafb6c3cd0cb0246efe061421dbd83ec3a350428cabda4f?s=80&d=identicon',
+            __typename: 'MergeRequestAssignee',
+          },
+        ],
+        __typename: 'MergeRequestAssigneeConnection',
+      },
+      __typename: 'MergeRequest',
+    },
+    __typename: 'WorkItemClosingMergeRequest',
+  },
+  {
+    fromMrDescription: true,
+    mergeRequest: {
+      iid: '11',
+      id: 'gid://gitlab/MergeRequest/119',
+      title: '[UX] Work items: Development widget (MRs, branches, feature flags)',
+      webUrl: 'http://127.0.0.1:3000/flightjs/Flight/-/merge_requests/11',
+      state: 'opened',
+      project: {
+        id: 'gid://gitlab/Project/1',
+        name: 'Flight',
+        namespace: {
+          path: 'flightjs',
+          __typename: 'Namespace',
+        },
+        __typename: 'Project',
+      },
+      assignees: {
+        nodes: [
+          {
+            webUrl: 'http://127.0.0.1:3000/contributor_001',
+            id: 'gid://gitlab/User/50',
+            name: 'Contributor',
+            webPath: '/contributor_001',
+            avatarUrl:
+              'https://www.gravatar.com/avatar/0425546bf992b09bf77c16afe53f3824a919c5f4a5ef3355d493155740dfaaf5?s=80&d=identicon',
+            __typename: 'MergeRequestAssignee',
+          },
+          {
+            webUrl: 'http://127.0.0.1:3000/reported_user_17',
+            id: 'gid://gitlab/User/40',
+            name: "Amira O'Keefe",
+            webPath: '/reported_user_17',
+            avatarUrl:
+              'https://www.gravatar.com/avatar/4650f7f452b5606f219ac12ed4c2869705752e62b94e28d3263aa9a5598c6ab8?s=80&d=identicon',
+            __typename: 'MergeRequestAssignee',
+          },
+          {
+            webUrl: 'http://127.0.0.1:3000/reported_user_5',
+            id: 'gid://gitlab/User/28',
+            name: 'Echo Littel',
+            webPath: '/reported_user_5',
+            avatarUrl:
+              'https://www.gravatar.com/avatar/3dcc93993fcf6705adb708f460d314d0994463ec2cb0a693e1e0597111acd3c7?s=80&d=identicon',
+            __typename: 'MergeRequestAssignee',
+          },
+          {
+            webUrl: 'http://127.0.0.1:3000/root',
+            id: 'gid://gitlab/User/1',
+            name: 'Administrator',
+            webPath: '/root',
+            avatarUrl:
+              'https://www.gravatar.com/avatar/258d8dc916db8cea2cafb6c3cd0cb0246efe061421dbd83ec3a350428cabda4f?s=80&d=identicon',
+            __typename: 'MergeRequestAssignee',
+          },
+        ],
+        __typename: 'MergeRequestAssigneeConnection',
+      },
+      __typename: 'MergeRequest',
+    },
+    __typename: 'WorkItemClosingMergeRequest',
+  },
+];
+
+export const workItemDevelopmentFragmentResponse = (nodes = workItemDevelopmentNodes) => {
+  return {
+    type: 'DEVELOPMENT',
+    closingMergeRequests: {
+      nodes,
+      __typename: 'WorkItemClosingMergeRequestConnection',
+    },
+    __typename: 'WorkItemWidgetDevelopment',
+  };
+};
+
 export const workItemResponseFactory = ({
   iid = '1',
   canUpdate = false,
@@ -709,10 +905,12 @@ export const workItemResponseFactory = ({
   healthStatusWidgetPresent = true,
   notesWidgetPresent = true,
   designWidgetPresent = true,
+  developmentWidgetPresent = true,
   confidential = false,
   discussionLocked = false,
   canInviteMembers = false,
   labelsWidgetPresent = true,
+  hierarchyWidgetPresent = true,
   linkedItemsWidgetPresent = true,
   colorWidgetPresent = true,
   labels = mockLabels,
@@ -728,6 +926,7 @@ export const workItemResponseFactory = ({
   awardEmoji = mockAwardsWidget,
   state = 'OPEN',
   linkedItems = mockEmptyLinkedItems,
+  developmentItems = workItemDevelopmentFragmentResponse(),
   color = '#1068bf',
 } = {}) => ({
   data: {
@@ -937,41 +1136,43 @@ export const workItemResponseFactory = ({
               },
             }
           : { type: 'MOCK TYPE' },
-        {
-          __typename: 'WorkItemWidgetHierarchy',
-          type: 'HIERARCHY',
-          hasChildren: true,
-          children: {
-            nodes: [
-              {
-                id: 'gid://gitlab/WorkItem/444',
-                iid: '5',
-                createdAt: '2022-08-03T12:41:54Z',
-                closedAt: null,
-                confidential: false,
-                title: '123',
-                state: 'OPEN',
-                webUrl: '/gitlab-org/gitlab-test/-/work_items/5',
-                reference: 'test-project-path#5',
-                namespace: {
-                  fullPath: 'test-project-path',
-                },
-                workItemType: {
-                  id: '1',
-                  name: 'Task',
-                  iconName: 'issue-type-task',
-                },
-                widgets: [
+        hierarchyWidgetPresent
+          ? {
+              __typename: 'WorkItemWidgetHierarchy',
+              type: 'HIERARCHY',
+              hasChildren: true,
+              children: {
+                nodes: [
                   {
-                    type: 'HIERARCHY',
-                    hasChildren: false,
+                    id: 'gid://gitlab/WorkItem/444',
+                    iid: '5',
+                    createdAt: '2022-08-03T12:41:54Z',
+                    closedAt: null,
+                    confidential: false,
+                    title: '123',
+                    state: 'OPEN',
+                    webUrl: '/gitlab-org/gitlab-test/-/work_items/5',
+                    reference: 'test-project-path#5',
+                    namespace: {
+                      fullPath: 'test-project-path',
+                    },
+                    workItemType: {
+                      id: '1',
+                      name: 'Task',
+                      iconName: 'issue-type-task',
+                    },
+                    widgets: [
+                      {
+                        type: 'HIERARCHY',
+                        hasChildren: false,
+                      },
+                    ],
                   },
                 ],
               },
-            ],
-          },
-          parent,
-        },
+              parent,
+            }
+          : { type: 'MOCK TYPE' },
         notesWidgetPresent
           ? {
               __typename: 'WorkItemWidgetNotes',
@@ -1023,6 +1224,13 @@ export const workItemResponseFactory = ({
               type: 'DESIGNS',
             }
           : { type: 'MOCK TYPE' },
+        developmentWidgetPresent
+          ? {
+              ...developmentItems,
+            }
+          : {
+              type: 'MOCK TYPE',
+            },
       ],
     },
   },
@@ -2787,8 +2995,7 @@ export const mockWorkItemNotesByIidResponse = {
                     nodes: [
                       {
                         id: 'gid://gitlab/IterationNote/addbc177f7664699a135130ab05ffb78c57e4db3',
-                        body:
-                          'changed iteration to Et autem debitis nam suscipit eos ut. Jul 13, 2022 - Jul 19, 2022',
+                        body: 'changed iteration to Et autem debitis nam suscipit eos ut. Jul 13, 2022 - Jul 19, 2022',
                         bodyHtml:
                           '\u003cp data-sourcepos="1:1-1:36" dir="auto"\u003echanged iteration to \u003ca href="/groups/flightjs/-/iterations/5352" data-reference-type="iteration" data-original="*iteration:5352" data-link="false" data-link-reference="false" data-project="6" data-iteration="5352" data-container="body" data-placement="top" title="Iteration" class="gfm gfm-iteration has-tooltip"\u003eEt autem debitis nam suscipit eos ut. Jul 13, 2022 - Jul 19, 2022\u003c/a\u003e\u003c/p\u003e',
                         systemNoteIconName: 'iteration',
@@ -3733,8 +3940,7 @@ export const workItemNotesWithSystemNotesWithChangedDescription = {
                           descriptionVersion: {
                             id: 'gid://gitlab/DescriptionVersion/199',
                             description: 'Desc2',
-                            diff:
-                              '<span class="idiff">Desc</span><span class="idiff deletion">1</span><span class="idiff addition">2</span>',
+                            diff: '<span class="idiff">Desc</span><span class="idiff deletion">1</span><span class="idiff addition">2</span>',
                             diffPath: '/gnuwget/Wget2/-/issues/79/descriptions/199/diff',
                             deletePath: '/gnuwget/Wget2/-/issues/79/descriptions/199',
                             canDelete: true,
@@ -3799,8 +4005,7 @@ export const workItemNotesWithSystemNotesWithChangedDescription = {
                           descriptionVersion: {
                             id: 'gid://gitlab/DescriptionVersion/200',
                             description: 'Desc3',
-                            diff:
-                              '<span class="idiff">Desc</span><span class="idiff deletion">2</span><span class="idiff addition">3</span>',
+                            diff: '<span class="idiff">Desc</span><span class="idiff deletion">2</span><span class="idiff addition">3</span>',
                             diffPath: '/gnuwget/Wget2/-/issues/79/descriptions/200/diff',
                             deletePath: '/gnuwget/Wget2/-/issues/79/descriptions/200',
                             canDelete: true,
@@ -4101,6 +4306,50 @@ export const groupProjectsList = {
   },
 };
 
+export const relatedProjectsList = {
+  data: {
+    project: {
+      id: 'gid://gitlab/Project/1',
+      group: {
+        id: 'gid://gitlab/Group/33',
+        projects: {
+          nodes: [
+            {
+              id: 'gid://gitlab/Project/1',
+              name: 'Example project A',
+              avatarUrl: null,
+              nameWithNamespace: 'Group A / Example project A',
+              fullPath: 'group-a/example-project-a',
+              namespace: {
+                id: 'gid://gitlab/Group/1',
+                name: 'Group A',
+                __typename: 'Namespace',
+              },
+              __typename: 'Project',
+            },
+            {
+              id: 'gid://gitlab/Project/2',
+              name: 'Example project B',
+              avatarUrl: null,
+              nameWithNamespace: 'Group A / Example project B',
+              fullPath: 'group-a/example-project-b',
+              namespace: {
+                id: 'gid://gitlab/Group/1',
+                name: 'Group A',
+                __typename: 'Namespace',
+              },
+              __typename: 'Project',
+            },
+          ],
+          __typename: 'ProjectConnection',
+        },
+        __typename: 'Group',
+      },
+      __typename: 'Project',
+    },
+  },
+};
+
 export const mockFrequentlyUsedProjects = [
   {
     id: 1,
@@ -4125,9 +4374,9 @@ export const mockFrequentlyUsedProjects = [
 export const createWorkItemQueryResponse = {
   data: {
     workspace: {
-      id: 'new-workspace-workitem-id',
+      id: 'full-path-epic-id',
       workItem: {
-        id: 'gid://gitlab/WorkItem/new',
+        id: 'gid://gitlab/WorkItem/new-epic',
         iid: NEW_WORK_ITEM_IID,
         archived: false,
         title: '',
@@ -4141,7 +4390,7 @@ export const createWorkItemQueryResponse = {
         reference: 'gitlab-org#56',
         createNoteEmail: null,
         namespace: {
-          id: 'gid://gitlab/Group/24',
+          id: 'full-path-epic-id',
           fullPath: 'full-path',
           name: 'Gitlab Org',
           __typename: 'Namespace',

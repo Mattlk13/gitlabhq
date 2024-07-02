@@ -1,4 +1,10 @@
 import { s__ } from '~/locale';
+import {
+  ACCESS_LEVEL_NO_ACCESS_INTEGER,
+  ACCESS_LEVEL_DEVELOPER_INTEGER,
+  ACCESS_LEVEL_MAINTAINER_INTEGER,
+  ACCESS_LEVEL_ADMIN_INTEGER,
+} from '~/access_level/constants';
 
 export const I18N = {
   pageTitle: s__('BranchRules|Branch rule details'),
@@ -34,6 +40,8 @@ export const I18N = {
   forcePushDescriptionWithDocs: s__(
     'BranchRules|Allow all users with push access to %{linkStart}force push%{linkEnd}.',
   ),
+  allowForcePushEnabled: s__('BranchRules|Allowed force push enabled'),
+  allowForcePushDisabled: s__('BranchRules|Allowed force push disabled'),
   requiresCodeOwnerApprovalLabel: s__('BranchRules|Require code owner approval'),
   requiresCodeOwnerApprovalTitle: s__('BranchRules|Requires code owner approval'),
   doesNotRequireCodeOwnerApprovalTitle: s__(
@@ -48,6 +56,8 @@ export const I18N = {
   codeOwnerApprovalDescription: s__(
     'BranchRules|Changed files listed in %{linkStart}CODEOWNERS%{linkEnd} require an approval for merge requests and will be rejected for code pushes.',
   ),
+  codeOwnerApprovalEnabled: s__('BranchRules|Require code owner approval enabled'),
+  codeOwnerApprovalDisabled: s__('BranchRules|Require code owner approval disabled'),
   noData: s__('BranchRules|No data to display'),
   deleteRuleModalTitle: s__('BranchRules|Delete branch rule?'),
   deleteRuleModalText: s__(
@@ -91,3 +101,18 @@ export const NOT_REQUIRED_ICON_CLASS = 'gl-text-red-500';
 export const DELETE_RULE_MODAL_ID = 'delete-branch-rule-modal';
 
 export const projectUsersOptions = { push_code: true, active: true };
+
+export const accessLevelsConfig = {
+  [ACCESS_LEVEL_ADMIN_INTEGER]: {
+    accessLevelLabel: s__('BranchRules|Administrators'),
+  },
+  [ACCESS_LEVEL_MAINTAINER_INTEGER]: {
+    accessLevelLabel: s__('BranchRules|Maintainers'),
+  },
+  [ACCESS_LEVEL_DEVELOPER_INTEGER]: {
+    accessLevelLabel: s__('BranchRules|Developers and Maintainers'),
+  },
+  [ACCESS_LEVEL_NO_ACCESS_INTEGER]: {
+    accessLevelLabel: s__('BranchRules|No one'),
+  },
+};

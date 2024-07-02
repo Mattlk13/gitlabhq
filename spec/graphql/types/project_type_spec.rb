@@ -341,6 +341,7 @@ RSpec.describe GitlabSchema.types['Project'], feature_category: :groups_and_proj
         :draft,
         :approved,
         :labels,
+        :label_name,
         :before,
         :after,
         :first,
@@ -356,11 +357,13 @@ RSpec.describe GitlabSchema.types['Project'], feature_category: :groups_and_proj
         :updated_before,
         :author_username,
         :assignee_username,
+        :assignee_wildcard_id,
         :reviewer_username,
         :reviewer_wildcard_id,
         :review_state,
         :review_states,
         :milestone_title,
+        :milestone_wildcard_id,
         :not,
         :sort
       )
@@ -510,7 +513,7 @@ RSpec.describe GitlabSchema.types['Project'], feature_category: :groups_and_proj
     subject { described_class.fields['pipelineAnalytics'] }
 
     it { is_expected.to have_graphql_type(Types::Ci::AnalyticsType) }
-    it { is_expected.to have_graphql_resolver(Resolvers::ProjectPipelineStatisticsResolver) }
+    it { is_expected.to have_graphql_resolver(Resolvers::Ci::ProjectPipelineAnalyticsResolver) }
   end
 
   describe 'jobs field' do

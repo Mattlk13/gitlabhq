@@ -133,13 +133,13 @@ $work-item-overview-gap-width: 2rem;
 
 @include container-and-media("min-width: #{calc($breakpoint-md)}") {
   .work-item-attributes-wrapper {
-      top: calc(#{$calc-application-header-height} + #{$work-item-sticky-header-height});
-      height: calc(#{$calc-application-viewport-height} - #{$work-item-sticky-header-height});
-      margin-bottom: calc(#{$content-wrapper-padding} * -1);
-      padding-inline: 0.5rem;
-      position: sticky;
-      overflow-y: auto;
-      overflow-x: hidden;
+    top: calc(#{$calc-application-header-height} + #{$work-item-sticky-header-height});
+    height: calc(#{$calc-application-viewport-height} - #{$work-item-sticky-header-height});
+    margin-bottom: calc(#{$content-wrapper-padding} * -1);
+    padding-inline: 0.5rem;
+    position: sticky;
+    overflow-y: auto;
+    overflow-x: hidden;
   }
 
   .work-item-date-picker {
@@ -258,7 +258,7 @@ $disclosure-hierarchy-chevron-dimension: 1.2rem;
   border-left-style: none;
   line-height: $gl-line-height-16;
   padding-right: $grid-size;
-  background: var(--gray-10, $white);
+  background: var(--gl-background-color-default);
 
   &::before,
   &::after {
@@ -272,7 +272,7 @@ $disclosure-hierarchy-chevron-dimension: 1.2rem;
   }
 
   &::before {
-    background: var(--gray-10, $white);
+    background: var(--gl-background-color-default);
     left: -10px;
     z-index: 1;
   }
@@ -402,4 +402,9 @@ $disclosure-hierarchy-chevron-dimension: 1.2rem;
       }
     }
   }
+}
+
+.is-ghost {
+  opacity: 0.3;
+  pointer-events: none;
 }

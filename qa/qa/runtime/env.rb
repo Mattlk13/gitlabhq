@@ -90,6 +90,10 @@ module QA
         ENV['CI_PROJECT_PATH']
       end
 
+      def coverband_enabled?
+        enabled?(ENV['COVERBAND_ENABLED'], default: false)
+      end
+
       def schedule_type
         ENV['SCHEDULE_TYPE']
       end
@@ -739,7 +743,7 @@ module QA
       def enabled?(value, default: true)
         return default if value.nil?
 
-        (value.to_s =~ /^(false|no|0)$/i) != 0
+        value.to_s.match?(/^(true|yes|1)$/i)
       end
     end
   end

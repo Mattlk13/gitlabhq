@@ -8,8 +8,8 @@ info: Any user with at least the Maintainer role can merge updates to this conte
 
 To allow GitLab to scale further we
 [decomposed the GitLab application database into multiple databases](https://gitlab.com/groups/gitlab-org/-/epics/6168).
-The two databases are `main` and `ci`. GitLab supports being run with either one database or two databases.
-On GitLab.com we are using two separate databases.
+The main databases are `main`, `ci`, and (optionally) `sec`. GitLab supports being run with one, two, or three databases.
+On GitLab.com we are using separate `main` and `ci` databases.
 
 For the purpose of building the [Cells](../../architecture/blueprints/cells/index.md) architecture, we are decomposing
 the databases further, to introduce another database `gitlab_main_clusterwide`.
@@ -34,7 +34,8 @@ Each table of GitLab needs to have a `gitlab_schema` assigned:
 | `gitlab_geo` | All Geo tables that are being stored in the `geo:` database (for example, like `project_registry`, `secondary_usage_data`) | |
 | `gitlab_shared` | All application tables that contain data across all decomposed databases (for example, `loose_foreign_keys_deleted_records`) for models that inherit from `Gitlab::Database::SharedModel`. | |
 | `gitlab_internal` | All internal tables of Rails and PostgreSQL (for example, `ar_internal_metadata`, `schema_migrations`, `pg_*`) | |
-| `gitlab_pm` | All tables that store `package_metadata`| It is an alias for `gitlab_main`|
+| `gitlab_pm` | All tables that store `package_metadata`| It is an alias for `gitlab_main`, to be replaced with `gitlab_sec` |
+| `gitlab_sec` | All Security and Vulnerability feature tables to be stored in the `sec:` database | [Decomposition in progress](https://gitlab.com/groups/gitlab-org/-/epics/13043) |
 
 More schemas to be introduced with additional decomposed databases
 
@@ -46,6 +47,7 @@ The usage of schema enforces the base class to be used:
 - `Geo::TrackingBase` for `gitlab_geo`
 - `Gitlab::Database::SharedModel` for `gitlab_shared`
 - `PackageMetadata::ApplicationRecord` for `gitlab_pm`
+- `Gitlab::Database::SecApplicationRecord` for `gitlab_sec`
 
 ### Choose either the `gitlab_main_cell` or `gitlab_main_clusterwide` schema
 

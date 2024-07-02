@@ -330,7 +330,8 @@ export default {
     :class="{
       'gl-h-full': list.collapsed,
       'gl-bg-gray-50': isSwimlanesHeader,
-      'gl-border-t-solid gl-border-4 gl-rounded-top-left-base gl-rounded-top-right-base': isLabelList,
+      'gl-border-t-solid gl-border-4 gl-rounded-top-left-base gl-rounded-top-right-base':
+        isLabelList,
       'gl-bg-red-50 gl-rounded-top-left-base gl-rounded-top-right-base': boardItemsSizeExceedsMax,
     }"
     :style="headerStyle"
@@ -395,7 +396,7 @@ export default {
           v-gl-tooltip.hover
           :class="{
             'gl-text-gray-500': list.collapsed,
-            'gl-display-block': list.collapsed || listType === 'milestone',
+            'gl-block': list.collapsed || listType === 'milestone',
           }"
           :title="listTitle"
           class="board-title-main-text gl-text-truncate"
@@ -449,18 +450,18 @@ export default {
       <!-- EE end -->
 
       <div
-        class="gl-font-sm issue-count-badge gl-display-inline-flex gl-pr-2 no-drag gl-text-secondary"
+        class="gl-font-sm issue-count-badge gl-inline-flex gl-pr-2 no-drag gl-text-secondary"
         data-testid="issue-count-badge"
         :class="{
           '!gl-hidden': list.collapsed && isSwimlanesHeader,
           'gl-p-0': list.collapsed,
         }"
       >
-        <span class="gl-display-inline-flex" :class="{ 'gl-rotate-90': list.collapsed }">
+        <span class="gl-inline-flex" :class="{ 'gl-rotate-90': list.collapsed }">
           <gl-tooltip :target="() => $refs.itemCount" :title="itemsTooltipLabel" />
           <span
             ref="itemCount"
-            class="gl-display-inline-flex gl-align-items-center"
+            class="gl-inline-flex gl-align-items-center"
             data-testid="item-count"
           >
             <gl-icon class="gl-mr-2" :name="countIcon" :size="14" />
@@ -473,7 +474,7 @@ export default {
           <!-- EE start -->
           <template v-if="canShowTotalWeight">
             <gl-tooltip :target="() => $refs.weightTooltip" :title="weightCountToolTip" />
-            <span ref="weightTooltip" class="gl-display-inline-flex gl-ml-3" data-testid="weight">
+            <span ref="weightTooltip" class="gl-inline-flex gl-ml-3" data-testid="weight">
               <gl-icon class="gl-mr-2" name="weight" :size="14" />
               {{ totalIssueWeight }}
             </span>

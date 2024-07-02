@@ -133,22 +133,7 @@ To enable product analytics on your instance:
 
 1. On the left sidebar, at the bottom, select **Admin Area**.
 1. Select **Settings > Analytics**.
-1. Expand **Product analytics** and enter the configuration values.
-1. Select **Save changes**.
-
-### Group-level settings
-
-Prerequisites:
-
-- You must have the Owner role for the group.
-
-NOTE:
-These group-level settings are available for top-level groups and cascade to all projects that belong to the group.
-
-1. On the left sidebar, select **Search or go to** and find your group.
-1. Select **Settings > General**.
-1. Expand the **Permissions and group features** section.
-1. Check **Use experiment and beta features** checkbox.
+1. Enter the configuration values.
 1. Select **Save changes**.
 
 ### Project-level settings
@@ -253,26 +238,40 @@ The autofill approach has both benefits and limitations.
   - Data exports have rows for the entire date range, making data analysis easier.
 - Limitations:
   - The `day` [granularity](https://cube.dev/docs/product/apis-integrations/rest-api/query-format) must be used.
-  All other granularities are not supported.
+    All other granularities are not supported.
   - Only date ranges defined by the [`inDateRange`](https://cube.dev/docs/product/apis-integrations/rest-api/query-format#indaterange) filter are filled.
     - The date selector in the UI already uses this filter.
   - The filling of data ignores the query-defined limit. If you set a limit of 10 data points over 20 days, it
-  returns 20 data points, with the missing data filled by `0`. [Issue 417231](https://gitlab.com/gitlab-org/gitlab/-/issues/417231) proposes a solution to this limitation.
+    returns 20 data points, with the missing data filled by `0`. [Issue 417231](https://gitlab.com/gitlab-org/gitlab/-/issues/417231) proposes a solution to this limitation.
 
 ## Funnel analysis
 
 Use funnel analysis to understand the flow of users through your application, and where
 users drop out of a predefined flow (for example, a checkout process or ticket purchase).
 
-Each product can also define an unlimited number of funnels.
+Each project can define an unlimited number of funnels.
 Like dashboards, funnels are defined with the GitLab YAML schema
 and stored in the `.gitlab/analytics/funnels/` directory of a project repository.
+If a repository has a custom dashboards pointer project that points to another repository,
+funnels must be defined in the pointer project.
 
-Funnel definitions must include the keys `name` and `seconds_to_convert`, and an array of `steps`.
+### Create a funnel dashboard
+
+To create a funnel dashboard, you must first create a funnel definition file and a visualization.
+Each funnel must have a custom visualization defined for it.
+When funnel definitions and visualizations are ready,
+you can [create a custom dashboard](../analytics/analytics_dashboards.md#create-a-custom-dashboard)
+to visualize funnel analysis behavior.
+
+#### Create a funnel definition
+
+1. In the `.gitlab/analytics/` directory, create a directory named `funnels`.
+1. In the new `.gitlab/analytics/funnels` directory, create a funnel definition YAML file.
+
+Funnel definitions must include the key `seconds_to_convert` and an array of `steps`.
 
 | Key                  | Description                                              |
 |----------------------|----------------------------------------------------------|
-| `name`               | The name of the funnel.                                  |
 | `seconds_to_convert` | The number of seconds a user has to complete the funnel. |
 | `steps`              | An array of funnel steps.                                |
 
@@ -284,12 +283,9 @@ Each step must include the keys `name`, `target`, and `action`.
 | `action` | The action performed. (Only `pageview` is supported.)                          |
 | `target` | The target of the step. (Because only `pageview` is supported, this should be a path.) |
 
-### Example funnel definition
-
 The following example defines a funnel that tracks users who completed a purchase within one hour by going through three target pages:
 
 ```yaml
-name: completed_purchase
 seconds_to_convert: 3600
 steps:
   - name: view_page_1
@@ -303,10 +299,50 @@ steps:
     action: 'pageview'
 ```
 
+#### Create a funnel visualization
+
+To create funnel visualizations, follow the steps for [defining a chart visualization](../analytics/analytics_dashboards.md#define-a-chart-visualization).
+Funnel visualizations support the measure `count` and the dimension `step`.
+
+The following example defines a column chart that visualizes the number of users who reached different steps in a funnel:
+
+```yaml
+version: 1
+type: ColumnChart
+data:
+  type: cube_analytics
+  query:
+    measures:
+      - FUNNEL_NAME.count
+    dimensions:
+      - FUNNEL_NAME.step
+    limit: 100
+    timezone: UTC
+    timeDimensions: []
+options:
+  xAxis:
+    name: Step
+    type: category
+  yAxis:
+    name: Total
+    type: value
+```
+
+NOTE:
+The funnel name defined in the YAML definition is converted to a slug that can be referenced in visualization definitions.
+For example, the funnel name `Successful Conversions` is converted to `successful_conversions`.
+
 ### Query a funnel
 
 You can [query the funnel data with the REST API](../../api/product_analytics.md#send-query-request-to-cube).
 To do this, you can use the example query body below, where you need to replace `FUNNEL_NAME` with your funnel's name.
+
+NOTE:
+The name of a funnel is generated from the filename of the funnel definition YAML file,
+by separating words with underscores and removing special characters.
+For example, for a funnel definition file in `.gitlab/analytics/funnels/Successful Conversions.yaml`
+the funnel name is `successful_conversions`.
+This funnel name can be referenced in visualization definitions.
 
 NOTE:
 The `afterDate` filter is not supported. Use `beforeDate` or `inDateRange`.
@@ -318,7 +354,7 @@ The `afterDate` filter is not supported. Use `beforeDate` or `inDateRange`.
         "FUNNEL_NAME.count"
       ],
       "order": {
-        "completed_purchase.count": "desc"
+        "FUNNEL_NAME.count": "desc"
       },
       "filters": [
         {

@@ -17,8 +17,10 @@ RSpec.describe 'Database schema', feature_category: :database do
     slack_integrations_scopes: [%w[slack_api_scope_id]],
     notes: %w[namespace_id], # this index is added in an async manner, hence it needs to be ignored in the first phase.
     users: [%w[accepted_term_id]],
-    ci_builds: [%w[partition_id stage_id], %w[partition_id execution_config_id]], # https://gitlab.com/gitlab-org/gitlab/-/merge_requests/142804#note_1745483081
-    p_ci_builds: [%w[partition_id stage_id], %w[partition_id execution_config_id]] # https://gitlab.com/gitlab-org/gitlab/-/merge_requests/142804#note_1745483081
+    ci_builds: [%w[partition_id stage_id], %w[partition_id execution_config_id], %w[partition_id upstream_pipeline_id], %w[auto_canceled_by_partition_id auto_canceled_by_id], %w[partition_id commit_id]], # https://gitlab.com/gitlab-org/gitlab/-/merge_requests/142804#note_1745483081
+    p_ci_builds: [%w[partition_id stage_id], %w[partition_id execution_config_id]], # https://gitlab.com/gitlab-org/gitlab/-/merge_requests/142804#note_1745483081
+    ai_testing_terms_acceptances: %w[user_id], # testing terms only have 1 entry, and if the user is deleted the record should remain
+    snippets: %w[organization_id] # this index is added in an async manner, hence it needs to be ignored in the first phase.
   }.with_indifferent_access.freeze
 
   TABLE_PARTITIONS = %w[ci_builds_metadata].freeze
@@ -34,6 +36,7 @@ RSpec.describe 'Database schema', feature_category: :database do
   # See: https://docs.gitlab.com/ee/development/database/foreign_keys.html#naming-foreign-keys
   IGNORED_FK_COLUMNS = {
     abuse_reports: %w[reporter_id user_id],
+    abuse_report_notes: %w[discussion_id],
     application_settings: %w[performance_bar_allowed_group_id slack_app_id snowplow_app_id eks_account_id eks_access_key_id],
     approvals: %w[user_id],
     approver_groups: %w[target_id],
@@ -62,9 +65,10 @@ RSpec.describe 'Database schema', feature_category: :database do
     ci_pipeline_messages: %w[partition_id],
     ci_pipeline_metadata: %w[partition_id],
     ci_pipeline_variables: %w[partition_id],
-    ci_pipelines: %w[partition_id],
+    ci_pipelines: %w[partition_id auto_canceled_by_partition_id],
     ci_runner_projects: %w[runner_id],
     ci_sources_pipelines: %w[partition_id source_partition_id source_job_id],
+    ci_sources_projects: %w[partition_id],
     ci_stages: %w[partition_id project_id pipeline_id],
     ci_trigger_requests: %w[commit_id],
     ci_job_artifact_states: %w[partition_id],
@@ -153,9 +157,18 @@ RSpec.describe 'Database schema', feature_category: :database do
     webauthn_registrations: %w[u2f_registration_id], # this column will be dropped
     ml_candidates: %w[internal_id],
     value_stream_dashboard_counts: %w[namespace_id],
+    vulnerability_export_parts: %w[start_id end_id],
     zoekt_indices: %w[namespace_id], # needed for cells sharding key
     zoekt_repositories: %w[namespace_id project_identifier], # needed for cells sharding key
-    zoekt_tasks: %w[project_identifier partition_id zoekt_repository_id] # needed for: cells sharding key, partitioning, and performance reasons
+    zoekt_tasks: %w[project_identifier partition_id zoekt_repository_id], # needed for: cells sharding key, partitioning, and performance reasons
+    # TODO: To remove with https://gitlab.com/gitlab-org/gitlab/-/merge_requests/155256
+    approval_group_rules: %w[approval_policy_rule_id],
+    approval_project_rules: %w[approval_policy_rule_id],
+    approval_merge_request_rules: %w[approval_policy_rule_id],
+    scan_result_policy_violations: %w[approval_policy_rule_id],
+    software_license_policies: %w[approval_policy_rule_id],
+    ai_testing_terms_acceptances: %w[user_id], # testing terms only have 1 entry, and if the user is deleted the record should remain
+    namespace_settings: %w[early_access_program_joined_by_id] # isn't used inside product itself. Only through Snowflake
   }.with_indifferent_access.freeze
 
   context 'for table' do
@@ -321,7 +334,8 @@ RSpec.describe 'Database schema', feature_category: :database do
     "Packages::Composer::Metadatum" => %w[composer_json],
     "RawUsageData" => %w[payload], # Usage data payload changes often, we cannot use one schema
     "Releases::Evidence" => %w[summary],
-    "Vulnerabilities::Finding::Evidence" => %w[data] # Validation work in progress
+    "Vulnerabilities::Finding::Evidence" => %w[data], # Validation work in progress
+    "Ai::DuoWorkflows::Checkpoint" => %w[checkpoint metadata] # https://gitlab.com/gitlab-org/gitlab/-/issues/468632
   }.freeze
 
   # We are skipping GEO models for now as it adds up complexity
@@ -394,6 +408,8 @@ RSpec.describe 'Database schema', feature_category: :database do
       partitionable_models = Ci::Partitionable::Testing.partitionable_models
       (partitionable_models - skip_tables).each do |klass|
         model = klass.safe_constantize
+        next unless model
+
         table_name = model.table_name
 
         primary_key_columns = Array.wrap(model.connection.primary_key(table_name))

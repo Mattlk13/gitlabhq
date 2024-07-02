@@ -10,18 +10,22 @@ module QA
         Flow::Login.sign_in
         project.visit!
         Page::Project::Show.perform(&:open_web_ide!)
-        Page::Project::WebIDE::VSCode.perform(&:wait_for_ide_to_load)
+        Page::Project::WebIDE::VSCode.perform do |vscode|
+          vscode.wait_for_ide_to_load
+          vscode.wait_for_file_to_load('README.md')
+        end
       end
 
       context 'when a file with the same name already exists' do
         let(:file_name) { 'README.md' }
 
-        it 'throws an error', :blocking, testcase: 'https://gitlab.com/gitlab-org/gitlab/-/quality/test_cases/390005' do
+        it 'throws an error', testcase: 'https://gitlab.com/gitlab-org/gitlab/-/quality/test_cases/390005' do
           Page::Project::WebIDE::VSCode.perform do |ide|
             ide.upload_file(file_path)
 
-            expect(ide)
-              .to have_message("A file or folder with the name 'README.md' already exists in the destination folder")
+            expect(ide).to have_message(
+              "A file or folder with the name 'README.md' already exists in the destination folder"
+            )
           end
         end
       end
@@ -30,13 +34,13 @@ module QA
         it "verifies it successfully uploads and commits to a MR" do
           Page::Project::WebIDE::VSCode.perform do |ide|
             ide.upload_file(file_path)
+            Support::Waiter.wait_until { ide.has_pending_changes? }
             ide.commit_and_push_to_new_branch(file_name)
 
             expect(ide).to have_message('Success! Your changes have been committed.')
 
             ide.create_merge_request
           end
-
           # Opens the MR in new tab and verify the file is in the MR
           page.driver.browser.switch_to.window(page.driver.browser.window_handles.last)
 
@@ -53,7 +57,7 @@ module QA
         it_behaves_like 'upload a file'
       end
 
-      context 'when the file is an image', :blocking,
+      context 'when the file is an image',
         testcase: 'https://gitlab.com/gitlab-org/gitlab/-/quality/test_cases/390007' do
         let(:file_name) { 'dk.png' }
 

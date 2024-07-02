@@ -88,7 +88,7 @@ export default {
               :selected="isDetailsShown"
               icon="ellipsis_h"
               size="small"
-              class="gl-ml-2 gl-display-none gl-sm-display-block"
+              class="gl-ml-2 gl-hidden sm:gl-block"
               :title="$options.i18n.toggleDetailsLabel"
               :aria-label="$options.i18n.toggleDetailsLabel"
               :aria-expanded="isDetailsShown"
@@ -116,7 +116,7 @@ export default {
                 'right-primary'
               ]
             "
-            class="gl-display-flex gl-align-items-center gl-sm-text-body gl-sm-font-weight-semibold gl-min-h-6"
+            class="gl-display-flex gl-align-items-center gl-sm-text-body gl-min-h-6"
           >
             <slot name="right-primary"></slot>
           </div>

@@ -1051,6 +1051,21 @@ This file is located at:
 - `/var/log/gitlab/gitlab-rails/epic_work_item_sync.log` on Linux package installations.
 - `/home/git/gitlab/log/epic_work_item_sync.log` on self-compiled installations.
 
+## `secret_push_protection.log`
+
+DETAILS:
+**Tier:** Ultimate
+**Offering:** GitLab.com, GitLab Dedicated
+
+> - [Introduced](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/137812) in GitLab 16.7.
+
+The `secret_push_protection.log` file logs information related to [Secret Push Protection](../../user/application_security/secret_detection/secret_push_protection/index.md) feature.
+
+This file is located at:
+
+- `/var/log/gitlab/gitlab-rails/secret_push_protection.log` on Linux package installations.
+- `/home/git/gitlab/log/secret_push_protection.log` on self-compiled installations.
+
 ## Registry logs
 
 For Linux package installations, container registry logs are in `/var/log/gitlab/registry/current`.

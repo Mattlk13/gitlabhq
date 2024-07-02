@@ -22,6 +22,9 @@
     "admin_push_rules": {
       "type": "boolean"
     },
+    "admin_runners": {
+      "type": "boolean"
+    },
     "admin_terraform_state": {
       "type": "boolean"
     },
@@ -52,6 +55,9 @@
     "read_code": {
       "type": "boolean"
     },
+    "read_crm_contact": {
+      "type": "boolean"
+    },
     "read_dependency": {
       "type": "boolean"
     },
@@ -62,6 +68,9 @@
       "type": "boolean"
     },
     "remove_project": {
+      "type": "boolean"
+    },
+    "read_runners": {
       "type": "boolean"
     }
   }

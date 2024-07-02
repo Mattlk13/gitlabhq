@@ -1252,7 +1252,8 @@ class MergeRequest < ApplicationRecord
       skip_blocked_check: merge_when_checks_pass_strat,
       skip_discussions_check: merge_when_checks_pass_strat,
       skip_external_status_check: merge_when_checks_pass_strat,
-      skip_requested_changes_check: merge_when_checks_pass_strat
+      skip_requested_changes_check: merge_when_checks_pass_strat,
+      skip_jira_check: merge_when_checks_pass_strat
     }
   end
 
@@ -1264,6 +1265,7 @@ class MergeRequest < ApplicationRecord
   # skip_blocked_check
   # skip_external_status_check
   # skip_requested_changes_check
+  # skip_jira_check
   def mergeable?(check_mergeability_retry_lease: false, skip_rebase_check: false, **mergeable_state_check_params)
     return false unless mergeable_state?(**mergeable_state_check_params)
 
@@ -1303,6 +1305,7 @@ class MergeRequest < ApplicationRecord
   # skip_blocked_check
   # skip_external_status_check
   # skip_requested_changes_check
+  # skip_jira_check
   def mergeable_state?(**params)
     results = check_mergeability_states(checks: self.class.mergeable_state_checks, **params)
 
@@ -1358,7 +1361,15 @@ class MergeRequest < ApplicationRecord
   def auto_merge_strategy
     return unless auto_merge_enabled?
 
-    merge_params['auto_merge_strategy'] || AutoMergeService::STRATEGY_MERGE_WHEN_PIPELINE_SUCCEEDS
+    merge_params['auto_merge_strategy'] || default_auto_merge_strategy
+  end
+
+  def default_auto_merge_strategy
+    if Feature.enabled?(:merge_when_checks_pass, project)
+      AutoMergeService::STRATEGY_MERGE_WHEN_CHECKS_PASS
+    else
+      AutoMergeService::STRATEGY_MERGE_WHEN_PIPELINE_SUCCEEDS
+    end
   end
 
   def auto_merge_strategy=(strategy)
@@ -1490,6 +1501,18 @@ class MergeRequest < ApplicationRecord
     ext.analyze("#{title}\n#{description}")
 
     ext.issues - visible_closing_issues_for(current_user)
+  end
+
+  def related_issues(user)
+    visible_notes = user.can?(:read_internal_note, project) ? notes : notes.not_internal
+
+    messages = [title, description, *visible_notes.pluck(:note)]
+    messages += commits.map(&:safe_message) if merge_request_diff.persisted?
+
+    ext = Gitlab::ReferenceExtractor.new(project, user)
+    ext.analyze(messages.join("\n"))
+
+    ext.issues
   end
 
   def target_project_path
@@ -1744,7 +1767,13 @@ class MergeRequest < ApplicationRecord
   def update_head_pipeline
     find_diff_head_pipeline.try do |pipeline|
       self.head_pipeline = pipeline
-      update_column(:head_pipeline_id, head_pipeline.id) if head_pipeline_id_changed?
+
+      next unless head_pipeline_id_changed?
+
+      update_columns(
+        head_pipeline_id: head_pipeline.id,
+        retargeted: false
+      )
     end
   end
 
@@ -2281,6 +2310,16 @@ class MergeRequest < ApplicationRecord
 
   def temporarily_unapproved?
     false
+  end
+
+  def has_jira_issue_keys?
+    return false unless project&.jira_integration&.reference_pattern
+
+    Atlassian::JiraIssueKeyExtractor.has_keys?(
+      title,
+      description,
+      custom_regex: project.jira_integration.reference_pattern
+    )
   end
 
   private

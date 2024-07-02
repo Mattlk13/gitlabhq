@@ -12,7 +12,7 @@ recommends these word choices. In addition:
 
 - The GitLab handbook contains a list of
   [top misused terms](https://handbook.gitlab.com/handbook/communication/top-misused-terms/).
-- The documentation [style guide](../styleguide#language) includes details
+- The documentation [style guide](../styleguide/index.md#language) includes details
   about language and capitalization.
 - The GitLab handbook provides guidance on the [use of third-party trademarks](https://handbook.gitlab.com/handbook/legal/policies/product-third-party-trademarks-guidelines/#process-for-adding-third-party-trademarks-to-gitlab).
 
@@ -35,7 +35,7 @@ When possible, use the full phrase: **the `.gitlab-ci.yml` file**
 Although users can specify another name for their CI/CD configuration file,
 in most cases, use **the `.gitlab-ci.yml` file** instead.
 
-## `&`
+## `&` (ampersand)
 
 Do not use Latin abbreviations. Use **and** instead, unless you are documenting a UI element that uses an `&`.
 
@@ -1154,6 +1154,22 @@ Instead of:
 - In GitLab 14.1 and above...
 - In GitLab 14.1 and newer...
 
+## level
+
+If you can, avoid using `level` in the context of an instance, project, or group.
+
+Use:
+
+- This setting is turned on for the instance.
+- This setting is turned on for the group and its subgroups.
+- This setting is turned on for projects.
+
+Instead of:
+
+- This setting is turned on at the instance level.
+- This setting is turned on at the group level.
+- This is a project-level setting.
+
 ## list
 
 Do not use **list** when referring to a [**dropdown list**](#dropdown-list).
@@ -1814,6 +1830,12 @@ Use **select** with buttons, links, menu items, and lists. **Select** applies to
 while **click** is more specific to a mouse.
 
 However, you can make an exception for **right-click** and **click-through demo**.
+
+## self-hosted model
+
+Use **self-hosted model** (lowercase) to refer to a language model that's hosted by a customer, rather than GitLab.
+
+The language model might be an LLM (large language model), but it might not be.
 
 ## self-managed
 

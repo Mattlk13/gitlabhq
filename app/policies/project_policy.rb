@@ -243,15 +243,15 @@ class ProjectPolicy < BasePolicy
   end
 
   condition(:user_defined_variables_allowed) do
-    if ::Feature.enabled?(:allow_user_variables_by_minimum_role, @subject)
-      @subject.override_pipeline_variables_allowed?(team_access_level)
-    else
-      !@subject.restrict_user_defined_variables? || can?(:maintainer_access)
-    end
+    @subject.override_pipeline_variables_allowed?(team_access_level)
   end
 
   condition(:push_repository_for_job_token_allowed) do
-    @user&.from_ci_job_token? && project.ci_push_repository_for_job_token_allowed? && @user.ci_job_token_scope.self_referential?(project)
+    if ::Feature.enabled?(:allow_push_repository_for_job_token, @subject)
+      @user&.from_ci_job_token? && project.ci_push_repository_for_job_token_allowed? && @user.ci_job_token_scope.self_referential?(project)
+    else
+      false
+    end
   end
 
   condition(:packages_disabled, scope: :subject) { !@subject.packages_enabled }
@@ -619,12 +619,14 @@ class ProjectPolicy < BasePolicy
     enable :read_import_error
     enable :admin_cicd_variables
     enable :admin_push_rules
+    enable :admin_runner
     enable :manage_deploy_tokens
     enable :manage_merge_request_settings
     enable :change_restrict_user_defined_variables
   end
 
   rule { can?(:admin_build) }.enable :manage_trigger
+  rule { can?(:admin_runner) }.enable :read_runner
 
   rule { public_project & metrics_dashboard_allowed }.policy do
     enable :metrics_dashboard

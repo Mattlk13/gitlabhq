@@ -97,7 +97,7 @@ export default {
     <gl-loading-icon v-if="updateInProgress" inline />
     <confidentiality-badge
       v-if="isWorkItemConfidential"
-      class="gl-align-middle gl-display-inline-flex!"
+      class="gl-align-middle !gl-inline-flex!"
       :issuable-type="workItemType"
       :workspace-type="$options.WORKSPACE_PROJECT"
       hide-text-in-small-screens
@@ -134,7 +134,7 @@ export default {
 
     <span
       v-if="updatedAt"
-      class="gl-ml-5 gl-display-none gl-sm-display-inline-block gl-align-middle"
+      class="gl-ml-5 gl-hidden sm:gl-inline-block gl-align-middle"
       data-testid="work-item-updated"
     >
       <gl-sprintf :message="__('Updated %{timeAgo}')">

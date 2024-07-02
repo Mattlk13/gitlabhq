@@ -266,7 +266,7 @@ export default {
 };
 </script>
 <template>
-  <div v-if="approvals" class="js-mr-approvals mr-section-container mr-widget-workflow">
+  <div v-if="approvals" class="js-mr-approvals mr-section-container">
     <state-container
       :is-loading="isLoading"
       :mr="mr"
@@ -280,10 +280,8 @@ export default {
     >
       <template v-if="isLoading">{{ $options.FETCH_LOADING }}</template>
       <template v-else>
-        <div class="gl-display-flex gl-flex-direction-column">
-          <div
-            class="gl-display-flex gl-flex-direction-column gl-sm-flex-direction-row gl-gap-3 gl-align-items-flex-start"
-          >
+        <div class="gl-flex gl-flex-col">
+          <div class="gl-flex gl-flex-col sm:gl-flex-row gl-gap-3 gl-items-baseline">
             <div v-if="requireSamlAuthToApprove && showApprove">
               <gl-form
                 ref="form"

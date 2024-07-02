@@ -7,8 +7,9 @@ module Banzai
       # similar functionality in reference filtering.
       class AbstractReferenceFilter < ReferenceFilter
         include CrossProjectReference
+        prepend Concerns::PipelineTimingCheck
 
-        RENDER_TIMEOUT = 4.seconds
+        RENDER_TIMEOUT = 2.seconds
 
         def initialize(doc, context = nil, result = nil)
           super
@@ -40,7 +41,7 @@ module Banzai
         def references_in(text, pattern = object_class.reference_pattern)
           text.gsub(pattern) do |match|
             if ident = identifier($~)
-              yield match, ident, $~[:project], $~[:namespace], $~
+              yield match, ident, $~.named_captures['project'], $~.named_captures['namespace'], $~
             else
               match
             end
@@ -123,7 +124,7 @@ module Banzai
           # protect against certain reference_patterns that are difficult to optimize
           # against malicious input, such as Commit.reference_pattern
           Gitlab::RenderTimeout.timeout(foreground: RENDER_TIMEOUT, background: RENDER_TIMEOUT) do
-            reference_cache.load_reference_cache(nodes) if respond_to?(:parent_records)
+            reference_cache.load_reference_cache(nodes) if respond_to?(:parent_records) && nodes.present?
 
             ref_pattern = object_reference_pattern
             link_pattern = object_class.link_reference_pattern
@@ -196,6 +197,8 @@ module Banzai
           references_in(text, pattern) do |match, id, project_ref, namespace_ref, matches|
             parent_path = if parent_type == :group
                             reference_cache.full_group_path(namespace_ref)
+                          elsif parent_type == :namespace
+                            reference_cache.full_namespace_path(matches)
                           else
                             reference_cache.full_project_path(namespace_ref, project_ref, matches)
                           end
@@ -254,15 +257,21 @@ module Banzai
         end
 
         def data_attributes_for(text, parent, object, link_content: false, link_reference: false)
-          object_parent_type = parent.is_a?(Group) ? :group : :project
+          parent_id = case parent
+                      when Group
+                        { group: parent.id, namespace: parent.id }
+                      when Project
+                        { project: parent.id }
+                      when Namespaces::ProjectNamespace
+                        { namespace: parent.id, project: parent.project.id }
+                      end
 
           {
             original: escape_html_entities(text),
             link: link_content,
             link_reference: link_reference,
-            object_parent_type => parent.id,
             object_sym => object.id
-          }
+          }.merge(parent_id)
         end
 
         def object_link_text_extras(object, matches)

@@ -51,7 +51,7 @@ module API
       end
       resource :projects, requirements: API::NAMESPACE_OR_PROJECT_REQUIREMENTS do
         before { authenticate! }
-        before { authorize_admin_project }
+        before { authorize_admin_integrations }
 
         desc 'List all active integrations' do
           detail 'Get a list of all active project integrations.'
@@ -106,7 +106,19 @@ module API
               params.delete(:active)
             end
 
-            if integration&.update(params)
+            render_api_error!('400 Bad Request', 400) if integration.nil?
+
+            if Feature.enabled?(:integration_api_inheritance, type: :gitlab_com_derisk)
+              result = ::Integrations::UpdateService.new(
+                current_user: current_user, integration: integration, attributes: params
+              ).execute
+
+              if result.success?
+                present integration, with: Entities::ProjectIntegration
+              else
+                render_api_error!(result.message, 400)
+              end
+            elsif integration&.update(params)
               present integration, with: Entities::ProjectIntegration
             else
               render_api_error!('400 Bad Request', 400)

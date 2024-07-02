@@ -125,7 +125,7 @@ RSpec::Matchers.define :trigger_internal_events do |*event_names|
     check_if_events_exist!(@event_names)
 
     allow(Gitlab::InternalEvents).to receive(:track_event).and_call_original
-    allow(Gitlab::UsageDataCounters::HLLRedisCounter).to receive(:track_event).and_call_original
+    allow(Gitlab::Redis::HLL).to receive(:add).and_call_original
 
     collect_expectations do |event_name|
       [
@@ -249,15 +249,13 @@ RSpec::Matchers.define :trigger_internal_events do |*event_names|
 
   def expect_redis(event_name)
     Gitlab::InternalEvents::EventDefinitions.unique_properties(event_name).map do |property|
-      expect(Gitlab::UsageDataCounters::HLLRedisCounter)
-        .to receive_expected_count_of(:track_event)
-        .with(
-          event_name,
-          include(
-            values: @properties.any? ? id_for(property) : anything,
-            property_name: property
-          )
-        )
+      expect(Gitlab::Redis::HLL)
+        .to receive_expected_count_of(:add)
+        .with(hash_including(
+          key: a_string_including(event_name),
+          value: @properties.any? ? id_for(property) : anything,
+          expiry: 6.weeks
+        ))
     end
   end
 
@@ -266,7 +264,7 @@ RSpec::Matchers.define :trigger_internal_events do |*event_names|
 
     expected_context = { project_id: id_for(:project), namespace_id: id_for(:namespace) }
     additional_properties = @properties.slice(:label, :property, :value)
-    expected_context.merge!(additional_properties) if additional_properties.any?
+    expected_context[:additional_properties] = additional_properties if additional_properties.any?
 
     expect(product_analytics_spy).to receive_expected_count_of(:track).with(
       event_name,
@@ -365,6 +363,7 @@ RSpec::Matchers.define :increment_usage_metrics do |*key_paths|
     @chained_methods ||= default_chained_methods
 
     check_if_params_provided!(:key_paths, key_paths)
+    stub_metric_timeframes
   end
 
   # Builds a single change matcher for verifying all
@@ -387,7 +386,7 @@ RSpec::Matchers.define :increment_usage_metrics do |*key_paths|
       stub_usage_data_connections if metric_definition.data_source == 'database'
 
       metric = Gitlab::Usage::Metric.new(metric_definition)
-      instrumentation_object = stub_metric_timeframe(metric)
+      instrumentation_object = metric.send(:instrumentation_object)
 
       instrumentation_object.value.tap do |value|
         @values[key_path] ||= []

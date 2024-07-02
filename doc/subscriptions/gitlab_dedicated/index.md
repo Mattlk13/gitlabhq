@@ -106,7 +106,23 @@ As a single-tenant SaaS solution, GitLab Dedicated provides infrastructure-level
 
 #### Access controls
 
-GitLab Dedicated adheres to the [principle of least privilege](https://handbook.gitlab.com/handbook/security/access-management-policy/#principle-of-least-privilege) to control access to customer tenant environments. Tenant AWS accounts live under a top-level GitLab Dedicated AWS parent organization. Access to the AWS Organization is restricted to select GitLab team members. All user accounts within the AWS Organization follow the overall [GitLab Access Management Policy](https://handbook.gitlab.com/handbook/security/access-management-policy/). Direct access to customer tenant environments is restricted to a single Hub account. The GitLab Dedicated Control Plane uses the Hub account to perform automated actions over tenant accounts when managing environments. Similarly, GitLab Dedicated engineers do not have direct access to customer tenant environments. In [break glass](https://gitlab.com/gitlab-com/gl-infra/gitlab-dedicated/team/-/blob/main/engineering/breaking_glass.md) situations, where access to resources in the tenant environment is required to address a high-severity issue, GitLab engineers must go through the Hub account to manage those resources. This is done via an approval process, and after permission is granted, the engineer will assume an IAM role on a temporary basis to access tenant resources through the Hub account. All actions within the hub account and tenant account are logged to CloudTrail.
+GitLab Dedicated adheres to the
+[principle of least privilege](https://handbook.gitlab.com/handbook/security/access-management-policy/#principle-of-least-privilege)
+to control access to customer tenant environments. Tenant AWS accounts live under
+a top-level GitLab Dedicated AWS parent organization. Access to the AWS Organization
+is restricted to select GitLab team members. All user accounts within the AWS Organization
+follow the overall [GitLab Access Management Policy](https://handbook.gitlab.com/handbook/security/access-management-policy/).
+Direct access to customer tenant environments is restricted to a single Hub account.
+The GitLab Dedicated Control Plane uses the Hub account to perform automated actions
+over tenant accounts when managing environments. Similarly, GitLab Dedicated engineers
+do not have direct access to customer tenant environments.
+In [break glass](https://gitlab.com/gitlab-com/gl-infra/gitlab-dedicated/team/-/blob/main/engineering/breaking_glass.md)
+situations, where access to resources in the tenant environment is required to
+address a high-severity issue, GitLab engineers must go through the Hub account
+to manage those resources. This is done via an approval process, and after permission
+is granted, the engineer will assume an IAM role on a temporary basis to access
+tenant resources through the Hub account. All actions within the hub account and
+tenant account are logged to CloudTrail.
 
 Inside tenant accounts, GitLab leverages Intrusion Detection and Malware Scanning capabilities from AWS GuardDuty. Infrastructure logs are monitored by the GitLab Security Incident Response Team to detect anomalous events.
 
@@ -116,12 +132,19 @@ GitLab Dedicated provides access to [audit and system logs](../../administration
 
 ### Bring your own domain
 
-You can configure a custom domain name for your GitLab Dedicated instance. So instead of `customer_name.gitlab-dedicated.com` you can use any domain name that you own, like `gitlab.my-company.com`. You can leverage this feature to:
+You can use your own hostname to access your GitLab Dedicated instance. Instead of `customer_name.gitlab-dedicated.com`, you can use a hostname for a domain that you own, like `gitlab.my-company.com`. Optionally, you can also provide a custom hostname for the bundled container registry and KAS services for your GitLab Dedicated instance. For example, `gitlab-registry.my-company.com` and `gitlab-kas.my-company.com`.
+
+Add a custom hostname to:
 
 - Increase control over branding
 - Avoid having to migrate away from an existing domain already configured for a self-managed instance
 
-Optionally, you can also provide custom domain names for the bundled container registry and KAS services, like `gitlab-registry.my-company.com` and `gitlab-kas.my-company.com`.
+When you add a custom hostname:
+
+- The hostname is included in the external URL used to access your instance.
+- Any connections to your instance using the previous domain names are no longer available.
+
+You can add a custom hostname when you [create your tenant](../../administration/dedicated/create_instance.md#step-2-create-your-gitlab-dedicated-instance). To add a custom hostname after your instance is created, submit a [support ticket](https://support.gitlab.com/hc/en-us/requests/new?ticket_form_id=4414917877650).
 
 ### Maintenance
 
@@ -220,20 +243,21 @@ The following GitLab application features are not available:
   - View the [list of AI features to see which ones are supported](../../user/ai_features.md).
   - Refer to our [direction page](https://about.gitlab.com/direction/saas-platforms/dedicated/#supporting-ai-features-on-gitlab-dedicated) for more information.
 - Features other than [available features](#available-features) that must be configured outside of the GitLab user interface
-- Interacting with GitLab [Feature Flags](../../administration/feature_flags.md)
-- Any functionality or feature behind a Feature Flag that is toggled `off` by default
+- Any functionality or feature behind a Feature Flag that is toggled `off` by default.
 
 The following features will not be supported:
 
 - Mattermost
 - [Server-side Git hooks](../../administration/server_hooks.md).
   GitLab Dedicated is a SaaS service, and access to the underlying infrastructure is only available to GitLab Inc. team members. Due to the nature of server side configuration, there is a possible security concern of running arbitrary code on Dedicated services, as well as the possible impact that can have on the service SLA. Use the alternative [push rules](../../user/project/repository/push_rules.md) or [webhooks](../../user/project/integrations/webhooks.md) instead.
+- Interacting with GitLab [Feature Flags](../../administration/feature_flags.md). [Feature flags support the development and rollout of new or experimental features](https://handbook.gitlab.com/handbook/product-development-flow/feature-flag-lifecycle/#when-to-use-feature-flags) on GitLab.com. Features behind feature flags are not considered ready for production use, are experimental and therefore unsafe for GitLab Dedicated. Stability and SLAs may be affected by changing default settings.
 
 ### GitLab Dedicated service features
 
 The following operational features are not available:
 
 - Multiple Geo secondaries (Geo replicas) beyond the secondary site included by default
+- [Geo proxying](../../administration/geo/secondary_proxy/index.md) and using a unified URL
 - Self-serve purchasing and configuration
 - Multiple login providers
 - Support for deploying to non-AWS cloud providers, such as GCP or Azure

@@ -125,6 +125,65 @@ NOTE:
 Your data source must respect the filters so that all panels show data for
 the same date range.
 
+#### Feedback and error handling
+
+Visualizations can provide panel-specific feedback in the form of an alert. This allows you to highlight the panel and add a popover to
+display additional information when the user hovers over the panel. You can view online examples in the [GitLab storybook](https://gitlab-org.gitlab.io/gitlab/storybook/?path=/story/ee-vue-shared-components-panels-base--default).
+
+The supported alert variants based on our [Pajamas guidelines](https://design.gitlab.com/components/alert#variants) are:
+
+- `danger`: For unrecoverable errors encountered when loading the data or the panel.
+- `warning`: For errors or additional information that impact the data displayed in the panel.
+- `info`: For additional information or tips about the panel.
+
+Visualization panels provide props for rendering alerts:
+
+- `showAlertState`: A boolean used to show or hide an alert.
+- `alertVariant`: The type of alert, which defaults to the `danger` variant.
+- `alertPopoverTitle`: The title text for the alert.
+
+The `alert-popover` slot can be used to customize the body content of the alert:
+
+```vue
+<!-- Displays a danger popover state with a list of failures -->
+<panels-base
+ :title="Test panel with error"
+ :show-alert-state="true"
+ :alert-variant="VARIANT_DANGER"
+ :alert-popover-title="Very bad!"
+>
+  <template #alert-popover>
+    <p>{{ "The following failures occurred:" }}</p>
+    <ul>
+      <li>{{ "Failed to load api" }}</li>
+      <li>{{ "Failed to load ui" }}</li>
+    </ul>
+  </template>
+</panels-base>
+```
+
+::Tabs
+
+:::TabTitle `danger` alert
+
+Here's an example of a `danger` alert for a panel.
+
+![Panel danger alert](img/panel_error_v17_1.png)
+
+:::TabTitle `warning` alert
+
+Here's an example of a `warning` alert for a panel.
+
+![Panel warning alert](img/panel_warning_v17_1.png)
+
+:::TabTitle `info` alert
+
+Here's an example of an `info` alert for a panel.
+
+![Panel info alert](img/panel_info_v17_1.png)
+
+::EndTabs
+
 ### Dashboard configuration
 
 Here is an example dashboard configuration:
@@ -311,4 +370,27 @@ export default {
     </template>
   </customizable-dashboard>
 </template>
+```
+
+## Introducing visualizations behind a feature flag
+
+While developing new visualizations we can use [feature flags](../feature_flags/index.md#create-a-new-feature-flag) to mitigate risks of disruptions or incorrect data for users.
+
+The [`from_data`](https://gitlab.com/gitlab-org/gitlab/-/blob/master/ee/app/models/product_analytics/panel.rb#L7) method builds the panel objects for a dashboard. Using the `filter_map` method, we can add a condition to skip rendering panels that include the visualization we are developing.
+
+For example, here we have added the `enable_usage_overview_visualization` feature flag and can check it's current state to determine whether panels using the `usage_overview` visualization should be rendered:
+
+```ruby
+panel_yaml.filter_map do |panel|
+  # Skip processing the usage_overview panel if the feature flag is disabled
+  next if panel['visualization'] == 'usage_overview' && Feature.disabled?(:enable_usage_overview_visualization)
+
+  new(
+    title: panel['title'],
+    project: project,
+    grid_attributes: panel['gridAttributes'],
+    query_overrides: panel['queryOverrides'],
+    visualization: panel['visualization']
+  )
+end
 ```

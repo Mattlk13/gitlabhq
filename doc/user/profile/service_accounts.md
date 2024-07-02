@@ -51,6 +51,8 @@ Prerequisites:
 
    This service account is associated only with your top-level group.
 
+1. [List all service account users](../../api/groups.md#list-service-account-users).
+
 1. [Create a personal access token](../../api/groups.md#create-personal-access-token-for-service-account-user)
    for the service account user.
 
@@ -73,6 +75,8 @@ Prerequisites:
 
    This service account is associated with the entire instance, not a specific group
    or project in the instance.
+
+1. [List all service account users](../../api/users.md#list-service-account-users).
 
 1. [Create a personal access token](../../api/users.md#create-a-personal-access-token)
    for the service account user.
@@ -148,11 +152,21 @@ To revoke a personal access token, use the [personal access tokens API](../../ap
 
 ### Delete a service account
 
+#### GitLab.com
+
+Prerequisites:
+
+- You must have the Owner role in a top-level group.
+
+To delete a service account, [use the groups API to delete the service account user](../../api/groups.md#delete-service-account-user).
+
+#### Self-managed GitLab
+
 Prerequisites:
 
 - You must be an administrator for the instance the service account is associated with.
 
-To delete a service account, [use the API to delete the service account user](../../api/users.md#user-deletion).
+To delete a service account, [use the users API to delete the service account user](../../api/users.md#user-deletion).
 
 ### Disable a service account
 

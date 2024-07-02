@@ -2,6 +2,7 @@
 
 module API
   module Helpers
+    include Gitlab::Allowable
     include Gitlab::Utils
     include Helpers::Caching
     include Helpers::Pagination
@@ -352,6 +353,10 @@ module API
       forbidden!(reason) unless can?(current_user, action, subject)
     end
 
+    def authorize_any!(abilities, subject = :global, reason = nil)
+      forbidden!(reason) unless can_any?(current_user, abilities, subject)
+    end
+
     def authorize_push_project
       authorize! :push_code, user_project
     end
@@ -362,6 +367,10 @@ module API
 
     def authorize_admin_project
       authorize! :admin_project, user_project
+    end
+
+    def authorize_admin_integrations
+      authorize! :admin_integrations, user_project
     end
 
     def authorize_admin_group
@@ -430,10 +439,6 @@ module API
 
     def require_pages_config_enabled!
       not_found! unless Gitlab.config.pages.enabled
-    end
-
-    def can?(object, action, subject = :global)
-      Ability.allowed?(object, action, subject)
     end
 
     # Checks the occurrences of required attributes, each attribute must be present in the params hash
@@ -671,7 +676,7 @@ module API
       present_carrierwave_file!(file, **args)
     end
 
-    def present_carrierwave_file!(file, supports_direct_download: true)
+    def present_carrierwave_file!(file, supports_direct_download: true, content_disposition: nil)
       return not_found! unless file&.exists?
 
       if file.file_storage?
@@ -679,7 +684,13 @@ module API
       elsif supports_direct_download && file.class.direct_download_enabled?
         return redirect(ObjectStorage::S3.signed_head_url(file)) if request.head? && file.fog_credentials[:provider] == 'AWS'
 
-        file_url = ObjectStorage::CDN::FileUrl.new(file: file, ip_address: ip_address)
+        redirect_params = {}
+        if content_disposition
+          response_disposition = ActionDispatch::Http::ContentDisposition.format(disposition: content_disposition, filename: file.filename)
+          redirect_params[:query] = { 'response-content-disposition': response_disposition, 'response-content-type': file.content_type }
+        end
+
+        file_url = ObjectStorage::CDN::FileUrl.new(file: file, ip_address: ip_address, redirect_params: redirect_params)
         redirect(file_url.url)
       else
         header(*Gitlab::Workhorse.send_url(file.url))

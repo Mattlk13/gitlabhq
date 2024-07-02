@@ -8,6 +8,7 @@ module WikiActions
   include ProductAnalyticsTracking
   include SafeFormatHelper
   extend ActiveSupport::Concern
+  include StrongPaginationParams
 
   RESCUE_GIT_TIMEOUTS_IN = %w[show raw edit history diff pages templates].freeze
 
@@ -30,7 +31,6 @@ module WikiActions
     before_action :wiki
     before_action :page, only: [:show, :edit, :update, :history, :destroy, :diff]
     before_action :load_sidebar, except: [:pages]
-    before_action :set_content_class
 
     before_action do
       push_frontend_feature_flag(:preserve_unchanged_markdown, @group)
@@ -84,7 +84,7 @@ module WikiActions
         wiki
           .list_pages(direction: params[:direction])
           .reject { |page| page.slug.start_with?('templates/') }
-      ).page(params[:page])
+      ).page(pagination_params[:page])
     end
   end
 
@@ -95,7 +95,7 @@ module WikiActions
         wiki
           .list_pages(direction: params[:direction])
           .select { |page| page.slug.start_with?('templates/') }
-      ).page(params[:page])
+      ).page(pagination_params[:page])
     end
   end
 
@@ -123,6 +123,7 @@ module WikiActions
       # Assign vars expected by MarkupHelper
       @ref = params[:version_id]
       @path = page.path
+      @templates = templates_list
 
       render 'shared/wikis/show'
     elsif file_blob
@@ -157,6 +158,8 @@ module WikiActions
       )
     elsif show_create_form?
       handle_create_form
+    elsif wiki.exists?
+      render 'shared/wikis/404', status: :not_found
     else
       render 'shared/wikis/empty'
     end
@@ -204,11 +207,7 @@ module WikiActions
     @page = response.payload[:page]
 
     if response.success?
-      flash[:toast] = s_('Wiki|Wiki page was successfully updated.')
-
-      redirect_to(
-        wiki_page_path(wiki, page)
-      )
+      handle_action_success :updated, @page
     else
       @error = response.message
       @templates = templates_list
@@ -224,11 +223,7 @@ module WikiActions
     @page = response.payload[:page]
 
     if response.success?
-      flash[:toast] = s_('Wiki|Wiki page was successfully created.')
-
-      redirect_to(
-        wiki_page_path(wiki, page)
-      )
+      handle_action_success :created, @page
     else
       @templates = templates_list
 
@@ -240,8 +235,9 @@ module WikiActions
   # rubocop:disable Gitlab/ModuleWithInstanceVariables
   def history
     if page
-      @commits = Kaminari.paginate_array(page.versions(page: params[:page].to_i), total_count: page.count_versions)
-        .page(params[:page])
+      @commits_count = page.count_versions
+      @commits = Kaminari.paginate_array(page.versions(page: pagination_params[:page].to_i), total_count: page.count_versions)
+        .page(pagination_params[:page])
 
       render 'shared/wikis/history'
     else
@@ -291,6 +287,20 @@ module WikiActions
 
   private
 
+  def handle_action_success(action, page)
+    if page.title == Wiki::SIDEBAR
+      flash[:toast] = s_('Wiki|Sidebar was successfully created.') if action == :created
+      flash[:toast] = s_('Wiki|Sidebar was successfully updated.') if action == :updated
+
+      redirect_to wiki_path(wiki)
+    else
+      flash[:toast] = s_('Wiki|Wiki page was successfully created.') if action == :created
+      flash[:toast] = s_('Wiki|Wiki page was successfully updated.') if action == :updated
+
+      redirect_to(wiki_page_path(wiki, page))
+    end
+  end
+
   def container
     raise NotImplementedError
   end
@@ -326,12 +336,7 @@ module WikiActions
   # rubocop:disable Gitlab/ModuleWithInstanceVariables
   def load_sidebar
     @sidebar_page = wiki.find_sidebar(params[:version_id])
-
-    unless @sidebar_page # Fallback to default sidebar
-      @sidebar_wiki_entries, @sidebar_limited = wiki.sidebar_entries(load_content: Feature.enabled?(:wiki_front_matter_title, container))
-    end
-  rescue ::Gitlab::Git::CommandTimedOut => e
-    @sidebar_error = e
+    @wiki_pages_count = pages_list.total_count
   end
   # rubocop:enable Gitlab/ModuleWithInstanceVariables
 
@@ -374,10 +379,6 @@ module WikiActions
     end
   end
 
-  def set_content_class
-    @content_class = 'limit-container-width' unless fluid_layout # rubocop:disable Gitlab/ModuleWithInstanceVariables
-  end
-
   # Override CommitsHelper#view_file_button
   def view_file_button(commit_sha, *args)
     path = wiki_page_path(wiki, page, version_id: page.version.id)
@@ -400,7 +401,7 @@ module WikiActions
   end
 
   def load_content?
-    skip_actions = Feature.enabled?(:wiki_front_matter_title, container) ? %w[history destroy diff] : %w[history destroy diff show]
+    skip_actions = %w[history destroy diff]
 
     return false if skip_actions.include?(params[:action])
 

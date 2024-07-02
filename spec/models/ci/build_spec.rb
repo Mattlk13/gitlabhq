@@ -99,15 +99,13 @@ RSpec.describe Ci::Build, feature_category: :continuous_integration, factory_def
 
     context 'when running after_commit callbacks' do
       it 'tracks creation event' do
-        build = FactoryBot.build(:ci_build, user: create(:user))
-
         expect(Gitlab::InternalEvents).to receive(:track_event).with(
           'create_ci_build',
-          project: build.project,
-          user: build.user
+          project: project,
+          user: user
         )
 
-        build.save!
+        create(:ci_build, user: user, project: project)
       end
     end
   end
@@ -882,31 +880,31 @@ RSpec.describe Ci::Build, feature_category: :continuous_integration, factory_def
     end
 
     context 'when there is a runner' do
-      let(:runner) { create(:ci_runner, :project, projects: [build.project]) }
-
       before do
-        runner.update!(contacted_at: 1.second.ago)
+        create(:ci_runner, *runner_traits, :project, projects: [build.project])
       end
 
-      it { is_expected.to be_truthy }
+      context 'that is online' do
+        let(:runner_traits) { [:online] }
+
+        it { is_expected.to be_truthy }
+      end
 
       context 'that is inactive' do
-        before do
-          runner.update!(active: false)
-        end
+        let(:runner_traits) { [:online, :inactive] }
 
         it { is_expected.to be_falsey }
       end
 
-      context 'that is not online' do
-        before do
-          runner.update!(contacted_at: nil)
-        end
+      context 'that is offline' do
+        let(:runner_traits) { [:offline] }
 
         it { is_expected.to be_falsey }
       end
 
       context 'that cannot handle build' do
+        let(:runner_traits) { [:online] }
+
         before do
           expect_any_instance_of(Gitlab::Ci::Matching::RunnerMatcher).to receive(:matches?).with(build.build_matcher).and_return(false)
         end
@@ -1834,7 +1832,8 @@ RSpec.describe Ci::Build, feature_category: :continuous_integration, factory_def
   describe '#runner_manager' do
     let_it_be(:runner) { create(:ci_runner) }
     let_it_be(:runner_manager) { create(:ci_runner_machine, runner: runner) }
-    let_it_be(:build) { create(:ci_build, runner_manager: runner_manager) }
+    let_it_be(:ci_stage) { create(:ci_stage) }
+    let_it_be(:build) { create(:ci_build, runner_manager: runner_manager, ci_stage: ci_stage) }
 
     subject(:build_runner_manager) { described_class.find(build.id).runner_manager }
 
@@ -3128,7 +3127,7 @@ RSpec.describe Ci::Build, feature_category: :continuous_integration, factory_def
 
     context 'when pipeline variable overrides build variable' do
       let(:build) do
-        create(:ci_build, pipeline: pipeline, yaml_variables: [{ key: 'MYVAR', value: 'myvar', public: true }])
+        create(:ci_build, pipeline: pipeline, ci_stage: pipeline.stages.first, yaml_variables: [{ key: 'MYVAR', value: 'myvar', public: true }])
       end
 
       before do
@@ -3191,9 +3190,9 @@ RSpec.describe Ci::Build, feature_category: :continuous_integration, factory_def
 
     context 'when build has not been persisted yet' do
       let(:build) do
-        described_class.new(
+        FactoryBot.build(:ci_build,
           name: 'rspec',
-          stage: 'test',
+          ci_stage: pipeline.stages.first,
           ref: 'feature',
           project: project,
           pipeline: pipeline
@@ -3501,10 +3500,21 @@ RSpec.describe Ci::Build, feature_category: :continuous_integration, factory_def
     context 'when build has dependency which has dotenv variable' do
       let!(:prepare) { create(:ci_build, pipeline: pipeline, stage_idx: 0) }
       let!(:build) { create(:ci_build, pipeline: pipeline, stage_idx: 1, options: { dependencies: [prepare.name] }) }
+      let!(:job_artifact) { create(:ci_job_artifact, :dotenv, job: prepare, accessibility: accessibility) }
 
       let!(:job_variable) { create(:ci_job_variable, :dotenv_source, job: prepare) }
 
-      it { is_expected.to include(key: job_variable.key, value: job_variable.value, public: false, masked: false) }
+      context "when artifact is public" do
+        let(:accessibility) { 'public' }
+
+        it { is_expected.to include(key: job_variable.key, value: job_variable.value, public: false, masked: false) }
+      end
+
+      context "when artifact is private" do
+        let(:accessibility) { 'private' }
+
+        it { is_expected.not_to include(key: job_variable.key, value: job_variable.value, public: false, masked: false) }
+      end
     end
 
     context 'when ID tokens are defined on the build' do
@@ -3640,10 +3650,12 @@ RSpec.describe Ci::Build, feature_category: :continuous_integration, factory_def
 
     shared_examples 'calculates scoped_variables' do
       context 'when build has not been persisted yet' do
+        let(:ci_stage) { create(:ci_stage) }
         let(:build) do
-          described_class.new(
+          FactoryBot.build(
+            :ci_build,
             name: 'rspec',
-            stage: 'test',
+            ci_stage: ci_stage,
             ref: 'feature',
             project: project,
             pipeline: pipeline,
@@ -3700,11 +3712,20 @@ RSpec.describe Ci::Build, feature_category: :continuous_integration, factory_def
       context 'with dependency variables' do
         let!(:prepare) { create(:ci_build, name: 'prepare', pipeline: pipeline, stage_idx: 0) }
         let!(:build) { create(:ci_build, pipeline: pipeline, stage_idx: 1, options: { dependencies: ['prepare'] }) }
+        let!(:job_artifact) { create(:ci_job_artifact, :dotenv, job: prepare, accessibility: accessibility_config) }
 
         let!(:job_variable) { create(:ci_job_variable, :dotenv_source, job: prepare) }
 
-        it 'inherits dependent variables' do
-          expect(build.scoped_variables.to_hash).to include(job_variable.key => job_variable.value)
+        context 'inherits dependent variables that are public' do
+          let(:accessibility_config) { 'public' }
+
+          it { expect(build.scoped_variables.to_hash).to include(job_variable.key => job_variable.value) }
+        end
+
+        context 'does not inherits dependent variables that are private' do
+          let(:accessibility_config) { 'private' }
+
+          it { expect(build.scoped_variables.to_hash).not_to include(job_variable.key => job_variable.value) }
         end
       end
     end
@@ -3791,13 +3812,22 @@ RSpec.describe Ci::Build, feature_category: :continuous_integration, factory_def
       let!(:prepare1) { create(:ci_build, name: 'prepare1', pipeline: pipeline, stage_idx: 0) }
       let!(:prepare2) { create(:ci_build, name: 'prepare2', pipeline: pipeline, stage_idx: 0) }
       let!(:build) { create(:ci_build, pipeline: pipeline, stage_idx: 1, options: { dependencies: ['prepare1'] }) }
+      let!(:job_artifact) { create(:ci_job_artifact, :dotenv, job: prepare1, accessibility: accessibility) }
 
       let!(:job_variable_1) { create(:ci_job_variable, :dotenv_source, job: prepare1) }
       let!(:job_variable_2) { create(:ci_job_variable, job: prepare1) }
       let!(:job_variable_3) { create(:ci_job_variable, :dotenv_source, job: prepare2) }
 
-      it 'inherits only dependent variables' do
-        expect(subject.to_hash).to eq(job_variable_1.key => job_variable_1.value)
+      context 'inherits only dependent variables that are public' do
+        let(:accessibility) { 'public' }
+
+        it { expect(subject.to_hash).to eq(job_variable_1.key => job_variable_1.value) }
+      end
+
+      context 'does not inherit dependent variables that are private' do
+        let(:accessibility) { 'private' }
+
+        it { expect(subject.to_hash).not_to eq(job_variable_1.key => job_variable_1.value) }
       end
     end
 
@@ -3808,13 +3838,22 @@ RSpec.describe Ci::Build, feature_category: :continuous_integration, factory_def
       let!(:build) { create(:ci_build, pipeline: pipeline, stage_idx: 1, scheduling_type: 'dag') }
       let!(:build_needs_prepare1) { create(:ci_build_need, build: build, name: 'prepare1', artifacts: true) }
       let!(:build_needs_prepare2) { create(:ci_build_need, build: build, name: 'prepare2', artifacts: false) }
+      let!(:job_artifact) { create(:ci_job_artifact, :dotenv, job: prepare1, accessibility: accessibility_config) }
 
       let!(:job_variable_1) { create(:ci_job_variable, :dotenv_source, job: prepare1) }
       let!(:job_variable_2) { create(:ci_job_variable, :dotenv_source, job: prepare2) }
       let!(:job_variable_3) { create(:ci_job_variable, :dotenv_source, job: prepare3) }
 
-      it 'inherits only needs with artifacts variables' do
-        expect(subject.to_hash).to eq(job_variable_1.key => job_variable_1.value)
+      context 'inherits only needs with artifacts variables that are public' do
+        let(:accessibility_config) { 'public' }
+
+        it { expect(subject.to_hash).to eq(job_variable_1.key => job_variable_1.value) }
+      end
+
+      context 'does not inherit needs with artifacts variables that are private' do
+        let(:accessibility_config) { 'private' }
+
+        it { expect(subject.to_hash).not_to eq(job_variable_1.key => job_variable_1.value) }
       end
     end
   end
@@ -5748,7 +5787,8 @@ RSpec.describe Ci::Build, feature_category: :continuous_integration, factory_def
     include Ci::PartitioningHelpers
 
     let(:new_pipeline) { create(:ci_pipeline, project: project) }
-    let(:ci_build) { FactoryBot.build(:ci_build, pipeline: new_pipeline) }
+    let(:ci_stage) { create(:ci_stage, pipeline: new_pipeline) }
+    let(:ci_build) { FactoryBot.build(:ci_build, pipeline: new_pipeline, ci_stage: ci_stage) }
 
     before do
       stub_current_partition_id
@@ -5800,9 +5840,8 @@ RSpec.describe Ci::Build, feature_category: :continuous_integration, factory_def
   describe 'metadata partitioning', :ci_partitionable do
     let(:pipeline) { create(:ci_pipeline, project: project, partition_id: ci_testing_partition_id) }
 
-    let(:build) do
-      FactoryBot.build(:ci_build, pipeline: pipeline)
-    end
+    let(:ci_stage) { create(:ci_stage, pipeline: pipeline) }
+    let(:build) { FactoryBot.build(:ci_build, pipeline: pipeline, ci_stage: ci_stage) }
 
     it 'creates the metadata record and assigns its partition' do
       # The record is initialized by the factory calling metadatable setters
@@ -5821,7 +5860,7 @@ RSpec.describe Ci::Build, feature_category: :continuous_integration, factory_def
   describe 'secrets management id_tokens usage data' do
     context 'when ID tokens are defined' do
       context 'on create' do
-        let(:ci_build) { FactoryBot.build(:ci_build, user: user, id_tokens: { 'ID_TOKEN_1' => { aud: 'developers' } }) }
+        let(:ci_build) { create(:ci_build, user: user, id_tokens: { 'ID_TOKEN_1' => { aud: 'developers' } }) }
 
         before do
           allow(Gitlab::UsageDataCounters::HLLRedisCounter).to receive(:track_event).and_call_original
@@ -5831,7 +5870,7 @@ RSpec.describe Ci::Build, feature_category: :continuous_integration, factory_def
           expect(::Gitlab::UsageDataCounters::HLLRedisCounter).to receive(:track_event)
             .with('i_ci_secrets_management_id_tokens_build_created', values: user.id)
 
-          ci_build.save!
+          ci_build
         end
 
         it 'tracks Snowplow event with RedisHLL context' do
@@ -5848,7 +5887,7 @@ RSpec.describe Ci::Build, feature_category: :continuous_integration, factory_def
             ).to_context.to_json]
           }
 
-          ci_build.save!
+          ci_build
           expect_snowplow_event(**params)
         end
       end
@@ -5871,14 +5910,14 @@ RSpec.describe Ci::Build, feature_category: :continuous_integration, factory_def
     end
 
     context 'when ID tokens are not defined' do
-      let(:ci_build) { FactoryBot.build(:ci_build, user: user) }
+      let(:ci_build) { create(:ci_build, user: user) }
 
       context 'on create' do
         it 'does not track RedisHLL event' do
           expect(Gitlab::UsageDataCounters::HLLRedisCounter).not_to receive(:track_event)
             .with('i_ci_secrets_management_id_tokens_build_created', values: user.id)
 
-          ci_build.save!
+          ci_build
         end
 
         it 'does not track Snowplow event' do

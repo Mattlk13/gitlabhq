@@ -2,6 +2,7 @@
 issues:
 - subscriptions
 - award_emoji
+- own_award_emoji
 - author
 - assignees
 - updated_by
@@ -19,7 +20,11 @@ issues:
 - sentry_issue
 - issuable_severity
 - label_links
+- own_label_links
 - labels
+- own_labels
+- own_description_versions
+- sync_object
 - last_edited_by
 - todos
 - user_agent_detail
@@ -128,6 +133,7 @@ commit_notes:
 label_links:
 - target
 - label
+- own_label
 label:
 - subscriptions
 - project
@@ -161,6 +167,7 @@ snippets:
 - snippet_repository
 - statistics
 - repository_storage_moves
+- organization
 releases:
 - author
 - project
@@ -644,6 +651,7 @@ project:
 - project_repository
 - users
 - maintainers
+- owners_and_maintainers
 - requesters
 - namespace_members
 - namespace_requesters
@@ -797,8 +805,8 @@ project:
 - export_jobs
 - daily_build_group_report_results
 - jira_imports
-- compliance_framework_setting
-- compliance_management_framework
+- compliance_framework_settings
+- compliance_management_frameworks
 - metrics_users_starred_dashboards
 - alert_management_alerts
 - repository_storage_moves
@@ -1006,6 +1014,7 @@ design_versions: *version
 epic:
 - subscriptions
 - award_emoji
+- own_award_emoji
 - description_versions
 - author
 - assignee
@@ -1014,7 +1023,11 @@ epic:
 - milestone
 - notes
 - label_links
+- own_label_links
 - labels
+- own_labels
+- own_description_versions
+- sync_object
 - todos
 - metrics
 - group
@@ -1036,6 +1049,7 @@ epic:
 - boards_epic_user_preferences
 - epic_board_positions
 - work_item
+- own_subscriptions
 epic_issue:
 - epic
 - issue

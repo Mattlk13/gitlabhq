@@ -60,7 +60,7 @@ To change your username:
 
 ## Add emails to your user profile
 
-To add new email to your account:
+To add a new email address to your account:
 
 1. On the left sidebar, select your avatar.
 1. Select **Edit profile**.
@@ -69,6 +69,10 @@ To add new email to your account:
 1. In the **Email** text box, enter the new email.
 1. Select **Add email address**.
 1. Verify your email address with the verification email received.
+
+The new email address is added as a secondary email address.
+You can use secondary email addresses to reset passwords but not to authenticate.
+You can update your [primary email address](#change-your-primary-email).
 
 NOTE:
 [Making your email non-public](#set-your-public-email) does not prevent it from being used for commit matching,
@@ -102,6 +106,9 @@ You can also [use the API to delete a secondary email address](../../api/users.m
 ## Make your user profile page private
 
 You can make your user profile visible to only you and GitLab administrators.
+
+NOTE:
+A GitLab administrator can [disable](../../administration/settings/account_and_limit_settings.md#allow-users-to-make-their-profiles-private) this setting, forcing all profiles to be made public.
 
 To make your profile private:
 
@@ -146,13 +153,13 @@ To create a new project and add its README to your profile:
    - In the **Project name** field, enter the name for your new project.
    - In the **Project URL** field, select your GitLab username.
    - In the **Project slug** field, enter your GitLab username.
-   All of these fields are case sensitive. If your username has capital letters, enter it into the project slug field with the capitals included.
+     All of these fields are case sensitive. If your username has capital letters, enter it into the project slug field with the capitals included.
 1. For **Visibility Level**, select **Public**.
    ![Proper project path for an individual on the hosted product](img/personal_readme_setup_v14_5.png)
 1. For **Project Configuration**, ensure **Initialize repository with a README** is selected.
 1. Select **Create project**.
-1. Create a README file inside this project. The file can be any valid [README or index file](../project/repository/index.md#readme-and-index-files).
-1. Populate the README file with [Markdown](../markdown.md), or another [supported markup language](../project/repository/index.md#supported-markup-languages).
+1. Create a README file inside this project. The file can be any valid [README or index file](../project/repository/files/index.md#readme-and-index-files).
+1. Populate the README file with [Markdown](../markdown.md), or another [supported markup language](../project/repository/files/index.md#supported-markup-languages).
 
 GitLab displays the contents of your README below your contribution graph.
 

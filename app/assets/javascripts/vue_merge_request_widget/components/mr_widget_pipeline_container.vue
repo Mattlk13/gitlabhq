@@ -90,6 +90,10 @@ export default {
       :mr-troubleshooting-docs-path="mr.mrTroubleshootingDocsPath"
       :ci-troubleshooting-docs-path="mr.ciTroubleshootingDocsPath"
       :merge-strategy="preferredAutoMergeStrategy"
+      :retargeted="mr.retargeted"
+      :target-project-id="mr.targetProjectId"
+      :iid="mr.iid"
+      :detatched-pipeline="mr.detatchedPipeline"
     />
     <template #footer>
       <div v-if="mr.exposedArtifactsPath" class="js-exposed-artifacts">
@@ -101,8 +105,10 @@ export default {
         :deployment-class="deploymentClass"
         :has-deployment-metrics="hasDeploymentMetrics"
       />
+
       <merge-train-position-indicator
         class="mr-widget-extension"
+        :merge-request-state="mr.mergeRequestState"
         :merge-train-index="mr.mergeTrainIndex"
         :merge-trains-count="mr.mergeTrainsCount"
         :merge-trains-path="mr.mergeTrainsPath"

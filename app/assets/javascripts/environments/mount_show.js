@@ -80,8 +80,11 @@ export const initPage = async () => {
         },
         component: () => import('./environment_details/components/kubernetes/kubernetes_logs.vue'),
         props: (route) => ({
+          containerName: route.query.container,
           podName: route.params.podName,
           namespace: route.params.namespace,
+          environmentName: dataSet.name,
+          highlightedLineHash: (route.hash || '').replace('#', ''),
         }),
       },
       {

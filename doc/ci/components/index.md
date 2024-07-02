@@ -167,7 +167,7 @@ In order of highest priority first, the component version can be:
 
 - A commit SHA, for example `e3262fdd0914fa823210cdb79a8c421e2cef79d8`.
 - A tag, for example: `1.0.0`. If a tag and commit SHA exist with the same name,
-  the commit SHA takes precedence over the tag. Components released to the CI/CD
+  the commit SHA takes precedence over the tag. Components released to the CI/CD Catalog
   should be tagged with a [semantic version](#semantic-versioning).
 - A branch name, for example `main`. If a branch and tag exist with the same name,
   the tag takes precedence over the branch.
@@ -241,7 +241,7 @@ write a good `README.md` file:
 
 - The documentation should start with a summary of the capabilities that the components in the project provide.
 - If the project contains multiple components, use a [table of contents](../../user/markdown.md#table-of-contents)
-   to help users quickly jump to a specific component's details.
+  to help users quickly jump to a specific component's details.
 - Add a `## Components` section with sub-sections like `### Component A` for each component in the project.
 - In each component section:
   - Add a description of what the component does.
@@ -343,6 +343,15 @@ full URL and path for your instance (like `https://gitlab.com/api/v4`).
 These [predefined variables](../variables/predefined_variables.md)
 ensure that your component also works when used on another instance, for example when using
 [a GitLab.com component in a self-managed instance](#use-a-gitlabcom-component-in-a-self-managed-instance).
+
+### Do not assume API resources are always public
+
+Ensure that the component and its testing pipeline work also [in a self-managed instance](#use-a-gitlabcom-component-in-a-self-managed-instance).
+While some API resources of public projects on GitLab.com could be accessed via unauthenticated requests
+on self-managed a component project could be mirrored as private or internal project.
+
+It's important that an access token can optionally be provided via inputs or variables to
+authenticate requests on self-managed instances.
 
 ### Avoid using global keywords
 
@@ -447,6 +456,38 @@ For example, to create a component with `stage` configuration that can be define
         stage: verify
   ```
 
+#### Define job names with inputs
+
+Similar to the values for the `stage` keyword, you should avoid hard-coding job names
+in CI/CD components. When your component's users can customize job names, they can prevent conflicts
+with the existing names in their pipelines. Users could also include a component
+multiple times with different input options by using different names.
+
+Use `inputs` to allow your component's users to define a specific job name, or a prefix for the
+job name. For example:
+
+```yaml
+spec:
+  inputs:
+    job-prefix:
+      description: "Define a prefix for the job name"
+    job-name:
+      description: "Alternatively, define the job's name"
+    job-stage:
+      default: test
+---
+
+"$[[ inputs.job-prefix ]]-scan-website":
+  stage: $[[ inputs.job-stage ]]
+  script:
+    - scan-website-1
+
+"$[[ inputs.job-name ]]":
+  stage: $[[ inputs.job-stage ]]
+  script:
+    - scan-website-2
+```
+
 ### Replace custom CI/CD variables with inputs
 
 When using CI/CD variables in a component, evaluate if the `inputs` keyword
@@ -547,6 +588,10 @@ To set the project as a catalog project:
 1. Turn on the **CI/CD Catalog project** toggle.
 
 The project only becomes findable in the catalog after you publish a new release.
+
+To use automation to enable this setting, you can use the [`mutationcatalogresourcescreate`](../../api/graphql/reference/index.md#mutationcatalogresourcescreate)
+GraphQL endpoint. [Issue 463043](https://gitlab.com/gitlab-org/gitlab/-/issues/463043)
+proposes to expose this in the REST API as well.
 
 #### Publish a new release
 

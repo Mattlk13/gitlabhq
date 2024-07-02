@@ -965,8 +965,8 @@ with the `action: stop` is not in a runnable state due to its `stages:` or `need
 For example:
 
 - The environment might start in a stage that also has a job that failed.
-Then the jobs in later stages job don't start. If the job with the `action: stop`
-for the environment is also in a later stage, it can't start and the environment isn't deleted.
+  Then the jobs in later stages job don't start. If the job with the `action: stop`
+  for the environment is also in a later stage, it can't start and the environment isn't deleted.
 - The job with the `action: stop` might have a dependency on a job that has not yet completed.
 
 To ensure the `action: stop` can always run when needed, you can:
@@ -1025,10 +1025,10 @@ To ensure the `action: stop` can always run when needed, you can:
     when: manual
   ```
 
-### A deployment job failed with "This job could not be executed because it would create an environment with an invalid parameter" error
+### Error: "This job could not be executed because it would create an environment with an invalid parameter"
 
 If your project is configured to [create a dynamic environment](#create-a-dynamic-environment),
-you might encounter this error because the dynamically generated parameter can't be used for creating an environment.
+you might encounter this error in a deployment job because the dynamically generated parameter can't be used for creating an environment.
 
 For example, your project has the following `.gitlab-ci.yml`:
 

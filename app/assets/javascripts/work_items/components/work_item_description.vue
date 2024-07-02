@@ -70,6 +70,11 @@ export default {
       required: false,
       default: false,
     },
+    workItemTypeName: {
+      type: String,
+      required: false,
+      default: '',
+    },
   },
   markdownDocsPath: helpPagePath('user/markdown'),
   data() {
@@ -99,7 +104,7 @@ export default {
       },
       variables() {
         return {
-          fullPath: this.createFlow ? newWorkItemFullPath(this.fullPath) : this.fullPath,
+          fullPath: this.workItemFullPath,
           iid: this.workItemIid,
         };
       },
@@ -117,6 +122,11 @@ export default {
     },
   },
   computed: {
+    workItemFullPath() {
+      return this.createFlow
+        ? newWorkItemFullPath(this.fullPath, this.workItemTypeName)
+        : this.fullPath;
+    },
     autosaveKey() {
       return this.workItemId || `new-${this.workItemType}-description-draft`;
     },
@@ -166,7 +176,8 @@ export default {
       return autocompleteDataSources({
         fullPath: this.fullPath,
         isGroup: this.isGroup,
-        iid: this.workItem?.iid,
+        iid: this.workItemIid,
+        workItemTypeId: this.workItem?.workItemType?.id,
       });
     },
     saveButtonText() {
@@ -247,6 +258,7 @@ export default {
       updateDraft(this.autosaveKey, this.descriptionText);
     },
     handleDescriptionTextUpdated(newText) {
+      this.disableTruncation = true;
       this.descriptionText = newText;
       this.$emit('updateDraft', this.descriptionText);
       this.updateWorkItem();

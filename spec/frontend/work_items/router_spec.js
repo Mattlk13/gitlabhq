@@ -18,7 +18,9 @@ describe('Work items router', () => {
 
   Vue.use(VueApollo);
 
-  const workItemQueryHandler = jest.fn().mockResolvedValue(workItemByIidResponseFactory());
+  const workItemQueryHandler = jest
+    .fn()
+    .mockResolvedValue(workItemByIidResponseFactory({ hierarchyWidgetPresent: false }));
   const currentUserQueryHandler = jest.fn().mockResolvedValue(currentUserResponse);
   const workItemUpdatedSubscriptionHandler = jest
     .fn()
@@ -40,6 +42,7 @@ describe('Work items router', () => {
       apolloProvider: createMockApollo(handlers),
       router,
       provide: {
+        canAdminLabel: true,
         fullPath: 'full-path',
         groupPath: '',
         isGroup: false,
@@ -48,6 +51,7 @@ describe('Work items router', () => {
         hasIterationsFeature: false,
         hasOkrsFeature: false,
         hasIssuableHealthStatusFeature: false,
+        labelsManagePath: 'test-project-path/labels',
         reportAbusePath: '/report/abuse/path',
       },
       stubs: {
@@ -57,6 +61,7 @@ describe('Work items router', () => {
         WorkItemNotes: true,
         WorkItemAwardEmoji: true,
         WorkItemTimeTracking: true,
+        WorkItemAncestors: true,
       },
     });
   };
@@ -64,7 +69,7 @@ describe('Work items router', () => {
   beforeEach(() => {
     window.gon = {
       features: {
-        workItemsMvc2: false,
+        workItemsAlpha: false,
       },
     };
   });
@@ -79,14 +84,14 @@ describe('Work items router', () => {
     expect(wrapper.findComponent(WorkItemsRoot).exists()).toBe(true);
   });
 
-  it('does not render create work item page on `/new` route if `workItemsMvc2` feature flag is off', async () => {
+  it('does not render create work item page on `/new` route if `workItemsAlpha` feature flag is off', async () => {
     await createComponent('/new');
 
     expect(wrapper.findComponent(CreateWorkItem).exists()).toBe(false);
   });
 
   it('renders create work item page on `/new` route', async () => {
-    window.gon.features.workItemsMvc2 = true;
+    window.gon.features.workItemsAlpha = true;
     await createComponent('/new');
 
     expect(wrapper.findComponent(CreateWorkItem).exists()).toBe(true);

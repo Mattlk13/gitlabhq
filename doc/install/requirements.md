@@ -251,7 +251,7 @@ Redis stores all user sessions and the background task queue.
 The requirements for Redis are as follows:
 
 - Redis 6.x or 7.x is required in GitLab 16.0 and later. However, you should upgrade to
-Redis 6.2 or later as [Redis 6.0 is no longer supported](https://endoflife.date/redis).
+  Redis 6.2.14 or later as [Redis 6.0 is no longer supported](https://endoflife.date/redis).
 - Redis Cluster mode is not supported. Redis Standalone must be used, with or without HA.
 - Storage requirements for Redis are minimal, about 25 kB per user on average.
 - [Redis eviction mode](../administration/redis/replication_and_failover_external.md#setting-the-eviction-policy) set appropriately.
@@ -296,7 +296,7 @@ The GitLab Runner server requirements depend on:
 
 Because the nature of the jobs varies for each use case, you must experiment by adjusting the job concurrency to get the optimum setting.
 
-For reference, the [SaaS runners on Linux](../ci/runners/saas/linux_saas_runner.md)
+For reference, the [SaaS runners on Linux](../ci/runners/hosted_runners/linux.md)
 are configured so that a **single job** runs in a **single instance** with:
 
 - 1 vCPU.
@@ -310,7 +310,7 @@ GitLab supports the following web browsers:
 - [Google Chrome](https://www.google.com/chrome/)
 - [Chromium](https://www.chromium.org/getting-involved/dev-channel/)
 - [Apple Safari](https://www.apple.com/safari/)
-- [Microsoft Edge](https://www.microsoft.com/en-us/edge?form=MA13FJ)
+- [Microsoft Edge](https://www.microsoft.com/en-us/edge?form=MA13QK)
 
 For the listed web browsers, GitLab supports:
 

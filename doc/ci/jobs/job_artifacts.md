@@ -1,6 +1,6 @@
 ---
 stage: Verify
-group: Pipeline Security
+group: Pipeline Execution
 info: To determine the technical writer assigned to the Stage/Group associated with this page, see https://handbook.gitlab.com/handbook/product/ux/technical-writing/#assignments
 ---
 
@@ -248,8 +248,8 @@ For example:
 
   Files returned by this endpoint always have the `plain/text` content type.
 
-In both examples, replace `<project-id>` with a valid project ID. You can find the project ID on the,
-[project overview page](../../user/project/working_with_projects.md#access-the-project-overview-page-by-using-the-project-id).
+In both examples, replace `<project-id>` with a valid project ID. You can find the project ID on the
+[project overview page](../../user/project/working_with_projects.md#access-a-project-by-using-the-project-id).
 
 Artifacts for [parent and child pipelines](../pipelines/downstream_pipelines.md#parent-child-pipelines)
 are searched in hierarchical order from parent to child. For example, if both parent and
@@ -361,7 +361,7 @@ With this configuration, GitLab adds **artifact 1** as a link to `file.txt` to t
 
 ## Keep artifacts from most recent successful jobs
 
-> - Artifacts for [blocked](https://gitlab.com/gitlab-org/gitlab/-/issues/387087) or [failed](https://gitlab.com/gitlab-org/gitlab/-/issues/266958) pipelines no longer kept indefinitely in GitLab 16.7.
+> - Artifacts for [blocked](https://gitlab.com/gitlab-org/gitlab/-/issues/387087) or [failed](https://gitlab.com/gitlab-org/gitlab/-/issues/266958) pipelines changed to no longer be kept indefinitely in GitLab 16.7.
 
 By default artifacts are always kept for successful pipelines for the most recent commit on each ref.
 Any [`expire_in`](#with-an-expiry) configuration does not apply to the most recent artifacts.

@@ -104,8 +104,9 @@ describe('WorkItemDetail component', () => {
     handler = successHandler,
     mutationHandler,
     error = undefined,
-    workItemsMvc2Enabled = false,
+    workItemsAlphaEnabled = false,
     workItemsBeta = false,
+    namespaceLevelWorkItems = true,
   } = {}) => {
     wrapper = shallowMountExtended(WorkItemDetail, {
       apolloProvider: createMockApollo([
@@ -128,8 +129,9 @@ describe('WorkItemDetail component', () => {
       },
       provide: {
         glFeatures: {
-          workItemsMvc2: workItemsMvc2Enabled,
+          workItemsAlpha: workItemsAlphaEnabled,
           workItemsBeta,
+          namespaceLevelWorkItems,
         },
         hasIssueWeightsFeature: true,
         hasIterationsFeature: true,
@@ -315,7 +317,7 @@ describe('WorkItemDetail component', () => {
       expect(findAncestors().exists()).toBe(false);
     });
 
-    it('does not show ancestors widget if there is not a parent', async () => {
+    it('does not show ancestors widget if there is no parent', async () => {
       createComponent({ handler: jest.fn().mockResolvedValue(workItemQueryResponseWithoutParent) });
 
       await waitForPromises();
@@ -327,7 +329,18 @@ describe('WorkItemDetail component', () => {
       createComponent({ handler: jest.fn().mockResolvedValue(workItemQueryResponseWithoutParent) });
 
       await waitForPromises();
-      expect(findWorkItemType().classes()).toEqual(['gl-sm-display-block!', 'gl-w-full']);
+      expect(findWorkItemType().classes()).toEqual(['sm:!gl-block', 'gl-w-full']);
+    });
+
+    describe('`namespace_level_work_items` is disabled', () => {
+      it('does not show ancestors widget and shows title in the header', async () => {
+        createComponent({ namespaceLevelWorkItems: false });
+
+        await waitForPromises();
+
+        expect(findAncestors().exists()).toBe(false);
+        expect(findWorkItemType().classes()).toEqual(['sm:!gl-block', 'gl-w-full']);
+      });
     });
 
     describe('with parent', () => {
@@ -343,33 +356,51 @@ describe('WorkItemDetail component', () => {
       });
 
       it('does not show title in the header when parent exists', () => {
-        expect(findWorkItemType().classes()).toEqual(['gl-sm-display-none!', 'gl-mt-3']);
+        expect(findWorkItemType().classes()).toEqual(['sm:!gl-hidden', 'gl-mt-3']);
       });
     });
   });
 
   describe('when the work item query is unsuccessful', () => {
-    beforeEach(() => {
-      const errorHandler = jest.fn().mockRejectedValue('Oops');
-      createComponent({ handler: errorHandler });
-      return waitForPromises();
+    describe('full view', () => {
+      beforeEach(() => {
+        const errorHandler = jest.fn().mockRejectedValue('Oops');
+        createComponent({ handler: errorHandler });
+        return waitForPromises();
+      });
+
+      it('does not show the work item detail wrapper', () => {
+        expect(findDetailWrapper().exists()).toBe(false);
+      });
+
+      it('shows empty state with an error message', () => {
+        expect(findEmptyState().exists()).toBe(true);
+        expect(findEmptyState().props('description')).toBe(i18n.fetchError);
+      });
+
+      it('does not render work item UI elements', () => {
+        expect(findWorkItemType().exists()).toBe(false);
+        expect(findWorkItemTitle().exists()).toBe(false);
+        expect(findCreatedUpdated().exists()).toBe(false);
+        expect(findWorkItemActions().exists()).toBe(false);
+        expect(findWorkItemTwoColumnViewContainer().exists()).toBe(false);
+      });
     });
 
-    it('does not show the work item detail wrapper', () => {
-      expect(findDetailWrapper().exists()).toBe(false);
-    });
+    describe('modal view', () => {
+      it('shows the modal close button', async () => {
+        createComponent({
+          isModal: true,
+          handler: jest.fn().mockRejectedValue('Oops, problemo'),
+          workItemsAlphaEnabled: true,
+        });
 
-    it('shows empty state with an error message', () => {
-      expect(findEmptyState().exists()).toBe(true);
-      expect(findEmptyState().props('description')).toBe(i18n.fetchError);
-    });
+        await waitForPromises();
 
-    it('does not render work item UI elements', () => {
-      expect(findWorkItemType().exists()).toBe(false);
-      expect(findWorkItemTitle().exists()).toBe(false);
-      expect(findCreatedUpdated().exists()).toBe(false);
-      expect(findWorkItemActions().exists()).toBe(false);
-      expect(findWorkItemTwoColumnViewContainer().exists()).toBe(false);
+        expect(findCloseButton().exists()).toBe(true);
+        expect(findEmptyState().exists()).toBe(true);
+        expect(findEmptyState().props('description')).toBe(i18n.fetchError);
+      });
     });
   });
 
@@ -445,8 +476,13 @@ describe('WorkItemDetail component', () => {
   });
 
   describe('hierarchy widget', () => {
-    it('does not render children tree by default', async () => {
-      createComponent();
+    it('does not render children tree by when widget is not present', async () => {
+      const workItemWithoutHierarchy = workItemByIidResponseFactory({
+        hierarchyWidgetPresent: false,
+      });
+      const handler = jest.fn().mockResolvedValue(workItemWithoutHierarchy);
+      createComponent({ handler });
+
       await waitForPromises();
 
       expect(findHierarchyTree().exists()).toBe(false);
@@ -483,7 +519,7 @@ describe('WorkItemDetail component', () => {
       });
 
       it('opens the modal with the child when `show-modal` is emitted', async () => {
-        createComponent({ handler: objectiveHandler, workItemsMvc2Enabled: true });
+        createComponent({ handler: objectiveHandler, workItemsAlphaEnabled: true });
         await waitForPromises();
 
         const event = {
@@ -507,7 +543,7 @@ describe('WorkItemDetail component', () => {
           createComponent({
             isModal: true,
             handler: objectiveHandler,
-            workItemsMvc2Enabled: true,
+            workItemsAlphaEnabled: true,
           });
 
           await waitForPromises();
@@ -563,7 +599,7 @@ describe('WorkItemDetail component', () => {
       it('opens the modal with the linked item when `showModal` is emitted', async () => {
         createComponent({
           handler,
-          workItemsMvc2Enabled: true,
+          workItemsAlphaEnabled: true,
         });
         await waitForPromises();
 
@@ -586,7 +622,7 @@ describe('WorkItemDetail component', () => {
           createComponent({
             isModal: true,
             handler,
-            workItemsMvc2Enabled: true,
+            workItemsAlphaEnabled: true,
           });
 
           await waitForPromises();
@@ -736,6 +772,17 @@ describe('WorkItemDetail component', () => {
       await nextTick();
 
       expect(findWorkItemDescription().props('editMode')).toBe(true);
+    });
+
+    it('sticky header is visible by default', () => {
+      expect(findStickyHeader().exists()).toBe(true);
+    });
+
+    it('sticky header is not visible if is drawer view', async () => {
+      createComponent({ isDrawer: true });
+      await waitForPromises();
+
+      expect(findStickyHeader().exists()).toBe(false);
     });
   });
 

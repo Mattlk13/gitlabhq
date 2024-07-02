@@ -29,6 +29,7 @@ module Gitlab
           group_download_export: { threshold: -> { application_settings.group_download_export_limit }, interval: 1.minute },
           group_import: { threshold: -> { application_settings.group_import_limit }, interval: 1.minute },
           group_api: { threshold: -> { application_settings.group_api_limit }, interval: 1.minute },
+          group_shared_groups_api: { threshold: -> { application_settings.group_shared_groups_api_limit }, interval: 1.minute },
           group_projects_api: { threshold: -> { application_settings.group_projects_api_limit }, interval: 1.minute },
           groups_api: { threshold: -> { application_settings.groups_api_limit }, interval: 1.minute },
           project_api: { threshold: -> { application_settings.project_api_limit }, interval: 1.minute },
@@ -63,18 +64,18 @@ module Gitlab
           pipelines_create: { threshold: -> { application_settings.pipeline_limit_per_project_user_sha }, interval: 1.minute },
           temporary_email_failure: { threshold: 300, interval: 1.day },
           permanent_email_failure: { threshold: 5, interval: 1.day },
-          notification_emails: { threshold: 500, interval: 1.day },
+          notification_emails: { threshold: 1000, interval: 1.day },
           project_testing_integration: { threshold: 5, interval: 1.minute },
           email_verification: { threshold: 10, interval: 10.minutes },
           email_verification_code_send: { threshold: 10, interval: 1.hour },
-          phone_verification_challenge: { threshold: 2, interval: 1.day },
           phone_verification_send_code: { threshold: 5, interval: 1.day },
           phone_verification_verify_code: { threshold: 5, interval: 1.day },
           namespace_exists: { threshold: 20, interval: 1.minute },
           update_namespace_name: { threshold: -> { application_settings.update_namespace_name_rate_limit }, interval: 1.hour },
           fetch_google_ip_list: { threshold: 10, interval: 1.minute },
           project_fork_sync: { threshold: 10, interval: 30.minutes },
-          ai_action: { threshold: 160, interval: 8.hours },
+          ai_action: { threshold: -> { application_settings.ai_action_api_rate_limit }, interval: 8.hours },
+          code_suggestions_api_endpoint: { threshold: -> { application_settings.code_suggestions_api_rate_limit }, interval: 1.minute },
           vertex_embeddings_api: { threshold: 450, interval: 1.minute },
           jobs_index: { threshold: -> { application_settings.project_jobs_api_rate_limit }, interval: 1.minute },
           bulk_import: { threshold: 6, interval: 1.minute },
@@ -244,7 +245,7 @@ module Gitlab
 
         serialized = composed_key.map do |obj|
           if obj.is_a?(String) || obj.is_a?(Symbol)
-            "#{obj}"
+            obj.to_s
           else
             "#{obj.class.model_name.to_s.underscore}:#{obj.id}"
           end

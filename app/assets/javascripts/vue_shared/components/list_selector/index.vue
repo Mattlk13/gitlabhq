@@ -60,7 +60,7 @@ export default {
       required: false,
       default: () => ({}),
     },
-    isProjectOnlyNamespace: {
+    disableNamespaceDropdown: {
       type: Boolean,
       required: false,
       default: false,
@@ -69,7 +69,7 @@ export default {
   data() {
     return {
       searchValue: '',
-      isProjectNamespace: 'true',
+      isProjectNamespace: this.disableNamespaceDropdown ? 'false' : 'true',
       selected: [],
       items: [],
       isLoading: false,
@@ -80,7 +80,7 @@ export default {
       return CONFIG[this.type];
     },
     showNamespaceDropdown() {
-      return this.config.showNamespaceDropdown && !this.isProjectOnlyNamespace;
+      return this.config.showNamespaceDropdown && !this.disableNamespaceDropdown;
     },
     namespaceDropdownText() {
       return parseBoolean(this.isProjectNamespace)
@@ -138,7 +138,7 @@ export default {
     },
     async fetchGroupsBySearchTerm(search) {
       let groups = [];
-      if (parseBoolean(this.groupId)) {
+      if (this.groupId) {
         groups = await this.fetchSubgroupsBySearchTerm(search);
         return groups;
       }
@@ -175,6 +175,7 @@ export default {
             value: group.name,
             ...group,
             id: getIdFromGraphQLId(group.id),
+            type: 'group',
           })),
         );
     },
@@ -243,7 +244,7 @@ export default {
     <div class="gl-display-flex gl-gap-3" :class="{ 'gl-mb-4': selectedItems.length }">
       <gl-collapsible-listbox
         ref="results"
-        class="list-selector gl-display-block gl-flex-grow-1"
+        class="list-selector gl-block gl-flex-grow-1"
         :items="filteredItems"
         @select="handleSelectItem"
         @shown="handleSearchInput"

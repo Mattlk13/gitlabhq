@@ -535,13 +535,7 @@ RSpec.describe MergeRequests::UpdateService, :mailer, feature_category: :code_re
             head_pipeline_of: merge_request
           )
 
-          expected_class = if Gitlab.ee?
-                             AutoMerge::MergeWhenChecksPassService
-                           else
-                             AutoMerge::MergeWhenPipelineSucceedsService
-                           end
-
-          expect(expected_class).to receive(:new).with(project, user, { sha: merge_request.diff_head_sha })
+          expect(AutoMerge::MergeWhenChecksPassService).to receive(:new).with(project, user, { sha: merge_request.diff_head_sha })
             .and_return(service_mock)
           allow(service_mock).to receive(:available_for?) { true }
           expect(service_mock).to receive(:execute).with(merge_request)
@@ -1311,7 +1305,8 @@ RSpec.describe MergeRequests::UpdateService, :mailer, feature_category: :code_re
           :merge_request,
           source_project: project,
           source_branch: 'mr-b',
-          target_branch: 'mr-a'
+          target_branch: 'mr-a',
+          head_pipeline_id: 1
         )
       end
 
@@ -1324,17 +1319,29 @@ RSpec.describe MergeRequests::UpdateService, :mailer, feature_category: :code_re
           .to change { merge_request.reload.target_branch }.from('mr-a').to('master')
       end
 
-      it 'updates to master because of branch deletion' do
-        expect(SystemNoteService).to receive(:change_branch).with(
-          merge_request, project, user, 'target', 'delete', 'mr-a', 'master'
-        )
-
-        expect { update_merge_request(target_branch: 'master', target_branch_was_deleted: true) }
-          .to change { merge_request.reload.target_branch }.from('mr-a').to('master')
-      end
-
       it_behaves_like "creates a new pipeline" do
         let(:new_target_branch) { "target" }
+      end
+
+      context 'when target_branch_was_deleted is true' do
+        it 'updates to master because of branch deletion' do
+          expect(SystemNoteService).to receive(:change_branch).with(
+            merge_request, project, user, 'target', 'delete', 'mr-a', 'master'
+          )
+
+          expect { update_merge_request(target_branch: 'master', target_branch_was_deleted: true) }
+            .to change { merge_request.reload.target_branch }.from('mr-a').to('master')
+        end
+
+        it 'does not create a new pipeline' do
+          expect(MergeRequests::CreatePipelineWorker).not_to receive(:perform_async)
+
+          expect { update_merge_request(target_branch: 'master', target_branch_was_deleted: true) }
+            .to change { merge_request.reload.target_branch }.from('mr-a').to('master')
+
+          expect(merge_request.reload.head_pipeline_id).to be_nil
+          expect(merge_request.retargeted).to eq(true)
+        end
       end
     end
 

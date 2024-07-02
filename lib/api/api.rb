@@ -278,6 +278,7 @@ module API
         mount ::API::Keys
         mount ::API::Lint
         mount ::API::Markdown
+        mount ::API::MarkdownUploads
         mount ::API::MavenPackages
         mount ::API::Members
         mount ::API::MergeRequestApprovals
@@ -302,6 +303,7 @@ module API
         mount ::API::ProjectAvatar
         mount ::API::ProjectClusters
         mount ::API::ProjectContainerRepositories
+        mount ::API::ProjectContainerRegistryProtectionRules
         mount ::API::ProjectDebianDistributions
         mount ::API::ProjectEvents
         mount ::API::ProjectExport
@@ -385,6 +387,7 @@ module API
     end
 
     mount ::API::Internal::Base
+    mount ::API::Internal::Coverage if Gitlab::Utils.to_boolean(ENV['COVERBAND_ENABLED'], default: false)
     mount ::API::Internal::Lfs
     mount ::API::Internal::Pages
     mount ::API::Internal::Kubernetes

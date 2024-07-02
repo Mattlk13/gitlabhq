@@ -33,8 +33,6 @@ module QA
           Page::Project::WebIDE::VSCode.perform do |ide|
             ide.create_new_file(file_name)
             ide.commit_and_push_to_existing_branch(file_name)
-
-            expect(ide).to have_message('Success! Your changes have been committed.')
           end
 
           project.visit!

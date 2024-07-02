@@ -8,7 +8,7 @@ info: To determine the technical writer assigned to the Stage/Group associated w
 
 DETAILS:
 **Tier:** Free, Premium, Ultimate
-**Offering:** Self-managed
+**Offering:** Self-managed, GitLab Dedicated
 
 The Admin Area provides a web UI to manage and configure features of GitLab
 self-managed instances. If you are an administrator, to access the Admin Area:
@@ -21,7 +21,7 @@ If the GitLab instance uses Admin Mode, you must [enable Admin Mode for your ses
 the **Admin Area** button is visible.
 
 NOTE:
-Only administrators on GitLab self-managed can access the Admin Area. On GitLab.com the Admin Area feature is not available.
+Only administrators on GitLab self-managed or GitLab Dedicated can access the Admin Area. On GitLab.com the Admin Area feature is not available.
 
 ## Administering organizations
 
@@ -108,8 +108,7 @@ You can use the user search box to search and filter users by:
 - User **state**.
 
 You can also type text into the search box. For example, the name of a specific user.
-This text search is case insensitive, and applies partial matching to name and username.
-To search for an email address, you must provide the complete email address.
+This text search is case insensitive, and applies partial matching to name, username and email for self-managed instances.
 
 For each user, the following are listed:
 
@@ -167,7 +166,7 @@ the identities being used for an account.
 
 DETAILS:
 **Tier:** Premium, Ultimate
-**Offering:** Self-managed
+**Offering:** Self-managed, GitLab Dedicated
 
 An administrator can export user permissions for all users in the GitLab instance from the Admin Area's Users page.
 The export lists direct membership the users have in groups and projects.
@@ -436,7 +435,7 @@ The following topics document the **Monitoring** section of the Admin Area.
 
 > - Support for relative time [introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/341248) in GitLab 15.2. "Uptime" statistic was renamed to "System started".
 
-The **System Info** page provides the following statistics:
+The **System information** page provides the following statistics:
 
 | Field          | Description                                       |
 |:---------------|:--------------------------------------------------|
@@ -445,7 +444,7 @@ The **System Info** page provides the following statistics:
 | Disk Usage     | Disk space in use, and total disk space available |
 | System started | When the system hosting GitLab was started. In GitLab 15.1 and earlier, this was an uptime statistic. |
 
-These statistics are updated only when you go to the **System Info** page, or you refresh the page in your browser.
+These statistics are updated only when you go to the **System information** page, or you refresh the page in your browser.
 
 ### Background Jobs
 
@@ -491,7 +490,7 @@ The content of each log file is listed in chronological order. To minimize perfo
 
 DETAILS:
 **Tier:** Premium, Ultimate
-**Offering:** Self-managed
+**Offering:** Self-managed, GitLab Dedicated
 
 The **Audit Events** page lists changes made within the GitLab server. With this information you can control, analyze, and track every change.
 

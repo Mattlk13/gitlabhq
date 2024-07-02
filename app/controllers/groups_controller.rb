@@ -39,9 +39,10 @@ class GroupsController < Groups::ApplicationController
     push_frontend_feature_flag(:frontend_caching, group)
     push_force_frontend_feature_flag(:work_items, group.work_items_feature_flag_enabled?)
     push_force_frontend_feature_flag(:work_items_beta, group.work_items_beta_feature_flag_enabled?)
-    push_force_frontend_feature_flag(:work_items_mvc_2, group.work_items_mvc_2_feature_flag_enabled?)
+    push_force_frontend_feature_flag(:work_items_alpha, group.work_items_alpha_feature_flag_enabled?)
     push_frontend_feature_flag(:issues_grid_view)
     push_frontend_feature_flag(:group_multi_select_tokens, group)
+    push_frontend_feature_flag(:namespace_level_work_items, group)
   end
 
   before_action only: :merge_requests do

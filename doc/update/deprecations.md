@@ -72,6 +72,27 @@ This change applies to all installation methods: Omnibus GitLab, GitLab Helm cha
 Before upgrading to GitLab 19.0, please ensure you have [migrated](https://docs.gitlab.com/ee/administration/postgresql/multiple_databases.html) to two databases.
 
 </div>
+
+<div class="deprecation breaking-change" data-milestone="19.0">
+
+### Single database connection is deprecated
+
+<div class="deprecation-notes">
+- Announced in GitLab <span class="milestone">15.9</span>
+- Removal in GitLab <span class="milestone">19.0</span> ([breaking change](https://docs.gitlab.com/ee/update/terminology.html#breaking-change))
+- To discuss this change or learn more, see the [deprecation issue](https://gitlab.com/gitlab-org/gitlab/-/issues/387898).
+</div>
+
+Previously, [GitLab's database](https://docs.gitlab.com/omnibus/settings/database.html)
+configuration had a single `main:` section. This is being deprecated. The new
+configuration has both a `main:` and a `ci:` section.
+
+This deprecation affects users compiling GitLab from source, who will need
+to [add the `ci:` section](https://docs.gitlab.com/ee/install/installation.html#configure-gitlab-db-settings).
+Omnibus, the Helm chart, and Operator will handle this configuration
+automatically from GitLab 16.0 onwards.
+
+</div>
 </div>
 
 <div class="milestone-wrapper" data-milestone="18.0">
@@ -173,8 +194,6 @@ In 18.0, we will remove the **Limit** setting completely, and set the **Allow ac
 To prepare for this change, users on GitLab.com or self-managed GitLab 15.9 or later can enable the **Allow access** setting now and add the other projects. It will not be possible to disable the setting in 18.0 or later.
 
 In 16.3, the names of these settings were changed to clarify their meanings: the deprecated **Limit CI_JOB_TOKEN access** setting is now called **Limit access _from_ this project**, and the newer **Allow access to this project with a CI_JOB_TOKEN** setting is now called **Limit access _to_ this project**.
-
-In 17.1, the name of the **Limit access _to_ this project** setting was further clarified: it is now called **Grant access to this project**.
 
 </div>
 
@@ -501,28 +520,6 @@ For updates and details about this deprecation, follow [this epic](https://gitla
 
 <div class="deprecation breaking-change" data-milestone="18.0">
 
-### Single database connection is deprecated
-
-<div class="deprecation-notes">
-- Announced in GitLab <span class="milestone">15.9</span>
-- End of Support in GitLab <span class="milestone">17.0</span>
-- Removal in GitLab <span class="milestone">18.0</span> ([breaking change](https://docs.gitlab.com/ee/update/terminology.html#breaking-change))
-- To discuss this change or learn more, see the [deprecation issue](https://gitlab.com/gitlab-org/gitlab/-/issues/387898).
-</div>
-
-Previously, [GitLab's database](https://docs.gitlab.com/omnibus/settings/database.html)
-configuration had a single `main:` section. This is being deprecated. The new
-configuration has both a `main:` and a `ci:` section.
-
-This deprecation affects users compiling GitLab from source, who will need
-to [add the `ci:` section](https://docs.gitlab.com/ee/install/installation.html#configure-gitlab-db-settings).
-Omnibus, the Helm chart, and Operator will handle this configuration
-automatically from GitLab 16.0 onwards.
-
-</div>
-
-<div class="deprecation breaking-change" data-milestone="18.0">
-
 ### Slack notifications integration
 
 <div class="deprecation-notes">
@@ -669,6 +666,27 @@ The [`GITLAB_SHARED_RUNNERS_REGISTRATION_TOKEN`](https://docs.gitlab.com/ee/admi
 
 <div class="deprecation breaking-change" data-milestone="18.0">
 
+### `require_password_to_approve` field
+
+<div class="deprecation-notes">
+- Announced in GitLab <span class="milestone">16.9</span>
+- Removal in GitLab <span class="milestone">18.0</span> ([breaking change](https://docs.gitlab.com/ee/update/terminology.html#breaking-change))
+- To discuss this change or learn more, see the [deprecation issue](https://gitlab.com/gitlab-org/gitlab/-/issues/431346).
+</div>
+
+In GitLab 16.7, we added the ability to re-authenticate with SAML SSO for the
+[Require user re-authentication to approve](https://docs.gitlab.com/ee/user/project/merge_requests/approvals/settings.html#require-user-re-authentication-to-approve)
+feature.
+
+For this reason, in GitLab 18.0, we are removing the `require_password_to_approve` field.
+
+In GitLab 17.1, we added the `require_reauthentication_to_approve` field to replace the `require_password_to_approve`
+field. You should switch to the new field as soon as possible.
+
+</div>
+
+<div class="deprecation breaking-change" data-milestone="18.0">
+
 ### `runnerRegistrationToken` parameter for GitLab Runner Helm Chart
 
 <div class="deprecation-notes">
@@ -746,6 +764,25 @@ We hope this will simplify infrastructure setup and add several improvements to 
 The [`workflow:rules`](https://docs.gitlab.com/ee/ci/yaml/workflow.html#workflowrules-templates) templates are deprecated and no longer recommended for use. Using these templates greatly limits the flexibility of your pipelines and makes it hard to use new `workflow` features.
 
 This is one small step towards moving away from CI/CD templates in preference of [CI/CD components](https://docs.gitlab.com/ee/ci/components/). You can search the [CI/CD Catalog](https://docs.gitlab.com/ee/ci/components/#cicd-catalog) for a replacement, or [add `workflow:rules`](https://docs.gitlab.com/ee/ci/yaml/workflow.html) to your pipeline explicitly.
+
+</div>
+</div>
+
+<div class="milestone-wrapper" data-milestone="17.4">
+
+## GitLab 17.4
+
+<div class="deprecation " data-milestone="17.4">
+
+### Removed Needs tab from the pipeline view
+
+<div class="deprecation-notes">
+- Announced in GitLab <span class="milestone">17.1</span>
+- Removal in GitLab <span class="milestone">17.4</span>
+- To discuss this change or learn more, see the [deprecation issue](https://gitlab.com/gitlab-org/gitlab/-/issues/336560).
+</div>
+
+We are removing the Needs tab from the pipeline view, as it duplicates the information displayed in the regular pipeline view with the **Job dependencies** grouping option. We will continue improving the views in the main pipeline graph in the future.
 
 </div>
 </div>
@@ -1121,7 +1158,7 @@ The message field was removed from security reports schema in GitLab 16.0 and is
 - To discuss this change or learn more, see the [deprecation issue](https://gitlab.com/gitlab-org/gitlab-runner/-/issues/28165).
 </div>
 
-The GitLab Runner Kubernetes executor setting, `terminationGracePeriodSeconds`, is deprecated and will be removed in GitLab 17.0. To manage the cleanup and termination of GitLab Runner worker pods on Kubernetes, customers should instead configure `cleanupGracePeriodSeconds` and `podTerminationGracePeriodSeconds`. For information about how to use the `cleanupGracePeriodSeconds` and `podTerminationGracePeriodSeconds, see the [GitLab Runner Executor documentation](https://docs.gitlab.com/runner/executors/kubernetes.html#other-configtoml-settings).
+The GitLab Runner Kubernetes executor setting, `terminationGracePeriodSeconds`, is deprecated and will be removed in GitLab 17.0. To manage the cleanup and termination of GitLab Runner worker pods on Kubernetes, customers should instead configure `cleanupGracePeriodSeconds` and `podTerminationGracePeriodSeconds`. For information about how to use the `cleanupGracePeriodSeconds` and `podTerminationGracePeriodSeconds`, see the [GitLab Runner Executor documentation](https://docs.gitlab.com/runner/executors/kubernetes/index.html#other-configtoml-settings).
 
 </div>
 
@@ -1365,6 +1402,20 @@ For customers already using documented and supported token types, there are no b
 
 <div class="deprecation breaking-change" data-milestone="17.0">
 
+### GraphQL `networkPolicies` resource deprecated
+
+<div class="deprecation-notes">
+- Announced in GitLab <span class="milestone">14.8</span>
+- Removal in GitLab <span class="milestone">17.0</span> ([breaking change](https://docs.gitlab.com/ee/update/terminology.html#breaking-change))
+- To discuss this change or learn more, see the [deprecation issue](https://gitlab.com/gitlab-org/gitlab/-/issues/421440).
+</div>
+
+The `networkPolicies` [GraphQL resource](https://docs.gitlab.com/ee/api/graphql/reference/#projectnetworkpolicies) has been deprecated and will be removed in GitLab 17.0. Since GitLab 15.0 this field has returned no data.
+
+</div>
+
+<div class="deprecation breaking-change" data-milestone="17.0">
+
 ### GraphQL deprecation of `dependencyProxyTotalSizeInBytes` field
 
 <div class="deprecation-notes">
@@ -1427,20 +1478,6 @@ Use `totalIssueWeight` instead, introduced in GitLab 16.2.
 
 <div class="deprecation breaking-change" data-milestone="17.0">
 
-### GraphQL networkPolicies resource deprecated
-
-<div class="deprecation-notes">
-- Announced in GitLab <span class="milestone">14.8</span>
-- Removal in GitLab <span class="milestone">17.0</span> ([breaking change](https://docs.gitlab.com/ee/update/terminology.html#breaking-change))
-- To discuss this change or learn more, see the [deprecation issue](https://gitlab.com/gitlab-org/gitlab/-/issues/421440).
-</div>
-
-The `networkPolicies` [GraphQL resource](https://docs.gitlab.com/ee/api/graphql/reference/#projectnetworkpolicies) has been deprecated and will be removed in GitLab 17.0. Since GitLab 15.0 this field has returned no data.
-
-</div>
-
-<div class="deprecation breaking-change" data-milestone="17.0">
-
 ### GraphQL type, `RunnerMembershipFilter` renamed to `CiRunnerMembershipFilter`
 
 <div class="deprecation-notes">
@@ -1456,7 +1493,7 @@ the aliasing for the `RunnerMembershipFilter` type will be removed.
 
 <div class="deprecation breaking-change" data-milestone="17.0">
 
-### GraphQL: The `DISABLED_WITH_OVERRIDE` value of the `SharedRunnersSetting` enum is deprecated. Use `DISABLED_AND_OVERRIDABLE` instead
+### GraphQL: The `DISABLED_WITH_OVERRIDE` value for the `SharedRunnersSetting` enum is deprecated
 
 <div class="deprecation-notes">
 - Announced in GitLab <span class="milestone">15.8</span>
@@ -1464,7 +1501,8 @@ the aliasing for the `RunnerMembershipFilter` type will be removed.
 - To discuss this change or learn more, see the [deprecation issue](https://gitlab.com/gitlab-org/gitlab/-/issues/385636).
 </div>
 
-In GitLab 17.0, the `DISABLED_WITH_OVERRIDE` value of the `SharedRunnersSetting` GraphQL enum type will be replaced with the value, `DISABLED_AND_OVERRIDABLE`.
+In GitLab 17.0, the `DISABLED_WITH_OVERRIDE` value of the `SharedRunnersSetting` GraphQL enum type will be removed.
+Use `DISABLED_AND_OVERRIDABLE` instead.
 
 </div>
 
@@ -1488,7 +1526,7 @@ This is a breaking change that will be completed in 17.0.
 
 <div class="deprecation breaking-change" data-milestone="17.0">
 
-### HashiCorp Vault integration will no longer use CI_JOB_JWT by default
+### HashiCorp Vault integration will no longer use the `CI_JOB_JWT` CI/CD job token by default
 
 <div class="deprecation-notes">
 - Announced in GitLab <span class="milestone">15.9</span>
@@ -1571,7 +1609,7 @@ If you do access the internal container registry API and use the original tag de
 - To discuss this change or learn more, see the [deprecation issue](https://gitlab.com/gitlab-org/gitlab/-/issues/221031).
 </div>
 
-With the [deprecation of old JSON web token versions](https://docs.gitlab.com/ee/update/deprecations.html?removal_milestone=17.0#old-versions-of-json-web-tokens-are-deprecated) in GitLab 17.0, the associated `/-/jwks` endpoint which is an alias for `/oauth/discovery/keys` is no longer necessary and will be removed. Please replace any uses of `/-/jwks` with `/oauth/discovery/keys`, for example change `https://gitlab.example.com/-/jwks` to `https://gitlab.example.com/oauth/discovery/keys`.
+With the [deprecation of old JSON web token versions](https://docs.gitlab.com/ee/update/deprecations.html?removal_milestone=17.0#old-versions-of-json-web-tokens-are-deprecated) in GitLab 17.0, the associated `/-/jwks` endpoint which is an alias for `/oauth/discovery/keys` is no longer necessary and will be removed. Please remove any uses of `/-/jwks`, for example change `https://gitlab.example.com/-/jwks` to `https://gitlab.example.com`.
 
 </div>
 
@@ -1823,20 +1861,6 @@ In milestone 17.0, we will remove the `pipelines` attribute from the API respons
 
 <div class="deprecation breaking-change" data-milestone="17.0">
 
-### PipelineSecurityReportFinding projectFingerprint GraphQL field
-
-<div class="deprecation-notes">
-- Announced in GitLab <span class="milestone">15.1</span>
-- Removal in GitLab <span class="milestone">17.0</span> ([breaking change](https://docs.gitlab.com/ee/update/terminology.html#breaking-change))
-- To discuss this change or learn more, see the [deprecation issue](https://gitlab.com/gitlab-org/gitlab/-/issues/343475).
-</div>
-
-The [`project_fingerprint`](https://gitlab.com/groups/gitlab-org/-/epics/2791) attribute of vulnerability findings is being deprecated in favor of a `uuid` attribute. By using UUIDv5 values to identify findings, we can easily associate any related entity with a finding. The `project_fingerprint` attribute is no longer being used to track findings, and will be removed in GitLab 17.0.  Starting in 16.1, the output of `project_fingerprint` returns the same value as the `uuid` field.
-
-</div>
-
-<div class="deprecation breaking-change" data-milestone="17.0">
-
 ### PostgreSQL 13 no longer supported
 
 <div class="deprecation-notes">
@@ -1910,22 +1934,6 @@ For more information, see [Removing tags from our small SaaS runner on Linux](ht
 
 <div class="deprecation breaking-change" data-milestone="17.0">
 
-### Rename the 'require_password_to_approve' field
-
-<div class="deprecation-notes">
-- Announced in GitLab <span class="milestone">16.9</span>
-- Removal in GitLab <span class="milestone">17.0</span> ([breaking change](https://docs.gitlab.com/ee/update/terminology.html#breaking-change))
-- To discuss this change or learn more, see the [deprecation issue](https://gitlab.com/gitlab-org/gitlab/-/issues/431346).
-</div>
-
-In GitLab 16.7, we added the ability to re-authenticate with SAML SSO for the [Require user re-authentication to approve](https://docs.gitlab.com/ee/user/project/merge_requests/approvals/settings.html#require-user-re-authentication-to-approve) feature.
-
-For this reason, in GitLab 17.0, we are renaming the `require_password_to_approve` field to `require_reauthentication_to_approve` in the UI, API, and the database.
-
-</div>
-
-<div class="deprecation breaking-change" data-milestone="17.0">
-
 ### Required Pipeline Configuration is deprecated
 
 <div class="deprecation-notes">
@@ -1965,11 +1973,11 @@ This is part of our long-term strategy to deliver a faster, more consistent user
 In GitLab 17.0, we will:
 
 1. Remove a set of language-specific analyzers from the [SAST CI/CD template](https://gitlab.com/gitlab-org/gitlab/-/blob/master/lib/gitlab/ci/templates/Jobs/SAST.gitlab-ci.yml) and replace their coverage with [GitLab-supported detection rules](https://docs.gitlab.com/ee/user/application_security/sast/rules.html) in the [Semgrep-based analyzer](https://gitlab.com/gitlab-org/security-products/analyzers/semgrep). The following analyzers are now deprecated and will reach End of Support in GitLab 17.0:
-    1. [Brakeman](https://gitlab.com/gitlab-org/security-products/analyzers/brakeman) (Ruby, Ruby on Rails)
-    1. [Flawfinder](https://gitlab.com/gitlab-org/security-products/analyzers/flawfinder) (C, C++)
-    1. [MobSF](https://gitlab.com/gitlab-org/security-products/analyzers/mobsf) (Android, iOS)
-    1. [NodeJS Scan](https://gitlab.com/gitlab-org/security-products/analyzers/nodejs-scan) (Node.js)
-    1. [PHPCS Security Audit](https://gitlab.com/gitlab-org/security-products/analyzers/phpcs-security-audit) (PHP)
+   1. [Brakeman](https://gitlab.com/gitlab-org/security-products/analyzers/brakeman) (Ruby, Ruby on Rails)
+   1. [Flawfinder](https://gitlab.com/gitlab-org/security-products/analyzers/flawfinder) (C, C++)
+   1. [MobSF](https://gitlab.com/gitlab-org/security-products/analyzers/mobsf) (Android, iOS)
+   1. [NodeJS Scan](https://gitlab.com/gitlab-org/security-products/analyzers/nodejs-scan) (Node.js)
+   1. [PHPCS Security Audit](https://gitlab.com/gitlab-org/security-products/analyzers/phpcs-security-audit) (PHP)
 1. Change the [SAST CI/CD template](https://gitlab.com/gitlab-org/gitlab/-/blob/master/lib/gitlab/ci/templates/Jobs/SAST.gitlab-ci.yml) to stop running the [SpotBugs-based analyzer](https://gitlab.com/gitlab-org/security-products/analyzers/spotbugs) for Kotlin and Scala code. These languages will instead be scanned using [GitLab-supported detection rules](https://docs.gitlab.com/ee/user/application_security/sast/rules.html) in the [Semgrep-based analyzer](https://gitlab.com/gitlab-org/security-products/analyzers/semgrep).
 
 Effective immediately, the deprecated analyzers will receive only security updates; other routine improvements or updates are not guaranteed.
@@ -2405,6 +2413,20 @@ enable `postgres_exporter['flags']['collector.stat_user_tables']` instead.
 
 <div class="deprecation breaking-change" data-milestone="17.0">
 
+### `projectFingerprint` GraphQL field
+
+<div class="deprecation-notes">
+- Announced in GitLab <span class="milestone">15.1</span>
+- Removal in GitLab <span class="milestone">17.0</span> ([breaking change](https://docs.gitlab.com/ee/update/terminology.html#breaking-change))
+- To discuss this change or learn more, see the [deprecation issue](https://gitlab.com/gitlab-org/gitlab/-/issues/343475).
+</div>
+
+The [`project_fingerprint`](https://gitlab.com/groups/gitlab-org/-/epics/2791) attribute of vulnerability findings is being deprecated in favor of a `uuid` attribute. By using UUIDv5 values to identify findings, we can easily associate any related entity with a finding. The `project_fingerprint` attribute is no longer being used to track findings, and will be removed in GitLab 17.0. Starting in 16.1, the output of `project_fingerprint` returns the same value as the `uuid` field.
+
+</div>
+
+<div class="deprecation breaking-change" data-milestone="17.0">
+
 ### npm package uploads now occur asynchronously
 
 <div class="deprecation-notes">
@@ -2614,7 +2636,7 @@ However, enabling the bundled Grafana will no longer work from GitLab 16.3.
 
 **Update:** We previously announced we would remove the existing License Compliance CI template in GitLab 16.0. However, due to performance issues with the [license scanning of CycloneDX files](https://docs.gitlab.com/ee/user/compliance/license_scanning_of_cyclonedx_files/) we will do this in 16.3 instead.
 
-The GitLab [**License Compliance**](https://docs.gitlab.com/ee/user/compliance/license_compliance/) CI/CD template is now deprecated and is scheduled for removal in the GitLab 16.3 release.
+The GitLab [**License Compliance**](https://docs.gitlab.com/ee/user/compliance/license_approval_policies.html) CI/CD template is now deprecated and is scheduled for removal in the GitLab 16.3 release.
 
 To continue using GitLab for license compliance, remove the **License Compliance** template from your CI/CD pipeline and add the **Dependency Scanning** template. The **Dependency Scanning** template is now capable of gathering the required license information, so it is no longer necessary to run a separate license compliance job.
 
@@ -2979,8 +3001,6 @@ In 18.0, we plan to remove the **Limit** setting completely, and set the **Allow
 To prepare for this change, users on GitLab.com or self-managed GitLab 15.9 or later can enable the **Allow access** setting now and add the other projects. It will not be possible to disable the setting in 18.0 or later.
 
 In 16.3, the names of these settings were changed to clarify their meanings: the deprecated **Limit CI_JOB_TOKEN access** setting is now called **Limit access _from_ this project**, and the newer **Allow access to this project with a CI_JOB_TOKEN** setting is now called **Limit access _to_ this project**.
-
-In 17.1, the name of the **Limit access _to_ this project** setting was further clarified: it is now called **Grant access to this project**.
 
 </div>
 
@@ -3521,20 +3541,6 @@ The option to delete groups and projects immediately by default was deprecated t
 
 <div class="deprecation breaking-change" data-milestone="16.0">
 
-### PipelineSecurityReportFinding name GraphQL field
-
-<div class="deprecation-notes">
-- Announced in GitLab <span class="milestone">15.1</span>
-- Removal in GitLab <span class="milestone">16.0</span> ([breaking change](https://docs.gitlab.com/ee/update/terminology.html#breaking-change))
-- To discuss this change or learn more, see the [deprecation issue](https://gitlab.com/gitlab-org/gitlab/-/issues/346335).
-</div>
-
-Previously, the [PipelineSecurityReportFinding GraphQL type was updated](https://gitlab.com/gitlab-org/gitlab/-/issues/335372) to include a new `title` field. This field is an alias for the current `name` field, making the less specific `name` field redundant. The `name` field will be removed from the PipelineSecurityReportFinding type in GitLab 16.0.
-
-</div>
-
-<div class="deprecation breaking-change" data-milestone="16.0">
-
 ### PostgreSQL 12 deprecated
 
 <div class="deprecation-notes">
@@ -3920,7 +3926,7 @@ In order to make the behavior of toggling the draft status of a merge request mo
 
 <div class="deprecation breaking-change" data-milestone="16.0">
 
-### Use of `id` field in vulnerabilityFindingDismiss mutation
+### Use of `id` field in `vulnerabilityFindingDismiss` mutation
 
 <div class="deprecation-notes">
 - Announced in GitLab <span class="milestone">15.3</span>
@@ -3928,7 +3934,7 @@ In order to make the behavior of toggling the draft status of a merge request mo
 - To discuss this change or learn more, see the [deprecation issue](https://gitlab.com/gitlab-org/gitlab/-/issues/367166).
 </div>
 
-You can use the vulnerabilityFindingDismiss GraphQL mutation to set the status of a vulnerability finding to `Dismissed`. Previously, this mutation used the `id` field to identify findings uniquely. However, this did not work for dismissing findings from the pipeline security tab. Therefore, using the `id` field as an identifier has been dropped in favor of the `uuid` field. Using the 'uuid' field as an identifier allows you to dismiss the finding from the pipeline security tab.
+You can use the `vulnerabilityFindingDismiss` GraphQL mutation to set the status of a vulnerability finding to `Dismissed`. Previously, this mutation used the `id` field to identify findings uniquely. However, this did not work for dismissing findings from the pipeline security tab. Therefore, using the `id` field as an identifier has been dropped in favor of the `uuid` field. Using the 'uuid' field as an identifier allows you to dismiss the finding from the pipeline security tab.
 
 </div>
 
@@ -4034,6 +4040,20 @@ To avoid confusion and duplication, the `environment_tier` parameter is deprecat
 
 <div class="deprecation breaking-change" data-milestone="16.0">
 
+### `name` field for `PipelineSecurityReportFinding` GraphQL type
+
+<div class="deprecation-notes">
+- Announced in GitLab <span class="milestone">15.1</span>
+- Removal in GitLab <span class="milestone">16.0</span> ([breaking change](https://docs.gitlab.com/ee/update/terminology.html#breaking-change))
+- To discuss this change or learn more, see the [deprecation issue](https://gitlab.com/gitlab-org/gitlab/-/issues/346335).
+</div>
+
+Previously, the [`PipelineSecurityReportFinding` GraphQL type was updated](https://gitlab.com/gitlab-org/gitlab/-/issues/335372) to include a new `title` field. This field is an alias for the current `name` field, making the less specific `name` field redundant. The `name` field will be removed from the `PipelineSecurityReportFinding` type in GitLab 16.0.
+
+</div>
+
+<div class="deprecation breaking-change" data-milestone="16.0">
+
 ### `started` iteration state
 
 <div class="deprecation-notes">
@@ -4054,7 +4074,7 @@ We plan to continue to support the `started` state in REST API version until the
 
 <div class="deprecation breaking-change" data-milestone="16.0">
 
-### vulnerabilityFindingDismiss GraphQL mutation
+### `vulnerabilityFindingDismiss` GraphQL mutation
 
 <div class="deprecation-notes">
 - Announced in GitLab <span class="milestone">15.5</span>
@@ -4437,16 +4457,34 @@ Administrators who need to add runners for multiple projects can register a runn
 - Removal in GitLab <span class="milestone">15.0</span> ([breaking change](https://docs.gitlab.com/ee/update/terminology.html#breaking-change))
 </div>
 
-All functionality related to GitLab's Container Network Security and Container Host Security categories is deprecated in GitLab 14.8 and scheduled for removal in GitLab 15.0. Users who need a replacement for this functionality are encouraged to evaluate the following open source projects as potential solutions that can be installed and managed outside of GitLab: [AppArmor](https://gitlab.com/apparmor/apparmor), [Cilium](https://github.com/cilium/cilium), [Falco](https://github.com/falcosecurity/falco), [FluentD](https://github.com/fluent/fluentd), [Pod Security Admission](https://kubernetes.io/docs/concepts/security/pod-security-admission/). To integrate these technologies into GitLab, add the desired Helm charts into your copy of the [Cluster Management Project Template](https://docs.gitlab.com/ee/user/clusters/management_project_template.html). Deploy these Helm charts in production by calling commands through GitLab [CI/CD](https://docs.gitlab.com/ee/user/clusters/agent/ci_cd_workflow.html).
+All functionality related to GitLab's Container Network Security and
+Container Host Security categories is deprecated in GitLab 14.8 and
+scheduled for removal in GitLab 15.0. Users who need a replacement for this
+functionality are encouraged to evaluate the following open source projects
+as potential solutions that can be installed and managed outside of GitLab:
+[AppArmor](https://gitlab.com/apparmor/apparmor),
+[Cilium](https://github.com/cilium/cilium),
+[Falco](https://github.com/falcosecurity/falco),
+[FluentD](https://github.com/fluent/fluentd),
+[Pod Security Admission](https://kubernetes.io/docs/concepts/security/pod-security-admission/).
 
-As part of this change, the following specific capabilities within GitLab are now deprecated, and are scheduled for removal in GitLab 15.0:
+To integrate these technologies into GitLab, add the desired Helm charts
+into your copy of the
+[Cluster Management Project Template](https://docs.gitlab.com/ee/user/clusters/management_project_template.html).
+Deploy these Helm charts in production by calling commands through GitLab
+[CI/CD](https://docs.gitlab.com/ee/user/clusters/agent/ci_cd_workflow.html).
+
+As part of this change, the following specific capabilities within GitLab
+are now deprecated, and are scheduled for removal in GitLab 15.0:
 
 - The **Security & Compliance > Threat Monitoring** page.
 - The `Network Policy` security policy type, as found on the **Security & Compliance > Policies** page.
 - The ability to manage integrations with the following technologies through GitLab: AppArmor, Cilium, Falco, FluentD, and Pod Security Policies.
 - All APIs related to the above functionality.
 
-For additional context, or to provide feedback regarding this change, please reference our open [deprecation issue](https://gitlab.com/groups/gitlab-org/-/epics/7476).
+For additional context, or to provide feedback regarding this change,
+please reference our open
+[deprecation issue](https://gitlab.com/groups/gitlab-org/-/epics/7476).
 
 </div>
 
@@ -5512,6 +5550,22 @@ In milestone 15.0, we will completely remove `Version` from `PackageType`.
 
 <div class="deprecation breaking-change" data-milestone="15.0">
 
+### `apiFuzzingCiConfigurationCreate` GraphQL mutation
+
+<div class="deprecation-notes">
+- Announced in GitLab <span class="milestone">14.6</span>
+- Removal in GitLab <span class="milestone">15.0</span> ([breaking change](https://docs.gitlab.com/ee/update/terminology.html#breaking-change))
+- To discuss this change or learn more, see the [deprecation issue](https://gitlab.com/gitlab-org/gitlab/-/issues/333233).
+</div>
+
+The API Fuzzing configuration snippet is now being generated client-side and does not require an
+API request anymore. We are therefore deprecating the `apiFuzzingCiConfigurationCreate` mutation
+which isn't being used in GitLab anymore.
+
+</div>
+
+<div class="deprecation breaking-change" data-milestone="15.0">
+
 ### `artifacts:reports:cobertura` keyword
 
 <div class="deprecation-notes">
@@ -5630,22 +5684,6 @@ In GitLab 14.5, we introduced the command `gitlab-ctl promote` to promote any Ge
 </div>
 
 The `type` and `types` CI/CD keywords will be removed in GitLab 15.0. Pipelines that use these keywords will stop working, so you must switch to `stage` and `stages`, which have the same behavior.
-
-</div>
-
-<div class="deprecation breaking-change" data-milestone="15.0">
-
-### apiFuzzingCiConfigurationCreate GraphQL mutation
-
-<div class="deprecation-notes">
-- Announced in GitLab <span class="milestone">14.6</span>
-- Removal in GitLab <span class="milestone">15.0</span> ([breaking change](https://docs.gitlab.com/ee/update/terminology.html#breaking-change))
-- To discuss this change or learn more, see the [deprecation issue](https://gitlab.com/gitlab-org/gitlab/-/issues/333233).
-</div>
-
-The API Fuzzing configuration snippet is now being generated client-side and does not require an
-API request anymore. We are therefore deprecating the `apiFuzzingCiConfigurationCreate` mutation
-which isn't being used in GitLab anymore.
 
 </div>
 

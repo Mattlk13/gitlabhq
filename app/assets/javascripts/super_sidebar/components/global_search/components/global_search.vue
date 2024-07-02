@@ -2,7 +2,7 @@
 import { GlSearchBoxByType, GlModal } from '@gitlab/ui';
 // eslint-disable-next-line no-restricted-imports
 import { mapState, mapActions, mapGetters } from 'vuex';
-import { debounce } from 'lodash';
+import { debounce, clamp } from 'lodash';
 import { InternalEvents } from '~/tracking';
 import { visitUrl } from '~/lib/utils/url_utility';
 import { DEFAULT_DEBOUNCE_AND_THROTTLE_MS } from '~/lib/utils/constants';
@@ -28,6 +28,7 @@ import {
 import modalKeyboardNavigationMixin from '~/vue_shared/mixins/modal_keyboard_navigation_mixin';
 import { darkModeEnabled } from '~/lib/utils/color_utils';
 import ScrollScrim from '~/super_sidebar/components/scroll_scrim.vue';
+import { injectRegexSearch } from '~/search/store/utils';
 import {
   EVENT_PRESS_ENTER_TO_ADVANCED_SEARCH,
   EVENT_PRESS_ESCAPE_IN_COMMAND_PALETTE,
@@ -185,50 +186,61 @@ export default {
     },
     handleSubmitSearch(event) {
       this.submitSearch();
-      this.trackEvent(EVENT_PRESS_ENTER_TO_ADVANCED_SEARCH, { label: LABEL_COMMAND_PALETTE });
       event.stopPropagation();
       event.preventDefault();
     },
     onKeydown(event) {
       const { code, target } = event;
-
       let stop = true;
-
-      if (code === ENTER_KEY) {
-        this.handleSubmitSearch(event);
-        return;
-      }
-
+      const isSearchInput = target && target?.matches(SEARCH_INPUT_SELECTOR);
       const elements = this.getFocusableOptions();
 
-      if (elements.length < 1) return;
+      switch (code) {
+        case ENTER_KEY:
+        case NUMPAD_ENTER_KEY:
+          // we want to submit search term specifically if isSearchInput
+          // we want to submit search term if there are no results (elements.length < 1)
+          this.trackEvent(EVENT_PRESS_ENTER_TO_ADVANCED_SEARCH, { label: LABEL_COMMAND_PALETTE });
+          this.handleSubmitSearch(event);
+          break;
 
-      const isSearchInput = target?.matches(SEARCH_INPUT_SELECTOR);
+        case HOME_KEY:
+          if (isSearchInput) return;
+          if (elements.length < 1) return;
 
-      if (code === HOME_KEY) {
-        if (isSearchInput) return;
+          this.focusItem(0, elements);
+          break;
 
-        this.focusItem(0, elements);
-      } else if (code === END_KEY) {
-        if (isSearchInput) return;
+        case END_KEY:
+          if (isSearchInput) return;
+          if (elements.length < 1) return;
 
-        this.focusItem(elements.length - 1, elements);
-      } else if (code === ARROW_UP_KEY) {
-        if (isSearchInput) return;
+          this.focusItem(elements.length - 1, elements);
+          break;
 
-        if (elements.indexOf(target) === 0) {
-          this.focusSearchInput();
-        } else {
-          this.focusNextItem(event, elements, -1);
-        }
-      } else if (code === ARROW_DOWN_KEY) {
-        this.focusNextItem(event, elements, 1);
-      } else if (code === ESC_KEY) {
-        this.$refs.searchModal.close();
-      } else if (code === NUMPAD_ENTER_KEY) {
-        event.target?.firstChild.click();
-      } else {
-        stop = false;
+        case ARROW_UP_KEY:
+          if (isSearchInput) return;
+          if (elements.length < 1) return;
+
+          if (elements.indexOf(target) === 0) {
+            this.focusSearchInput();
+          } else {
+            this.focusNextItem(event, elements, -1);
+          }
+          break;
+
+        case ARROW_DOWN_KEY:
+          if (elements.length < 1) return;
+          this.focusNextItem(event, elements, 1);
+          break;
+
+        case ESC_KEY:
+          this.$refs.modal.close();
+          break;
+
+        default:
+          stop = false;
+          break;
       }
 
       if (stop) {
@@ -237,15 +249,32 @@ export default {
     },
     onKeyComboDown(event) {
       const { code, metaKey } = event;
-
       if (code === KEY_K && metaKey) {
         if (!this.commandPaletteDropdownOpen) {
           this.$refs.commandDropdown.open();
+          this.commandPaletteDropdownOpen = true;
         } else {
           this.$refs.commandDropdown.close();
+          this.commandPaletteDropdownOpen = false;
         }
-        this.commandPaletteDropdownOpen = !this.commandPaletteDropdownOpen;
       }
+    },
+    handleClosing() {
+      this.commandPaletteDropdownOpen = false;
+    },
+    focusSearchInput() {
+      this.$refs.searchInput.$el.querySelector('input')?.focus();
+    },
+    focusNextItem(event, elements, offset) {
+      const { target } = event;
+      const currentIndex = elements.indexOf(target);
+      const nextIndex = clamp(currentIndex + offset, 0, elements.length - 1);
+
+      this.focusItem(nextIndex, elements);
+    },
+    focusItem(index, elements) {
+      this.nextFocusedItemIndex = index;
+      elements[index]?.focus();
     },
     submitSearch() {
       if (this.isCommandMode) {
@@ -255,10 +284,11 @@ export default {
       if (this.search?.length <= SEARCH_SHORTCUTS_MIN_CHARACTERS) {
         return;
       }
-      visitUrl(this.searchQuery);
+
+      visitUrl(injectRegexSearch(this.searchQuery));
     },
     runFirstCommand() {
-      this.getFocusableOptions()[0]?.firstChild.click();
+      this.getFocusableOptions()[0]?.firstChild?.click();
     },
     onSearchModalShown() {
       this.$emit('shown');
@@ -359,7 +389,7 @@ export default {
     hide-header-close
     scrollable
     :title="$options.i18n.COMMAND_PALETTE"
-    body-class="gl-p-0!"
+    body-class="gl-p-0! !gl-min-h-26"
     modal-class="global-search-modal"
     :centered="false"
     @shown="onSearchModalShown"
@@ -462,6 +492,7 @@ export default {
             ref="commandDropdown"
             :items="commandPaletteDropdownItems"
             @selected="handleCommandSelection"
+            @hidden="handleClosing"
         /></span>
       </div>
     </template>

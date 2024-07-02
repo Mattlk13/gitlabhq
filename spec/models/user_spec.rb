@@ -98,6 +98,12 @@ RSpec.describe User, feature_category: :user_profile do
     it { is_expected.to delegate_method(:achievements_enabled).to(:user_preference) }
     it { is_expected.to delegate_method(:achievements_enabled=).to(:user_preference).with_arguments(:args) }
 
+    it { is_expected.to delegate_method(:organization_groups_projects_sort).to(:user_preference) }
+    it { is_expected.to delegate_method(:organization_groups_projects_sort=).to(:user_preference).with_arguments(:args) }
+
+    it { is_expected.to delegate_method(:organization_groups_projects_display).to(:user_preference) }
+    it { is_expected.to delegate_method(:organization_groups_projects_display=).to(:user_preference).with_arguments(:args) }
+
     it { is_expected.to delegate_method(:home_organization).to(:user_preference) }
     it { is_expected.to delegate_method(:home_organization_id).to(:user_preference) }
     it { is_expected.to delegate_method(:home_organization_id=).to(:user_preference).with_arguments(:args) }
@@ -149,6 +155,7 @@ RSpec.describe User, feature_category: :user_profile do
   end
 
   describe 'associations' do
+    it { is_expected.to belong_to(:created_by).class_name('User').optional }
     it { is_expected.to have_one(:namespace) }
     it { is_expected.to have_one(:status) }
     it { is_expected.to have_one(:user_detail) }
@@ -184,7 +191,7 @@ RSpec.describe User, feature_category: :user_profile do
     it { is_expected.to have_many(:abuse_reports).dependent(:nullify).inverse_of(:user) }
     it { is_expected.to have_many(:reported_abuse_reports).dependent(:nullify).class_name('AbuseReport').inverse_of(:reporter) }
     it { is_expected.to have_many(:resolved_abuse_reports).class_name('AbuseReport').inverse_of(:resolved_by) }
-    it { is_expected.to have_many(:abuse_events).class_name('Abuse::Event').inverse_of(:user) }
+    it { is_expected.to have_many(:abuse_events).class_name('AntiAbuse::Event').inverse_of(:user) }
     it { is_expected.to have_many(:custom_attributes).class_name('UserCustomAttribute') }
     it { is_expected.to have_many(:releases).dependent(:nullify) }
     it { is_expected.to have_many(:reviews).inverse_of(:author) }
@@ -204,7 +211,7 @@ RSpec.describe User, feature_category: :user_profile do
     it { is_expected.to have_many(:achievements).through(:user_achievements).class_name('Achievements::Achievement').inverse_of(:users) }
     it { is_expected.to have_many(:namespace_commit_emails).class_name('Users::NamespaceCommitEmail') }
     it { is_expected.to have_many(:audit_events).with_foreign_key(:author_id).inverse_of(:user) }
-    it { is_expected.to have_many(:abuse_trust_scores).class_name('Abuse::TrustScore') }
+    it { is_expected.to have_many(:abuse_trust_scores).class_name('AntiAbuse::TrustScore') }
     it { is_expected.to have_many(:issue_assignment_events).class_name('ResourceEvents::IssueAssignmentEvent') }
     it { is_expected.to have_many(:merge_request_assignment_events).class_name('ResourceEvents::MergeRequestAssignmentEvent') }
     it { is_expected.to have_many(:admin_abuse_report_assignees).class_name('Admin::AbuseReportAssignee') }
@@ -1374,37 +1381,6 @@ RSpec.describe User, feature_category: :user_profile do
 
         expect(described_class.by_username('CAMELCASED'))
           .to contain_exactly(user)
-      end
-    end
-
-    describe '.with_expiring_and_not_notified_personal_access_tokens' do
-      let_it_be(:user1) { create(:user) }
-      let_it_be(:user2) { create(:user) }
-      let_it_be(:user3) { create(:user) }
-
-      let_it_be(:expired_token) { create(:personal_access_token, user: user1, expires_at: 2.days.ago) }
-      let_it_be(:revoked_token) { create(:personal_access_token, user: user1, revoked: true) }
-      let_it_be(:impersonation_token) { create(:personal_access_token, :impersonation, user: user1, expires_at: 2.days.from_now) }
-      let_it_be(:valid_token_and_notified) { create(:personal_access_token, user: user2, expires_at: 2.days.from_now, expire_notification_delivered: true) }
-      let_it_be(:valid_token1) { create(:personal_access_token, user: user2, expires_at: 2.days.from_now) }
-      let_it_be(:valid_token2) { create(:personal_access_token, user: user2, expires_at: 2.days.from_now) }
-
-      let(:users) { described_class.with_expiring_and_not_notified_personal_access_tokens(from) }
-
-      context 'in one day' do
-        let(:from) { 1.day.from_now }
-
-        it "doesn't include an user" do
-          expect(users).to be_empty
-        end
-      end
-
-      context 'in three days' do
-        let(:from) { 3.days.from_now }
-
-        it 'only includes user2' do
-          expect(users).to contain_exactly(user2)
-        end
       end
     end
 
@@ -3477,20 +3453,62 @@ RSpec.describe User, feature_category: :user_profile do
       end
 
       context 'with private emails search' do
+        let(:options) { { with_private_emails: true } }
+
         it 'returns users with matching private primary email' do
-          expect(described_class.search(user.email, with_private_emails: true)).to match_array([user])
+          expect(described_class.search(user.email, **options)).to match_array([user])
         end
 
         it 'returns users with matching private unconfirmed primary email' do
-          expect(described_class.search(unconfirmed_user.email, with_private_emails: true)).to match_array([unconfirmed_user])
+          expect(described_class.search(unconfirmed_user.email, **options)).to match_array([unconfirmed_user])
         end
 
         it 'returns users with matching private confirmed secondary email' do
-          expect(described_class.search(confirmed_secondary_email.email, with_private_emails: true)).to match_array([user])
+          expect(described_class.search(confirmed_secondary_email.email, **options)).to match_array([user])
         end
 
         it 'does not return users with matching private unconfirmed secondary email' do
-          expect(described_class.search(unconfirmed_secondary_email.email, with_private_emails: true)).to be_empty
+          expect(described_class.search(unconfirmed_secondary_email.email, **options)).to be_empty
+        end
+
+        context 'with partial email search' do
+          let(:options) { super().merge(partial_email_search: true) }
+
+          before do
+            user.emails.each { |email| email.update! confirmed_at: nil }
+          end
+
+          it 'returns users with partially matching private primary email' do
+            expect(described_class.search(user.email[1...-1], **options)).to match_array([user, user2])
+          end
+
+          it 'returns users with partially matching private unconfirmed primary email' do
+            expect(described_class.search(unconfirmed_user.email[1...-1], **options)).to match_array([unconfirmed_user])
+          end
+
+          it 'returns users with partially matching private confirmed secondary email' do
+            expect(described_class.search(confirmed_secondary_email.email[1...-1], **options)).to match_array([user])
+          end
+
+          context 'when search is less than minimum char limit' do
+            subject(:users) { described_class.search(user.public_email[1..2], **options) }
+
+            context 'and use_minimum_char_limit is false' do
+              let(:options) { super().merge(use_minimum_char_limit: false) }
+
+              it 'ignores minimum char limit and returns users with a partially matching public email' do
+                expect(users).to match_array([user])
+              end
+            end
+
+            context 'and use_minimum_char_limit is true' do
+              let(:options) { super().merge(use_minimum_char_limit: true) }
+
+              it 'respects minimum char limit and does not return any users' do
+                expect(users).to be_empty
+              end
+            end
+          end
         end
       end
     end
@@ -3607,6 +3625,12 @@ RSpec.describe User, feature_category: :user_profile do
 
       expect(described_class.find_by_ssh_key_id(signing_key.id)).to be_nil
       expect(described_class.find_by_ssh_key_id(auth_and_signing_key.id)).to eq(user)
+    end
+
+    it 'does not return a user for a deploy key' do
+      deploy_key = create(:deploy_key)
+
+      expect(described_class.find_by_ssh_key_id(deploy_key.id)).to be_nil
     end
   end
 
@@ -4880,7 +4904,7 @@ RSpec.describe User, feature_category: :user_profile do
 
     subject { user.authorized_groups }
 
-    it { is_expected.to contain_exactly private_group, project_group }
+    it { is_expected.to contain_exactly private_group, child_group, project_group }
 
     context 'with shared memberships' do
       let_it_be(:shared_group) { create(:group) }
@@ -6586,8 +6610,8 @@ RSpec.describe User, feature_category: :user_profile do
 
       context 'when the user is a spammer' do
         before do
-          user_scores = Abuse::UserTrustScore.new(user)
-          allow(Abuse::UserTrustScore).to receive(:new).and_return(user_scores)
+          user_scores = AntiAbuse::UserTrustScore.new(user)
+          allow(AntiAbuse::UserTrustScore).to receive(:new).and_return(user_scores)
           allow(user_scores).to receive(:spammer?).and_return(true)
         end
 

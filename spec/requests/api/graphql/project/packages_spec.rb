@@ -21,7 +21,7 @@ RSpec.describe 'getting a package list for a project', feature_category: :packag
 
     let_it_be(:npm_package_protection_rule) do
       create(:package_protection_rule, project: resource, package_name_pattern: npm_package.name, package_type: :npm,
-        push_protected_up_to_access_level: :maintainer)
+        minimum_access_level_for_push: :maintainer)
     end
 
     let(:query) do
@@ -37,7 +37,6 @@ RSpec.describe 'getting a package list for a project', feature_category: :packag
         nodes {
           name
           packageType
-          packageProtectionRuleExists
           protectionRuleExists
         }
       QUERY
@@ -67,13 +66,11 @@ RSpec.describe 'getting a package list for a project', feature_category: :packag
             hash_including(
               'name' => npm_package.name,
               'packageType' => npm_package.package_type.upcase,
-              'packageProtectionRuleExists' => expected_protection_rule_exists,
               'protectionRuleExists' => expected_protection_rule_exists
             ),
             hash_including(
               'name' => maven_package.name,
               'packageType' => maven_package.package_type.upcase,
-              'packageProtectionRuleExists' => false,
               'protectionRuleExists' => false
             )
           )
@@ -94,7 +91,6 @@ RSpec.describe 'getting a package list for a project', feature_category: :packag
 
       it 'returns false for the field protectionRuleExists for each package' do
         graphql_data_at(resource_type, :packages, :nodes).each do |package|
-          expect(package['packageProtectionRuleExists']).to eq false
           expect(package['protectionRuleExists']).to eq false
         end
       end

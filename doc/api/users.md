@@ -681,7 +681,11 @@ DETAILS:
 **Offering:** Self-managed, GitLab Dedicated
 
 Deletes a user. Available only for administrators.
-This returns a `204 No Content` status code if the operation was successfully, `404` if the resource was not found or `409` if the user cannot be soft deleted.
+This returns a:
+
+- `204 No Content` status code if the operation was successful.
+- `404` if the resource was not found.
+- `409` if the user cannot be soft deleted.
 
 ```plaintext
 DELETE /users/:id
@@ -1058,7 +1062,7 @@ Example response:
 
 ## User counts
 
-Get the counts (same as in the upper-right menu) of the authenticated user.
+Get the counts (same as in the upper-left menu) of the authenticated user.
 
 | Attribute                         | Type   | Description                                                                  |
 | --------------------------------- | ------ | ---------------------------------------------------------------------------- |
@@ -1122,6 +1126,58 @@ Example response:
   "username": "service_account_6018816a18e515214e0c34c2b33523fc",
   "name": "Service account user"
 }
+```
+
+## List service account users
+
+DETAILS:
+**Tier:** Premium, Ultimate
+**Offering:** Self-managed, GitLab Dedicated
+
+> - Ability to list all service account users [introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/416729) in GitLab 17.1.
+
+Prerequisites:
+
+- You must be an administrator of the self-managed instance.
+
+Lists all service account users.
+
+This function takes pagination parameters `page` and `per_page` to restrict the list of users.
+
+This API endpoint requires the user to be an instance admin.
+
+Example request:
+
+```plaintext
+GET /service_accounts
+```
+
+```shell
+curl --request GET --header "PRIVATE-TOKEN: <your_access_token>" "https://gitlab.example.com/api/v4/service_accounts"
+```
+
+Supported attributes:
+
+| Attribute    | Type     | Required  | Description                                                 |
+|:-------------|:---------|:----------|:------------------------------------------------------------|
+| `order_by`   | string   | no        | Orders list of users by `username` or `id` Default is `id`. |
+| `sort`       | string   | no        | Specifies sorting by `asc` or `desc`. Default is `desc`.    |
+
+Example response:
+
+```json
+[
+  {
+    "id": 114,
+    "username": "service_account_33",
+    "name": "Service account user"
+  },
+  {
+    "id": 137,
+    "username": "service_account_34",
+    "name": "john doe"
+  }
+]
 ```
 
 ## List user projects
@@ -1352,7 +1408,7 @@ This also adds an audit event.
 
 Deletes key owned by the authenticated user.
 
-This returns a `204 No Content` status code if the operation was successfully
+This returns a `204 No Content` status code if the operation was successful
 or `404` if the resource was not found.
 
 ```plaintext
@@ -2530,7 +2586,7 @@ Example response:
 ```json
 {
     "id": 9171,
-    "token": "glrt-kyahzxLaj4Dc1jQf4xjX",
+    "token": "<access-token>",
     "token_expires_at": null
 }
 ```

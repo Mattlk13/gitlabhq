@@ -1,7 +1,6 @@
 ---
 # Cop supports --autocorrect.
 Layout/ClassStructure:
-  Details: grace period
   Exclude:
     - 'app/components/pajamas/accordion_item_component.rb'
     - 'app/components/pajamas/alert_component.rb'
@@ -31,7 +30,6 @@ Layout/ClassStructure:
     - 'app/graphql/resolvers/group_resolver.rb'
     - 'app/graphql/resolvers/namespace_projects_resolver.rb'
     - 'app/graphql/resolvers/namespace_resolver.rb'
-    - 'app/graphql/resolvers/project_pipeline_resolver.rb'
     - 'app/graphql/resolvers/project_resolver.rb'
     - 'app/graphql/resolvers/releases_resolver.rb'
     - 'app/graphql/resolvers/work_items/work_item_discussions_resolver.rb'
@@ -274,9 +272,7 @@ Layout/ClassStructure:
     - 'ee/app/services/path_locks/unlock_service.rb'
     - 'ee/app/services/personal_access_tokens/rotation_verifier_service.rb'
     - 'ee/app/services/search/zoekt/callback_service.rb'
-    - 'ee/app/services/search/zoekt/indexing_task_service.rb'
     - 'ee/app/services/search/zoekt/routing_service.rb'
-    - 'ee/app/services/search/zoekt/scheduling_service.rb'
     - 'ee/app/services/search/zoekt/task_presenter_service.rb'
     - 'ee/app/services/search/zoekt/task_serializer_service.rb'
     - 'ee/app/services/security/ingestion/tasks/update_vulnerability_uuids.rb'
@@ -328,8 +324,6 @@ Layout/ClassStructure:
     - 'ee/lib/gitlab/vulnerability_scanning/possibly_affected_component.rb'
     - 'ee/lib/langsmith/client.rb'
     - 'ee/lib/omni_auth/strategies/group_saml.rb'
-    - 'ee/lib/remote_development/workspaces/reconcile/output/devfile_parser.rb'
-    - 'ee/lib/remote_development/workspaces/reconcile/output/devfile_parser_v2.rb'
     - 'ee/lib/system_check/app/advanced_search_migrations_check.rb'
     - 'ee/lib/system_check/geo/license_check.rb'
     - 'lib/api/support/git_access_actor.rb'
@@ -357,14 +351,12 @@ Layout/ClassStructure:
     - 'lib/gitlab/background_migration/backfill_branch_protection_namespace_setting.rb'
     - 'lib/gitlab/background_migration/backfill_default_branch_protection_namespace_setting.rb'
     - 'lib/gitlab/background_migration/job_coordinator.rb'
-    - 'lib/gitlab/background_migration/migrate_remediations_for_vulnerability_findings.rb'
     - 'lib/gitlab/background_migration/project_namespaces/backfill_project_namespaces.rb'
     - 'lib/gitlab/background_task.rb'
     - 'lib/gitlab/backup_logger.rb'
     - 'lib/gitlab/checks/container_moved.rb'
     - 'lib/gitlab/checks/post_push_message.rb'
     - 'lib/gitlab/checks/project_created.rb'
-    - 'lib/gitlab/ci/ansi2html.rb'
     - 'lib/gitlab/ci/build/status/reason.rb'
     - 'lib/gitlab/ci/config/entry/job.rb'
     - 'lib/gitlab/ci/config/entry/jobs.rb'
@@ -487,7 +479,6 @@ Layout/ClassStructure:
     - 'lib/peek/views/external_http.rb'
     - 'lib/peek/views/zoekt.rb'
     - 'lib/release_highlights/validator.rb'
-    - 'lib/result.rb'
     - 'lib/sbom/package_url.rb'
     - 'lib/system_check/base_check.rb'
     - 'lib/uploaded_file.rb'

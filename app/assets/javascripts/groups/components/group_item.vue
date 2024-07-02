@@ -40,8 +40,6 @@ export default {
     ItemStats,
     ProjectAvatar,
     VisibilityIcon,
-    FrameworkBadge: () =>
-      import('ee_component/compliance_dashboard/components/shared/framework_badge.vue'),
   },
   inject: {
     currentGroupVisibility: {
@@ -159,9 +157,9 @@ export default {
   >
     <div
       :class="{ 'project-row-contents': !isGroup }"
-      class="group-row-contents d-flex gl-align-items-center py-2 pr-3"
+      class="group-row-contents gl-flex gl-items-center py-2 pr-3"
     >
-      <div class="folder-toggle-wrap gl-mr-2 d-flex gl-align-items-center">
+      <div class="folder-toggle-wrap gl-mr-2 !gl-flex gl-items-center">
         <gl-button
           v-if="hasChildren"
           :aria-label="toggleAriaLabel"
@@ -180,7 +178,7 @@ export default {
         class="gl-hidden sm:gl-inline-flex flex-shrink-0 gl-mr-3"
       />
       <a
-        :class="{ 'gl-sm-display-flex': !group.isChildrenLoading }"
+        :class="{ 'sm:gl-flex': !group.isChildrenLoading }"
         class="gl-hidden gl-text-decoration-none! gl-mr-3"
         :href="group.relativePath"
         :aria-label="group.name"
@@ -193,10 +191,10 @@ export default {
           :project-name="group.name"
         />
       </a>
-      <div class="group-text-container d-flex flex-fill gl-align-items-center">
+      <div class="group-text-container !gl-flex flex-fill gl-align-items-center">
         <div class="group-text flex-grow-1 flex-shrink-1">
           <div
-            class="gl-display-flex gl-align-items-center gl-flex-wrap title namespace-title gl-font-bold gl-mr-3"
+            class="gl-flex gl-align-items-center gl-flex-wrap title namespace-title gl-font-bold gl-mr-3"
           >
             <a
               v-gl-tooltip.bottom
@@ -241,14 +239,9 @@ export default {
                 </div>
               </gl-popover>
             </template>
-            <user-access-role-badge v-if="group.permission" size="sm" class="gl-mr-2">
+            <user-access-role-badge v-if="group.permission" class="gl-mr-2">
               {{ group.permission }}
             </user-access-role-badge>
-            <framework-badge
-              v-if="hasComplianceFramework"
-              :framework="complianceFramework"
-              :show-edit="false"
-            />
           </div>
           <div v-if="group.description" class="description gl-font-sm gl-mt-1">
             <span
@@ -266,7 +259,7 @@ export default {
           <gl-badge variant="info">{{ __('Archived') }}</gl-badge>
         </div>
         <div
-          class="metadata gl-display-flex gl-flex-grow-1 gl-flex-shrink-0 gl-flex-wrap justify-content-md-between"
+          class="metadata gl-flex gl-flex-grow-1 gl-flex-shrink-0 gl-flex-wrap justify-content-md-between"
         >
           <item-stats
             :item="group"
@@ -281,6 +274,7 @@ export default {
         </div>
       </div>
     </div>
+    <!-- eslint-disable-next-line vue/no-undef-components -->
     <group-folder
       v-if="group.isOpen && hasChildren"
       :parent-group="group"

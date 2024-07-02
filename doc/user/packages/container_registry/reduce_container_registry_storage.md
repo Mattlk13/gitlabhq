@@ -78,7 +78,7 @@ the size value only changes when:
   are analyzed and their layers deleted if not referenced by any other tagged image.
   If any layers are deleted, the namespace usage is updated.
 - The namespace's registry usage shrinks enough that GitLab can measure it with maximum precision.
-  As usage for namespaces shrinks to be under the [limits](../../../user/usage_quotas.md#namespace-storage-limit),
+  As usage for namespaces shrinks,
   the measurement switches automatically from delayed to precise usage measurement.
   There is no place in the UI to determine which measurement method is being used,
   but [issue 386468](https://gitlab.com/gitlab-org/gitlab/-/issues/386468) proposes to improve this.
@@ -192,6 +192,9 @@ To create a cleanup policy in the UI:
    | **Remove tags older than** | Remove only tags older than X days. |
    | **Remove tags matching**   | A regex pattern that determines which tags to remove. This value cannot be blank. For all tags, use `.*`. See other [regex pattern examples](#regex-pattern-examples). |
 
+   NOTE:
+   Both keep and remove regex patterns are automatically surrounded with `\A` and `\Z` anchors, so you do not need to include them. However, make sure to take this into account when choosing and testing your regex patterns.
+
 1. Select **Save**.
 
 The policy runs on the scheduled interval you selected.
@@ -204,9 +207,6 @@ If you edit the policy and select **Save** again, the interval is reset.
 Cleanup policies use regex patterns to determine which tags should be preserved or removed, both in the UI and the API.
 
 GitLab uses [RE2 syntax](https://github.com/google/re2/wiki/Syntax) for regular expressions in the cleanup policy.
-
-Regex patterns are automatically surrounded with `\A` and `\Z` anchors. Therefore, you do not need to include any
-`\A`, `\Z`, `^` or `$` tokens in the regex patterns.
 
 Here are some examples of regex patterns you can use:
 

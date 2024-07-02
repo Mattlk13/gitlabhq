@@ -199,15 +199,11 @@ The **rate limit** is 60 deletions per minute.
 ### Notification emails
 
 > - [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/439101) in GitLab 17.1 [with a flag](../administration/feature_flags.md) named `rate_limit_notification_emails`. Disabled by default.
-
-FLAG:
-The availability of this feature is controlled by a feature flag.
-For more information, see the history.
-This feature is available for testing, but not ready for production use.
+> - [Generally available](https://gitlab.com/gitlab-org/gitlab/-/issues/439101) in GitLab 17.2. Feature flag `rate_limit_notification_emails` removed.
 
 There is a rate limit for notification emails related to a project or group.
 
-The **rate limit** is 500 notifications per 24 hours per project or group per user.
+The **rate limit** is 1,000 notifications per 24 hours per project or group per user.
 
 ## Troubleshooting
 

@@ -39,7 +39,7 @@ Analyzers are shipped as Docker images. For example, to run the
        registry.gitlab.com/gitlab-org/security-products/analyzers/semgrep:latest /analyzer run
    ```
 
-1. The Docker container generates a report in the mounted project directory with a report filename corresponding to the analyzer category. For example, [SAST](../../user/application_security/sast) generates a file named `gl-sast-report.json`.
+1. The Docker container generates a report in the mounted project directory with a report filename corresponding to the analyzer category. For example, [SAST](../../user/application_security/sast/index.md) generates a file named `gl-sast-report.json`.
 
 ## Analyzers development
 
@@ -138,9 +138,9 @@ For more information, refer to the [project README](https://gitlab.com/gitlab-or
 
 ## Versioning and release process
 
-GitLab Security Products use an independent versioning system from GitLab Rails' `MAJOR.MINOR`. All products use a variation of [Semantic Versioning](https://semver.org) and are available as Docker images.
+GitLab Security Products use an independent versioning system from GitLab `MAJOR.MINOR`. All products use a variation of [Semantic Versioning](https://semver.org) and are available as Docker images.
 
-`Patch` version bumps tend to correspond to a `Minor` version bump of the underlying tools (i.e. [`bandit`](https://wiki.openstack.org/wiki/Security/Projects/Bandit)), allowing us greater flexibility in reserving `Minor` bumps for more significant changes to our scanners. In case of breaking changes imposed by the wrapped scanner, creating a new analyzer on a separate repository must be considered.
+`Major` is bumped with every new major release of GitLab, when [breaking changes are allowed](../deprecation_guidelines/index.md). `Minor` is bumped for new functionality, and `Patch` is reserved for bugfixes.
 
 The analyzers are released as Docker images following this scheme:
 
@@ -233,6 +233,19 @@ After the above steps have been completed, the automatic release process execute
 
 **Never delete a Git tag that has been pushed** as there is a good
 chance that the tag will be used and/or cached by the Go package registry.
+
+### Backporting a critical fix or patch
+
+To backport a critical fix or patch to an earlier version, follow the steps below.
+
+1. Create a new branch from the tag you are backporting the fix to, if it doesn't exist.
+   - For example, if the latest stable tag is `v4` and you are backporting a fix to `v3`, create a new branch called `v3`.
+1. Submit a merge request targeting the branch you just created.
+1. After its approved, merge the merge request into the branch.
+1. Create a new tag for the branch.
+1. If the analyzer has the [automatic release process](#automatic-release-process) enabled, a new version will be released.
+1. If not, you have to follow the [manual release process](#manual-release-process) to release a new version.
+1. NOTE: the release pipeline will override the latest `edge` tag so the most recent release pipeline's `tag edge` job may need to be re-ran to avoid a regression for that tag.
 
 ## Development of new analyzers
 

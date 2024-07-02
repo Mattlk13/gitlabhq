@@ -19,12 +19,12 @@ This page explains how to retrieve data from PostgreSQL for [RAG](index.md).
 1. Install [PgVector extension](#vector-store-with-pgvector) to the PostgreSQL database.
 1. Add a `vector` column to a new or existing table.
 1. Data <=> Embedding synchronization
-    1. Load data which you want to search from.
-    1. Pass the data to an embedding model and get an vector.
-    1. Set the vector to the `vector` column.
+   1. Load data which you want to search from.
+   1. Pass the data to an embedding model and get an vector.
+   1. Set the vector to the `vector` column.
 1. Retrieval
-    1. Pass the user input to an embedding model and get an vector.
-    1. Get the nearest neighbors to the user input vector e.g. `SELECT * FROM a_table ORDER BY vector_column <-> '<user-input-vector>' LIMIT 5;`
+   1. Pass the user input to an embedding model and get an vector.
+   1. Get the nearest neighbors to the user input vector e.g. `SELECT * FROM a_table ORDER BY vector_column <-> '<user-input-vector>' LIMIT 5;`
 
 ### Vector store with PgVector
 
@@ -87,7 +87,7 @@ The ingestion pipeline is performed in following steps:
 
 1. A CI X Ray scanner job is triggered - a documentation [page](../../../user/project/repository/code_suggestions/repository_xray.md#enable-repository-x-ray) suggest limiting this job to be executed only when changes occur to the main repository branch. However repository maintainers may configure trigger rules differently.
    1. An X Ray [scanner](https://gitlab.com/gitlab-org/code-creation/repository-x-ray) locates and process one of the supported [dependencies files](../../../user/project/repository/code_suggestions/repository_xray.md#supported-languages-and-package-managers), producing JSON report files
-1. After the X Ray scanner job finish sucessfully a [background job](https://gitlab.com/gitlab-org/gitlab/-/blob/c6b2f18eaf0b78a4e0012e88f28d643eb0dfb1c2/ee/app/workers/ai/store_repository_xray_worker.rb#L18) is triggered in GitLab Rails monolith that imports JSON report into [`Projects::XrayReport`](https://gitlab.com/gitlab-org/gitlab/-/blob/bc2ad40b4b026dd359e289cf2dc232de1a2d3227/ee/app/models/projects/xray_report.rb#L22)
+1. After the X Ray scanner job finishes successfully, a [background job](https://gitlab.com/gitlab-org/gitlab/-/blob/c6b2f18eaf0b78a4e0012e88f28d643eb0dfb1c2/ee/app/workers/ai/store_repository_xray_worker.rb#L18) is triggered in GitLab Rails monolith that imports JSON report into [`Projects::XrayReport`](https://gitlab.com/gitlab-org/gitlab/-/blob/bc2ad40b4b026dd359e289cf2dc232de1a2d3227/ee/app/models/projects/xray_report.rb#L22)
    1. There can be only one Repository X Ray report per project in the scope of programming language, duplicated records are being upserted during import process
 
 As of today, there are 84 rows on `xray_reports` table on GitLab.com.

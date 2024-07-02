@@ -7,6 +7,7 @@ module Gitlab
       #
       class Client
         include Helpers::Shell
+        include Helpers::Output
 
         # Error raised by kubectl client class
         Error = Class.new(StandardError)
@@ -20,6 +21,8 @@ module Gitlab
         # @return [String] command output
         def create_namespace
           execute_shell(["kubectl", "create", "namespace", namespace])
+        rescue Helpers::Shell::CommandFailure => e
+          raise(Error, e.message)
         end
 
         # Create kubernetes resource
@@ -30,34 +33,93 @@ module Gitlab
           run_in_namespace("apply", args: ["-f", "-"], stdin_data: resource.json)
         end
 
+        # Remove kubernetes resource
+        #
+        # @param [String] resource_type
+        # @param [String] resource_name
+        # @param [Boolean] ignore_not_found
+        # @return [String] command output
+        def delete_resource(resource_type, resource_name, ignore_not_found: true)
+          run_in_namespace("delete", resource_type, resource_name, args: [
+            "--ignore-not-found=#{ignore_not_found}", "--wait"
+          ])
+        end
+
         # Execute command in a pod
         #
         # @param [String] pod full or part of pod name
         # @param [Array] command
         # @param [String] container
         # @return [String]
-        def execute(pod, command, container: nil)
+        def execute(pod_name, command, container: nil)
           args = ["--", *command]
           args.unshift("-c", container) if container
 
-          run_in_namespace("exec", get_pod_name(pod), args: args)
+          run_in_namespace("exec", get_pod_name(pod_name), args: args)
+        end
+
+        # Get pod logs
+        #
+        # @param [Array<String>] pods
+        # @param [String] since
+        # @param [String] containers
+        # @return [Hash<String, String>]
+        def pod_logs(pods, since: "1h", containers: "default")
+          pod_data = JSON.parse(all_pods)["items"]
+            .select { |pod| pods.empty? || pods.any? { |p| pod.dig("metadata", "name").include?(p) } }
+            .each_with_object({}) { |pod, hash| hash[pod.dig("metadata", "name")] = pod.slice("metadata", "spec") }
+
+          if pod_data.empty?
+            raise Error, "No pods matched: #{pods.join(', ')}" unless pods.empty?
+
+            raise Error, "No pods found in namespace '#{namespace}'"
+          end
+
+          log("Fetching logs for pods '#{pod_data.keys.join(', ')}'", :info)
+          pod_data.to_h do |pod_name, data|
+            default_container = data.dig("spec", "containers").first["name"]
+            [
+              pod_name,
+              run_in_namespace("logs", "pod/#{pod_name}", args: [
+                "--since=#{since}",
+                "--prefix=true",
+                containers == "default" ? "--container=#{default_container}" : "--all-containers=true"
+              ])
+            ]
+          end
+        end
+
+        # Get events
+        #
+        # @return [String]
+        def events
+          log("Fetching events", :info)
+          run_in_namespace("get", "events", args: ["--sort-by=lastTimestamp"])
         end
 
         private
 
         attr_reader :namespace
 
+        # Get all pods in namespace
+        #
+        # @param [String] output --output type
+        # @return [String]
+        def all_pods(output: "json")
+          run_in_namespace("get", "pods", args: ["--output", output])
+        end
+
         # Get full pod name
         #
         # @param [String] name
         # @return [String]
         def get_pod_name(name)
-          pod = run_in_namespace("get", "pods", args: ["--output", "jsonpath={.items[*].metadata.name}"])
+          pod_name = all_pods(output: "jsonpath={.items[*].metadata.name}")
             .split(" ")
-            .find { |pod| pod.include?(name) }
-          raise Error, "Pod '#{name}' not found" unless pod
+            .find { |pod_name| pod_name.include?(name) }
+          raise Error, "Pod '#{name}' not found" unless pod_name
 
-          pod
+          pod_name
         end
 
         # Run kubectl command in namespace
@@ -68,6 +130,8 @@ module Gitlab
         # @return [String]
         def run_in_namespace(*action, args:, stdin_data: nil)
           execute_shell(["kubectl", *action, "-n", namespace, *args], stdin_data: stdin_data)
+        rescue Helpers::Shell::CommandFailure => e
+          raise(Error, e.message)
         end
       end
     end

@@ -65,6 +65,7 @@ Example response:
     "id": 2,
     "name": "rule1",
     "rule_type": "any_approver",
+    "report_type": null,
     "eligible_approvers": [],
     "approvals_required": 3,
     "users": [],
@@ -77,6 +78,20 @@ Example response:
     "id": 3,
     "name": "rule2",
     "rule_type": "code_owner",
+    "report_type": null,
+    "eligible_approvers": [],
+    "approvals_required": 2,
+    "users": [],
+    "groups": [],
+    "contains_hidden_groups": false,
+    "protected_branches": [],
+    "applies_to_all_protected_branches": true
+  },
+  {
+    "id": 4,
+    "name": "rule2",
+    "rule_type": "report_approver",
+    "report_type": "code_coverage",
     "eligible_approvers": [],
     "approvals_required": 2,
     "users": [],
@@ -263,7 +278,8 @@ Supported attributes:
   "disable_overriding_approvers_per_merge_request": false,
   "merge_requests_author_approval": true,
   "merge_requests_disable_committers_approval": false,
-  "require_password_to_approve": true
+  "require_password_to_approve": true, // Deprecated in 16.9, use require_reauthentication_to_approve instead
+  "require_reauthentication_to_approve": true
 }
 ```
 
@@ -284,7 +300,8 @@ Supported attributes:
 | `disable_overriding_approvers_per_merge_request` | boolean           | No       | Allow or prevent overriding approvers per merge request. |
 | `merge_requests_author_approval`                 | boolean           | No       | Allow or prevent authors from self approving merge requests; `true` means authors can self approve. |
 | `merge_requests_disable_committers_approval`     | boolean           | No       | Allow or prevent committers from self approving merge requests. |
-| `require_password_to_approve`                    | boolean           | No       | Require approver to enter a password to authenticate before adding the approval. |
+| `require_password_to_approve` (deprecated)       | boolean           | No       | Require approver to enter a password to authenticate before adding the approval. [Deprecated](https://gitlab.com/gitlab-org/gitlab/-/issues/431346) in GitLab 16.9. Use `require_reauthentication_to_approve` instead. |
+| `require_reauthentication_to_approve`            | boolean           | No       | Require approver to enter a to authenticate before adding the approval. [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/431346) in GitLab 17.1. |
 | `reset_approvals_on_push`                        | boolean           | No       | Reset approvals on a new push. |
 | `selective_code_owner_removals`                  | boolean           | No       | Reset approvals from Code Owners if their files changed. You must disable the `reset_approvals_on_push` field to use this field. |
 
@@ -296,7 +313,8 @@ Supported attributes:
   "disable_overriding_approvers_per_merge_request": false,
   "merge_requests_author_approval": false,
   "merge_requests_disable_committers_approval": false,
-  "require_password_to_approve": true
+  "require_password_to_approve": true,
+  "require_reauthentication_to_approve": true
 }
 ```
 
@@ -327,6 +345,7 @@ Supported attributes:
     "id": 1,
     "name": "security",
     "rule_type": "regular",
+    "report_type": null,
     "eligible_approvers": [
       {
         "id": 5,
@@ -400,7 +419,87 @@ Supported attributes:
         "code_owner_approval_required": "false"
       }
     ],
-    "contains_hidden_groups": false
+    "contains_hidden_groups": false,
+  },
+  {
+    "id": 2,
+    "name": "Coverage-Check",
+    "rule_type": "report_approver",
+    "report_type": "code_coverage",
+    "eligible_approvers": [
+      {
+        "id": 5,
+        "name": "John Doe",
+        "username": "jdoe",
+        "state": "active",
+        "avatar_url": "https://www.gravatar.com/avatar/0?s=80&d=identicon",
+        "web_url": "http://localhost/jdoe"
+      },
+      {
+        "id": 50,
+        "name": "Group Member 1",
+        "username": "group_member_1",
+        "state": "active",
+        "avatar_url": "https://www.gravatar.com/avatar/0?s=80&d=identicon",
+        "web_url": "http://localhost/group_member_1"
+      }
+    ],
+    "approvals_required": 3,
+    "users": [
+      {
+        "id": 5,
+        "name": "John Doe",
+        "username": "jdoe",
+        "state": "active",
+        "avatar_url": "https://www.gravatar.com/avatar/0?s=80&d=identicon",
+        "web_url": "http://localhost/jdoe"
+      }
+    ],
+    "groups": [
+      {
+        "id": 5,
+        "name": "group1",
+        "path": "group1",
+        "description": "",
+        "visibility": "public",
+        "lfs_enabled": false,
+        "avatar_url": null,
+        "web_url": "http://localhost/groups/group1",
+        "request_access_enabled": false,
+        "full_name": "group1",
+        "full_path": "group1",
+        "parent_id": null,
+        "ldap_cn": null,
+        "ldap_access": null
+      }
+    ],
+    "applies_to_all_protected_branches": false,
+    "protected_branches": [
+      {
+        "id": 1,
+        "name": "main",
+        "push_access_levels": [
+          {
+            "access_level": 30,
+            "access_level_description": "Developers + Maintainers"
+          }
+        ],
+        "merge_access_levels": [
+          {
+            "access_level": 30,
+            "access_level_description": "Developers + Maintainers"
+          }
+        ],
+        "unprotect_access_levels": [
+          {
+            "access_level": 40,
+            "access_level_description": "Maintainers"
+          }
+        ],
+        "code_owner_approval_required": "false"
+      }
+    ],
+    "contains_hidden_groups": false,
   }
 ]
 ```
@@ -428,6 +527,7 @@ Supported attributes:
   "id": 1,
   "name": "security",
   "rule_type": "regular",
+  "report_type": null,
   "eligible_approvers": [
     {
       "id": 5,
@@ -906,6 +1006,63 @@ Supported attributes:
     "id": 1,
     "name": "security",
     "rule_type": "regular",
+    "report_type": null,
+    "eligible_approvers": [
+      {
+        "id": 5,
+        "name": "John Doe",
+        "username": "jdoe",
+        "state": "active",
+        "avatar_url": "https://www.gravatar.com/avatar/0?s=80&d=identicon",
+        "web_url": "http://localhost/jdoe"
+      },
+      {
+        "id": 50,
+        "name": "Group Member 1",
+        "username": "group_member_1",
+        "state": "active",
+        "avatar_url": "https://www.gravatar.com/avatar/0?s=80&d=identicon",
+        "web_url": "http://localhost/group_member_1"
+      }
+    ],
+    "approvals_required": 3,
+    "source_rule": null,
+    "users": [
+      {
+        "id": 5,
+        "name": "John Doe",
+        "username": "jdoe",
+        "state": "active",
+        "avatar_url": "https://www.gravatar.com/avatar/0?s=80&d=identicon",
+        "web_url": "http://localhost/jdoe"
+      }
+    ],
+    "groups": [
+      {
+        "id": 5,
+        "name": "group1",
+        "path": "group1",
+        "description": "",
+        "visibility": "public",
+        "lfs_enabled": false,
+        "avatar_url": null,
+        "web_url": "http://localhost/groups/group1",
+        "request_access_enabled": false,
+        "full_name": "group1",
+        "full_path": "group1",
+        "parent_id": null,
+        "ldap_cn": null,
+        "ldap_access": null
+      }
+    ],
+    "contains_hidden_groups": false,
+    "overridden": false
+  },
+  {
+    "id": 2,
+    "name": "Coverage-Check",
+    "rule_type": "report_approver",
+    "report_type": "code_coverage",
     "eligible_approvers": [
       {
         "id": 5,
@@ -981,6 +1138,7 @@ Supported attributes:
   "id": 1,
   "name": "security",
   "rule_type": "regular",
+  "report_type": null,
   "eligible_approvers": [
     {
       "id": 5,
@@ -1232,7 +1390,7 @@ Supported attributes:
 | Attribute           | Type              | Required | Description |
 |---------------------|-------------------|----------|-------------|
 | `id`                | integer or string | Yes      | The ID or [URL-encoded path of a project](rest/index.md#namespaced-path-encoding). |
-| `approval_password` | string            | No       | Current user's password. Required if [**Require user password to approve**](../user/project/merge_requests/approvals/settings.md#require-user-re-authentication-to-approve) is enabled in the project settings. |
+| `approval_password` | string            | No       | Current user's password. Required if [**Require user re-authentication to approve**](../user/project/merge_requests/approvals/settings.md#require-user-re-authentication-to-approve) is enabled in the project settings. Always fails if the group or self-managed instance is configured to force SAML authentication. |
 | `merge_request_iid` | integer           | Yes      | The IID of the merge request. |
 | `sha`               | string            | No       | The `HEAD` of the merge request. |
 

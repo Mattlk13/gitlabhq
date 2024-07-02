@@ -33,7 +33,7 @@ import MemberSource from './member_source.vue';
 import MemberActivity from './member_activity.vue';
 import MaxRole from './max_role.vue';
 import MembersPagination from './members_pagination.vue';
-import RoleDetailsDrawer from './role_details_drawer.vue';
+import RoleDetailsDrawer from './drawer/role_details_drawer.vue';
 
 export default {
   components: {
@@ -58,6 +58,7 @@ export default {
       import('ee_component/members/components/modals/ldap_override_confirmation_modal.vue'),
     UserLimitReachedAlert: () =>
       import('ee_component/members/components/table/user_limit_reached_alert.vue'),
+    RoleBadges: () => import('ee_component/members/components/table/role_badges.vue'),
   },
   directives: { GlTooltip: GlTooltipDirective },
   mixins: [glFeatureFlagsMixin()],
@@ -294,14 +295,12 @@ export default {
               v-gl-tooltip.d0.hover="member.accessLevel.description"
               variant="link"
               :disabled="isRoleDrawerBusy"
-              class="gl-display-block"
+              class="gl-block"
               @click="selectedMember = member"
             >
               {{ member.accessLevel.stringValue }}
             </gl-button>
-            <gl-badge v-if="member.accessLevel.memberRoleId" class="gl-mt-3" size="sm">
-              {{ s__('MemberRole|Custom role') }}
-            </gl-badge>
+            <role-badges :member="member" :role="member.accessLevel" class="gl-mt-3" />
           </div>
           <max-role v-else :permissions="permissions" :member="member" />
         </members-table-cell>

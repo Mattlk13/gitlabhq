@@ -1,6 +1,6 @@
 import Vue, { nextTick } from 'vue';
 import VueApollo from 'vue-apollo';
-import { GlModal, GlCard, GlCollapsibleListbox } from '@gitlab/ui';
+import { GlModal, GlCard, GlCollapsibleListbox, GlToast } from '@gitlab/ui';
 import { sprintf } from '~/locale';
 import * as util from '~/lib/utils/url_utility';
 import createMockApollo from 'helpers/mock_apollo_helper';
@@ -35,6 +35,7 @@ import {
   matchingBranchesCount,
   protectableBranchesMockResponse,
   allowedToMergeDrawerProps,
+  protectionMockProps,
 } from 'ee_else_ce_jest/projects/settings/branch_rules/components/view/mock_data';
 
 jest.mock('~/lib/utils/url_utility', () => ({
@@ -50,16 +51,8 @@ jest.mock('~/lib/utils/url_utility', () => ({
 jest.mock('~/alert');
 
 Vue.use(VueApollo);
+Vue.use(GlToast);
 useMockLocationHelper();
-
-const protectionMockProps = {
-  headerLinkHref: 'protected/branches',
-  headerLinkTitle: I18N.manageProtectionsLinkTitle,
-};
-const roles = [
-  { accessLevelDescription: 'Maintainers' },
-  { accessLevelDescription: 'Maintainers + Developers' },
-];
 
 describe('View branch rules', () => {
   let wrapper;
@@ -77,7 +70,7 @@ describe('View branch rules', () => {
     .fn()
     .mockResolvedValue(protectableBranchesMockResponse);
   const errorHandler = jest.fn().mockRejectedValue('error');
-  const toastMock = { show: jest.fn() };
+  const showToast = jest.fn();
 
   const createComponent = async ({
     glFeatures = { editBranchRules: true },
@@ -109,7 +102,9 @@ describe('View branch rules', () => {
         GlModal: stubComponent(GlModal, { template: RENDER_ALL_SLOTS_TEMPLATE }),
       },
       mocks: {
-        $toast: toastMock,
+        $toast: {
+          show: showToast,
+        },
       },
       directives: { GlModal: createMockDirective('gl-modal') },
     });
@@ -121,6 +116,7 @@ describe('View branch rules', () => {
 
   afterEach(() => {
     fakeApollo = null;
+    showToast.mockReset();
   });
 
   const findBranchName = () => wrapper.findByTestId('branch');
@@ -188,13 +184,7 @@ describe('View branch rules', () => {
   });
 
   it('passes expected roles for push rules via props', () => {
-    findAllowedToPush()
-      .props()
-      .roles.forEach((role, i) => {
-        expect(role).toMatchObject({
-          accessLevelDescription: roles[i].accessLevelDescription,
-        });
-      });
+    expect(findAllowedToPush().props('roles')).toEqual(protectionMockProps.roles);
   });
 
   it('does not render Allow force push toggle if there are no push rules set', async () => {
@@ -215,7 +205,8 @@ describe('View branch rules', () => {
     'renders force push section with the correct title and description',
     async ({ allowForcePush, iconTitle, description }) => {
       const mockResponse = branchProtectionsMockResponse;
-      mockResponse.data.project.branchRules.nodes[0].branchProtection.allowForcePush = allowForcePush;
+      mockResponse.data.project.branchRules.nodes[0].branchProtection.allowForcePush =
+        allowForcePush;
       await createComponent({
         glFeatures: { editBranchRules: true },
         branchRulesQueryHandler: jest.fn().mockResolvedValue(mockResponse),
@@ -236,13 +227,7 @@ describe('View branch rules', () => {
   });
 
   it('passes expected roles form merge rules via props', () => {
-    findAllowedToMerge()
-      .props()
-      .roles.forEach((role, i) => {
-        expect(role).toMatchObject({
-          accessLevelDescription: roles[i].accessLevelDescription,
-        });
-      });
+    expect(findAllowedToMerge().props('roles')).toEqual(protectionMockProps.roles);
   });
 
   it('does not render a branch protection component for approvals', () => {
@@ -285,21 +270,20 @@ describe('View branch rules', () => {
       findBranchRuleModal().vm.$emit('primary', 'main');
       await nextTick();
       await waitForPromises();
-      expect(editBranchRuleSuccessHandler).toHaveBeenCalledWith({
-        input: {
-          id: 'gid://gitlab/Projects/BranchRule/1',
-          name: 'main',
-        },
-      });
+      expect(editBranchRuleSuccessHandler).toHaveBeenCalledWith(
+        expect.objectContaining({
+          input: {
+            id: 'gid://gitlab/Projects/BranchRule/1',
+            name: 'main',
+            branchProtection: expect.anything(),
+          },
+        }),
+      );
       await waitForPromises();
       expect(util.setUrlParams).toHaveBeenCalledWith({ branch: 'main' });
       expect(util.visitUrl).toHaveBeenCalledWith(
         '/project/Project/-/settings/repository/branch_rules?branch=main',
       );
-    });
-
-    it('renders force push section with the correct toggle label and description', () => {
-      expect(findAllowForcePushToggle().props('label')).toEqual('Allow force push');
     });
   });
 
@@ -394,18 +378,55 @@ describe('View branch rules', () => {
     it('when save button is clicked it calls edit rule mutation', async () => {
       findRuleDrawer().vm.$emit('editRule', { accessLevel: 30 });
       await nextTick();
+      expect(findRuleDrawer().props('isLoading')).toEqual(true);
       await waitForPromises();
-      expect(editBranchRuleSuccessHandler).toHaveBeenCalledWith({
-        input: {
-          branchProtection: {
-            mergeAccessLevels: {
-              accessLevel: 30,
-            },
+      expect(editBranchRuleSuccessHandler).toHaveBeenCalledWith(
+        expect.objectContaining({
+          input: {
+            branchProtection: expect.objectContaining({
+              mergeAccessLevels: {
+                accessLevel: 30,
+              },
+            }),
+            id: 'gid://gitlab/Projects/BranchRule/1',
+            name: 'main',
           },
-          id: 'gid://gitlab/Projects/BranchRule/1',
-          name: 'main',
-        },
-      });
+        }),
+      );
+      expect(findRuleDrawer().props('isLoading')).toEqual(false);
+    });
+  });
+
+  describe('Allow force push editing', () => {
+    it('renders force push section with the correct toggle label and description', () => {
+      expect(findAllowForcePushToggle().props('label')).toEqual('Allow force push');
+    });
+
+    it('when a toggle is triggered, it goes into a loading state, then shows a toast message', async () => {
+      findAllowForcePushToggle().vm.$emit('toggle', false);
+      await nextTick();
+      expect(findAllowForcePushToggle().props('isLoading')).toEqual(true);
+      await waitForPromises();
+      expect(showToast).toHaveBeenCalledTimes(1);
+      expect(showToast).toHaveBeenCalledWith('Allowed force push disabled');
+      expect(findAllowForcePushToggle().props('isLoading')).toEqual(false);
+    });
+
+    it('when a toggle is triggered it calls edit rule mutation', async () => {
+      findAllowForcePushToggle().vm.$emit('toggle', false);
+      await nextTick();
+      await waitForPromises();
+      expect(editBranchRuleSuccessHandler).toHaveBeenCalledWith(
+        expect.objectContaining({
+          input: {
+            branchProtection: expect.objectContaining({
+              allowForcePush: false,
+            }),
+            id: 'gid://gitlab/Projects/BranchRule/1',
+            name: 'main',
+          },
+        }),
+      );
     });
   });
 
@@ -441,7 +462,8 @@ describe('View branch rules', () => {
       'renders force push section with the correct title and description, when rule is `$allowForcePush`',
       async ({ allowForcePush, title, description }) => {
         const mockResponse = branchProtectionsMockResponse;
-        mockResponse.data.project.branchRules.nodes[0].branchProtection.allowForcePush = allowForcePush;
+        mockResponse.data.project.branchRules.nodes[0].branchProtection.allowForcePush =
+          allowForcePush;
 
         await createComponent({
           glFeatures: { editBranchRules: false },

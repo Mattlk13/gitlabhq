@@ -41,30 +41,48 @@ class WorkItem < Issue
       'issues.id'
     end
 
-    # def reference_pattern
-    #   # no-op: We currently only support link_reference_pattern parsing
-    # end
+    def namespace_reference_pattern
+      %r{
+        (?<!#{Gitlab::PathRegex::PATH_START_CHAR})
+        ((?<group_or_project_namespace>#{Gitlab::PathRegex::FULL_NAMESPACE_FORMAT_REGEX}))
+      }xo
+    end
+
+    def reference_pattern
+      @reference_pattern ||= %r{
+        (?:
+          (#{namespace_reference_pattern})?#{Regexp.escape(reference_prefix)} |
+          #{Regexp.escape(alternative_reference_prefix)}
+        )#{Gitlab::Regex.work_item}
+      }x
+    end
 
     def link_reference_pattern
-      @link_reference_pattern ||= compose_link_reference_pattern('work_items', Gitlab::Regex.work_item)
+      @link_reference_pattern ||= project_or_group_link_reference_pattern(
+        'work_items',
+        namespace_reference_pattern,
+        Gitlab::Regex.work_item
+      )
     end
 
     def work_item_children_keyset_order
-      keyset_order = Gitlab::Pagination::Keyset::Order.build([
-        Gitlab::Pagination::Keyset::ColumnOrderDefinition.new(
-          attribute_name: :relative_position,
-          column_expression: WorkItems::ParentLink.arel_table[:relative_position],
-          order_expression: WorkItems::ParentLink.arel_table[:relative_position].asc.nulls_last,
-          nullable: :nulls_last
-        ),
-        Gitlab::Pagination::Keyset::ColumnOrderDefinition.new(
-          attribute_name: :created_at,
-          order_expression: WorkItem.arel_table[:created_at].asc,
-          nullable: :not_nullable
-        )
-      ])
+      keyset_order = Gitlab::Pagination::Keyset::Order.build(
+        [
+          Gitlab::Pagination::Keyset::ColumnOrderDefinition.new(
+            attribute_name: 'parent_link_relative_position',
+            column_expression: WorkItems::ParentLink.arel_table[:relative_position],
+            order_expression: WorkItems::ParentLink.arel_table[:relative_position].asc.nulls_last,
+            add_to_projections: true,
+            nullable: :nulls_last
+          ),
+          Gitlab::Pagination::Keyset::ColumnOrderDefinition.new(
+            attribute_name: 'work_item_id',
+            order_expression: WorkItems::ParentLink.arel_table['work_item_id'].asc
+          )
+        ]
+      )
 
-      includes(:parent_link).order(keyset_order)
+      keyset_order.apply_cursor_conditions(includes(:parent_link)).reorder(keyset_order)
     end
 
     def linked_items_keyset_order

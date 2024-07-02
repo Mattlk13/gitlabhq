@@ -58,6 +58,9 @@ module Types
     mount_mutation Mutations::Environments::Delete
     mount_mutation Mutations::Environments::Stop
     mount_mutation Mutations::Environments::Update
+    mount_mutation Mutations::Import::SourceUsers::CancelReassignment, alpha: { milestone: '17.2' }
+    mount_mutation Mutations::Import::SourceUsers::KeepAsPlaceholder, alpha: { milestone: '17.2' }
+    mount_mutation Mutations::Import::SourceUsers::Reassign, alpha: { milestone: '17.2' }
     mount_mutation Mutations::IncidentManagement::TimelineEvent::Create, alpha: { milestone: '15.6' }
     mount_mutation Mutations::IncidentManagement::TimelineEvent::PromoteFromNote
     mount_mutation Mutations::IncidentManagement::TimelineEvent::Update
@@ -218,6 +221,7 @@ module Types
     mount_mutation Mutations::Ml::ModelVersions::Delete, alpha: { milestone: '17.0' }
     mount_mutation Mutations::BranchRules::Delete, alpha: { milestone: '16.9' }
     mount_mutation Mutations::Pages::Deployment::Delete, alpha: { milestone: '17.1' }
+    mount_mutation Mutations::Pages::Deployment::Restore, alpha: { milestone: '17.1' }
   end
 end
 

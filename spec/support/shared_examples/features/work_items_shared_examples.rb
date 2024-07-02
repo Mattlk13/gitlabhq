@@ -181,8 +181,6 @@ RSpec.shared_examples 'work items assignees' do
   end
 
   it 'updates the assignee in real-time' do
-    Capybara::Session.new(:other_session)
-
     using_session :other_session do
       visit work_items_path
       expect(work_item.reload.assignees).not_to include(user)
@@ -199,65 +197,54 @@ RSpec.shared_examples 'work items assignees' do
 end
 
 RSpec.shared_examples 'work items labels' do
-  let(:label_title_selector) { '[data-testid="labels-title"]' }
-  let(:labels_input_selector) { '[data-testid="work-item-labels-input"]' }
-  let(:work_item_labels_selector) { '[data-testid="work-item-labels"]' }
+  it 'adds and removes a label' do
+    within_testid 'work-item-labels' do
+      expect(page).not_to have_css '.gl-label', text: label.title
 
-  it 'successfully applies the label by searching' do
-    expect(work_item.reload.labels).not_to include(label)
+      click_button 'Edit'
+      select_listbox_item(label.title)
+      click_button 'Apply'
 
-    find_and_click_edit(work_item_labels_selector)
+      expect(page).to have_css '.gl-label', text: label.title
 
-    select_listbox_item(label.title)
+      click_button 'Edit'
+      click_button 'Clear'
 
-    find("body").click
-    wait_for_all_requests
-
-    expect(work_item.reload.labels).to include(label)
-    within(work_item_labels_selector) do
-      expect(page).to have_link(label.title)
+      expect(page).not_to have_css '.gl-label', text: label.title
     end
   end
 
-  it 'successfully removes all users on clear all button click' do
-    expect(work_item.reload.labels).not_to include(label)
-
-    find_and_click_edit(work_item_labels_selector)
-
-    select_listbox_item(label.title)
-
-    find("body").click
-    wait_for_requests
-
-    expect(work_item.reload.labels).to include(label)
-
-    find_and_click_edit(work_item_labels_selector)
-
-    find_and_click_clear(work_item_labels_selector)
-    wait_for_all_requests
-
-    expect(work_item.reload.labels).not_to include(label)
-  end
-
-  it 'updates the assignee in real-time' do
-    Capybara::Session.new(:other_session)
-
+  it 'updates the assigned labels in real-time when another user updates the label' do
     using_session :other_session do
       visit work_items_path
-      expect(work_item.reload.labels).not_to include(label)
+
+      expect(page).not_to have_css '.gl-label', text: label.title
     end
 
-    find_and_click_edit(work_item_labels_selector)
+    within_testid 'work-item-labels' do
+      click_button 'Edit'
+      select_listbox_item(label.title)
+      click_button 'Apply'
 
-    select_listbox_item(label.title)
+      expect(page).to have_css '.gl-label', text: label.title
+    end
 
-    find("body").click
-    wait_for_all_requests
-
-    expect(work_item.reload.labels).to include(label)
+    expect(page).to have_css '.gl-label', text: label.title
 
     using_session :other_session do
-      expect(work_item.reload.labels).to include(label)
+      expect(page).to have_css '.gl-label', text: label.title
+    end
+  end
+
+  it 'creates, auto-selects, and adds new label' do
+    within_testid 'work-item-labels' do
+      click_button 'Edit'
+      click_button 'Create project label'
+      send_keys 'Quintessence'
+      click_button 'Create'
+      click_button 'Apply'
+
+      expect(page).to have_css '.gl-label', text: 'Quintessence'
     end
   end
 end
@@ -735,13 +722,13 @@ RSpec.shared_examples 'work items time tracking' do
     click_button '3d'
 
     expect(page).to have_css 'h2', text: 'Time tracking report'
-    expect(page).to have_text '1d Sidney Jones1 First summary'
-    expect(page).to have_text '2d Sidney Jones1 Second summary'
+    expect(page).to have_text "1d #{user.name} First summary"
+    expect(page).to have_text "2d #{user.name} Second summary"
 
     click_button 'Delete time spent', match: :first
 
-    expect(page).to have_text '1d Sidney Jones1 First summary'
-    expect(page).not_to have_text '2d Sidney Jones1 Second summary'
+    expect(page).to have_text "1d #{user.name} First summary"
+    expect(page).not_to have_text "2d #{user.name} Second summary"
 
     click_button 'Close'
 

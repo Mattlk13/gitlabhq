@@ -182,21 +182,21 @@ In exceptional cases, we may need to add a new bounded context to the list. This
 1. **Is there ever a situation where the cop should be disabled?**
 
     - The cop **should not** be disabled but it **could** be disabled temporarily if the offending class or module is part
-    of a cluster of classes that should otherwise be moved all together.
-    In this case you could disable the cop and create a follow-up issue to move all the classes at once.
+      of a cluster of classes that should otherwise be moved all together.
+      In this case you could disable the cop and create a follow-up issue to move all the classes at once.
 1. **Is there a suggested timeline to get all of the existing code refactored into compliance?**
 
     - We do not have a timeline defined but the quicker we consolidate code the more consistent it becomes.
 1. **Do the bounded contexts apply for existing Sidekiq workers?**
 
     - Existing workers would be already in the RuboCop TODO file so they do not raise offenses. However, they should
-    also be moved into the bounded context whenever possible.
-    Follow the Sidekiq [renaming worker](../development/sidekiq/compatibility_across_updates.md#renaming-worker-classes) guide.
+      also be moved into the bounded context whenever possible.
+      Follow the Sidekiq [renaming worker](../development/sidekiq/compatibility_across_updates.md#renaming-worker-classes) guide.
 1. **We are renaming a feature category and the `config/bounded_contexts.yml` references that. Is it safe to update?**
 
     - Yes the file only expects that the feature categories mapped to bounded contexts are defined in `config/feature_categories.yml`
-    and nothing specifically depends on these values. This mapping is primarily for contributors to understand where features
-    may be living in the codebase.
+      and nothing specifically depends on these values. This mapping is primarily for contributors to understand where features
+      may be living in the codebase.
 
 ## Distinguish domain code from generic code
 
@@ -253,7 +253,7 @@ class User
 
   def spammer?
     # Warning sign: we use a constant that belongs to a specific bounded context!
-    spam_score > Abuse::TrustScore::SPAMCHECK_HAM_THRESHOLD
+    spam_score > AntiAbuse::TrustScore::SPAMCHECK_HAM_THRESHOLD
   end
 
   def telesign_score
@@ -279,7 +279,7 @@ user.arkose_global_score
 ```ruby
 ##
 # GOOD: Define a thin class that represents a user trust score
-class Abuse::UserTrustScore
+class AntiAbuse::UserTrustScore
   def initialize(user)
     @user = user
   end
@@ -289,7 +289,7 @@ class Abuse::UserTrustScore
   end
 
   def spammer?
-    spam > Abuse::TrustScore::SPAMCHECK_HAM_THRESHOLD
+    spam > AntiAbuse::TrustScore::SPAMCHECK_HAM_THRESHOLD
   end
 
   def telesign
@@ -307,13 +307,13 @@ class Abuse::UserTrustScore
   private
 
   def scores
-    Abuse::TrustScore.for_user(@user)
+    AntiAbuse::TrustScore.for_user(@user)
   end
 end
 
 # Usage:
 user = User.find(1)
-user_score = Abuse::UserTrustScore.new(user)
+user_score = AntiAbuse::UserTrustScore.new(user)
 user_score.spam
 user_score.spammer?
 user_score.telesign

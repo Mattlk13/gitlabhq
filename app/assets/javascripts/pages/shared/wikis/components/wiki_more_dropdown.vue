@@ -23,7 +23,12 @@ export default {
   directives: {
     GlTooltip: GlTooltipDirective,
   },
-  inject: ['newUrl', 'historyUrl', 'templatesUrl', 'cloneLinkClass', 'pagePersisted'],
+  inject: {
+    newUrl: { default: null },
+    historyUrl: { default: null },
+    templatesUrl: { default: null },
+    pagePersisted: { default: null },
+  },
   i18n: {
     wikiActions: s__('Wiki|Wiki actions'),
   },
@@ -75,7 +80,7 @@ export default {
       return !this.isDropdownVisible ? this.$options.i18n.wikiActions : '';
     },
     showPrintItem() {
-      return !this.isTemplate;
+      return !this.isTemplate && this.pagePersisted;
     },
   },
   methods: {
@@ -99,7 +104,7 @@ export default {
     v-gl-tooltip="showDropdownTooltip"
     icon="ellipsis_v"
     category="tertiary"
-    placement="right"
+    placement="bottom-end"
     no-caret
     data-testid="wiki-more-dropdown"
     @shown="showDropdown"

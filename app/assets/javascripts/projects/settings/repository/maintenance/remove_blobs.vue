@@ -36,7 +36,7 @@ export default {
   i18n,
   DRAWER_Z_INDEX,
   removeBlobsHelpLink: helpPagePath('/user/project/repository/reducing_the_repo_size_using_git', {
-    anchor: 'repository-cleanup',
+    anchor: 'get-a-list-of-object-ids',
   }),
   modalCancel: { text: i18n.modalCancelText },
   components: { GlButton, GlDrawer, GlLink, GlFormTextarea, GlModal, GlFormInput },
@@ -77,6 +77,9 @@ export default {
     closeDrawer() {
       this.blobIDs = null;
       this.isDrawerOpen = false;
+    },
+    clearConfirmInput() {
+      this.confirmInput = null;
     },
     removeBlobs() {
       this.showConfirmationModal = true;
@@ -184,14 +187,20 @@ export default {
       modal-id="remove-blobs-confirmation-modal"
       :action-cancel="$options.modalCancel"
       :action-primary="modalPrimary"
+      @hide="clearConfirmInput"
       @primary="removeBlobsConfirm"
     >
       <p>{{ $options.i18n.modalContent }}</p>
 
-      <p class="gl-mb-0">{{ $options.i18n.modalConfirm }}</p>
-      <code>{{ projectPath }}</code>
+      <p id="confirmationInstruction" class="gl-mb-0">
+        {{ $options.i18n.modalConfirm }} <code>{{ projectPath }}</code>
+      </p>
 
-      <gl-form-input v-model="confirmInput" class="gl-mt-2 gl-max-w-34" />
+      <gl-form-input
+        v-model="confirmInput"
+        class="gl-mt-3 gl-max-w-34"
+        aria-labelledby="confirmationInstruction"
+      />
     </gl-modal>
   </div>
 </template>

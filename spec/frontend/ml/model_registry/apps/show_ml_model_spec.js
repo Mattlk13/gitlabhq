@@ -89,6 +89,8 @@ describe('ml/model_registry/apps/show_ml_model', () => {
         indexModelsPath: 'index/path',
         mlflowTrackingUrl: 'path/to/tracking',
         canWriteModelRegistry,
+        maxAllowedFileSize: 99999,
+        latestVersion: '',
       },
       stubs: { GlTab, DeleteModel, LoadOrErrorOrShow },
     });

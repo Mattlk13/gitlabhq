@@ -51,7 +51,7 @@ export default {
 };
 </script>
 <template>
-  <span class="gl-display-inline-flex">
+  <span class="gl-inline-flex">
     <gl-button-group v-if="shouldRenderDropdown" size="small">
       <review-app-link
         :display="appButtonText"
@@ -62,15 +62,15 @@ export default {
       <gl-collapsible-listbox
         :items="filteredChanges"
         size="small"
-        placement="right"
+        placement="bottom-end"
         searchable
         @search="search"
       >
         <template #list-item="{ item }">
           <gl-link :href="item.value" target="_blank" rel="noopener noreferrer nofollow">
             <div>
-              <strong class="gl-text-truncate gl-mb-0 gl-display-block">{{ item.text }}</strong>
-              <p class="gl-text-secondary gl-text-truncate gl-mb-0 gl-display-block">
+              <strong class="gl-text-truncate gl-mb-0 gl-block">{{ item.text }}</strong>
+              <p class="gl-text-secondary gl-text-truncate gl-mb-0 gl-block">
                 {{ item.value }}
               </p>
             </div>

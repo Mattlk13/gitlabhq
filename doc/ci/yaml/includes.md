@@ -14,14 +14,20 @@ You can use [`include`](index.md#include) to include external YAML files in your
 
 ## Include a single configuration file
 
-To include a single configuration file, use either of these syntax options:
+To include a single configuration file, use `include` by itself with a single file
+with either of these syntax options:
 
-- `include` by itself with a single file. If this is a local file, it is the same as [`include:local`](index.md#includelocal).
-  If this is a remote file, it is the same as [`include:remote`](index.md#includeremote).
-
-  ```yaml
-  include: '/templates/.after-script-template.yml'
+- ```yaml
+  include: 'my-config.yml'
   ```
+
+- ```yaml
+  include:
+    - 'my-config.yml'
+  ```
+
+If the file is a local file, the behavior is the same as [`include:local`](index.md#includelocal).
+If the file is a remote file, it is the same as [`include:remote`](index.md#includeremote).
 
 ## Include an array of configuration files
 
@@ -33,7 +39,7 @@ You can include an array of configuration files:
   ```yaml
   include:
     - 'https://gitlab.com/awesome-project/raw/main/.before-script-template.yml'
-    - '/templates/.after-script-template.yml'
+    - 'templates/.after-script-template.yml'
   ```
 
 - You can define a single item array:
@@ -48,7 +54,7 @@ You can include an array of configuration files:
   ```yaml
   include:
     - remote: 'https://gitlab.com/awesome-project/raw/main/.before-script-template.yml'
-    - local: '/templates/.after-script-template.yml'
+    - local: 'templates/.after-script-template.yml'
     - template: Auto-DevOps.gitlab-ci.yml
   ```
 
@@ -57,11 +63,11 @@ You can include an array of configuration files:
   ```yaml
   include:
     - 'https://gitlab.com/awesome-project/raw/main/.before-script-template.yml'
-    - '/templates/.after-script-template.yml'
+    - 'templates/.after-script-template.yml'
     - template: Auto-DevOps.gitlab-ci.yml
     - project: 'my-group/my-project'
       ref: main
-      file: '/templates/.gitlab-ci-template.yml'
+      file: 'templates/.gitlab-ci-template.yml'
   ```
 
 ## Use `default` configuration from an included configuration file
@@ -85,7 +91,7 @@ default:
 Content of `.gitlab-ci.yml`:
 
 ```yaml
-include: '/templates/.before-script-template.yml'
+include: 'templates/.before-script-template.yml'
 
 rspec1:
   script:
@@ -375,9 +381,6 @@ In `include` sections in your `.gitlab-ci.yml` file, you can use:
 - The `CI_PIPELINE_SOURCE` and `CI_PIPELINE_TRIGGERED` [predefined variables](../variables/predefined_variables.md).
 - The `$CI_COMMIT_REF_NAME` [predefined variable](../variables/predefined_variables.md).
 
-  When used in `include`, the `CI_COMMIT_REF_NAME` variable returns the full
-  ref path, like `refs/heads/branch-name`.
-
 For example:
 
 ```yaml
@@ -392,6 +395,10 @@ so these variables cannot be used with `include`.
 
 For an example of how you can include predefined variables, and the variables' impact on CI/CD jobs,
 see this [CI/CD variable demo](https://youtu.be/4XR8gw3Pkos).
+
+You cannot use CI/CD variables in an `include` section in a dynamic child pipeline's configuration.
+[Issue 378717](https://gitlab.com/gitlab-org/gitlab/-/issues/378717) proposes fixing
+this issue.
 
 ## Use `rules` with `include`
 

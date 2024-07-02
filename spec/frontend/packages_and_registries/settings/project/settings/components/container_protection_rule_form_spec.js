@@ -58,12 +58,15 @@ describe('container Protection Rule Form', () => {
           .findAll('option')
           .wrappers.map((option) => option.element.value);
 
-      it.each(['MAINTAINER', 'OWNER', 'ADMIN'])('includes the %s access level', (accessLevel) => {
-        mountComponent();
+      it.each(['', 'MAINTAINER', 'OWNER', 'ADMIN'])(
+        'includes the access level "%s" as an option',
+        (accessLevel) => {
+          mountComponent();
 
-        expect(findMinimumAccessLevelForPushSelect().exists()).toBe(true);
-        expect(minimumAccessLevelForPushOptions()).toContain(accessLevel);
-      });
+          expect(findMinimumAccessLevelForPushSelect().exists()).toBe(true);
+          expect(minimumAccessLevelForPushOptions()).toContain(accessLevel);
+        },
+      );
     });
 
     describe('when graphql mutation is in progress', () => {
@@ -162,6 +165,29 @@ describe('container Protection Rule Form', () => {
         });
       });
 
+      it('dispatches correct apollo mutation when no minimumAccessLevelForPush is selected', async () => {
+        const mutationResolver = jest
+          .fn()
+          .mockResolvedValue(createContainerProtectionRuleMutationPayload());
+
+        mountComponentWithApollo({ mutationResolver });
+
+        await findRepositoryPathPatternInput().setValue(
+          createContainerProtectionRuleMutationInput.repositoryPathPattern,
+        );
+        await findMinimumAccessLevelForPushSelect().setValue('');
+
+        await submitForm();
+
+        expect(mutationResolver).toHaveBeenCalledWith({
+          input: {
+            projectPath: 'path',
+            ...createContainerProtectionRuleMutationInput,
+            minimumAccessLevelForPush: null,
+          },
+        });
+      });
+
       it('emits event "submit" when apollo mutation successful', async () => {
         const mutationResolver = jest
           .fn()
@@ -172,8 +198,9 @@ describe('container Protection Rule Form', () => {
         await submitForm();
 
         expect(wrapper.emitted('submit')).toBeDefined();
-        const expectedEventSubmitPayload = createContainerProtectionRuleMutationPayload().data
-          .createContainerRegistryProtectionRule.containerRegistryProtectionRule;
+        const expectedEventSubmitPayload =
+          createContainerProtectionRuleMutationPayload().data.createContainerRegistryProtectionRule
+            .containerRegistryProtectionRule;
         expect(wrapper.emitted('submit')[0]).toEqual([expectedEventSubmitPayload]);
 
         expect(wrapper.emitted()).not.toHaveProperty('cancel');

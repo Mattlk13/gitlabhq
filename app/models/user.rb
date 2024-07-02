@@ -246,9 +246,9 @@ class User < MainClusterwide::ApplicationRecord
   has_many :assigned_abuse_reports, class_name: "AbuseReport", through: :admin_abuse_report_assignees, source: :abuse_report
   has_many :reported_abuse_reports,   dependent: :nullify, foreign_key: :reporter_id, class_name: "AbuseReport", inverse_of: :reporter # rubocop:disable Cop/ActiveRecordDependent
   has_many :resolved_abuse_reports,   foreign_key: :resolved_by_id, class_name: "AbuseReport", inverse_of: :resolved_by
-  has_many :abuse_events,             foreign_key: :user_id, class_name: 'Abuse::Event', inverse_of: :user
+  has_many :abuse_events,             foreign_key: :user_id, class_name: 'AntiAbuse::Event', inverse_of: :user
   has_many :spam_logs,                dependent: :destroy # rubocop:disable Cop/ActiveRecordDependent
-  has_many :abuse_trust_scores,       class_name: 'Abuse::TrustScore', foreign_key: :user_id
+  has_many :abuse_trust_scores,       class_name: 'AntiAbuse::TrustScore', foreign_key: :user_id
   has_many :builds,                   class_name: 'Ci::Build'
   has_many :pipelines,                class_name: 'Ci::Pipeline'
   has_many :todos,                    dependent: :destroy # rubocop:disable Cop/ActiveRecordDependent
@@ -275,6 +275,7 @@ class User < MainClusterwide::ApplicationRecord
   has_many :project_callouts, class_name: 'Users::ProjectCallout'
   has_many :term_agreements
   belongs_to :accepted_term, class_name: 'ApplicationSetting::Term'
+  belongs_to :created_by, class_name: 'User', optional: true
 
   has_many :organization_users, class_name: 'Organizations::OrganizationUser', inverse_of: :user
   has_many :organizations, through: :organization_users, class_name: 'Organizations::Organization', inverse_of: :users,
@@ -415,6 +416,8 @@ class User < MainClusterwide::ApplicationRecord
     :gitpod_enabled, :gitpod_enabled=,
     :use_web_ide_extension_marketplace, :use_web_ide_extension_marketplace=,
     :extensions_marketplace_opt_in_status, :extensions_marketplace_opt_in_status=,
+    :organization_groups_projects_sort, :organization_groups_projects_sort=,
+    :organization_groups_projects_display, :organization_groups_projects_display=,
     :extensions_marketplace_enabled, :extensions_marketplace_enabled=,
     :setup_for_company, :setup_for_company=,
     :project_shortcut_buttons, :project_shortcut_buttons=,
@@ -607,13 +610,6 @@ class User < MainClusterwide::ApplicationRecord
   scope :with_emails, -> { preload(:emails) }
   scope :with_dashboard, ->(dashboard) { where(dashboard: dashboard) }
   scope :with_public_profile, -> { where(private_profile: false) }
-  scope :with_expiring_and_not_notified_personal_access_tokens, ->(at) do
-    where('EXISTS (?)', ::PersonalAccessToken
-      .where('personal_access_tokens.user_id = users.id')
-      .without_impersonation
-      .expiring_and_not_notified(at).select(1)
-    )
-  end
   scope :with_personal_access_tokens_expired_today, -> do
     where('EXISTS (?)', ::PersonalAccessToken
       .select(1)
@@ -662,6 +658,7 @@ class User < MainClusterwide::ApplicationRecord
     .includes(:projects)
   end
 
+  scope :left_join_user_detail, -> { left_joins(:user_detail) }
   scope :preload_user_detail, -> { preload(:user_detail) }
 
   def self.supported_keyset_orderings
@@ -861,6 +858,7 @@ class User < MainClusterwide::ApplicationRecord
     #
     # query - The search query as a String
     # with_private_emails - include private emails in search
+    # partial_email_search - only for admins to preserve email privacy. Only for self-managed instances.
     #
     # Returns an ActiveRecord::Relation.
     def search(query, **options)
@@ -882,8 +880,18 @@ class User < MainClusterwide::ApplicationRecord
 
       sanitized_order_sql = Arel.sql(sanitize_sql_array([order, { query: query }]))
 
-      scope = options[:with_private_emails] ? with_primary_or_secondary_email(query) : with_public_email(query)
-      scope = scope.or(search_by_name_or_username(query, use_minimum_char_limit: options[:use_minimum_char_limit]))
+      use_minimum_char_limit = options[:use_minimum_char_limit]
+
+      scope =
+        if options[:with_private_emails]
+          with_primary_or_secondary_email(
+            query, use_minimum_char_limit: use_minimum_char_limit, partial_email_search: options[:partial_email_search]
+          )
+        else
+          with_public_email(query)
+        end
+
+      scope = scope.or(search_by_name_or_username(query, use_minimum_char_limit: use_minimum_char_limit))
 
       order = Gitlab::Pagination::Keyset::Order.build(
         [
@@ -955,16 +963,25 @@ class User < MainClusterwide::ApplicationRecord
       where(public_email: email_address)
     end
 
-    def with_primary_or_secondary_email(email_address)
+    def with_primary_or_secondary_email(query, use_minimum_char_limit: true, partial_email_search: false)
       email_table = Email.arel_table
+
+      if partial_email_search
+        email_table_matched_by_email = Email.fuzzy_arel_match(:email, query, use_minimum_char_limit: use_minimum_char_limit)
+        matched_by_email = User.fuzzy_arel_match(:email, query, use_minimum_char_limit: use_minimum_char_limit)
+      else
+        email_table_matched_by_email = email_table[:email].eq(query)
+        matched_by_email = arel_table[:email].eq(query)
+      end
+
       matched_by_email_user_id = email_table
         .project(email_table[:user_id])
-        .where(email_table[:email].eq(email_address))
+        .where(email_table_matched_by_email)
         .where(email_table[:confirmed_at].not_eq(nil))
         .take(1) # at most 1 record as there is a unique constraint
 
       where(
-        arel_table[:email].eq(email_address)
+        matched_by_email
         .or(arel_table[:id].eq(matched_by_email_user_id))
       )
     end
@@ -987,9 +1004,9 @@ class User < MainClusterwide::ApplicationRecord
       by_username(username).take!
     end
 
-    # Returns a user for the given SSH key.
+    # Returns a user for the given SSH key. Deploy keys are excluded.
     def find_by_ssh_key_id(key_id)
-      find_by('EXISTS (?)', Key.select(1).where('keys.user_id = users.id').auth.where(id: key_id))
+      find_by('EXISTS (?)', Key.select(1).where('keys.user_id = users.id').auth.regular_keys.where(id: key_id))
     end
 
     def find_by_full_path(path, follow_redirects: false)
@@ -1253,7 +1270,7 @@ class User < MainClusterwide::ApplicationRecord
     gpg_keys.each(&:update_invalid_gpg_signatures)
   end
 
-  # Returns the groups a user has access to, either through a membership or a project authorization
+  # Returns the groups a user has access to, either through direct or inherited membership or a project authorization
   def authorized_groups
     Group.unscoped do
       direct_groups_cte = Gitlab::SQL::CTE.new(:direct_groups, groups)
@@ -1262,7 +1279,7 @@ class User < MainClusterwide::ApplicationRecord
       Group
         .with(direct_groups_cte.to_arel)
         .from_union([
-          Group.from(direct_groups_cte_alias),
+          Group.from(direct_groups_cte_alias).self_and_descendants,
           Group.id_in(authorized_projects.select(:namespace_id)),
           Group.joins(:shared_with_group_links)
             .where(group_group_links: { shared_with_group_id: Group.from(direct_groups_cte_alias) })
@@ -1550,10 +1567,6 @@ class User < MainClusterwide::ApplicationRecord
         DeployKey.where(id: project_deploy_keys.select(:deploy_key_id)),
         DeployKey.are_public
       ])
-  end
-
-  def created_by
-    User.find_by(id: created_by_id) if created_by_id
   end
 
   def sanitize_attrs
@@ -2148,7 +2161,7 @@ class User < MainClusterwide::ApplicationRecord
   end
 
   def can_admin_organization?(organization)
-    owns_organization?(organization)
+    can?(:admin_organization, organization)
   end
 
   def update_two_factor_requirement
@@ -2479,7 +2492,7 @@ class User < MainClusterwide::ApplicationRecord
   end
 
   def block_or_ban
-    user_scores = Abuse::UserTrustScore.new(self)
+    user_scores = AntiAbuse::UserTrustScore.new(self)
     if user_scores.spammer? && account_age_in_days < 7
       ban_and_report
     else

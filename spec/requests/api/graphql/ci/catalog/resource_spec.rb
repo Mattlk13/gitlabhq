@@ -73,12 +73,16 @@ RSpec.describe 'Query.ciCatalogResource', feature_category: :pipeline_compositio
 
     let_it_be(:inputs) do
       {
-        website: nil,
+        access_token: nil,
         environment: {
           default: 'test'
         },
         tags: {
           type: 'array'
+        },
+        website: {
+          description: 'The website',
+          regex: '^https'
         }
       }
     end
@@ -103,9 +107,12 @@ RSpec.describe 'Query.ciCatalogResource', feature_category: :pipeline_compositio
                     name
                     includePath
                     inputs {
-                      name
                       default
+                      description
+                      name
+                      regex
                       required
+                      type
                     }
                   }
                 }
@@ -126,23 +133,31 @@ RSpec.describe 'Query.ciCatalogResource', feature_category: :pipeline_compositio
           components.first,
           name: components.first.name,
           include_path: components.first.include_path,
-          inputs: [
+          inputs: contain_exactly(
+            a_graphql_entity_for(
+              name: 'access_token',
+              required: true,
+              type: 'STRING'
+            ),
             a_graphql_entity_for(
               name: 'tags',
-              default: nil,
-              required: true
+              required: true,
+              type: 'ARRAY'
             ),
             a_graphql_entity_for(
               name: 'website',
-              default: nil,
-              required: true
+              required: true,
+              description: 'The website',
+              regex: '^https',
+              type: 'STRING'
             ),
             a_graphql_entity_for(
               name: 'environment',
               default: 'test',
-              required: false
+              required: false,
+              type: 'STRING'
             )
-          ]
+          )
         ),
         a_graphql_entity_for(
           components.last,
@@ -272,7 +287,8 @@ RSpec.describe 'Query.ciCatalogResource', feature_category: :pipeline_compositio
           GQL
         end
 
-        it 'returns the version that matches the name' do
+        it 'returns the version that matches the name',
+          quarantine: 'https://gitlab.com/gitlab-org/gitlab/-/issues/465564' do
           post_query
 
           expect(graphql_data_at(:ciCatalogResource, :versions, :nodes)).to contain_exactly(
@@ -306,83 +322,6 @@ RSpec.describe 'Query.ciCatalogResource', feature_category: :pipeline_compositio
           post_query
 
           expect(graphql_data_at(:ciCatalogResource, :versions, :nodes)).to eq([])
-        end
-      end
-    end
-  end
-
-  describe 'openIssuesCount' do
-    context 'when open_issue_count is requested' do
-      let(:query) do
-        <<~GQL
-          query {
-            ciCatalogResource(id: "#{resource.to_global_id}") {
-              openIssuesCount
-            }
-          }
-        GQL
-      end
-
-      it 'returns the correct count' do
-        create(:issue, :opened, project: project)
-        create(:issue, :opened, project: project)
-
-        post_query
-
-        expect(graphql_data_at(:ciCatalogResource)).to match(
-          a_graphql_entity_for(
-            open_issues_count: 2
-          )
-        )
-      end
-
-      context 'when open_issue_count is zero' do
-        it 'returns zero' do
-          post_query
-
-          expect(graphql_data_at(:ciCatalogResource)).to match(
-            a_graphql_entity_for(
-              open_issues_count: 0
-            )
-          )
-        end
-      end
-    end
-  end
-
-  describe 'openMergeRequestsCount' do
-    context 'when merge_requests_count is requested' do
-      let(:query) do
-        <<~GQL
-          query {
-            ciCatalogResource(id: "#{resource.to_global_id}") {
-              openMergeRequestsCount
-            }
-          }
-        GQL
-      end
-
-      it 'returns the correct count' do
-        create(:merge_request, :opened, source_project: project)
-
-        post_query
-
-        expect(graphql_data_at(:ciCatalogResource)).to match(
-          a_graphql_entity_for(
-            open_merge_requests_count: 1
-          )
-        )
-      end
-
-      context 'when open merge_requests_count is zero' do
-        it 'returns zero' do
-          post_query
-
-          expect(graphql_data_at(:ciCatalogResource)).to match(
-            a_graphql_entity_for(
-              open_merge_requests_count: 0
-            )
-          )
         end
       end
     end

@@ -294,8 +294,10 @@ To view value stream analytics for your group or project:
    1. Select a parameter.
    1. Select a value or enter text to refine the results.
    1. To view metrics in a particular date range, from the dropdown list select a predefined date range or the **Custom** option. With the **Custom** option selected:
-        - In the **From** field, select a start date.
-        - In the **To** field, select an end date.
+
+      - In the **From** field, select a start date.
+      - In the **To** field, select an end date.
+
       The charts and list display workflow items created during the date range.
 1. Optional. Sort results by ascending or descending:
       - To sort by most recent or oldest workflow item, select the **Last event** header.
@@ -488,6 +490,13 @@ time from a staging environment to production, you could use the following label
 - When the code is deployed to production, the `workflow::production` label is added to the merge request.
 
 ![Label-based value stream analytics stage](img/vsa_label_based_stage_v14_0.png "Creating a label-based value stream analytics stage")
+
+##### Automatic data labeling with webhooks
+
+You can automatically add labels by using [GitLab webhook events](../../project/integrations/webhook_events.md),
+so that a label is applied to merge requests or issues when a specific event occurs.
+Then, you can add label-based stages to track your workflow.
+To learn more about the implementation, see the blog post [Applying GitLab Labels Automatically](https://about.gitlab.com/blog/2016/08/19/applying-gitlab-labels-automatically/).
 
 #### Example for custom value stream configuration
 

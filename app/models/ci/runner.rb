@@ -19,9 +19,6 @@ module Ci
 
     extend ::Gitlab::Utils::Override
 
-    ignore_column %i[config version revision platform architecture ip_address executor_type],
-      remove_with: '17.2', remove_after: '2024-07-22'
-
     add_authentication_token_field :token,
       encrypted: :optional,
       expires_at: :compute_token_expiration,
@@ -67,7 +64,7 @@ module Ci
     UPDATE_CONTACT_COLUMN_EVERY = ((40.minutes)..(55.minutes))
 
     # The `STALE_TIMEOUT` constant defines the how far past the last contact or creation date a runner will be considered stale
-    STALE_TIMEOUT = 3.months
+    STALE_TIMEOUT = 7.days
 
     # Only allow authentication token to be visible for a short while
     REGISTRATION_AVAILABILITY_TIME = 1.hour

@@ -27,6 +27,7 @@ class ApplicationSetting < MainClusterwide::ApplicationRecord
   ], remove_with: '17.2', remove_after: '2024-06-24'
   ignore_column %i[sign_in_text help_text], remove_with: '17.3', remove_after: '2024-08-15'
   ignore_columns %i[toggle_security_policies_policy_scope lock_toggle_security_policies_policy_scope], remove_with: '17.2', remove_after: '2024-07-12'
+  ignore_columns %i[arkose_labs_verify_api_url], remove_with: '17.4', remove_after: '2024-08-09'
 
   INSTANCE_REVIEW_MIN_USERS = 50
   GRAFANA_URL_ERROR_MESSAGE = 'Please check your Grafana URL setting in ' \
@@ -530,7 +531,9 @@ class ApplicationSetting < MainClusterwide::ApplicationRecord
   end
 
   with_options(numericality: { only_integer: true, greater_than: 0 }) do
-    validates :bulk_import_concurrent_pipeline_batch_limit,
+    validates :ai_action_api_rate_limit,
+      :bulk_import_concurrent_pipeline_batch_limit,
+      :code_suggestions_api_rate_limit,
       :concurrent_github_import_jobs_limit,
       :concurrent_bitbucket_import_jobs_limit,
       :concurrent_bitbucket_server_import_jobs_limit,
@@ -586,6 +589,7 @@ class ApplicationSetting < MainClusterwide::ApplicationRecord
       :gitlab_shell_operation_limit,
       :group_api_limit,
       :group_projects_api_limit,
+      :group_shared_groups_api_limit,
       :groups_api_limit,
       :inactive_projects_min_size_mb,
       :issues_create_limit,
@@ -624,6 +628,7 @@ class ApplicationSetting < MainClusterwide::ApplicationRecord
     downstream_pipeline_trigger_limit_per_project_user_sha: [:integer, { default: 0 }],
     group_api_limit: [:integer, { default: 400 }],
     group_projects_api_limit: [:integer, { default: 600 }],
+    group_shared_groups_api_limit: [:integer, { default: 60 }],
     groups_api_limit: [:integer, { default: 200 }],
     members_delete_limit: [:integer, { default: 60 }],
     project_api_limit: [:integer, { default: 400 }],
@@ -774,9 +779,9 @@ class ApplicationSetting < MainClusterwide::ApplicationRecord
   attr_encrypted :telesign_api_key, encryption_options_base_32_aes_256_gcm.merge(encode: false, encode_iv: false)
   attr_encrypted :product_analytics_configurator_connection_string, encryption_options_base_32_aes_256_gcm.merge(encode: false, encode_iv: false)
   attr_encrypted :openai_api_key, encryption_options_base_32_aes_256_gcm.merge(encode: false, encode_iv: false)
-  attr_encrypted :anthropic_api_key, encryption_options_base_32_aes_256_gcm.merge(encode: false, encode_iv: false)
-  attr_encrypted :vertex_ai_credentials, encryption_options_base_32_aes_256_gcm.merge(encode: false, encode_iv: false)
-  attr_encrypted :vertex_ai_access_token, encryption_options_base_32_aes_256_gcm.merge(encode: false, encode_iv: false)
+  attr_encrypted :anthropic_api_key, encryption_options_base_32_aes_256_gcm.merge(encode: false, encode_iv: false) # Deprecated. See https://gitlab.com/gitlab-org/gitlab/-/issues/466161
+  attr_encrypted :vertex_ai_credentials, encryption_options_base_32_aes_256_gcm.merge(encode: false, encode_iv: false) # Deprecated. See https://gitlab.com/gitlab-org/gitlab/-/issues/466161
+  attr_encrypted :vertex_ai_access_token, encryption_options_base_32_aes_256_gcm.merge(encode: false, encode_iv: false) # Deprecated. See https://gitlab.com/gitlab-org/gitlab/-/issues/466161
 
   # Restricting the validation to `on: :update` only to avoid cyclical dependencies with
   # License <--> ApplicationSetting. This method calls a license check when we create
@@ -826,7 +831,7 @@ class ApplicationSetting < MainClusterwide::ApplicationRecord
     reset_memoized_terms
   end
   after_commit :expire_performance_bar_allowed_user_ids_cache, if: -> { previous_changes.key?('performance_bar_allowed_group_id') }
-  after_commit :reset_deletion_warning_redis_key, if: :saved_change_to_inactive_projects_delete_after_months?
+  after_commit :reset_deletion_warning_redis_key, if: :should_reset_inactive_project_deletion_warning?
 
   def validate_grafana_url
     validate_url(parsed_grafana_url, :grafana_url, GRAFANA_URL_ERROR_MESSAGE)
@@ -990,6 +995,10 @@ class ApplicationSetting < MainClusterwide::ApplicationRecord
     default_project_visibility_changed? ||
       default_group_visibility_changed? ||
       restricted_visibility_levels_changed?
+  end
+
+  def should_reset_inactive_project_deletion_warning?
+    saved_change_to_inactive_projects_delete_after_months? || saved_change_to_delete_inactive_projects?(from: true, to: false)
   end
 end
 

@@ -242,6 +242,8 @@ class Issue < ApplicationRecord
   scope :with_non_null_relative_position, -> { where.not(relative_position: nil) }
   scope :with_projects_matching_search_data, -> { where('issue_search_data.project_id = issues.project_id') }
 
+  scope :with_work_item_type, -> { joins(:work_item_type) }
+
   before_validation :ensure_namespace_id, :ensure_work_item_type
 
   after_save :ensure_metrics!, unless: :skip_metrics?
@@ -285,6 +287,12 @@ class Issue < ApplicationRecord
 
   class << self
     extend ::Gitlab::Utils::Override
+
+    def in_namespaces_with_cte(namespaces)
+      cte = Gitlab::SQL::CTE.new(:namespace_ids, namespaces.select(:id))
+
+      where('namespace_id IN (SELECT id FROM namespace_ids)').with(cte.to_arel)
+    end
 
     override :order_upvotes_desc
     def order_upvotes_desc
@@ -558,7 +566,7 @@ class Issue < ApplicationRecord
   end
 
   def can_be_worked_on?
-    !self.closed?
+    !self.closed? && !self.project.forked?
   end
 
   # Returns `true` if the current issue can be viewed by either a logged in User
@@ -622,7 +630,10 @@ class Issue < ApplicationRecord
   end
 
   def banzai_render_context(field)
-    super.merge(label_url_method: :project_issues_url)
+    additional_attributes = { label_url_method: :project_issues_url }
+    additional_attributes[:group] = namespace if namespace.is_a?(Group)
+
+    super.merge(additional_attributes)
   end
 
   def design_collection
@@ -866,10 +877,10 @@ class Issue < ApplicationRecord
 
   def linked_issues_select
     self.class.select(['issues.*', 'issue_links.id AS issue_link_id',
-                       'issue_links.link_type as issue_link_type_value',
-                       'issue_links.target_id as issue_link_source_id',
-                       'issue_links.created_at as issue_link_created_at',
-                       'issue_links.updated_at as issue_link_updated_at'])
+      'issue_links.link_type as issue_link_type_value',
+      'issue_links.target_id as issue_link_source_id',
+      'issue_links.created_at as issue_link_created_at',
+      'issue_links.updated_at as issue_link_updated_at'])
   end
 end
 

@@ -33,9 +33,10 @@ info: To determine the technical writer assigned to the Stage/Group associated w
 |[`FUZZAPI_OVERRIDES_ENV`](customizing_analyzer_settings.md#overrides)                        | JSON string containing headers to override. |
 |[`FUZZAPI_OVERRIDES_CMD`](customizing_analyzer_settings.md#overrides)                        | Overrides command. |
 |[`FUZZAPI_OVERRIDES_CMD_VERBOSE`](customizing_analyzer_settings.md#overrides)                | When set to any value. It shows overrides command output as part of the job output. |
-|`FUZZAPI_PRE_SCRIPT`                                         | Run user command or script before scan session starts. |
-|`FUZZAPI_POST_SCRIPT`                                        | Run user command or script after scan session has finished. |
+|`FUZZAPI_PRE_SCRIPT`                                         | Run user command or script before scan session starts. `sudo` must be used for privileged operations like installing packages. |
+|`FUZZAPI_POST_SCRIPT`                                        | Run user command or script after scan session has finished. `sudo` must be used for privileged operations like installing packages. |
 |[`FUZZAPI_OVERRIDES_INTERVAL`](customizing_analyzer_settings.md#overrides)                   | How often to run overrides command in seconds. Defaults to `0` (once). |
 |[`FUZZAPI_HTTP_USERNAME`](customizing_analyzer_settings.md#http-basic-authentication)        | Username for HTTP authentication. |
 |[`FUZZAPI_HTTP_PASSWORD`](customizing_analyzer_settings.md#http-basic-authentication)        | Password for HTTP authentication. |
 |[`FUZZAPI_HTTP_PASSWORD_BASE64`](customizing_analyzer_settings.md#http-basic-authentication) | Password for HTTP authentication, Base64-encoded. [Introduced](https://gitlab.com/gitlab-org/security-products/analyzers/api-fuzzing-src/-/merge_requests/702) in GitLab 15.4. |
+|`FUZZAPI_SUCCESS_STATUS_CODES`                        | Specify a comma-separated (`,`) list of HTTP success status codes that determine whether an API Fuzzing testing scanning job has passed. [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/442219) in GitLab 17.1. Example: `'200, 201, 204'` |

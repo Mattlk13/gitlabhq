@@ -50,11 +50,11 @@ module SearchHelper
 
   def scope_specific_results(term, scope)
     case scope&.to_sym
-    when :project
+    when :projects
       projects_autocomplete(term)
-    when :user
+    when :users
       users_autocomplete(term)
-    when :issue
+    when :issues
       recent_issues_autocomplete(term)
     else
       []
@@ -481,6 +481,7 @@ module SearchHelper
     opts =
       {
         id: "filtered-search-#{type}",
+        'aria-label': _('Add search filter'),
         placeholder: placeholder,
         data: {
           'username-params' => UserSerializer.new.represent(@users)

@@ -31,8 +31,8 @@ module Keeps
   class QuarantineFlakyTests < ::Gitlab::Housekeeper::Keep
     MINIMUM_REMAINING_RATE = 25
     QUERY_URL_TEMPLATE = "https://gitlab.com/api/v4/projects/278964/issues/?order_by=updated_at&state=opened&labels[]=test&labels[]=failure::flaky-test&labels[]=%<flakiness_label>s&not[labels][]=QA&not[labels][]=quarantine&per_page=20"
-    # https://rubular.com/r/WnMxnDPvGGjoGE
-    EXAMPLE_LINE_REGEX = /\bit (?<description_and_metadata>[\w'",: ]*(?:,\n)?[\w\'",: ]+?) do$/m
+    # https://rubular.com/r/OoeQIEwPkL1m7E
+    EXAMPLE_LINE_REGEX = /\bit (?<description_and_metadata>[\w'",: \#\{\}]*(?:,\n)?[\w\'",: ]+?) do$/m
     FLAKINESS_LABELS = %w[flakiness::1 flakiness::2].freeze
 
     def each_change
@@ -194,8 +194,8 @@ module Keeps
         [Flaky tests management process](https://handbook.gitlab.com/handbook/engineering/infrastructure/engineering-productivity/flaky-tests-management-and-processes/#flaky-tests-management-process)
         to help us increase `master` stability.
 
-        Please let us know your feedback
-        [in the dedicated issue](https://gitlab.com/gitlab-org/quality/engineering-productivity/team/-/issues/447).
+        Please let us know your feedback in the
+        [Engineering Productivity issue tracker](https://gitlab.com/gitlab-org/quality/engineering-productivity/team/-/issues).
 
         Related to #{flaky_issue['web_url']}.
         MARKDOWN
@@ -205,7 +205,7 @@ module Keeps
           'maintenance::refactor',
           'test',
           'failure::flaky-test',
-          'pipeline:expedite',
+          'pipeline::expedited',
           'quarantine',
           'quarantine::flaky',
           group_label

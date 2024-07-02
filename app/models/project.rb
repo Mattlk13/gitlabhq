@@ -370,10 +370,18 @@ class Project < ApplicationRecord
 
   has_many :users, -> { allow_cross_joins_across_databases(url: "https://gitlab.com/gitlab-org/gitlab/-/issues/422405") },
     through: :project_members
+
   has_many :maintainers,
     -> do
       allow_cross_joins_across_databases(url: "https://gitlab.com/gitlab-org/gitlab/-/issues/422405")
         .where(members: { access_level: Gitlab::Access::MAINTAINER })
+    end,
+    through: :project_members,
+    source: :user
+
+  has_many :owners_and_maintainers,
+    -> do
+      where(members: { access_level: [Gitlab::Access::OWNER, Gitlab::Access::MAINTAINER] })
     end,
     through: :project_members,
     source: :user
@@ -656,6 +664,8 @@ class Project < ApplicationRecord
   # Sometimes queries (e.g. using CTEs) require explicit disambiguation with table name
   scope :projects_order_id_asc, -> { reorder(self.arel_table['id'].asc) }
   scope :projects_order_id_desc, -> { reorder(self.arel_table['id'].desc) }
+  scope :sorted_by_storage_size_asc, -> { order_by_storage_size(:asc) }
+  scope :sorted_by_storage_size_desc, -> { order_by_storage_size(:desc) }
   scope :order_by_storage_size, ->(direction) do
     build_keyset_order_on_joined_column(
       scope: joins(:statistics),
@@ -768,6 +778,13 @@ class Project < ApplicationRecord
   scope :with_builds_enabled, -> { with_feature_enabled(:builds) }
   scope :with_issues_enabled, -> { with_feature_enabled(:issues) }
   scope :with_package_registry_enabled, -> { with_feature_enabled(:package_registry) }
+  scope :with_public_package_registry, -> do
+    where_exists(
+      ::ProjectFeature
+        .where(::ProjectFeature.arel_table[:project_id].eq(arel_table[:id]))
+        .with_feature_access_level(:package_registry, ::ProjectFeature::PUBLIC)
+    )
+  end
   scope :with_issues_available_for_user, ->(current_user) { with_feature_available_for_user(:issues, current_user) }
   scope :with_merge_requests_available_for_user, ->(current_user) { with_feature_available_for_user(:merge_requests, current_user) }
   scope :with_issues_or_mrs_available_for_user, ->(user) do
@@ -914,11 +931,28 @@ class Project < ApplicationRecord
   end
 
   def self.projects_user_can(projects, user, action)
-    projects = where(id: projects)
-
     DeclarativePolicy.user_scope do
       projects.select { |project| Ability.allowed?(user, action, project) }
     end
+  end
+
+  def self.filter_out_public_projects_with_unauthorized_private_repos(projects, user)
+    public_projects_with_private_repos = projects.with_project_feature.where(
+      visibility_level: Gitlab::VisibilityLevel::PUBLIC,
+      project_features: { repository_access_level: ProjectFeature::PRIVATE }
+    ).pluck(:id)
+
+    return projects unless public_projects_with_private_repos.present?
+
+    authorized_public_projects_with_private_repos = projects.filter_by_feature_visibility(
+      :repository, user
+    )
+
+    rejected_projects_with_private_repos = (
+      public_projects_with_private_repos - authorized_public_projects_with_private_repos.pluck(:id)
+    )
+
+    projects.where.not(id: rejected_projects_with_private_repos)
   end
 
   # This scope returns projects where user has access to both the project and the feature.
@@ -994,10 +1028,10 @@ class Project < ApplicationRecord
 
     def sort_by_attribute(method)
       case method.to_s
+      when 'storage_size_asc'
+        sorted_by_storage_size_asc
       when 'storage_size_desc'
-        # storage_size is a joined column so we need to
-        # pass a string to avoid AR adding the table name
-        reorder('project_statistics.storage_size DESC, projects.id DESC')
+        sorted_by_storage_size_desc
       when 'latest_activity_desc'
         sorted_by_updated_desc
       when 'latest_activity_asc'
@@ -2392,6 +2426,8 @@ class Project < ApplicationRecord
       :started
     elsif export_file_exists?
       :finished
+    elsif export_failed?
+      :failed
     else
       :none
     end
@@ -2406,6 +2442,12 @@ class Project < ApplicationRecord
   def export_enqueued?
     strong_memoize(:export_enqueued) do
       ::Projects::ExportJobFinder.new(self, { status: :queued }).execute.present?
+    end
+  end
+
+  def export_failed?
+    strong_memoize(:export_failed) do
+      ::Projects::ExportJobFinder.new(self, { status: :failed }).execute.present?
     end
   end
 
@@ -3211,8 +3253,8 @@ class Project < ApplicationRecord
     group&.work_items_beta_feature_flag_enabled? || Feature.enabled?(:work_items_beta, type: :beta)
   end
 
-  def work_items_mvc_2_feature_flag_enabled?
-    group&.work_items_mvc_2_feature_flag_enabled? || Feature.enabled?(:work_items_mvc_2)
+  def work_items_alpha_feature_flag_enabled?
+    group&.work_items_alpha_feature_flag_enabled? || Feature.enabled?(:work_items_alpha)
   end
 
   def enqueue_record_project_target_platforms
@@ -3309,6 +3351,11 @@ class Project < ApplicationRecord
 
   # Overridden in EE
   def supports_saved_replies?
+    false
+  end
+
+  # Overridden in EE
+  def merge_trains_enabled?
     false
   end
 

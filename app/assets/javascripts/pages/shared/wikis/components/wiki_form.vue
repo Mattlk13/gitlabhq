@@ -101,6 +101,7 @@ export default {
     submitButton: {
       existingPage: s__('WikiPage|Save changes'),
       newPage: s__('WikiPage|Create page'),
+      newSidebar: s__('WikiPage|Create custom sidebar'),
       newTemplate: s__('WikiPage|Create template'),
     },
     cancel: s__('WikiPage|Cancel'),
@@ -119,7 +120,15 @@ export default {
     DeleteWikiModal,
   },
   mixins: [trackingMixin],
-  inject: ['formatOptions', 'pageInfo', 'drawioUrl', 'templates'],
+  inject: [
+    'isEditingPath',
+    'formatOptions',
+    'pageInfo',
+    'drawioUrl',
+    'templates',
+    'pageHeading',
+    'wikiUrl',
+  ],
   data() {
     const title = window.location.href.includes('random_title=true') ? '' : getTitle(this.pageInfo);
     return {
@@ -176,9 +185,16 @@ export default {
       return MARKDOWN_LINK_TEXT[this.format];
     },
     submitButtonText() {
-      return this.pageInfo.persisted
+      let buttonText = this.pageInfo.persisted
         ? this.$options.i18n.submitButton.existingPage
         : this.$options.i18n.submitButton.newPage;
+
+      buttonText =
+        this.isCustomSidebar && !this.pageInfo.persisted
+          ? this.$options.i18n.submitButton.newSidebar
+          : buttonText;
+
+      return buttonText;
     },
     titleHelpText() {
       return this.pageInfo.persisted
@@ -206,6 +222,16 @@ export default {
     },
     drawioEnabled() {
       return typeof this.drawioUrl === 'string' && this.drawioUrl.length > 0;
+    },
+    cancelFormHref() {
+      if (this.isEditingPath) {
+        return this.cancelFormPath;
+      }
+
+      return null;
+    },
+    isCustomSidebar() {
+      return this.wikiUrl.endsWith('_sidebar');
     },
   },
   watch: {
@@ -270,7 +296,12 @@ export default {
       if (!this.title) return;
 
       // Replace hyphens with spaces
-      const newTitle = this.title.replace(/-+/g, ' ').replace('templates/', '');
+      let newTitle = this.title.replace(/-+/g, ' ').replace('templates/', '');
+
+      // Replace _sidebar with sidebar
+      if (this.isCustomSidebar) {
+        newTitle = this.title.replace('_sidebar', 'sidebar');
+      }
 
       const newCommitMessage = sprintf(this.commitMessageI18n, { pageTitle: newTitle }, false);
       this.commitMessage = newCommitMessage;
@@ -312,6 +343,13 @@ export default {
     setTemplate(template) {
       this.$refs.markdownEditor.setTemplate(template);
     },
+    cancelFormAction() {
+      this.isFormDirty = false;
+
+      if (!this.isEditingPath) {
+        this.$emit('is-editing', false);
+      }
+    },
   },
 };
 </script>
@@ -321,7 +359,8 @@ export default {
     ref="form"
     :action="formAction"
     method="post"
-    class="wiki-form common-note-form gl-mt-3 js-quick-submit"
+    class="wiki-form common-note-form js-quick-submit"
+    :class="{ 'gl-mt-5': !isEditingPath }"
     @submit="handleFormSubmit"
     @input="isFormDirty = true"
   >
@@ -336,13 +375,20 @@ export default {
 
     <div class="row">
       <div class="col-12">
-        <gl-form-group :label="$options.i18n.title.label" label-for="wiki_title">
+        <gl-form-group
+          :label="$options.i18n.title.label"
+          label-for="wiki_title"
+          label-class="gl-sr-only"
+          :class="{ 'gl-hidden': isCustomSidebar }"
+        >
           <template v-if="!isTemplate" #description>
-            <gl-icon name="bulb" />
-            {{ titleHelpText }}
-            <gl-link :href="helpPath" target="_blank">
-              {{ $options.i18n.title.helpText.learnMore }}
-            </gl-link>
+            <div class="gl-mt-3">
+              <gl-icon name="bulb" />
+              {{ titleHelpText }}
+              <gl-link :href="helpPath" target="_blank">
+                {{ $options.i18n.title.helpText.learnMore }}
+              </gl-link>
+            </div>
           </template>
           <gl-form-input
             id="wiki_title"
@@ -405,24 +451,26 @@ export default {
             @keydown.meta.enter="submitFormWithShortcut"
           />
           <template #description>
-            <gl-sprintf
-              v-if="displayWikiSpecificMarkdownHelp && !isTemplate"
-              :message="$options.i18n.linksHelpText"
-            >
-              <template #linkExample>
-                <code>{{ linkExample }}</code>
-              </template>
-              <template
-                #link="// eslint-disable-next-line vue/no-template-shadow
-                { content }"
-                ><gl-link
-                  :href="wikiSpecificMarkdownHelpPath"
-                  target="_blank"
-                  data-testid="wiki-markdown-help-link"
-                  >{{ content }}</gl-link
-                ></template
+            <div class="gl-mt-3">
+              <gl-sprintf
+                v-if="displayWikiSpecificMarkdownHelp && !isTemplate"
+                :message="$options.i18n.linksHelpText"
               >
-            </gl-sprintf>
+                <template #linkExample>
+                  <code>{{ linkExample }}</code>
+                </template>
+                <template
+                  #link="// eslint-disable-next-line vue/no-template-shadow
+                  { content }"
+                  ><gl-link
+                    :href="wikiSpecificMarkdownHelpPath"
+                    target="_blank"
+                    data-testid="wiki-markdown-help-link"
+                    >{{ content }}</gl-link
+                  ></template
+                >
+              </gl-sprintf>
+            </div>
           </template>
         </gl-form-group>
       </div>
@@ -456,8 +504,8 @@ export default {
         >
         <gl-button
           data-testid="wiki-cancel-button"
-          :href="cancelFormPath"
-          @click="isFormDirty = false"
+          :href="cancelFormHref"
+          @click="cancelFormAction"
         >
           {{ $options.i18n.cancel }}</gl-button
         >

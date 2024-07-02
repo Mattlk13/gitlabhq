@@ -12,6 +12,9 @@ DETAILS:
 
 Interact with [projects](../user/project/index.md) by using the REST API.
 
+NOTE:
+Users with any [default role](../user/permissions.md#roles) can read project properties with the Projects API. Only users with the Owner or Maintainer role can edit project properties in the UI or with the API.
+
 ## Project visibility level
 
 A project in GitLab can be private, internal, or public.
@@ -36,7 +39,7 @@ These attributes are deprecated, and are scheduled to be removed in v5 of the AP
 The `merge_method` can use these options:
 
 - `merge`: a merge commit is created for every merge, and merging is allowed if
- no conflicts are present.
+  no conflicts are present.
 - `rebase_merge`: a merge commit is created for every merge, but merging is only
   allowed if fast-forward merge is possible. You can make sure that the target
   branch would build after this merge request builds and merges.
@@ -87,6 +90,7 @@ GET /projects
 | `with_issues_enabled`                          | boolean  | No       | Limit by enabled issues feature. |
 | `with_merge_requests_enabled`                  | boolean  | No       | Limit by enabled merge requests feature. |
 | `with_programming_language`                    | string   | No       | Limit by projects which use the given programming language. |
+| `marked_for_deletion_on`                       | date     | No       | Filter by date when project was marked for deletion. [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/463939) in GitLab 17.1. Premium and Ultimate only. |
 
 This endpoint supports [keyset pagination](rest/index.md#keyset-based-pagination)
 for selected `order_by` options.
@@ -245,6 +249,8 @@ When the user is authenticated and `simple` is not set this returns something li
     "ci_job_token_scope_enabled": false,
     "ci_separated_caches": true,
     "ci_restrict_pipeline_cancellation_role": "developer",
+    "ci_pipeline_variables_minimum_override_role": "maintainer",
+    "ci_push_repository_for_job_token_allowed": false,
     "public_jobs": true,
     "build_timeout": 3600,
     "auto_cancel_pending_pipelines": "enabled",
@@ -421,6 +427,8 @@ GET /users/:user_id/projects
     "ci_allow_fork_pipelines_to_run_in_parent_project": true,
     "ci_separated_caches": true,
     "ci_restrict_pipeline_cancellation_role": "developer",
+    "ci_pipeline_variables_minimum_override_role": "maintainer",
+    "ci_push_repository_for_job_token_allowed": false,
     "public_jobs": true,
     "shared_with_groups": [],
     "only_allow_merge_if_pipeline_succeeds": false,
@@ -542,6 +550,8 @@ GET /users/:user_id/projects
     "ci_allow_fork_pipelines_to_run_in_parent_project": true,
     "ci_separated_caches": true,
     "ci_restrict_pipeline_cancellation_role": "developer",
+    "ci_pipeline_variables_minimum_override_role": "maintainer",
+    "ci_push_repository_for_job_token_allowed": false,
     "public_jobs": true,
     "shared_with_groups": [],
     "only_allow_merge_if_pipeline_succeeds": false,
@@ -1214,6 +1224,8 @@ GET /projects/:id
   "ci_allow_fork_pipelines_to_run_in_parent_project": true,
   "ci_separated_caches": true,
   "ci_restrict_pipeline_cancellation_role": "developer",
+  "ci_pipeline_variables_minimum_override_role": "maintainer",
+  "ci_push_repository_for_job_token_allowed": false,
   "public_jobs": true,
   "shared_with_groups": [
     {
@@ -1756,6 +1768,8 @@ General project attributes:
 | `ci_allow_fork_pipelines_to_run_in_parent_project` | boolean           | No       | Enable or disable [running pipelines in the parent project for merge requests from forks](../ci/pipelines/merge_request_pipelines.md#run-pipelines-in-the-parent-project). _([Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/325189) in GitLab 15.3.)_ |
 | `ci_separated_caches`                              | boolean           | No       | Set whether or not caches should be [separated](../ci/caching/index.md#cache-key-names) by branch protection status. |
 | `ci_restrict_pipeline_cancellation_role`           | string            | No       | Set the [role required to cancel a pipeline or job](../ci/pipelines/settings.md#restrict-roles-that-can-cancel-pipelines-or-jobs). One of `developer`, `maintainer`, or `no_one`. [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/429921) in GitLab 16.8. Premium and Ultimate only. |
+| `ci_pipeline_variables_minimum_override_role`           | string            | No       | When `restrict_user_defined_variables` is enabled, you can specify which role can override variables. One of `owner`, `maintainer`, `developer` or `no_one_allowed`. [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/440338) in GitLab 17.1. |
+| `ci_push_repository_for_job_token_allowed` | boolean           | No       | Enable or disable the ability to push to the project repository using job token. [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/389060) in GitLab 17.2. |
 | `container_expiration_policy_attributes`           | hash              | No       | Update the image cleanup policy for this project. Accepts: `cadence` (string), `keep_n` (integer), `older_than` (string), `name_regex` (string), `name_regex_delete` (string), `name_regex_keep` (string), `enabled` (boolean). |
 | `container_registry_enabled`                       | boolean           | No       | _(Deprecated)_ Enable container registry for this project. Use `container_registry_access_level` instead. |
 | `default_branch`                                   | string            | No       | The [default branch](../user/project/repository/branches/default.md) name. |
@@ -2375,6 +2389,8 @@ Example response:
   "ci_allow_fork_pipelines_to_run_in_parent_project": true,
   "ci_separated_caches": true,
   "ci_restrict_pipeline_cancellation_role": "developer",
+  "ci_pipeline_variables_minimum_override_role": "maintainer",
+  "ci_push_repository_for_job_token_allowed": false,
   "public_jobs": true,
   "shared_with_groups": [],
   "only_allow_merge_if_pipeline_succeeds": false,
@@ -2507,6 +2523,8 @@ Example response:
   "ci_allow_fork_pipelines_to_run_in_parent_project": true,
   "ci_separated_caches": true,
   "ci_restrict_pipeline_cancellation_role": "developer",
+  "ci_pipeline_variables_minimum_override_role": "maintainer",
+  "ci_push_repository_for_job_token_allowed": false,
   "public_jobs": true,
   "shared_with_groups": [],
   "only_allow_merge_if_pipeline_succeeds": false,
@@ -2866,6 +2884,7 @@ POST /projects/:id/hooks
 | `note_events`                | boolean           | No       | Trigger hook on note events. |
 | `pipeline_events`            | boolean           | No       | Trigger hook on pipeline events. |
 | `push_events_branch_filter`  | string            | No       | Trigger hook on push events for matching branches only. |
+| `branch_filter_strategy`     | string         | No       | Filter push events by branch. Possible values are `wildcard` (default), `regex`, and `all_branches`. |
 | `push_events`                | boolean           | No       | Trigger hook on push events. |
 | `releases_events`            | boolean           | No       | Trigger hook on release events. |
 | `tag_push_events`            | boolean           | No       | Trigger hook on tag push events. |
@@ -2900,6 +2919,7 @@ PUT /projects/:id/hooks/:hook_id
 | `note_events`                | boolean           | No       | Trigger hook on note events. |
 | `pipeline_events`            | boolean           | No       | Trigger hook on pipeline events. |
 | `push_events_branch_filter`  | string            | No       | Trigger hook on push events for matching branches only. |
+| `branch_filter_strategy`     | string         | No       | Filter push events by branch. Possible values are `wildcard` (default), `regex`, and `all_branches`. |
 | `push_events`                | boolean           | No       | Trigger hook on push events. |
 | `releases_events`            | boolean           | No       | Trigger hook on release events. |
 | `tag_push_events`            | boolean           | No       | Trigger hook on tag push events. |
@@ -3078,7 +3098,8 @@ GET /projects/:id/push_rule
   "max_file_size": 5,
   "commit_committer_check": false,
   "commit_committer_name_check": false,
-  "reject_unsigned_commits": false
+  "reject_unsigned_commits": false,
+  "reject_non_dco_commits": false
 }
 ```
 
@@ -3096,9 +3117,7 @@ POST /projects/:id/push_rule
 |---------------------------------|-------------------|----------|-------------|
 | `id`                            | integer or string | Yes      | The ID or [URL-encoded path of the project](rest/index.md#namespaced-path-encoding). |
 | `author_email_regex`            | string            | No       | All commit author emails must match this, for example `@my-company.com$`. |
-| `branch_name_regex`             | string            | No       | All branch names must match this, for example `(feature|hotfix)\/*`. |
-| `commit_committer_check`        | boolean           | No       | Users can only push commits to this repository if the committer email is one of their own verified emails. |
-| `commit_committer_name_check`   | boolean           | No       | Users can only push commits to this repository if the commit author name is consistent with their GitLab account name. |
+| `branch_name_regex`             | string            | No       | All branch names must match this, for example `(feature|hotfix)\/.*`. |
 | `commit_message_negative_regex` | string            | No       | No commit message is allowed to match this, for example `ssh\:\/\/`. |
 | `commit_message_regex`          | string            | No       | All commit messages must match this, for example `Fixed \d+\..*`. |
 | `deny_delete_tag`               | boolean           | No       | Deny deleting a tag. |
@@ -3106,7 +3125,10 @@ POST /projects/:id/push_rule
 | `max_file_size`                 | integer           | No       | Maximum file size (MB). |
 | `member_check`                  | boolean           | No       | Restrict commits by author (email) to existing GitLab users. |
 | `prevent_secrets`               | boolean           | No       | GitLab rejects any files that are likely to contain secrets. |
+| `commit_committer_check`        | boolean           | No       | Users can only push commits to this repository if the committer email is one of their own verified emails. |
+| `commit_committer_name_check`   | boolean           | No       | Users can only push commits to this repository if the commit author name is consistent with their GitLab account name. |
 | `reject_unsigned_commits`       | boolean           | No       | Reject commit when it's not signed. |
+| `reject_non_dco_commits`        | boolean           | No       | Reject commit when it's not DCO certified. |
 
 <!-- markdownlint-enable MD056 -->
 
@@ -3124,9 +3146,7 @@ PUT /projects/:id/push_rule
 |---------------------------------|-------------------|----------|-------------|
 | `id`                            | integer or string | Yes      | The ID or [URL-encoded path of the project](rest/index.md#namespaced-path-encoding). |
 | `author_email_regex`            | string            | No       | All commit author emails must match this, for example `@my-company.com$`. |
-| `branch_name_regex`             | string            | No       | All branch names must match this, for example `(feature|hotfix)\/*`. |
-| `commit_committer_check`        | boolean           | No       | Users can only push commits to this repository if the committer email is one of their own verified emails. |
-| `commit_committer_name_check`   | boolean           | No       | Users can only push commits to this repository if the commit author name is consistent with their GitLab account name. |
+| `branch_name_regex`             | string            | No       | All branch names must match this, for example `(feature|hotfix)\/.*`. |
 | `commit_message_negative_regex` | string            | No       | No commit message is allowed to match this, for example `ssh\:\/\/`. |
 | `commit_message_regex`          | string            | No       | All commit messages must match this, for example `Fixed \d+\..*`. |
 | `deny_delete_tag`               | boolean           | No       | Deny deleting a tag. |
@@ -3134,7 +3154,10 @@ PUT /projects/:id/push_rule
 | `max_file_size`                 | integer           | No       | Maximum file size (MB). |
 | `member_check`                  | boolean           | No       | Restrict commits by author (email) to existing GitLab users. |
 | `prevent_secrets`               | boolean           | No       | GitLab rejects any files that are likely to contain secrets. |
+| `commit_committer_check`        | boolean           | No       | Users can only push commits to this repository if the committer email is one of their own verified emails. |
+| `commit_committer_name_check`   | boolean           | No       | Users can only push commits to this repository if the commit author name is consistent with their GitLab account name. |
 | `reject_unsigned_commits`       | boolean           | No       | Reject commits when they are not signed. |
+| `reject_non_dco_commits`        | boolean           | No       | Reject commit when it's not DCO certified. |
 
 <!-- markdownlint-enable MD056 -->
 

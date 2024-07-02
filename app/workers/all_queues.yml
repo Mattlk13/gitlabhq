@@ -246,6 +246,15 @@
   :weight: 1
   :idempotent: false
   :tags: []
+- :name: cronjob:ci_catalog_resources_aggregate_last30_day_usage
+  :worker_name: Ci::Catalog::Resources::AggregateLast30DayUsageWorker
+  :feature_category: :pipeline_composition
+  :has_external_dependencies: false
+  :urgency: :low
+  :resource_boundary: :unknown
+  :weight: 1
+  :idempotent: true
+  :tags: []
 - :name: cronjob:ci_catalog_resources_process_sync_events
   :worker_name: Ci::Catalog::Resources::ProcessSyncEventsWorker
   :feature_category: :pipeline_composition
@@ -1541,6 +1550,15 @@
   :resource_boundary: :cpu
   :weight: 2
   :idempotent: true
+  :tags: []
+- :name: jira_connect:integrations_jira_connect_remove_branch
+  :worker_name: Integrations::JiraConnect::RemoveBranchWorker
+  :feature_category: :integrations
+  :has_external_dependencies: true
+  :urgency: :low
+  :resource_boundary: :unknown
+  :weight: 1
+  :idempotent: false
   :tags: []
 - :name: jira_connect:jira_connect_forward_event
   :worker_name: JiraConnect::ForwardEventWorker
@@ -3443,7 +3461,7 @@
   :tags: []
 - :name: merge_requests_delete_source_branch
   :worker_name: MergeRequests::DeleteSourceBranchWorker
-  :feature_category: :source_code_management
+  :feature_category: :code_review_workflow
   :has_external_dependencies: false
   :urgency: :high
   :resource_boundary: :unknown

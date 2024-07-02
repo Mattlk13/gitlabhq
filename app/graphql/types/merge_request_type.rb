@@ -175,6 +175,12 @@ module Types
       description: 'Labels of the merge request.',
       resolver: Resolvers::BulkLabelsResolver
 
+    field :auto_merge_enabled, GraphQL::Types::Boolean, null: false,
+      description: 'Indicates if auto merge is enabled for the merge request.'
+    field :commit_count, GraphQL::Types::Int, null: true, method: :commits_count,
+      description: 'Number of commits in the merge request.'
+    field :conflicts, GraphQL::Types::Boolean, null: false, method: :cannot_be_merged?,
+      description: 'Indicates if the merge request has conflicts.'
     field :milestone, Types::MilestoneType, null: true,
       description: 'Milestone of the merge request.'
     field :participants, Types::MergeRequests::ParticipantType.connection_type, null: true, complexity: 15,
@@ -185,12 +191,6 @@ module Types
       argument :full, GraphQL::Types::Boolean, required: false, default_value: false,
         description: 'Boolean option specifying whether the reference should be returned in full.'
     end
-    field :auto_merge_enabled, GraphQL::Types::Boolean, null: false,
-      description: 'Indicates if auto merge is enabled for the merge request.'
-    field :commit_count, GraphQL::Types::Int, null: true, method: :commits_count,
-      description: 'Number of commits in the merge request.'
-    field :conflicts, GraphQL::Types::Boolean, null: false, method: :cannot_be_merged?,
-      description: 'Indicates if the merge request has conflicts.'
     field :reviewers,
       type: Types::MergeRequests::ReviewerType.connection_type,
       null: true,
@@ -264,6 +264,9 @@ module Types
       method: :allows_multiple_reviewers?,
       description: 'Allows assigning multiple reviewers to a merge request.',
       null: false
+
+    field :retargeted, GraphQL::Types::Boolean, null: true,
+      description: 'Indicates if merge request was retargeted.'
 
     markdown_field :title_html, null: true
     markdown_field :description_html, null: true

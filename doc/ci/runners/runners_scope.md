@@ -169,7 +169,7 @@ To disable instance runners for a project:
 1. Expand **Runners**.
 1. In the **Instance runners** area, turn off the **Enable instance runners for this project** toggle.
 
-instance runners are automatically disabled for a project:
+Instance runners are automatically disabled for a project:
 
 - If the instance runners setting for the parent group is disabled, and
 - If overriding this setting is not permitted at the project level.
@@ -584,7 +584,7 @@ A runner can have one of the following statuses.
 |---------|-------------|
 | `online`  | The runner has contacted GitLab within the last 2 hours and is available to run jobs. |
 | `offline` | The runner has not contacted GitLab in more than 2 hours and is not available to run jobs. Check the runner to see if you can bring it online. |
-| `stale`   | The runner has not contacted GitLab in more than 3 months. If the runner was created more than 3 months ago, but it never contacted the instance, it is also considered **stale**. |
+| `stale`   | The runner has not contacted GitLab in more than 7 days. If the runner was created more than 7 days ago, but it never contacted the instance, it is also considered **stale**. |
 | `never_contacted` | The runner has never contacted GitLab. To make the runner contact GitLab, run `gitlab-runner run`. |
 
 ## View statistics for runner performance

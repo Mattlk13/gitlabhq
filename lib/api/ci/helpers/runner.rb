@@ -101,7 +101,8 @@ module API
         end
 
         def authenticate_job_via_dependent_job!
-          authenticate!
+          ::Gitlab::Database::LoadBalancing::Session.current.use_primary { authenticate! }
+
           forbidden! unless current_job
           forbidden! unless can?(current_user, :read_build, current_job)
         end

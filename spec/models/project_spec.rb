@@ -32,6 +32,7 @@ RSpec.describe Project, factory_default: :keep, feature_category: :groups_and_pr
     it { is_expected.to belong_to(:pool_repository) }
     it { is_expected.to have_many(:users) }
     it { is_expected.to have_many(:maintainers).through(:project_members).source(:user).conditions(members: { access_level: Gitlab::Access::MAINTAINER }) }
+    it { is_expected.to have_many(:owners_and_maintainers).through(:project_members).source(:user).conditions(members: { access_level: Gitlab::Access::MAINTAINER }) }
     it { is_expected.to have_many(:events) }
     it { is_expected.to have_many(:merge_requests) }
     it { is_expected.to have_many(:merge_request_metrics).class_name('MergeRequest::Metrics') }
@@ -258,6 +259,23 @@ RSpec.describe Project, factory_default: :keep, feature_category: :groups_and_pr
     context 'after initialized' do
       it "has a project_feature" do
         expect(described_class.new.project_feature).to be_present
+      end
+    end
+
+    describe 'owners_and_maintainers association' do
+      let_it_be(:project) { create(:project) }
+      let_it_be(:maintainer) { create(:user) }
+      let_it_be(:reporter) { create(:user) }
+      let_it_be(:developer) { create(:user) }
+
+      before do
+        project.add_maintainer(maintainer)
+        project.add_developer(developer)
+        project.add_reporter(reporter)
+      end
+
+      it 'returns only maintainers and owners' do
+        expect(project.owners_and_maintainers).to match_array([maintainer, project.owner])
       end
     end
 
@@ -2194,6 +2212,12 @@ RSpec.describe Project, factory_default: :keep, feature_category: :groups_and_pr
     let_it_be(:project2) { create(:project, star_count: 1) }
     let_it_be(:project3) { create(:project, last_activity_at: 2.minutes.ago) }
 
+    before_all do
+      create(:project_statistics, project: project1, repository_size: 1)
+      create(:project_statistics, project: project2, repository_size: 3)
+      create(:project_statistics, project: project3, repository_size: 2)
+    end
+
     it 'reorders the input relation by start count desc' do
       projects = described_class.sort_by_attribute(:stars_desc)
 
@@ -2223,6 +2247,18 @@ RSpec.describe Project, factory_default: :keep, feature_category: :groups_and_pr
 
       expect(projects).to eq([project1, project2, project3].sort_by(&:path).reverse)
     end
+
+    it 'reorders the input relation by storage size asc' do
+      projects = described_class.sort_by_attribute(:storage_size_asc)
+
+      expect(projects).to eq([project1, project3, project2])
+    end
+
+    it 'reorders the input relation by storage size desc' do
+      projects = described_class.sort_by_attribute(:storage_size_desc)
+
+      expect(projects).to eq([project2, project3, project1])
+    end
   end
 
   describe '.order_by_storage_size' do
@@ -2231,11 +2267,11 @@ RSpec.describe Project, factory_default: :keep, feature_category: :groups_and_pr
     let_it_be(:project_3) { create(:project_statistics, repository_size: 2).project }
 
     context 'ascending' do
-      it { expect(described_class.order_by_storage_size(:asc)).to eq([project_1, project_3, project_2]) }
+      it { expect(described_class.sorted_by_storage_size_asc).to eq([project_1, project_3, project_2]) }
     end
 
     context 'descending' do
-      it { expect(described_class.order_by_storage_size(:desc)).to eq([project_2, project_3, project_1]) }
+      it { expect(described_class.sorted_by_storage_size_desc).to eq([project_2, project_3, project_1]) }
     end
   end
 
@@ -7021,6 +7057,15 @@ RSpec.describe Project, factory_default: :keep, feature_category: :groups_and_pr
     end
   end
 
+  describe '.with_public_package_registry' do
+    let_it_be(:project) { create(:project, package_registry_access_level: ::ProjectFeature::PUBLIC) }
+    let_it_be(:other_project) { create(:project, package_registry_access_level: ::ProjectFeature::ENABLED) }
+
+    subject { described_class.with_public_package_registry }
+
+    it { is_expected.to contain_exactly(project) }
+  end
+
   describe '.not_a_fork' do
     let_it_be(:project) { create(:project, :public) }
 
@@ -7888,6 +7933,14 @@ RSpec.describe Project, factory_default: :keep, feature_category: :groups_and_pr
 
     context 'when project export is enqueued' do
       it { expect(project.export_status).to eq :queued }
+    end
+
+    context 'when project export is failed' do
+      before do
+        project_export_job.fail_op!
+      end
+
+      it { expect(project.export_status).to eq :failed }
     end
 
     context 'when project export is in progress' do
@@ -8851,12 +8904,12 @@ RSpec.describe Project, factory_default: :keep, feature_category: :groups_and_pr
     end
   end
 
-  describe '#work_items_mvc_2_feature_flag_enabled?' do
+  describe '#work_items_alpha_feature_flag_enabled?' do
     let_it_be(:group_project) { create(:project, :in_subgroup) }
 
     it_behaves_like 'checks parent group feature flag' do
-      let(:feature_flag_method) { :work_items_mvc_2_feature_flag_enabled? }
-      let(:feature_flag) { :work_items_mvc_2 }
+      let(:feature_flag_method) { :work_items_alpha_feature_flag_enabled? }
+      let(:feature_flag) { :work_items_alpha }
       let(:subject_project) { group_project }
     end
   end
@@ -9451,5 +9504,11 @@ RSpec.describe Project, factory_default: :keep, feature_category: :groups_and_pr
     let_it_be(:project) { create(:project) }
 
     it { expect(project.supports_saved_replies?).to eq(false) }
+  end
+
+  describe '#merge_trains_enabled?' do
+    let_it_be(:project) { create(:project) }
+
+    it { expect(project.merge_trains_enabled?).to eq(false) }
   end
 end

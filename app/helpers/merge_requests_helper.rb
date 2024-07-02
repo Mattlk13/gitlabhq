@@ -89,7 +89,7 @@ module MergeRequestsHelper
 
   def merge_params(merge_request)
     {
-      auto_merge_strategy: AutoMergeService::STRATEGY_MERGE_WHEN_PIPELINE_SUCCEEDS,
+      auto_merge_strategy: merge_request.default_auto_merge_strategy,
       should_remove_source_branch: true,
       sha: merge_request.diff_head_sha,
       squash: merge_request.squash_on_merge?
@@ -124,7 +124,7 @@ module MergeRequestsHelper
     return if merge_request.can_allow_collaboration?(current_user)
 
     minimum_visibility = [merge_request.target_project.visibility_level,
-                          merge_request.source_project.visibility_level].min
+      merge_request.source_project.visibility_level].min
 
     if minimum_visibility < Gitlab::VisibilityLevel::INTERNAL
       _('Not available for private projects')
@@ -308,7 +308,7 @@ module MergeRequestsHelper
     copy_action_description = _('Copy branch name')
     copy_action_shortcut = 'b'
     copy_button_title = "#{copy_action_description} <kbd class='flat ml-1' aria-hidden=true>#{copy_action_shortcut}</kbd>"
-    copy_button = clipboard_button(text: merge_request.source_branch, title: copy_button_title, aria_keyshortcuts: copy_action_shortcut, aria_label: copy_action_description, class: '!gl-hidden md:!gl-inline-block js-source-branch-copy gl-mx-1')
+    copy_button = clipboard_button(text: merge_request.source_branch, title: copy_button_title, aria_keyshortcuts: copy_action_shortcut, aria_label: copy_action_description, class: '!gl-hidden md:!gl-inline-block gl-mx-1 js-source-branch-copy')
 
     target_branch = link_to merge_request.target_branch, project_tree_path(merge_request.target_project, merge_request.target_branch), title: merge_request.target_branch, class: 'ref-container gl-display-inline-block gl-text-truncate gl-max-w-26 gl-mx-2'
 

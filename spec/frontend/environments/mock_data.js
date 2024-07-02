@@ -320,7 +320,32 @@ const fluxKustomization = {
   kind: 'Kustomization',
   metadata: { name: 'my-kustomization' },
   conditions: fluxResourceStatus,
+  inventory: [
+    { id: 'flux-system_notification-controller_apps_Deployment' },
+    { id: 'flux-system_source-controller_apps_Deployment' },
+  ],
 };
+
+const k8sDeploymentsMock = [
+  {
+    metadata: { name: 'notification-controller' },
+    status: {
+      conditions: [
+        { type: 'Available', status: 'True' },
+        { type: 'Progressing', status: 'False' },
+      ],
+    },
+  },
+  {
+    metadata: { name: 'source-controller' },
+    status: {
+      conditions: [
+        { type: 'Available', status: 'False' },
+        { type: 'Progressing', status: 'True' },
+      ],
+    },
+  },
+];
 
 export {
   environment,
@@ -333,4 +358,5 @@ export {
   mockKasTunnelUrl,
   fluxResourceStatus,
   fluxKustomization,
+  k8sDeploymentsMock,
 };

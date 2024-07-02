@@ -223,15 +223,7 @@ An administrator can make this option the default in the project's settings.
 
 DETAILS:
 **Tier:** Free, Premium, Ultimate
-**Offering:** Self-managed
-
-> - Chained merge requests [changed](https://gitlab.com/gitlab-org/gitlab/-/issues/323329) to automatically rebase on the new target branch in GitLab 16.9.
-> - Chained merge requests [no longer automatically rebase](https://gitlab.com/gitlab-org/gitlab/-/issues/441232) on the new target branch in GitLab 16.10 [with a flag](../../../administration/feature_flags.md) named `:rebase_when_retargetting_mrs`. Disabled by default.
-
-FLAG:
-On self-managed GitLab, by default this feature is not available. To make it
-available, an administrator can [enable the feature flag](../../../administration/feature_flags.md) named `:rebase_when_retargetting_mrs`.
-On GitLab.com and GitLab Dedicated, this feature is not available.
+**Offering:** GitLab.com, Self-managed, GitLab Dedicated
 
 Merge requests are often chained together, with one merge request depending on
 the code added or changed in another merge request. To support keeping individual

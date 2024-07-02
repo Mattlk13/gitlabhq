@@ -60,7 +60,14 @@ These requirements are documented in the `Required permission` column in the fol
 
 | Name | Required permission | Description | Introduced in | Feature flag | Enabled in |
 |:-----|:------------|:------------------|:---------|:--------------|:---------|
-| [`admin_integrations`](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/TODO) |  | Create, read, update, and delete integrations with external applications. | GitLab [17.1](https://gitlab.com/gitlab-org/gitlab/-/issues/460522) |  |  |
+| [`admin_integrations`](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/154601) |  | Create, read, update, and delete integrations with external applications. | GitLab [17.1](https://gitlab.com/gitlab-org/gitlab/-/issues/460522) |  |  |
+
+## Runner
+
+| Name | Required permission | Description | Introduced in | Feature flag | Enabled in |
+|:-----|:------------|:------------------|:---------|:--------------|:---------|
+| [`admin_runners`](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/151825) |  | Create, view, edit, and delete group or project Runners. Includes configuring Runner settings. | GitLab [17.1](https://gitlab.com/gitlab-org/gitlab/-/issues/442851) | `custom_ability_admin_runners` |  |
+| [`read_runners`](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/156798) |  | Allows read-only access to group or project runners, including the runner fleet dashboard. | GitLab [17.2](https://gitlab.com/gitlab-org/gitlab/-/issues/468202) |  |  |
 
 ## Secrets management
 
@@ -88,6 +95,12 @@ These requirements are documented in the `Required permission` column in the fol
 |:-----|:------------|:------------------|:---------|:--------------|:---------|
 | [`manage_group_access_tokens`](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/140115) |  | Create, read, update, and delete group access tokens. When creating a token, users with this custom permission must select a role for that token that has the same or fewer permissions as the default role used as the base for the custom role. | GitLab [16.8](https://gitlab.com/gitlab-org/gitlab/-/issues/428353) |  |  |
 | [`manage_project_access_tokens`](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/132342) |  | Create, read, update, and delete project access tokens. When creating a token, users with this custom permission must select a role for that token that has the same or fewer permissions as the default role used as the base for the custom role. | GitLab [16.5](https://gitlab.com/gitlab-org/gitlab/-/issues/421778) | `manage_project_access_tokens` | GitLab [16.8](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/141294) |
+
+## Team planning
+
+| Name | Required permission | Description | Introduced in | Feature flag | Enabled in |
+|:-----|:------------|:------------------|:---------|:--------------|:---------|
+| [`read_crm_contact`](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/154017) |  | Read CRM contact. | GitLab [17.1](https://gitlab.com/gitlab-org/gitlab/-/issues/443268) |  |  |
 
 ## Vulnerability management
 

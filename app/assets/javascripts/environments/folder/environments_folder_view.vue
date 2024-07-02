@@ -64,11 +64,12 @@ export default {
       >
         <template #title>
           <span>{{ tab.name }}</span>
-          <gl-badge size="sm" class="gl-tab-counter-badge">{{ tab.count }}</gl-badge>
+          <gl-badge class="gl-tab-counter-badge">{{ tab.count }}</gl-badge>
         </template>
       </gl-tab>
     </gl-tabs>
 
+    <!-- eslint-disable-next-line vue/no-undef-components -->
     <container
       :is-loading="isLoading"
       :environments="state.environments"

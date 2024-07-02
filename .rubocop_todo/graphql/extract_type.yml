@@ -1,6 +1,5 @@
 ---
 GraphQL/ExtractType:
-  Details: grace period
   Exclude:
     - 'app/graphql/mutations/ci/job_artifact/bulk_destroy.rb'
     - 'app/graphql/mutations/ci/runner/bulk_delete.rb'
@@ -12,7 +11,6 @@ GraphQL/ExtractType:
     - 'app/graphql/types/board_type.rb'
     - 'app/graphql/types/branch_protections/base_access_level_type.rb'
     - 'app/graphql/types/ci/analytics_type.rb'
-    - 'app/graphql/types/ci/catalog/resource_type.rb'
     - 'app/graphql/types/ci/config/include_type.rb'
     - 'app/graphql/types/ci/freeze_period_type.rb'
     - 'app/graphql/types/ci/inherited_ci_variable_type.rb'
@@ -97,7 +95,6 @@ GraphQL/ExtractType:
     - 'ee/app/graphql/types/member_roles/customizable_permission_type.rb'
     - 'ee/app/graphql/types/metric_image_type.rb'
     - 'ee/app/graphql/types/pipeline_security_report_finding_type.rb'
-    - 'ee/app/graphql/types/remote_development/workspace_type.rb'
     - 'ee/app/graphql/types/requirements_management/requirement_type.rb'
     - 'ee/app/graphql/types/security/finding_reports_comparer/report_type.rb'
     - 'ee/app/graphql/types/security_report_summary_section_type.rb'

@@ -77,7 +77,7 @@ If this check fails:
 ### Check clock synchronization
 
 Authentication between Praefect and the Gitaly servers requires the server times to be
-in sync so the token check succeeds.
+within 60 seconds of each other, so that the token check succeeds.
 
 This check helps identify the root cause of `permission denied`
 [errors being logged by Praefect](troubleshooting.md#permission-denied-errors-appearing-in-gitaly-or-praefect-logs-when-accessing-repositories).
@@ -90,7 +90,7 @@ checking with NTP service at  and allowed clock drift 60000ms [correlation_id: <
 Failed (fatal) error: gitaly node at tcp://[gitlab.example-instance.com]:8075: rpc error: code = DeadlineExceeded desc = context deadline exceeded
 ```
 
-To resolve this issue, set an environment variable on all Praefect servers to point to an accessible internal NTP server. For example:
+To resolve this issue, set an environment variable on all Praefect servers to point to an accessible internal [Network Time Protocol](https://en.wikipedia.org/wiki/Network_Time_Protocol) (NTP) server. For example:
 
 ```shell
 export NTP_HOST=ntp.example.com
@@ -298,7 +298,13 @@ Possible solutions:
 - Provision larger VMs to gain access to larger network traffic allowances.
 - Use your cloud service's monitoring and logging to check that the Praefect nodes are not exhausting their traffic allowances.
 
-## `gitlab-ctl reconfigure` fails with error: `STDOUT: praefect: configuration error: error reading config file: toml: cannot store TOML string into a Go int`
+## `gitlab-ctl reconfigure` fails with a Praefect configuration error
+
+If `gitlab-ctl reconfigure` fails, you might see this error:
+
+```plaintext
+STDOUT: praefect: configuration error: error reading config file: toml: cannot store TOML string into a Go int
+```
 
 This error occurs when `praefect['database_port']` or `praefect['database_direct_port']` are configured as a string instead of an integer.
 

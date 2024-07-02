@@ -3,6 +3,7 @@ import {
   GlAvatar,
   GlBadge,
   GlButton,
+  GlIcon,
   GlLink,
   GlSprintf,
   GlTooltipDirective,
@@ -29,6 +30,7 @@ export default {
     GlAvatar,
     GlBadge,
     GlButton,
+    GlIcon,
     GlLink,
     GlSprintf,
     GlTruncate,
@@ -107,6 +109,14 @@ export default {
     starCountText() {
       return n__('Star', 'Stars', this.starCount);
     },
+    usageCount() {
+      return this.resource?.last30DayUsageCount || 0;
+    },
+    usageText() {
+      return s__(
+        'CiCatalog|The number of projects that used a component from this project in a pipeline, by using "include:component", in the last 30 days.',
+      );
+    },
     webPath() {
       return cleanLeadingSeparator(this.resource?.webPath);
     },
@@ -127,7 +137,6 @@ export default {
       // Override the <a> tag if no modifier key is held down to use Vue router and not
       // open a new tab.
       e.preventDefault();
-
       // Push to the decoded URL to avoid all the / being encoded
       this.$router.push({ path: decodeURIComponent(this.resourceId) });
     },
@@ -167,21 +176,31 @@ export default {
           <b> {{ resource.name }}</b>
         </gl-link>
         <div class="gl-display-flex gl-flex-grow-1 gl-md-justify-content-space-between">
-          <gl-badge size="sm" class="gl-h-5 gl-align-self-center" variant="info">{{
-            name
-          }}</gl-badge>
-          <gl-button
-            v-gl-tooltip.top
-            data-testid="stats-favorites"
-            class="!gl-text-inherit"
-            icon="star-o"
-            :title="starCountText"
-            :href="starsHref"
-            size="small"
-            variant="link"
-          >
-            {{ starCount }}
-          </gl-button>
+          <gl-badge class="gl-h-5 gl-align-self-center" variant="info">{{ name }}</gl-badge>
+          <div class="gl-display-flex gl-align-items-center gl-ml-3">
+            <div
+              v-gl-tooltip.top
+              class="gl-display-flex gl-align-items-center gl-mr-3"
+              :title="usageText"
+            >
+              <gl-icon name="chart" :size="16" />
+              <span class="gl-ml-2" data-testid="stats-usage">
+                {{ usageCount }}
+              </span>
+            </div>
+            <gl-button
+              v-gl-tooltip.top
+              data-testid="stats-favorites"
+              class="!gl-text-inherit"
+              icon="star-o"
+              :title="starCountText"
+              :href="starsHref"
+              size="small"
+              variant="link"
+            >
+              {{ starCount }}
+            </gl-button>
+          </div>
         </div>
       </div>
       <div
@@ -195,7 +214,7 @@ export default {
           <div
             v-if="hasComponents"
             data-testid="ci-resource-component-names"
-            class="gl-font-sm gl-mt-1 gl-display-inline-flex gl-flex-wrap gl-text-gray-900"
+            class="gl-font-sm gl-mt-1 gl-inline-flex gl-flex-wrap gl-text-gray-900"
           >
             <span class="gl-font-bold"> &#8226; {{ $options.i18n.components }} </span>
             <gl-sprintf :message="componentNamesSprintfMessage">

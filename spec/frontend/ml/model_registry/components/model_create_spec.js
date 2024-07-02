@@ -1,17 +1,20 @@
 import Vue from 'vue';
 import VueApollo from 'vue-apollo';
-import { GlAlert, GlModal } from '@gitlab/ui';
+import { GlModal } from '@gitlab/ui';
 import { shallowMountExtended } from 'helpers/vue_test_utils_helper';
 import * as Sentry from '~/sentry/sentry_browser_wrapper';
 import { visitUrl } from '~/lib/utils/url_utility';
 import ModelCreate from '~/ml/model_registry/components/model_create.vue';
 import ImportArtifactZone from '~/ml/model_registry/components/import_artifact_zone.vue';
+import UploadDropzone from '~/vue_shared/components/upload_dropzone/upload_dropzone.vue';
 import { uploadModel } from '~/ml/model_registry/services/upload_model';
 import createModelMutation from '~/ml/model_registry/graphql/mutations/create_model.mutation.graphql';
 import createModelVersionMutation from '~/ml/model_registry/graphql/mutations/create_model_version.mutation.graphql';
 import createMockApollo from 'helpers/mock_apollo_helper';
 import waitForPromises from 'helpers/wait_for_promises';
 
+import { createMockDirective, getBinding } from 'helpers/vue_mock_directive';
+import { MODEL_CREATION_MODAL_ID } from '~/ml/model_registry/constants';
 import { createModelResponses, createModelVersionResponses } from '../graphql_mock_data';
 
 Vue.use(VueApollo);
@@ -28,6 +31,8 @@ jest.mock('~/ml/model_registry/services/upload_model', () => ({
 describe('ModelCreate', () => {
   let wrapper;
   let apolloProvider;
+
+  const file = { name: 'file.txt', size: 1024 };
 
   beforeEach(() => {
     jest.spyOn(Sentry, 'captureException').mockImplementation();
@@ -54,8 +59,15 @@ describe('ModelCreate', () => {
       },
       provide: {
         projectPath: 'some/project',
+        maxAllowedFileSize: 99999,
+      },
+      directives: {
+        GlModal: createMockDirective('gl-modal'),
       },
       apolloProvider,
+      stubs: {
+        ImportArtifactZone,
+      },
     });
   };
 
@@ -65,12 +77,14 @@ describe('ModelCreate', () => {
   const findDescriptionInput = () => wrapper.findByTestId('descriptionId');
   const findVersionDescriptionInput = () => wrapper.findByTestId('versionDescriptionId');
   const findImportArtifactZone = () => wrapper.findComponent(ImportArtifactZone);
+  const zone = () => wrapper.findComponent(UploadDropzone);
   const findGlModal = () => wrapper.findComponent(GlModal);
-  const findGlAlert = () => wrapper.findComponent(GlAlert);
+  const findGlAlert = () => wrapper.findByTestId('modal-create-alert');
   const submitForm = async () => {
     findGlModal().vm.$emit('primary', new Event('primary'));
     await waitForPromises();
   };
+  const findArtifactZoneLabel = () => wrapper.findByTestId('importArtifactZoneLabel');
 
   describe('Initial state', () => {
     describe('Modal closed', () => {
@@ -84,12 +98,9 @@ describe('ModelCreate', () => {
 
       it('renders the modal button', () => {
         expect(findModalButton().text()).toBe('Create model');
-      });
-
-      it('clicking create button triggers show-create-model', async () => {
-        await findModalButton().vm.$emit('click');
-
-        expect(wrapper.emitted('show-create-model')).toHaveLength(1);
+        expect(getBinding(findModalButton().element, 'gl-modal').value).toBe(
+          MODEL_CREATION_MODAL_ID,
+        );
       });
     });
 
@@ -100,16 +111,6 @@ describe('ModelCreate', () => {
           jest.fn().mockResolvedValue(createModelVersionResponses.success),
           true,
         );
-      });
-
-      it('shows the modal', () => {
-        expect(findGlModal().props('visible')).toBe(true);
-      });
-
-      it('hides the modal', async () => {
-        await findGlModal().vm.$emit('hide');
-
-        expect(wrapper.emitted('hide-create-model')).toHaveLength(1);
       });
 
       it('renders the name input', () => {
@@ -132,6 +133,18 @@ describe('ModelCreate', () => {
         expect(findImportArtifactZone().exists()).toBe(false);
       });
 
+      it('does not displays the title of the artifacts uploader', () => {
+        expect(findArtifactZoneLabel().exists()).toBe(false);
+      });
+
+      it('displays the title of the artifacts uploader when a version is entered', async () => {
+        findNameInput().vm.$emit('input', 'gpt-alice-1');
+        findVersionInput().vm.$emit('input', '1.0.0');
+        findVersionDescriptionInput().vm.$emit('input', 'My version description');
+        await Vue.nextTick();
+        expect(findArtifactZoneLabel().attributes('label')).toBe('Upload artifacts');
+      });
+
       it('renders the import artifact zone input with version entered', async () => {
         findNameInput().vm.$emit('input', 'gpt-alice-1');
         findVersionInput().vm.$emit('input', '1.0.0');
@@ -151,10 +164,6 @@ describe('ModelCreate', () => {
         });
       });
 
-      it('renders the cancel button in the modal', () => {
-        expect(findGlModal().props('actionCancel')).toEqual({ text: 'Cancel' });
-      });
-
       it('renders the create button in the modal', () => {
         expect(findGlModal().props('actionPrimary')).toEqual({
           attributes: { variant: 'confirm' },
@@ -162,15 +171,26 @@ describe('ModelCreate', () => {
         });
       });
 
+      it('renders the cancel button in the modal', () => {
+        expect(findGlModal().props('actionSecondary')).toEqual({
+          text: 'Cancel',
+          attributes: { variant: 'default' },
+        });
+      });
+
       it('does not render the alert by default', () => {
         expect(findGlAlert().exists()).toBe(false);
       });
+    });
 
-      it('clicking on cancel button triggers hide-create-model', async () => {
-        await findGlModal().vm.$emit('cancel');
+    it('clicking on secondary button clears the form', async () => {
+      createWrapper();
 
-        expect(wrapper.emitted('hide-create-model')).toHaveLength(1);
-      });
+      await findNameInput().vm.$emit('input', 'my_model');
+
+      await findGlModal().vm.$emit('secondary');
+
+      expect(findVersionInput().attributes('value')).toBe(undefined);
     });
   });
 
@@ -181,6 +201,8 @@ describe('ModelCreate', () => {
       findVersionInput().vm.$emit('input', '1.0.0');
       findDescriptionInput().vm.$emit('input', 'My model description');
       findVersionDescriptionInput().vm.$emit('input', 'My version description');
+      await Vue.nextTick();
+      zone().vm.$emit('change', file);
       jest.spyOn(apolloProvider.defaultClient, 'mutate');
 
       await submitForm();
@@ -215,9 +237,11 @@ describe('ModelCreate', () => {
 
     it('Uploads a file mutation upon confirm', () => {
       expect(uploadModel).toHaveBeenCalledWith({
-        file: null,
+        file,
         importPath: '/api/v4/projects/1/packages/ml_models/1/files/',
         subfolder: '',
+        maxAllowedFileSize: 99999,
+        onUploadProgress: expect.any(Function),
       });
     });
 
@@ -256,6 +280,8 @@ describe('ModelCreate', () => {
       findNameInput().vm.$emit('input', 'gpt-alice-1');
       findVersionInput().vm.$emit('input', '1.0.0');
       findVersionDescriptionInput().vm.$emit('input', 'My version description');
+      await Vue.nextTick();
+      zone().vm.$emit('change', file);
       await submitForm();
     });
 
@@ -304,6 +330,8 @@ describe('ModelCreate', () => {
       findVersionInput().vm.$emit('input', '1.0.0');
       findDescriptionInput().vm.$emit('input', 'My model description');
       findVersionDescriptionInput().vm.$emit('input', 'My version description');
+      await Vue.nextTick();
+      zone().vm.$emit('change', file);
       uploadModel.mockRejectedValueOnce('Artifact import error.');
       await submitForm();
     });
@@ -312,6 +340,17 @@ describe('ModelCreate', () => {
       expect(findGlAlert().text()).toBe('Artifact import error.');
       await submitForm(); // retry submit
       expect(visitUrl).toHaveBeenCalledWith('/some/project/-/ml/models/1/versions/1');
+    });
+
+    it('Uploads a file mutation upon confirm', async () => {
+      await submitForm(); // retry submit
+      expect(uploadModel).toHaveBeenCalledWith({
+        file,
+        importPath: '/api/v4/projects/1/packages/ml_models/1/files/',
+        subfolder: '',
+        maxAllowedFileSize: 99999,
+        onUploadProgress: expect.any(Function),
+      });
     });
   });
 

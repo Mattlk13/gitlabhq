@@ -129,6 +129,9 @@ export default {
     getProjectPath(item) {
       return cleanLeadingSeparator(item.project.full_path);
     },
+    getStages(item) {
+      return item?.details?.stages || [];
+    },
     failedJobsCount(pipeline) {
       return pipeline?.failed_builds_count || 0;
     },
@@ -136,11 +139,9 @@ export default {
       this.$emit('refresh-pipelines-table');
     },
     onRetryPipeline(pipeline) {
-      // This emit is only used by the `legacy_pipelines_table_wrapper`.
       this.$emit('retry-pipeline', pipeline);
     },
     onCancelPipeline(pipeline) {
-      // This emit is only used by the `legacy_pipelines_table_wrapper`.
       this.$emit('cancel-pipeline', pipeline);
     },
     trackPipelineMiniGraph() {
@@ -162,7 +163,7 @@ export default {
       fixed
     >
       <template #head(actions)>
-        <span class="gl-display-block gl-lg-display-none!">{{ s__('Pipeline|Actions') }}</span>
+        <span class="gl-block lg:!gl-hidden">{{ s__('Pipeline|Actions') }}</span>
         <slot name="table-header-actions"></slot>
       </template>
 
@@ -190,7 +191,7 @@ export default {
         <legacy-pipeline-mini-graph
           :downstream-pipelines="getDownstreamPipelines(item)"
           :pipeline-path="item.path"
-          :stages="item.details.stages"
+          :stages="getStages(item)"
           :update-dropdown="updateGraphDropdown"
           :upstream-pipeline="item.triggered_by"
           @miniGraphStageClick="trackPipelineMiniGraph"

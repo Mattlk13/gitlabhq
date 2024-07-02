@@ -13,6 +13,7 @@ module Ci
         Ci::BuildNeed
         Ci::BuildReportResult
         Ci::BuildRunnerSession
+        Ci::BuildSource
         Ci::BuildTraceChunk
         Ci::BuildTraceMetadata
         Ci::BuildPendingState
@@ -31,6 +32,7 @@ module Ci
         Ci::PipelineMetadata
         Ci::PipelineVariable
         Ci::Sources::Pipeline
+        Ci::Sources::Project
         Ci::Stage
         Ci::UnitTestFailure
       ].freeze

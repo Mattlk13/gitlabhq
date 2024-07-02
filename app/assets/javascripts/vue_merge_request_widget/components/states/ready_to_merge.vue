@@ -33,6 +33,7 @@ import {
   STATE_MACHINE,
   MT_SKIP_TRAIN,
   MT_RESTART_TRAIN,
+  MWCP_MERGE_STRATEGY,
 } from '../../constants';
 import eventHub from '../../event_hub';
 import mergeRequestQueryVariablesMixin from '../../mixins/merge_request_query_variables';
@@ -212,7 +213,7 @@ export default {
       return ['FAILED', 'CANCELED'].indexOf(this.pipeline?.status) !== -1;
     },
     showMergeFailedPipelineConfirmationDialog() {
-      return this.status === PIPELINE_FAILED_STATE && this.isPipelineFailed;
+      return (this.status === PIPELINE_FAILED_STATE && this.isPipelineFailed) || this.mr.retargeted;
     },
     isMergeAllowed() {
       return this.state.mergeable || false;
@@ -242,6 +243,9 @@ export default {
       return MergeRequestStore.getPreferredAutoMergeStrategy(
         this.state.availableAutoMergeStrategies,
       );
+    },
+    isPreferredAutoMergeStrategyMWPC() {
+      return this.preferredAutoMergeStrategy === MWCP_MERGE_STRATEGY;
     },
     squashIsSelected() {
       return this.isSquashReadOnly ? this.state.squashOnMerge : this.state.squash;
@@ -390,7 +394,11 @@ export default {
       return this.$apollo.queries.state.refetch();
     },
     handleMergeButtonClick(useAutoMerge, mergeImmediately = false, confirmationClicked = false) {
-      if (this.showMergeFailedPipelineConfirmationDialog && !confirmationClicked) {
+      if (
+        this.preferredAutoMergeStrategy !== MT_MERGE_STRATEGY &&
+        this.showMergeFailedPipelineConfirmationDialog &&
+        !confirmationClicked
+      ) {
         this.isPipelineFailedModalVisibleNormalMerge = true;
         return;
       }
@@ -832,6 +840,8 @@ export default {
       />
       <merge-failed-pipeline-confirmation-dialog
         :visible="isPipelineFailedModalVisibleNormalMerge"
+        :target-project-id="mr.targetProjectId"
+        :iid="mr.iid"
         @mergeWithFailedPipeline="onMergeWithFailedPipelineConfirmation"
         @cancel="isPipelineFailedModalVisibleNormalMerge = false"
       />

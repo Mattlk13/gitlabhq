@@ -1,6 +1,7 @@
 import { GlSprintf } from '@gitlab/ui';
 import TimeAgo from '~/vue_shared/components/time_ago_tooltip.vue';
 import { shallowMountExtended } from 'helpers/vue_test_utils_helper';
+import PageHeading from '~/vue_shared/components/page_heading.vue';
 import WikiHeader from '~/pages/shared/wikis/components/wiki_header.vue';
 
 describe('pages/shared/wikis/components/wiki_header', () => {
@@ -9,28 +10,30 @@ describe('pages/shared/wikis/components/wiki_header', () => {
   function buildWrapper(provide = {}) {
     wrapper = shallowMountExtended(WikiHeader, {
       provide: {
-        pageTitle: 'Wiki page heading',
+        pageHeading: 'Wiki page heading',
         isPageTemplate: false,
+        isEditingPath: false,
         showEditButton: true,
+        wikiUrl: 'http://wiki.url',
         editButtonUrl: 'http://edit.url',
         lastVersion: '2024-06-03T01:53:28.000Z',
         pageVersion: {
-          commit: {
-            author_name: 'Test author',
-            authored_date: '2024-06-03T01:53:28.000Z',
-          },
+          author_name: 'Test author',
+          authored_date: '2024-06-03T01:53:28.000Z',
         },
+        pagePersisted: true,
         authorUrl: 'http://author.url',
         ...provide,
       },
       stubs: {
         GlSprintf,
         TimeAgo,
+        PageHeading,
       },
     });
   }
 
-  const findPageHeading = () => wrapper.findByTestId('wiki-page-title');
+  const findPageHeading = () => wrapper.findByTestId('page-heading');
   const findEditButton = () => wrapper.findByTestId('wiki-edit-button');
   const findLastVersion = () => wrapper.findByTestId('wiki-page-last-version');
 

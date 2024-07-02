@@ -22,6 +22,8 @@ module Gitlab
         chain.add ::Labkit::Middleware::Sidekiq::Server
         chain.add ::Gitlab::SidekiqMiddleware::RequestStoreMiddleware
 
+        chain.add ::Gitlab::QueryLimiting::SidekiqMiddleware if ::Gitlab::QueryLimiting.enabled_for_env?
+
         if metrics
           chain.add ::Gitlab::SidekiqMiddleware::ServerMetrics
 
@@ -32,6 +34,7 @@ module Gitlab
         chain.add ::Gitlab::SidekiqMiddleware::ExtraDoneLogMetadata
         chain.add ::Gitlab::SidekiqMiddleware::BatchLoader
         chain.add ::Gitlab::SidekiqMiddleware::InstrumentationLogger
+        chain.add ::Gitlab::SidekiqMiddleware::SetIpAddress
         chain.add ::Gitlab::SidekiqMiddleware::AdminMode::Server
         chain.add ::Gitlab::SidekiqMiddleware::QueryAnalyzer
         chain.add ::Gitlab::SidekiqVersioning::Middleware
@@ -70,3 +73,5 @@ module Gitlab
     end
   end
 end
+
+Gitlab::SidekiqMiddleware.prepend_mod

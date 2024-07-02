@@ -13,6 +13,9 @@ module Resolvers
       argument :assignee_username, GraphQL::Types::String,
         required: false,
         description: 'Username of the assignee.'
+      argument :assignee_wildcard_id, ::Types::AssigneeWildcardIdEnum,
+        required: false,
+        description: 'Filter by assignee presence. Incompatible with assigneeUsernames and assigneeUsername.'
     end
 
     def self.accept_author
@@ -87,10 +90,14 @@ module Resolvers
       required: false,
       description: 'Merge requests updated before the timestamp.'
 
+    argument :label_name, [GraphQL::Types::String, { null: true }],
+      required: false,
+      description: 'Labels applied to the merge request.'
     argument :labels, [GraphQL::Types::String],
       required: false,
       as: :label_name,
-      description: 'Array of label names. All resolved merge requests will have all of these labels.'
+      description: 'Array of label names. All resolved merge requests will have all of these labels.',
+      deprecated: { reason: 'Use `labelName`', milestone: '17.1' }
     argument :merged_after, Types::TimeType,
       required: false,
       description: 'Merge requests merged after the date.'
@@ -99,7 +106,10 @@ module Resolvers
       description: 'Merge requests merged before the date.'
     argument :milestone_title, GraphQL::Types::String,
       required: false,
-      description: 'Title of the milestone.'
+      description: 'Title of the milestone. Incompatible with milestoneWildcardId.'
+    argument :milestone_wildcard_id, ::Types::MilestoneWildcardIdEnum,
+      required: false,
+      description: 'Filter issues by milestone ID wildcard. Incompatible with milestoneTitle.'
     argument :review_state, ::Types::MergeRequestReviewStateEnum,
       required: false,
       description: 'Reviewer state of the merge request.',
@@ -122,6 +132,10 @@ module Resolvers
         required: false,
         description: 'Title of the milestone.'
     end
+
+    validates mutually_exclusive: [:assignee_username, :assignee_wildcard_id]
+    validates mutually_exclusive: [:reviewer_username, :reviewer_wildcard_id]
+    validates mutually_exclusive: [:milestone_title, :milestone_wildcard_id]
 
     def self.single
       ::Resolvers::MergeRequestResolver

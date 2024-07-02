@@ -11,6 +11,8 @@ module Gitlab
       class Installation
         include Helpers::Output
         include Helpers::Shell
+        extend Helpers::Output
+        extend Helpers::Shell
 
         LICENSE_SECRET = "gitlab-license"
 
@@ -25,6 +27,35 @@ module Gitlab
           @chart_sha = chart_sha
         end
 
+        # Delete installation
+        #
+        # @param [String] name
+        # @param [Configurations::Cleanup::Base] cleanup_configuration
+        # @param [String] timeout
+        # @return [void]
+        def self.uninstall(name, cleanup_configuration:, timeout:)
+          helm = Helm::Client.new
+          namespace = cleanup_configuration.namespace
+
+          log("Performing full deployment cleanup", :info, bright: true)
+          return log("Helm release '#{name}' not found, skipping", :warn) unless helm.status(name, namespace: namespace)
+
+          Helpers::Spinner.spin("uninstalling helm release '#{name}'") do
+            helm.uninstall(name, namespace: namespace, timeout: timeout)
+
+            log("Removing license secret", :info)
+            puts cleanup_configuration.kubeclient.delete_resource("secret", LICENSE_SECRET)
+          end
+
+          Helpers::Spinner.spin("removing configuration specific objects") do
+            cleanup_configuration.run
+          end
+
+          Helpers::Spinner.spin("removing namespace '#{namespace}'") do
+            puts cleanup_configuration.kubeclient.delete_resource("namespace", namespace)
+          end
+        end
+
         # Perform deployment with all the additional setup
         #
         # @return [void]
@@ -33,7 +64,8 @@ module Gitlab
           chart_reference = run_pre_deploy_setup
           run_deploy(chart_reference)
           run_post_deploy_setup
-        rescue Helpers::Shell::CommandFailure
+        # Exit on error to not duplicate error messages and exit cleanly when kubectl or helm related errors are raised
+        rescue Kubectl::Client::Error, Helm::Client::Error
           exit(1)
         end
 
@@ -150,7 +182,7 @@ module Gitlab
         def create_namespace
           log("Creating namespace '#{namespace}'", :info)
           puts kubeclient.create_namespace
-        rescue StandardError => e
+        rescue Kubectl::Client::Error => e
           return log("namespace already exists, skipping", :warn) if e.message.include?("already exists")
 
           raise(e)
@@ -165,14 +197,6 @@ module Gitlab
 
           secret = Kubectl::Resources::Secret.new(LICENSE_SECRET, "license", license)
           puts mask_secrets(kubeclient.create_resource(secret), [license, Base64.encode64(license)])
-        end
-
-        # Run helm command
-        #
-        # @param [Array] cmd
-        # @return [String]
-        def run_helm_cmd(cmd, stdin = nil)
-          execute_shell(["helm", *cmd], stdin_data: stdin)
         end
       end
     end

@@ -691,7 +691,7 @@ module API
             .execute(merge_request)
         elsif automatically_mergeable
           AutoMergeService.new(merge_request.target_project, current_user, merge_params)
-            .execute(merge_request, AutoMergeService::STRATEGY_MERGE_WHEN_PIPELINE_SUCCEEDS)
+            .execute(merge_request, merge_request.default_auto_merge_strategy)
         end
 
         if immediately_mergeable && !merge_request.merged?
@@ -767,6 +767,7 @@ module API
         detail 'Get all the issues that would be closed by merging the provided merge request.'
         success Entities::MRNote
         failure [
+          { code: 403, message: 'Forbidden' },
           { code: 404, message: 'Not found' }
         ]
         tags %w[merge_requests]
@@ -777,6 +778,30 @@ module API
       get ':id/merge_requests/:merge_request_iid/closes_issues', feature_category: :code_review_workflow, urgency: :low do
         merge_request = find_merge_request_with_access(params[:merge_request_iid])
         issues = ::Kaminari.paginate_array(merge_request.visible_closing_issues_for(current_user))
+        issues = paginate(issues)
+
+        external_issues, internal_issues = issues.partition { |issue| issue.is_a?(ExternalIssue) }
+
+        data = Entities::IssueBasic.represent(internal_issues, current_user: current_user)
+        data += Entities::ExternalIssue.represent(external_issues, current_user: current_user)
+
+        data.as_json
+      end
+
+      desc 'List issues related to merge request' do
+        detail 'Get all the related issues from title, description, commits, comments and discussions of the merge request.'
+        failure [
+          { code: 403, message: 'Forbidden' },
+          { code: 404, message: 'Not found' }
+        ]
+        tags %w[merge_requests]
+      end
+      params do
+        use :pagination
+      end
+      get ':id/merge_requests/:merge_request_iid/related_issues', feature_category: :code_review_workflow, urgency: :low do
+        merge_request = find_merge_request_with_access(params[:merge_request_iid])
+        issues = ::Kaminari.paginate_array(merge_request.related_issues(current_user))
         issues = paginate(issues)
 
         external_issues, internal_issues = issues.partition { |issue| issue.is_a?(ExternalIssue) }

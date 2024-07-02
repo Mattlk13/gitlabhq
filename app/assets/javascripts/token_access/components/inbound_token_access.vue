@@ -9,9 +9,10 @@ import {
   GlLoadingIcon,
   GlSprintf,
   GlToggle,
+  GlTooltipDirective,
 } from '@gitlab/ui';
 import { createAlert } from '~/alert';
-import { __, s__ } from '~/locale';
+import { __, s__, n__, sprintf } from '~/locale';
 import { helpPagePath } from '~/helpers/help_page_helper';
 import { TYPENAME_GROUP } from '~/graphql_shared/constants';
 import inboundAddGroupOrProjectCIJobTokenScope from '../graphql/mutations/inbound_add_group_or_project_ci_job_token_scope.mutation.graphql';
@@ -24,16 +25,13 @@ import TokenAccessTable from './token_access_table.vue';
 
 export default {
   i18n: {
-    toggleLabelTitle: s__('CICD|Allow CI/CD job token access'),
+    toggleLabelTitle: s__('CICD|Limit access %{italicStart}to%{italicEnd} this project'),
     toggleDescription: s__(
-      `CICD|When enabled, groups and projects listed in the allowlist are authorized to use a CI/CD job token to authenticate requests to this project. %{linkStart}Learn more%{linkEnd}.`,
+      `CICD|Allow access to this project from authorized groups or projects by adding them to the allowlist. It is a security risk to disable this feature, because unauthorized projects might attempt to retrieve an active token and access the API. %{linkStart}Learn more%{linkEnd}.`,
     ),
-    cardHeaderTitle: s__('CICD|Authorized groups and projects'),
-    cardHeaderDescription: s__(
-      `CICD|Ensure only groups and projects with members authorized to access sensitive project data are added to the allowlist.`,
-    ),
+    cardHeaderTitle: s__('CICD|Groups and projects with access'),
     settingDisabledMessage: s__(
-      'CICD|No access is currently allowed to this project. Enable feature to authorize access from groups or projects in the allowlist below.',
+      'CICD|Access unrestricted, so users with sufficient permissions in this project can authenticate with a job token generated in any other project. Enable this setting to restrict authentication to only job tokens generated in the groups and projects in the allowlist below.',
     ),
     addGroupOrProject: __('Add group or project'),
     add: __('Add'),
@@ -44,17 +42,6 @@ export default {
     projectsFetchError: __('There was a problem fetching the projects'),
     scopeFetchError: __('There was a problem fetching the job token scope value'),
   },
-  fields: [
-    {
-      key: 'fullPath',
-      label: '',
-    },
-    {
-      key: 'actions',
-      label: '',
-      tdClass: 'gl-text-right',
-    },
-  ],
   components: {
     GlAlert,
     GlButton,
@@ -66,6 +53,9 @@ export default {
     GlSprintf,
     GlToggle,
     TokenAccessTable,
+  },
+  directives: {
+    GlTooltip: GlTooltipDirective,
   },
   inject: {
     fullPath: {
@@ -95,8 +85,13 @@ export default {
         };
       },
       update({ project }) {
-        this.projects = project?.ciJobTokenScope?.inboundAllowlist?.nodes ?? [];
-        this.groups = project?.ciJobTokenScope?.groupsAllowlist?.nodes ?? [];
+        const projects = project?.ciJobTokenScope?.inboundAllowlist?.nodes ?? [];
+        const groups = project?.ciJobTokenScope?.groupsAllowlist?.nodes ?? [];
+
+        this.projectCount = projects.length;
+        this.groupCount = groups.length;
+
+        return [...groups, ...projects];
       },
       error() {
         createAlert({ message: this.$options.i18n.projectsFetchError });
@@ -106,18 +101,35 @@ export default {
   data() {
     return {
       inboundJobTokenScopeEnabled: null,
-      targetPath: '',
-      projects: [],
-      groups: [],
+      groupsAndProjectsWithAccess: [],
+      groupOrProjectPath: '',
+      projectCount: 0,
+      groupCount: 0,
       isAddFormVisible: false,
     };
   },
   computed: {
-    isTargetPathEmpty() {
-      return this.targetPath === '';
+    isGroupOrProjectPathEmpty() {
+      return this.groupOrProjectPath === '';
     },
     ciJobTokenHelpPage() {
       return helpPagePath('ci/jobs/ci_job_token#control-job-token-access-to-your-project');
+    },
+    groupCountTooltip() {
+      return sprintf(
+        n__('%{count} group has access', '%{count} groups have access', this.groupCount),
+        {
+          count: this.groupCount,
+        },
+      );
+    },
+    projectCountTooltip() {
+      return sprintf(
+        n__('%{count} project has access', '%{count} projects have access', this.projectCount),
+        {
+          count: this.projectCount,
+        },
+      );
     },
   },
   methods: {
@@ -155,7 +167,7 @@ export default {
           mutation: inboundAddGroupOrProjectCIJobTokenScope,
           variables: {
             projectPath: this.fullPath,
-            targetPath: this.targetPath,
+            targetPath: this.groupOrProjectPath,
           },
         });
 
@@ -165,7 +177,7 @@ export default {
       } catch (error) {
         createAlert({ message: error.message });
       } finally {
-        this.clearTargetPath();
+        this.clearGroupOrProjectPath();
         this.getGroupsAndProjects();
       }
     },
@@ -207,8 +219,8 @@ export default {
         this.getGroupsAndProjects();
       }
     },
-    clearTargetPath() {
-      this.targetPath = '';
+    clearGroupOrProjectPath() {
+      this.groupOrProjectPath = '';
       this.isAddFormVisible = false;
     },
     getGroupsAndProjects() {
@@ -261,25 +273,34 @@ export default {
       <div>
         <gl-card
           class="gl-new-card"
-          header-class="gl-new-card-header gl-border-bottom-0 gl-flex-wrap gl-md-flex-nowrap"
+          header-class="gl-new-card-header gl-border-bottom-0"
           body-class="gl-new-card-body gl-px-0"
         >
           <template #header>
             <div class="gl-new-card-title-wrapper gl-flex-direction-column gl-flex-wrap">
-              <div class="gl-new-card-title">
-                <h5>{{ $options.i18n.cardHeaderTitle }}</h5>
-                <span class="gl-new-card-count">
+              <div class="gl-new-card-title gl-items-center">
+                <h5 class="gl-my-0">{{ $options.i18n.cardHeaderTitle }}</h5>
+                <span
+                  v-gl-tooltip
+                  :title="groupCountTooltip"
+                  class="gl-new-card-count"
+                  data-testid="group-count"
+                >
                   <gl-icon name="group" class="gl-mr-2" />
-                  {{ groups.length }}
+                  {{ groupCount }}
                 </span>
-                <span class="gl-new-card-count">
+                <span
+                  v-gl-tooltip
+                  :title="projectCountTooltip"
+                  class="gl-new-card-count"
+                  data-testid="project-count"
+                >
                   <gl-icon name="project" class="gl-mr-2" />
-                  {{ projects.length }}
+                  {{ projectCount }}
                 </span>
               </div>
-              <p class="gl-text-secondary">{{ $options.i18n.cardHeaderDescription }}</p>
             </div>
-            <div class="gl-new-card-actions gl-w-full gl-md-w-auto gl-text-right">
+            <div class="gl-new-card-actions">
               <gl-button
                 v-if="!isAddFormVisible"
                 size="small"
@@ -293,35 +314,24 @@ export default {
           <div v-if="isAddFormVisible" class="gl-new-card-add-form gl-m-3">
             <h4 class="gl-mt-0">{{ $options.i18n.addGroupOrProject }}</h4>
             <gl-form-input
-              v-model="targetPath"
+              v-model="groupOrProjectPath"
               :placeholder="$options.i18n.addProjectPlaceholder"
             />
             <div class="gl-display-flex gl-mt-5">
               <gl-button
                 variant="confirm"
-                :disabled="isTargetPathEmpty"
+                :disabled="isGroupOrProjectPathEmpty"
                 class="gl-mr-3"
                 data-testid="add-project-btn"
                 @click="addGroupOrProject"
               >
                 {{ $options.i18n.add }}
               </gl-button>
-              <gl-button @click="clearTargetPath">{{ $options.i18n.cancel }}</gl-button>
+              <gl-button @click="clearGroupOrProjectPath">{{ $options.i18n.cancel }}</gl-button>
             </div>
           </div>
 
-          <token-access-table
-            :is-group="true"
-            :items="groups"
-            :table-fields="$options.fields"
-            @removeItem="removeItem"
-          />
-
-          <token-access-table
-            :items="projects"
-            :table-fields="$options.fields"
-            @removeItem="removeItem"
-          />
+          <token-access-table :items="groupsAndProjectsWithAccess" @removeItem="removeItem" />
         </gl-card>
       </div>
     </template>

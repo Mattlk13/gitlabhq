@@ -232,33 +232,53 @@ graph LR
     A --"artifact: list of test files"--> B & C
 ```
 
-## Merge Trains
+## Merge trains
 
-### Why do we need to have a "stable" master branch to enable merge trains?
+### Current usage
 
-If the master branch is unstable (i.e. CI/CD pipelines for the master branch are failing frequently), all of the merge requests pipelines that were added AFTER a faulty merge request pipeline would have to be **cancelled** and **added back to the train**, which would create a lot of delays if the merge train is long.
+[We started using merge trains in June 2024](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/154540).
 
-### How stable does the master branch have to be for us to enable merge trains?
+At the moment, **Merge train pipelines don't run any tests**: they only enforce the
+["Merging a merge request" guidelines](../code_review.md#merging-a-merge-request)
+that already existed before the enablement of merge trains, but that we couldn't easily enforce.
 
-We don't have a specific number, but we need to have better numbers for flaky tests failures and infrastructure failures (see the [Master Broken Incidents RCA Dashboard](https://app.periscopedata.com/app/gitlab/1082465/Master-Broken-Incidents-Root-Cause-Analysis)).
+Merge train pipelines run a single `pre-merge-checks` job which ensures the latest pipeline before merge is:
 
-### Could we gradually move to merge trains in our CI/CD configuration?
+1. A [Merged Results pipeline](../../ci/pipelines/merged_results_pipelines.md)
+1. A [`tier-3` pipeline](#pipeline-tiers) (i.e. full pipeline, not predictive one)
+1. Created at most 8 hours ago
 
-There was a proposal from a contributor, but the approach is not without some downsides: [see the original proposal and discussion](https://gitlab.com/gitlab-org/quality/quality-engineering/team-tasks/-/issues/195#note_1117151994).
+We opened [a feedback issue](https://gitlab.com/gitlab-org/quality/engineering-productivity/team/-/issues/513)
+to iterate on this solution.
+
+### Next iterations
+
+We opened [a dedicated issue to discuss the next iteration for merge trains](https://gitlab.com/gitlab-org/quality/engineering-productivity/team/-/issues/516)
+to actually start running tests in merge train pipelines.
+
+### Challenges for enabling merge trains running "full" test pipelines
+
+#### Why do we need to have a "stable" default branch?
+
+If the default branch is unstable (i.e. CI/CD pipelines for the default branch are failing frequently), all of the merge requests pipelines that were added AFTER a faulty merge request pipeline would have to be **cancelled** and **added back to the train**, which would create a lot of delays if the merge train is long.
+
+#### How stable does the default branch have to be?
+
+We don't have a specific number, but we need to have better numbers for flaky tests failures and infrastructure failures (see the [Master Broken Incidents RCA Dashboard](https://10az.online.tableau.com/#/site/gitlab/workbooks/2296993/views)).
 
 ## Faster feedback for some merge requests
 
 ### Broken Master Fixes
 
-When you need to [fix a broken `master`](https://handbook.gitlab.com/handbook/engineering/workflow/#resolution-of-broken-master), you can add the `pipeline:expedite` label to expedite the pipelines that run on the merge request.
+When you need to [fix a broken `master`](https://handbook.gitlab.com/handbook/engineering/workflow/#resolution-of-broken-master), you can add the `pipeline::expedited` label to expedite the pipelines that run on the merge request.
 
 Note that the merge request also needs to have the `master:broken` or `master:foss-broken` label set.
 
 ### Revert MRs
 
-To make your Revert MRs faster, use the [revert MR template](https://gitlab.com/gitlab-org/gitlab/-/blob/master/.gitlab/merge_request_templates/Revert%20To%20Resolve%20Incident.md) **before** you create your merge request. It will apply the `pipeline:expedite` label and others that will expedite the pipelines that run on the merge request.
+To make your Revert MRs faster, use the [revert MR template](https://gitlab.com/gitlab-org/gitlab/-/blob/master/.gitlab/merge_request_templates/Revert%20To%20Resolve%20Incident.md) **before** you create your merge request. It will apply the `pipeline::expedited` label and others that will expedite the pipelines that run on the merge request.
 
-### The `pipeline:expedite` label
+### The `pipeline::expedited` label
 
 When this label is assigned, the following steps of the CI/CD pipeline are skipped:
 
@@ -289,7 +309,7 @@ If you want to force `e2e:package-and-test` to run regardless of your changes, y
 `pipeline:run-all-e2e` label to the merge request.
 
 The [`e2e:test-on-gdk`](../testing_guide/end_to_end/index.md#using-the-test-on-gdk-job) child pipeline runs `:blocking`
-E2E specs automatically for all `code patterns changes`. See `.qa:rules:e2e-blocking` [`rules.gitlab-ci.yml`](https://gitlab.com/gitlab-org/gitlab/-/blob/master/.gitlab/ci/rules.gitlab-ci.yml) for specific set of rules.
+E2E specs automatically for all `code patterns changes`. See `.qa:rules:e2e-blocking-gdk` [`rules.gitlab-ci.yml`](https://gitlab.com/gitlab-org/gitlab/-/blob/master/.gitlab/ci/rules.gitlab-ci.yml) for specific set of rules.
 
 Consult the [End-to-end Testing](../testing_guide/end_to_end/index.md) dedicated page for more information.
 

@@ -121,9 +121,8 @@ class Notify < ApplicationMailer
     subject << @project.name if @project
     subject << @group.name if @group
     subject.concat(extra) if extra.present?
-    subject << Gitlab.config.gitlab.email_subject_suffix if Gitlab.config.gitlab.email_subject_suffix.present?
 
-    subject.join(' | ')
+    subject_with_suffix(subject)
   end
 
   # Return a string suitable for inclusion in the 'Message-Id' mail header.
@@ -238,6 +237,10 @@ class Notify < ApplicationMailer
     end
 
     headers['List-Unsubscribe'] = list_unsubscribe_methods.map { |e| "<#{e}>" }.join(',')
+    # Based on RFC 8058 one-click unsubscribe functionality should
+    # be signalled with using the List-Unsubscribe-Post header
+    # See https://datatracker.ietf.org/doc/html/rfc8058
+    headers['List-Unsubscribe-Post'] = 'List-Unsubscribe=One-Click'
     @unsubscribe_url = unsubscribe_sent_notification_url(@sent_notification)
   end
 
@@ -249,8 +252,7 @@ class Notify < ApplicationMailer
   end
 
   def check_rate_limit
-    return if rate_limit_scope.nil?
-    return if Feature.disabled?(:rate_limit_notification_emails, rate_limit_scope)
+    return if rate_limit_scope.nil? || @recipient.nil?
 
     already_notified = throttled?(peek: true)
 
@@ -260,16 +262,23 @@ class Notify < ApplicationMailer
 
     return if already_notified
 
+    Gitlab::AppLogger.info(
+      event: 'notification_emails_rate_limited',
+      user_id: @recipient.id,
+      project_id: @project&.id,
+      group_id: @group&.id
+    )
+
     Namespaces::RateLimiterMailer.project_or_group_emails(
       rate_limit_scope,
-      message.to
+      @recipient.notification_email_for(rate_limit_scope)
     ).deliver_later
   end
 
   def throttled?(peek: false)
     ::Gitlab::ApplicationRateLimiter.throttled?(
       :notification_emails,
-      scope: [rate_limit_scope, message.to].flatten,
+      scope: [rate_limit_scope, @recipient].flatten,
       peek: peek
     )
   end

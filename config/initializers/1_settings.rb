@@ -707,6 +707,9 @@ Settings.cron_jobs['namespaces_process_outdated_namespace_descendants_cron_worke
 Settings.cron_jobs['performance_bar_stats'] ||= {}
 Settings.cron_jobs['performance_bar_stats']['cron'] ||= '*/2 * * * *'
 Settings.cron_jobs['performance_bar_stats']['job_class'] = 'GitlabPerformanceBarStatsWorker'
+Settings.cron_jobs['ci_catalog_resources_aggregate_last30_day_usage_worker'] ||= {}
+Settings.cron_jobs['ci_catalog_resources_aggregate_last30_day_usage_worker']['cron'] ||= '*/4 * * * *'
+Settings.cron_jobs['ci_catalog_resources_aggregate_last30_day_usage_worker']['job_class'] = 'Ci::Catalog::Resources::AggregateLast30DayUsageWorker'
 
 Gitlab.ee do
   Settings.cron_jobs['analytics_devops_adoption_create_all_snapshots_worker'] ||= {}
@@ -784,11 +787,14 @@ Gitlab.ee do
   Settings.cron_jobs['elastic_index_bulk_cron_worker'] ||= {}
   Settings.cron_jobs['elastic_index_bulk_cron_worker']['cron'] ||= '*/1 * * * *'
   Settings.cron_jobs['elastic_index_bulk_cron_worker']['job_class'] ||= 'ElasticIndexBulkCronWorker'
+  Settings.cron_jobs['elastic_index_embedding_bulk_cron_worker'] ||= {}
+  Settings.cron_jobs['elastic_index_embedding_bulk_cron_worker']['cron'] ||= '*/1 * * * *'
+  Settings.cron_jobs['elastic_index_embedding_bulk_cron_worker']['job_class'] ||= 'Search::ElasticIndexEmbeddingBulkCronWorker'
   Settings.cron_jobs['elastic_index_initial_bulk_cron_worker'] ||= {}
   Settings.cron_jobs['elastic_index_initial_bulk_cron_worker']['cron'] ||= '*/1 * * * *'
   Settings.cron_jobs['elastic_index_initial_bulk_cron_worker']['job_class'] ||= 'ElasticIndexInitialBulkCronWorker'
   Settings.cron_jobs['elastic_cluster_reindexing_cron_worker'] ||= {}
-  Settings.cron_jobs['elastic_cluster_reindexing_cron_worker']['cron'] ||= '*/10 * * * *'
+  Settings.cron_jobs['elastic_cluster_reindexing_cron_worker']['cron'] ||= '*/5 * * * *'
   Settings.cron_jobs['elastic_cluster_reindexing_cron_worker']['job_class'] ||= 'ElasticClusterReindexingCronWorker'
   Settings.cron_jobs['elastic_remove_expired_namespace_subscriptions_from_index_cron_worker'] ||= {}
   Settings.cron_jobs['elastic_remove_expired_namespace_subscriptions_from_index_cron_worker']['cron'] ||= '10 3 * * *'
@@ -902,9 +908,9 @@ Gitlab.ee do
   Settings.cron_jobs['click_house_rebuild_materialized_view_cron_worker'] ||= {}
   Settings.cron_jobs['click_house_rebuild_materialized_view_cron_worker']['cron'] ||= "*/10 * * * *"
   Settings.cron_jobs['click_house_rebuild_materialized_view_cron_worker']['job_class'] = 'ClickHouse::RebuildMaterializedViewCronWorker'
-  Settings.cron_jobs['click_house_code_suggestion_events_cron_worker'] ||= {}
-  Settings.cron_jobs['click_house_code_suggestion_events_cron_worker']['cron'] ||= "*/5 * * * *"
-  Settings.cron_jobs['click_house_code_suggestion_events_cron_worker']['job_class'] = 'ClickHouse::CodeSuggestionEventsCronWorker'
+  Settings.cron_jobs['click_house_dump_all_write_buffers_cron_worker'] ||= {}
+  Settings.cron_jobs['click_house_dump_all_write_buffers_cron_worker']['cron'] ||= "*/5 * * * *"
+  Settings.cron_jobs['click_house_dump_all_write_buffers_cron_worker']['job_class'] = 'ClickHouse::DumpAllWriteBuffersCronWorker'
   Settings.cron_jobs['gitlab_subscriptions_add_on_purchases_schedule_bulk_refresh_user_assignments_worker'] ||= {}
   Settings.cron_jobs['gitlab_subscriptions_add_on_purchases_schedule_bulk_refresh_user_assignments_worker']['cron'] ||= "0 */4 * * *"
   Settings.cron_jobs['gitlab_subscriptions_add_on_purchases_schedule_bulk_refresh_user_assignments_worker']['job_class'] = 'GitlabSubscriptions::AddOnPurchases::ScheduleBulkRefreshUserAssignmentsWorker'
@@ -963,6 +969,22 @@ ObjectStoreSettings.new(Settings).parse!
 #
 Settings['workhorse'] ||= {}
 Settings.workhorse['secret_file'] ||= Rails.root.join('.gitlab_workhorse_secret')
+
+#
+# Topology Service
+#
+Settings['topology_service'] ||= {}
+Settings.topology_service['enabled'] ||= false
+Settings.topology_service['address'] ||= 'topology-service.gitlab.example.com:443'
+Settings.topology_service['ca_file'] ||= '/home/git/gitlab/config/topology-service-ca.pem'
+Settings.topology_service['certificate_file'] ||= '/home/git/gitlab/config/topology-service-cert.pem'
+Settings.topology_service['private_key_file'] ||= '/home/git/gitlab/config/topology-service-key.pem'
+
+#
+# Cells
+#
+Settings['cell'] ||= {}
+Settings.cell['name'] ||= 'cell-1'
 
 #
 # GitLab KAS

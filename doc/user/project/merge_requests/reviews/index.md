@@ -148,6 +148,7 @@ DETAILS:
 **Offering:** GitLab.com, Self-managed, GitLab Dedicated
 
 > - [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/430728) in GitLab 16.11 [with a flag](../../../../administration/feature_flags.md) named `mr_reviewer_requests_changes`. Disabled by default.
+> - [Enabled on GitLab.com](https://gitlab.com/gitlab-org/gitlab/-/issues/451211) in GitLab 17.2.
 
 FLAG:
 On self-managed GitLab, by default this feature is not available. To make it
@@ -158,8 +159,11 @@ On GitLab Dedicated, this feature is not available.
 
 Any reviewer [requesting changes](#submit-a-review) blocks the merge request.
 In the merge request reports area, it shows the message **The change requests must be completed or resolved.**
+The request for changes is resolved when the reviewer who requested changes is asked
+to [re-review](#re-request-a-review) and then approves the merge request.
 
-Users with permission to merge the merge request can override this check in the
+If the user who has previously requested changes is unable to re-review or provide an approval,
+users with permission to merge the merge request can override this check in the
 merge request reports area by selecting **Bypass**.
 
 ### See how reviewers map to approval rules

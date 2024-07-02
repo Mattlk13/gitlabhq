@@ -69,6 +69,8 @@ export default {
       mlflowTrackingUrl: this.mlflowTrackingUrl,
       projectPath: this.projectPath,
       canWriteModelRegistry: this.canWriteModelRegistry,
+      maxAllowedFileSize: this.maxAllowedFileSize,
+      latestVersion: this.latestVersion,
     };
   },
   props: {
@@ -95,6 +97,15 @@ export default {
     mlflowTrackingUrl: {
       type: String,
       required: true,
+    },
+    maxAllowedFileSize: {
+      type: Number,
+      required: true,
+    },
+    latestVersion: {
+      type: String,
+      required: false,
+      default: null,
     },
   },
   apollo: {
@@ -208,13 +219,13 @@ export default {
             <gl-tab @click="goTo($options.ROUTE_VERSIONS)">
               <template #title>
                 {{ s__('MlModelRegistry|Versions') }}
-                <gl-badge size="sm" class="gl-tab-counter-badge">{{ versionCount }}</gl-badge>
+                <gl-badge class="gl-tab-counter-badge">{{ versionCount }}</gl-badge>
               </template>
             </gl-tab>
             <gl-tab @click="goTo($options.ROUTE_CANDIDATES)">
               <template #title>
                 {{ s__('MlModelRegistry|Version candidates') }}
-                <gl-badge size="sm" class="gl-tab-counter-badge">{{ candidateCount }}</gl-badge>
+                <gl-badge class="gl-tab-counter-badge">{{ candidateCount }}</gl-badge>
               </template>
             </gl-tab>
 

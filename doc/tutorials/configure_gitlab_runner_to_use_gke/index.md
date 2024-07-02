@@ -6,10 +6,6 @@ info: To determine the technical writer assigned to the Stage/Group associated w
 
 # Tutorial: Configure GitLab Runner to use the Google Kubernetes Engine
 
-DETAILS:
-**Tier:** Free, Premium, Ultimate
-**Offering:** GitLab.com, Self-managed, GitLab Dedicated
-
 This tutorial describes how to configure GitLab Runner to use the Google Kubernetes Engine (GKE)
 to run jobs.
 
@@ -128,7 +124,7 @@ Now that you have a cluster, you're ready to install and configure the Kubernete
    - To use the `cert-manager`:
 
      1. Use the `certificate-issuer-install.yaml` to install a `Certificate` and `Issuer` in the default namespace, in addition
-     to the operator installation:
+        to the operator installation:
 
         ```shell
         cat > certificate-issuer-install.yaml << EOF

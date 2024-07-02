@@ -153,6 +153,9 @@ export default {
     childrenCountLabel() {
       return this.isLoading && this.children.length === 0 ? '...' : this.children.length;
     },
+    activeChildNamespaceFullPath() {
+      return this.activeChild.namespace?.fullPath;
+    },
   },
   methods: {
     showAddForm(formType) {
@@ -246,7 +249,7 @@ export default {
       />
       <gl-disclosure-dropdown
         v-if="canUpdate && canAddTask"
-        placement="right"
+        placement="bottom-end"
         size="small"
         :toggle-text="$options.i18n.addChildButtonLabel"
         data-testid="toggle-form"
@@ -307,6 +310,7 @@ export default {
             ref="modal"
             :work-item-id="activeChild.id"
             :work-item-iid="activeChild.iid"
+            :work-item-full-path="activeChildNamespaceFullPath"
             @close="closeModal"
             @workItemDeleted="handleWorkItemDeleted(activeChild)"
             @openReportAbuse="openReportAbuseDrawer"

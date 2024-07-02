@@ -79,9 +79,9 @@ export default {
   jobClasses: [
     'gl-p-3',
     'gl-border-0',
-    'gl-rounded-base',
-    'gl-hover-bg-gray-50',
-    'gl-focus-bg-gray-50',
+    'gl-rounded',
+    'hover:gl-bg-strong',
+    'focus:gl-bg-strong',
     'gl-hover-text-gray-900',
     'gl-focus-text-gray-900',
   ],
@@ -204,7 +204,7 @@ export default {
         :id="groupId(group)"
         :key="getGroupId(group)"
         data-testid="stage-column-group"
-        class="gl-relative gl-white-space-normal gl-pipeline-job-width gl-mb-2"
+        class="gl-relative gl-whitespace-normal gl-pipeline-job-width gl-mb-2"
         @mouseenter="$emit('jobHover', group.name)"
         @mouseleave="$emit('jobHover', '')"
       >
@@ -220,7 +220,7 @@ export default {
           :css-class-job-name="$options.jobClasses"
           :class="[
             { 'gl-opacity-3': isFadedOut(group.name) },
-            'gl-transition-duration-slow gl-transition-timing-function-ease',
+            'gl-duration-slow gl-transition-timing-function-ease',
           ]"
           @pipelineActionRequestComplete="$emit('refreshPipelineGraph')"
           @setSkipRetryModal="$emit('setSkipRetryModal')"

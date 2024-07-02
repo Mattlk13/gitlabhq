@@ -729,7 +729,7 @@ class Group < Namespace
 
     unless only_concrete_membership
       return GroupMember::OWNER if user.can_admin_all_resources?
-      return GroupMember::OWNER if user.can_admin_organization?(organization_id)
+      return GroupMember::OWNER if user.can_admin_organization?(organization)
     end
 
     max_member_access(user)
@@ -927,8 +927,8 @@ class Group < Namespace
     feature_flag_enabled_for_self_or_ancestor?(:work_items_beta, type: :beta)
   end
 
-  def work_items_mvc_2_feature_flag_enabled?
-    feature_flag_enabled_for_self_or_ancestor?(:work_items_mvc_2)
+  def work_items_alpha_feature_flag_enabled?
+    feature_flag_enabled_for_self_or_ancestor?(:work_items_alpha)
   end
 
   def work_items_rolledup_dates_feature_flag_enabled?

@@ -51,11 +51,11 @@ class Repository
   # For example, for entry `:commit_count` there's a method called `commit_count` which
   # stores its data in the `commit_count` cache key.
   CACHED_METHODS = %i[size recent_objects_size commit_count readme_path contribution_guide
-                      changelog license_blob license_gitaly gitignore
-                      branch_names tag_names branch_count
-                      tag_count avatar exists? root_ref merged_branch_names
-                      has_visible_content? issue_template_names_hash merge_request_template_names_hash
-                      xcode_project? has_ambiguous_refs?].freeze
+    changelog license_blob license_gitaly gitignore
+    branch_names tag_names branch_count
+    tag_count avatar exists? root_ref merged_branch_names
+    has_visible_content? issue_template_names_hash merge_request_template_names_hash
+    xcode_project? has_ambiguous_refs?].freeze
 
   # Certain method caches should be refreshed when certain types of files are
   # changed. This Hash maps file types (as returned by Gitlab::FileDetector) to
@@ -787,12 +787,16 @@ class Repository
     Commit.order_by(collection: commits, order_by: order_by, sort: sort)
   end
 
-  def branch_names_contains(sha, limit: 0)
-    raw_repository.branch_names_contains_sha(sha, limit: limit)
+  def branch_names_contains(sha, limit: 0, exclude_refs: [])
+    refs = raw_repository.branch_names_contains_sha(sha, limit: adjust_containing_limit(limit: limit, exclude_refs: exclude_refs))
+
+    adjust_containing_refs(limit: limit, refs: refs - exclude_refs)
   end
 
-  def tag_names_contains(sha, limit: 0)
-    raw_repository.tag_names_contains_sha(sha, limit: limit)
+  def tag_names_contains(sha, limit: 0, exclude_refs: [])
+    refs = raw_repository.tag_names_contains_sha(sha, limit: adjust_containing_limit(limit: limit, exclude_refs: exclude_refs))
+
+    adjust_containing_refs(limit: limit, refs: refs - exclude_refs)
   end
 
   def local_branches
@@ -1305,6 +1309,22 @@ class Repository
   end
 
   private
+
+  # Increase the limit by number of excluded refs
+  # to prevent a situation when we return less refs than requested
+  def adjust_containing_limit(limit:, exclude_refs:)
+    return limit if limit == 0
+
+    limit + exclude_refs.size
+  end
+
+  # Limit number of returned refs
+  # in case the result has more refs than requested
+  def adjust_containing_refs(limit:, refs:)
+    return refs if limit == 0
+
+    refs.take(limit)
+  end
 
   def ancestor_cache_key(ancestor_id, descendant_id)
     "ancestor:#{ancestor_id}:#{descendant_id}"

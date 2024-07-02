@@ -56,7 +56,7 @@ class SearchController < ApplicationController
     @group = search_service.group
     @search_service_presenter = Gitlab::View::Presenter::Factory.new(search_service, current_user: current_user).fabricate!
 
-    return unless search_term_valid?
+    return unless search_term_valid? && search_type_valid?
 
     return if check_single_commit_result?
 
@@ -73,7 +73,7 @@ class SearchController < ApplicationController
       @search_highlight = @search_service_presenter.search_highlight
     end
 
-    return if @search_results.respond_to?(:failed?) && @search_results.failed?
+    return if @search_results.respond_to?(:failed?) && @search_results.failed?(@scope)
 
     Gitlab::Metrics::GlobalSearchSlis.record_apdex(
       elapsed: @global_search_duration_s,
@@ -106,9 +106,13 @@ class SearchController < ApplicationController
 
     count = 0
     @global_search_duration_s = Benchmark.realtime do
-      ApplicationRecord.with_fast_read_statement_timeout do
-        count = search_service.search_results.formatted_count(scope)
-      end
+      count = if @search_type == 'basic'
+                ApplicationRecord.with_fast_read_statement_timeout do
+                  search_service.search_results.formatted_count(scope)
+                end
+              else
+                search_service.search_results.formatted_count(scope)
+              end
 
       # Users switching tabs will keep fetching the same tab counts so it's a
       # good idea to cache in their browser just for a short time. They can still
@@ -117,6 +121,19 @@ class SearchController < ApplicationController
       expires_in 1.minute
 
       render json: { count: count }
+    end
+  end
+
+  def settings
+    return render(json: []) unless current_user
+
+    project_id = params.require(:project_id)
+    project = Project.find_by(id: project_id) # rubocop: disable CodeReuse/ActiveRecord -- Using `find_by` as `find` would raise 404s
+
+    if project && current_user.can?(:admin_project, project)
+      render json: Search::Settings.new.for_project(project)
+    else
+      render json: []
     end
   end
 
@@ -163,6 +180,17 @@ class SearchController < ApplicationController
 
     unless search_service.valid_terms_count?
       flash[:alert] = t('errors.messages.search_terms_too_long', count: Gitlab::Search::Params::SEARCH_TERM_LIMIT)
+      return false
+    end
+
+    true
+  end
+
+  def search_type_valid?
+    search_type_errors = search_service.search_type_errors
+
+    if search_type_errors
+      flash[:alert] = search_type_errors
       return false
     end
 

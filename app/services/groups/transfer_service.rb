@@ -293,7 +293,7 @@ module Groups
 
     def update_integrations
       @group.integrations.with_default_settings.delete_all
-      Integration.create_from_active_default_integrations(@group, :group_id)
+      Integration.create_from_default_integrations(@group, :group_id)
     end
 
     def propagate_integrations
@@ -307,10 +307,7 @@ module Groups
     end
 
     def pending_builds_params
-      {
-        namespace_traversal_ids: group.traversal_ids,
-        namespace_id: group.id
-      }
+      ::Ci::PendingBuild.namespace_transfer_params(group)
     end
 
     def update_crm_objects(was_root_group)

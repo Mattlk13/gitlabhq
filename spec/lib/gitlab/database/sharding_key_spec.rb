@@ -29,7 +29,6 @@ RSpec.describe 'new tables missing sharding_key', feature_category: :cell do
       *['boards.project_id', 'boards.group_id'],
       *['bulk_import_exports.project_id', 'bulk_import_exports.group_id'],
       'ci_pipeline_schedules.project_id',
-      'ci_runner_namespaces.namespace_id',
       'ci_sources_pipelines.project_id',
       'ci_triggers.project_id',
       'gpg_signatures.project_id',
@@ -40,7 +39,6 @@ RSpec.describe 'new tables missing sharding_key', feature_category: :cell do
       'pages_domains.project_id', # https://gitlab.com/gitlab-org/gitlab/-/issues/442178,
       'remote_mirrors.project_id', # https://gitlab.com/gitlab-org/gitlab/-/issues/444643
       'sprints.group_id',
-      'subscription_add_on_purchases.namespace_id', # https://gitlab.com/gitlab-org/gitlab/-/issues/444338
       *['todos.project_id', 'todos.group_id']
     ]
   end
@@ -83,7 +81,10 @@ RSpec.describe 'new tables missing sharding_key', feature_category: :cell do
       # aggregated table, a worker ensures eventual consistency
       'analytics_cycle_analytics_issue_stage_events.group_id',
       # aggregated table, a worker ensures eventual consistency
-      'analytics_cycle_analytics_merge_request_stage_events.group_id'
+      'analytics_cycle_analytics_merge_request_stage_events.group_id',
+      # This is event log table for gitlab_subscriptions and should not be deleted.
+      # See more: https://gitlab.com/gitlab-org/gitlab/-/issues/462598#note_1949768698
+      'gitlab_subscription_histories.namespace_id'
     ]
   end
 

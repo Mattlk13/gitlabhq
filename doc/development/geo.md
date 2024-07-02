@@ -199,7 +199,7 @@ sequenceDiagram
   S->>TDB: Insert to `job_artifact_registry`
 ```
 
-- [Sidekiq-cron](https://github.com/ondrejbartas/sidekiq-cron) enqueues a `Geo::Secondary::RegistryConsistencyWorker` job every minute. As long as it is actively doing work (creating and deleting rows), this job immediately re-enqueues itself. This job uses an exclusive lease to prevent multiple instances of itself from running simultaneously.
+- [Sidekiq-cron](https://github.com/sidekiq-cron/sidekiq-cron) enqueues a `Geo::Secondary::RegistryConsistencyWorker` job every minute. As long as it is actively doing work (creating and deleting rows), this job immediately re-enqueues itself. This job uses an exclusive lease to prevent multiple instances of itself from running simultaneously.
 - [Sidekiq](architecture.md#sidekiq) picks up `Geo::Secondary::RegistryConsistencyWorker` job
   - Sidekiq queries `ci_job_artifacts` table for up to 10000 rows
   - Sidekiq queries `job_artifact_registry` table for up to 10000 rows
@@ -647,6 +647,7 @@ After triggering a successful [e2e:package-and-test-ee](testing_guide/end_to_end
 
 1. In the [GitLab project](https://gitlab.com/gitlab-org/gitlab), select the **Pipelines** tab of a merge request.
 1. Select the `Stage: qa` stage on the latest pipeline to expand and list all the related jobs.
+1. Select trigger job `e2e:package-and-test` to navigate inside child pipeline.
 1. Select `trigger-omnibus` to view the [Omnibus GitLab Mirror](https://gitlab.com/gitlab-org/build/omnibus-gitlab-mirror) pipeline corresponding to the merge request.
 1. The `GET:Geo` job can be found and triggered under the `trigger-qa` stage.
 

@@ -29,7 +29,7 @@ const getTrialStatusWidgetData = (sidebarData) => {
       trialDiscoverPagePath,
     } = convertObjectPropsToCamelCase(sidebarData.trial_status_widget_data_attrs);
 
-    const { daysRemaining, targetId, trialEndDate } = convertObjectPropsToCamelCase(
+    const { daysRemaining, trialEndDate } = convertObjectPropsToCamelCase(
       sidebarData.trial_status_popover_data_attrs,
     );
 
@@ -44,7 +44,7 @@ const getTrialStatusWidgetData = (sidebarData) => {
       planName,
       plansHref,
       daysRemaining,
-      targetId,
+      targetId: containerId,
       trialEndDate: new Date(trialEndDate),
       trialDiscoverPagePath,
     };
@@ -54,13 +54,8 @@ const getTrialStatusWidgetData = (sidebarData) => {
     sidebarData.duo_pro_trial_status_widget_data_attrs &&
     sidebarData.duo_pro_trial_status_popover_data_attrs
   ) {
-    const {
-      containerId,
-      trialDaysUsed,
-      trialDuration,
-      percentageComplete,
-      widgetUrl,
-    } = convertObjectPropsToCamelCase(sidebarData.duo_pro_trial_status_widget_data_attrs);
+    const { containerId, trialDaysUsed, trialDuration, percentageComplete, widgetUrl } =
+      convertObjectPropsToCamelCase(sidebarData.duo_pro_trial_status_widget_data_attrs);
 
     const { daysRemaining, trialEndDate, purchaseNowUrl } = convertObjectPropsToCamelCase(
       sidebarData.duo_pro_trial_status_popover_data_attrs,
@@ -78,6 +73,7 @@ const getTrialStatusWidgetData = (sidebarData) => {
       targetId: containerId,
       trialEndDate: new Date(trialEndDate),
       purchaseNowUrl,
+      learnAboutButtonUrl: widgetUrl,
     };
   }
 
@@ -107,7 +103,8 @@ export const initSuperSidebar = () => {
   const commandPaletteLinks = convertObjectPropsToCamelCase(sidebarData.current_menu_items || []);
   const contextSwitcherLinks = sidebarData.context_switcher_links;
 
-  const { searchPath, issuesPath, mrPath, autocompletePath, searchContext } = searchData;
+  const { searchPath, issuesPath, mrPath, autocompletePath, settingsPath, searchContext } =
+    searchData;
   const isImpersonating = parseBoolean(sidebarData.is_impersonating);
 
   const isGroup = Boolean(sidebarData.current_context?.namespace === CONTEXT_NAMESPACE_GROUPS);
@@ -124,6 +121,7 @@ export const initSuperSidebar = () => {
       commandPaletteLinks,
       contextSwitcherLinks,
       autocompletePath,
+      settingsPath,
       searchContext,
       projectFilesPath,
       projectBlobPath,

@@ -4,6 +4,7 @@
   --system-header-height: 0px;
   --header-height: 0px;
   --top-bar-height: 0px;
+  --broadcast-message-height: 0px;
   --system-footer-height: 0px;
   --mr-review-bar-height: 0px;
 
@@ -119,10 +120,6 @@
 .text-info,
 .text-info:hover {
   color: $brand-info;
-}
-
-.bg-gray-light {
-  background-color: $gray-light;
 }
 
 .bg-white {
@@ -369,7 +366,7 @@ li.note {
     clip: auto;
     text-decoration: none;
     color: $gl-text-color;
-    background: $gray-light;
+    background: $gray-10;
     z-index: 1;
   }
 }

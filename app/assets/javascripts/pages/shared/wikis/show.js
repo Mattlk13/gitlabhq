@@ -1,17 +1,21 @@
 import Vue from 'vue';
-import { parseBoolean } from '~/lib/utils/common_utils';
+import VueApollo from 'vue-apollo';
+import createApolloClient from '~/lib/graphql';
+import { convertObjectPropsToCamelCase, parseBoolean } from '~/lib/utils/common_utils';
 import csrf from '~/lib/utils/csrf';
 import Wikis from './wikis';
 import WikiContentApp from './app.vue';
+import WikiSidebarEntries from './components/wiki_sidebar_entries.vue';
 
 const mountWikiContentApp = () => {
   const el = document.querySelector('#js-vue-wiki-content-app');
 
   if (!el) return false;
   const {
-    pageTitle,
+    pageHeading,
     contentApi,
     showEditButton,
+    pageInfo,
     isPageTemplate,
     isPageHistorical,
     editButtonUrl,
@@ -24,17 +28,24 @@ const mountWikiContentApp = () => {
     newUrl,
     historyUrl,
     templatesUrl,
-    cloneLinkClass,
     wikiUrl,
     pagePersisted,
+    templates,
+    formatOptions,
   } = el.dataset;
+
+  Vue.use(VueApollo);
+  const apolloProvider = new VueApollo({ defaultClient: createApolloClient() });
 
   return new Vue({
     el,
+    apolloProvider,
     provide: {
-      pageTitle,
+      isEditingPath: false,
+      pageHeading,
       contentApi,
       showEditButton: parseBoolean(showEditButton),
+      pageInfo: convertObjectPropsToCamelCase(JSON.parse(pageInfo)),
       isPageTemplate: parseBoolean(isPageTemplate),
       isPageHistorical: parseBoolean(isPageHistorical),
       editButtonUrl,
@@ -46,10 +57,12 @@ const mountWikiContentApp = () => {
       cloneHttpUrl,
       newUrl,
       historyUrl,
-      csrfToken: csrf.token,
       templatesUrl,
-      cloneLinkClass,
       wikiUrl,
+      formatOptions: JSON.parse(formatOptions),
+      csrfToken: csrf.token,
+      templates: JSON.parse(templates),
+      drawioUrl: gon.diagramsnet_url,
       pagePersisted: parseBoolean(pagePersisted),
     },
     render(createElement) {
@@ -58,8 +71,28 @@ const mountWikiContentApp = () => {
   });
 };
 
+export const mountWikiSidebarEntries = () => {
+  const el = document.querySelector('#js-wiki-sidebar-entries');
+  if (!el) return false;
+
+  const { hasCustomSidebar, canCreate, viewAllPagesPath } = el.dataset;
+
+  return new Vue({
+    el,
+    provide: {
+      hasCustomSidebar: parseBoolean(hasCustomSidebar),
+      canCreate: parseBoolean(canCreate),
+      sidebarPagesApi: gl.GfmAutoComplete.dataSources.wikis,
+      viewAllPagesPath,
+    },
+    render(createElement) {
+      return createElement(WikiSidebarEntries);
+    },
+  });
+};
+
 export const mountApplications = () => {
   mountWikiContentApp();
-  // eslint-disable-next-line no-new
-  new Wikis();
+
+  new Wikis(); // eslint-disable-line no-new
 };
