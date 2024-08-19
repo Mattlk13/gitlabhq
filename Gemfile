@@ -24,7 +24,7 @@ gem 'bundler-checksum', '~> 0.1.0', path: 'vendor/gems/bundler-checksum', requir
 # https://gitlab.com/gitlab-org/gitlab/-/issues/375713
 #
 # See https://docs.gitlab.com/ee/development/gemfile.html#upgrade-rails for guidelines when upgrading Rails
-gem 'rails', '~> 7.0.8.1' # rubocop:todo Gemfile/MissingFeatureCategory
+gem 'rails', '~> 7.0.8.4' # rubocop:todo Gemfile/MissingFeatureCategory
 
 gem 'activerecord-gitlab', path: 'gems/activerecord-gitlab' # rubocop:todo Gemfile/MissingFeatureCategory
 
@@ -70,7 +70,7 @@ gem 'devise-pbkdf2-encryptable', '~> 0.0.0', path: 'vendor/gems/devise-pbkdf2-en
 gem 'bcrypt', '~> 3.1', '>= 3.1.14' # rubocop:todo Gemfile/MissingFeatureCategory
 gem 'doorkeeper', '~> 5.6', '>= 5.6.6' # rubocop:todo Gemfile/MissingFeatureCategory
 gem 'doorkeeper-openid_connect', '~> 1.8', '>= 1.8.7' # rubocop:todo Gemfile/MissingFeatureCategory
-gem 'rexml', '~> 3.2.6' # rubocop:todo Gemfile/MissingFeatureCategory
+gem 'rexml', '~> 3.3.3' # rubocop:todo Gemfile/MissingFeatureCategory
 gem 'ruby-saml', '~> 1.15.0' # rubocop:todo Gemfile/MissingFeatureCategory
 gem 'omniauth', '~> 2.1.0' # rubocop:todo Gemfile/MissingFeatureCategory
 gem 'omniauth-auth0', '~> 3.1' # rubocop:todo Gemfile/MissingFeatureCategory
@@ -155,7 +155,7 @@ gem 'kaminari', '~> 1.2.2' # rubocop:todo Gemfile/MissingFeatureCategory
 gem 'hamlit', '~> 2.15.0' # rubocop:todo Gemfile/MissingFeatureCategory
 
 # Files attachments
-gem 'carrierwave', '~> 1.3' # rubocop:todo Gemfile/MissingFeatureCategory
+gem 'carrierwave', '~> 2.2' # rubocop:todo Gemfile/MissingFeatureCategory
 gem 'mini_magick', '~> 4.12' # rubocop:todo Gemfile/MissingFeatureCategory
 
 # for backups
@@ -236,7 +236,7 @@ gem 'diffy', '~> 3.4' # rubocop:todo Gemfile/MissingFeatureCategory
 gem 'diff_match_patch', '~> 0.1.0', path: 'vendor/gems/diff_match_patch', feature_category: :team_planning
 
 # Application server
-gem 'rack', '~> 2.2.8.1' # rubocop:todo Gemfile/MissingFeatureCategory
+gem 'rack', '~> 2.2.9' # rubocop:todo Gemfile/MissingFeatureCategory
 # https://github.com/zombocom/rack-timeout/blob/master/README.md#rails-apps-manually
 gem 'rack-timeout', '~> 0.6.3', require: 'rack/timeout/base' # rubocop:todo Gemfile/MissingFeatureCategory
 
@@ -257,7 +257,7 @@ gem 'sidekiq-cron', '~> 1.12.0', feature_category: :shared
 gem 'gitlab-sidekiq-fetcher', path: 'vendor/gems/sidekiq-reliable-fetch', require: 'sidekiq-reliable-fetch' # rubocop:todo Gemfile/MissingFeatureCategory
 
 # Cron Parser
-gem 'fugit', '~> 1.8.1' # rubocop:todo Gemfile/MissingFeatureCategory
+gem 'fugit', '~> 1.11.1' # rubocop:todo Gemfile/MissingFeatureCategory
 
 # HTTP requests
 gem 'httparty', '~> 0.21.0' # rubocop:todo Gemfile/MissingFeatureCategory
