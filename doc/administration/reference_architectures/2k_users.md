@@ -20,7 +20,6 @@ For a full list of reference architectures, see
 > - **Target Load**: API: 40 RPS, Web: 4 RPS, Git (Pull): 4 RPS, Git (Push): 1 RPS
 > - **High Availability**: No. For a highly-available environment, you can
 >   follow a modified [3K or 60 RPS reference architecture](3k_users.md#supported-modifications-for-lower-user-counts-ha).
-> - **Cost calculator template**: [See cost calculator templates section](_index.md#cost-calculator-templates)
 > - **Cloud Native Hybrid**: [Yes](#cloud-native-hybrid-reference-architecture-with-helm-charts-alternative)
 > - **Unsure which Reference Architecture to use?** [Go to this guide for more info](_index.md#deciding-which-architecture-to-start-with).
 
@@ -235,7 +234,7 @@ There are several different options:
 - [The load balancer terminates SSL without backend SSL](#load-balancer-terminates-ssl-without-backend-ssl)
   and communication is not secure between the load balancer and the application node.
 - [The load balancer terminates SSL with backend SSL](#load-balancer-terminates-ssl-with-backend-ssl)
-  and communication is *secure* between the load balancer and the application node.
+  and communication is secure between the load balancer and the application node.
 
 #### Application node terminates SSL
 
@@ -445,7 +444,7 @@ specifically the number of projects and those projects' sizes.
 {{< alert type="warning" >}}
 
 **Gitaly specifications are based on high percentiles of both usage patterns and repository sizes in good health**.
-**However, if you have [large monorepos](_index.md#large-monorepos) (larger than several gigabytes) or [additional workloads](_index.md#additional-workloads) these can *significantly* impact the performance of the environment and further adjustments may be required**.
+**However, if you have [large monorepos](_index.md#large-monorepos) (larger than several gigabytes) or [additional workloads](_index.md#additional-workloads) these can significantly impact the performance of the environment and further adjustments may be required**.
 If you believe this applies to you, contact us for additional guidance as required.
 
 {{< /alert >}}

@@ -326,7 +326,7 @@ Project Owners can perform any listed action, and can delete pipelines:
 | View [agents for Kubernetes](clusters/agent/_index.md)                                                                          |            |       |         |          |     ✓     |     ✓      |       |
 | View project [Secure Files](../api/secure_files.md)                                                                            |            |       |         |          |     ✓     |     ✓      |       |
 | Download project [Secure Files](../api/secure_files.md)                                                                        |            |       |         |          |     ✓     |     ✓      |       |
-| View a job with [debug logging](../ci/variables/_index.md#enable-debug-logging)                                                 |            |       |         |          |     ✓     |     ✓      |       |
+| View a job with [debug logging](../ci/variables/variables_troubleshooting.md#enable-debug-logging)                             |            |       |         |          |     ✓     |     ✓      |       |
 | Create [environments](../ci/environments/_index.md)                                                                             |            |       |         |          |     ✓     |     ✓      |       |
 | Delete [environments](../ci/environments/_index.md)                                                                             |            |       |         |          |     ✓     |     ✓      |       |
 | Stop [environments](../ci/environments/_index.md)                                                                               |            |       |         |          |     ✓     |     ✓      |       |
@@ -669,7 +669,7 @@ To work around the issue, give these users the Guest role or higher to any proje
 - [Members](project/members/_index.md)
 - Customize permissions on [protected branches](project/repository/branches/protected.md)
 - [LDAP user permissions](group/access_and_permissions.md#manage-group-memberships-with-ldap)
-- [Value stream analytics permissions](group/value_stream_analytics/_index.md#access-permissions-for-value-stream-analytics)
+- [Value stream analytics permissions](group/value_stream_analytics/_index.md#access-permissions)
 - [Project aliases](project/working_with_projects.md#project-aliases)
 - [Auditor users](../administration/auditor_users.md)
 - [Confidential issues](project/issues/confidential_issues.md)

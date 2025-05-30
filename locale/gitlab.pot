@@ -2173,6 +2173,9 @@ msgstr ""
 msgid "A limit of %{ci_project_subscriptions_limit} subscriptions to or from a project applies."
 msgstr ""
 
+msgid "A list for this status already exists on the board"
+msgstr ""
+
 msgid "A management, operational, or technical control (that is, safeguard or countermeasure) employed by an organization that provides equivalent or comparable protection for an information system."
 msgstr ""
 
@@ -4886,7 +4889,7 @@ msgstr ""
 msgid "AdminSettings|Size and domain settings for Pages static sites."
 msgstr ""
 
-msgid "AdminSettings|Skip confirmation when reassigning placeholder users"
+msgid "AdminSettings|Skip confirmation when administrators reassign placeholder users %{link_start}%{icon}%{link_end}"
 msgstr ""
 
 msgid "AdminSettings|The URL of your Cube instance."
@@ -4944,6 +4947,9 @@ msgid "AdminSettings|Use AWS OpenSearch Service with IAM credentials"
 msgstr ""
 
 msgid "AdminSettings|Use for cluster and index migrations. When indexing is paused, GitLab still tracks changes."
+msgstr ""
+
+msgid "AdminSettings|User impersonation is not enabled on the GitLab instance."
 msgstr ""
 
 msgid "AdminSettings|Users and groups must accept the invitation before they're added to a group or project."
@@ -6618,6 +6624,9 @@ msgstr ""
 msgid "Allow top-level group owners to create Service accounts."
 msgstr ""
 
+msgid "Allow unauthenticated users to use search"
+msgstr ""
+
 msgid "Allow use of licensed EE features"
 msgstr ""
 
@@ -7874,9 +7883,6 @@ msgid "AppleAppStore|Upload a new Apple App Store Connect Private Key (replace %
 msgstr ""
 
 msgid "AppleAppStore|Use GitLab to build and release an app in the Apple App Store."
-msgstr ""
-
-msgid "Application"
 msgstr ""
 
 msgid "Application ID"
@@ -9411,6 +9417,9 @@ msgid "Avatar will be removed. Are you sure?"
 msgstr ""
 
 msgid "Average per day: %{average}"
+msgstr ""
+
+msgid "Avg"
 msgstr ""
 
 msgid "Awaiting user signup"
@@ -12290,6 +12299,9 @@ msgid "Cannot push to source branch"
 msgstr ""
 
 msgid "Cannot refer to a group milestone by an internal id!"
+msgstr ""
+
+msgid "Cannot set both system defined status and custom status"
 msgstr ""
 
 msgid "Cannot show preview. For previews on sketch files, they must have the file format introduced by Sketch version 43 and above."
@@ -15595,6 +15607,9 @@ msgstr ""
 msgid "ComplianceFrameworks|External"
 msgstr ""
 
+msgid "ComplianceFrameworks|External Control Name"
+msgstr ""
+
 msgid "ComplianceFrameworks|External URL"
 msgstr ""
 
@@ -15668,6 +15683,9 @@ msgid "ComplianceFrameworks|Optional"
 msgstr ""
 
 msgid "ComplianceFrameworks|Please enter a valid URL"
+msgstr ""
+
+msgid "ComplianceFrameworks|Please enter a valid name"
 msgstr ""
 
 msgid "ComplianceFrameworks|Policies"
@@ -16074,9 +16092,6 @@ msgstr ""
 msgid "ComplianceStandardsAdherence|Configure pipeline settings to restrict public access to CI/CD pipelines."
 msgstr ""
 
-msgid "ComplianceStandardsAdherence|Configure project settings to allow only maintainers to create CI/CD variables."
-msgstr ""
-
 msgid "ComplianceStandardsAdherence|Configure push permissions"
 msgstr ""
 
@@ -16087,6 +16102,9 @@ msgid "ComplianceStandardsAdherence|Configure push rules to reject unsigned comm
 msgstr ""
 
 msgid "ComplianceStandardsAdherence|Configure push rules to require that all commits are signed."
+msgstr ""
+
+msgid "ComplianceStandardsAdherence|Configure settings to ensures that only users with the maintainer role or higher can pass user-defined variables when triggering pipelines."
 msgstr ""
 
 msgid "ComplianceStandardsAdherence|Configure settings to prevent editing of merge request approval rules."
@@ -16566,9 +16584,6 @@ msgstr ""
 msgid "ComplianceStandardsAdherence|Restricts access to build artifacts and pipeline outputs."
 msgstr ""
 
-msgid "ComplianceStandardsAdherence|Restricts creation of project variables to maintainers only."
-msgstr ""
-
 msgid "ComplianceStandardsAdherence|Restricts who can push to or merge into protected branches."
 msgstr ""
 
@@ -16708,6 +16723,9 @@ msgid "ComplianceStandardsAdherence|Upgrade to Ultimate license"
 msgstr ""
 
 msgid "ComplianceStandardsAdherence|Upgrade your GitLab license to Ultimate to access all security and compliance features."
+msgstr ""
+
+msgid "ComplianceStandardsAdherence|User-defined CI/CD variables restricted to maintainers."
 msgstr ""
 
 msgid "ComplianceStandardsAdherence|View details"
@@ -16852,6 +16870,9 @@ msgid "Configure SAST IaC in `.gitlab-ci.yml` using the GitLab managed template.
 msgstr ""
 
 msgid "Configure SAST IaC in `.gitlab-ci.yml`, creating this file if it does not already exist"
+msgstr ""
+
+msgid "Configure SAST and Secret Detection in `.gitlab-ci.yml`, creating this file if it does not already exist"
 msgstr ""
 
 msgid "Configure SAST in `.gitlab-ci.yml` using the GitLab managed template. You can [add variable overrides](https://docs.gitlab.com/ee/user/application_security/sast/#customizing-the-sast-settings) to customize SAST settings."
@@ -17462,6 +17483,12 @@ msgid "ContainerRegistry|Protected container image tags"
 msgstr ""
 
 msgid "ContainerRegistry|Protected container repositories"
+msgstr ""
+
+msgid "ContainerRegistry|Protection rule created."
+msgstr ""
+
+msgid "ContainerRegistry|Protection rule updated."
 msgstr ""
 
 msgid "ContainerRegistry|Protection type"
@@ -18933,9 +18960,6 @@ msgstr ""
 msgid "Created %{timestamp}"
 msgstr ""
 
-msgid "Created At"
-msgstr ""
-
 msgid "Created Date"
 msgstr ""
 
@@ -19850,7 +19874,7 @@ msgstr ""
 msgid "DastProfiles|A URL that is compared to the URL in the browser to determine if authentication has succeeded after the login form is submitted."
 msgstr ""
 
-msgid "DastProfiles|A comma-separated list of actions to be run after login but before login verification. Currently supports `click` actions."
+msgid "DastProfiles|A comma-separated list of actions to take after login but before login verification. Supports `click` and `select` actions. See [Taking additional actions after submitting the login form](authentication.md#taking-additional-actions-after-submitting-the-login-form)."
 msgstr ""
 
 msgid "DastProfiles|A comma-separated list of selectors representing elements to click on prior to entering the DAST_AUTH_USERNAME and DAST_AUTH_PASSWORD into the login form."
@@ -20732,6 +20756,9 @@ msgid "Date range must be shorter than %{max_range} days."
 msgstr ""
 
 msgid "Date range too large"
+msgstr ""
+
+msgid "Date updated"
 msgstr ""
 
 msgid "DateRange|%{start_date}–%{end_date}"
@@ -24834,6 +24861,9 @@ msgstr ""
 msgid "Epic actions"
 msgstr ""
 
+msgid "Epic and its work item parent must be the same"
+msgstr ""
+
 msgid "Epic boards"
 msgstr ""
 
@@ -27347,9 +27377,6 @@ msgid_plural "Geo|%d shards selected"
 msgstr[0] ""
 msgstr[1] ""
 
-msgid "Geo|%{action} %{replicableType}"
-msgstr ""
-
 msgid "Geo|%{boldStart}Not applicable%{boldEnd}: Geo does not verify this component yet. See the %{linkStart}data types we plan to support%{linkEnd}."
 msgstr ""
 
@@ -27413,6 +27440,18 @@ msgstr ""
 msgid "Geo|Allowed Geo IP should contain valid IP addresses"
 msgstr ""
 
+msgid "Geo|CI Job Artifact"
+msgstr ""
+
+msgid "Geo|CI Job Artifacts"
+msgstr ""
+
+msgid "Geo|CI Secure File"
+msgstr ""
+
+msgid "Geo|CI Secure Files"
+msgstr ""
+
 msgid "Geo|Checksum: %{verificationChecksum}"
 msgstr ""
 
@@ -27420,12 +27459,6 @@ msgid "Geo|Checksummed"
 msgstr ""
 
 msgid "Geo|Choose specific groups or storage shards"
-msgstr ""
-
-msgid "Geo|Ci Secure File"
-msgstr ""
-
-msgid "Geo|Ci Secure Files"
 msgstr ""
 
 msgid "Geo|Comma-separated, e.g. '1.1.1.1, 2.2.2.0/24'"
@@ -27587,10 +27620,10 @@ msgstr ""
 msgid "Geo|Internal URL (optional)"
 msgstr ""
 
-msgid "Geo|Job Artifact"
+msgid "Geo|LFS Object"
 msgstr ""
 
-msgid "Geo|Job Artifacts"
+msgid "Geo|LFS Objects"
 msgstr ""
 
 msgid "Geo|Last event ID"
@@ -27615,12 +27648,6 @@ msgid "Geo|Learn more about Geo"
 msgstr ""
 
 msgid "Geo|Learn more about Geo site statuses"
-msgstr ""
-
-msgid "Geo|Lfs Object"
-msgstr ""
-
-msgid "Geo|Lfs Objects"
 msgstr ""
 
 msgid "Geo|Limit the number of concurrent operations this secondary site can run in the background."
@@ -27785,10 +27812,16 @@ msgstr ""
 msgid "Geo|Resync all"
 msgstr ""
 
+msgid "Geo|Resync all %{type}"
+msgstr ""
+
 msgid "Geo|Reverify"
 msgstr ""
 
 msgid "Geo|Reverify all"
+msgstr ""
+
+msgid "Geo|Reverify all %{type}"
 msgstr ""
 
 msgid "Geo|Review replication status, and resynchronize and reverify items with the primary site."
@@ -27923,7 +27956,10 @@ msgstr ""
 msgid "Geo|This GitLab instance is subscribed to the %{insufficient_license} tier. Geo is only available for users who have at least a Premium subscription."
 msgstr ""
 
-msgid "Geo|This will %{action} %{replicableType}. It may take some time to complete. Are you sure you want to continue?"
+msgid "Geo|This will resync all %{type}. It may take some time to complete. Are you sure you want to continue?"
+msgstr ""
+
+msgid "Geo|This will reverify all %{type}. It may take some time to complete. Are you sure you want to continue?"
 msgstr ""
 
 msgid "Geo|Time in seconds"
@@ -29006,12 +29042,6 @@ msgstr ""
 msgid "GlobalSearch|Search labels"
 msgstr ""
 
-msgid "GlobalSearch|Search or go to… %{kbdStart}/%{kbdEnd}"
-msgstr ""
-
-msgid "GlobalSearch|Search or go to… (or use the / keyboard shortcut)"
-msgstr ""
-
 msgid "GlobalSearch|Search results are loading"
 msgstr ""
 
@@ -29165,6 +29195,9 @@ msgid "Go to commits"
 msgstr ""
 
 msgid "Go to definition"
+msgstr ""
+
+msgid "Go to docs"
 msgstr ""
 
 msgid "Go to environments"
@@ -30720,6 +30753,9 @@ msgstr ""
 msgid "Groups|Group path is unavailable. Path has been replaced with a suggested available path."
 msgstr ""
 
+msgid "Groups|Groups that are archived or pending deletion will appear here."
+msgstr ""
+
 msgid "Groups|Learn more about subgroups"
 msgstr ""
 
@@ -30754,6 +30790,9 @@ msgid "Groups|This will create a README.md for project %{path}."
 msgstr ""
 
 msgid "Groups|This will create a project %{path} and add a README.md."
+msgstr ""
+
+msgid "Groups|You don't have any inactive groups."
 msgstr ""
 
 msgid "Groups|You're creating a new top-level group"
@@ -35834,6 +35873,9 @@ msgstr ""
 msgid "Last repository check (%{last_check_timestamp}) failed. See the 'repocheck.log' file for error messages."
 msgstr ""
 
+msgid "Last scan"
+msgstr ""
+
 msgid "Last seen"
 msgstr ""
 
@@ -36600,13 +36642,22 @@ msgstr ""
 msgid "Loading %{name}"
 msgstr ""
 
+msgid "Loading file actions"
+msgstr ""
+
 msgid "Loading files, directories, and submodules in the path %{path} for commit reference %{ref}"
 msgstr ""
 
 msgid "Loading full blame…"
 msgstr ""
 
+msgid "Loading items"
+msgstr ""
+
 msgid "Loading more"
+msgstr ""
+
+msgid "Loading more items"
 msgstr ""
 
 msgid "Loading pipeline status"
@@ -37149,6 +37200,9 @@ msgstr ""
 msgid "MattermostService|Use this service to perform common tasks in your project by entering slash commands in Mattermost."
 msgstr ""
 
+msgid "Max"
+msgstr ""
+
 msgid "Max 100,000 events"
 msgstr ""
 
@@ -37554,7 +37608,7 @@ msgstr ""
 msgid "MemberRole|Are you sure you want to delete this role?"
 msgstr ""
 
-msgid "MemberRole|Automatically sync your LDAP directory to custom admin roles."
+msgid "MemberRole|Automatically sync your LDAP directory to custom admin roles. For users matched to multiple LDAP syncs, the oldest sync entry will be used."
 msgstr ""
 
 msgid "MemberRole|Base role"
@@ -37821,7 +37875,7 @@ msgstr ""
 msgid "MemberRole|This member is an LDAP user. Changing their role will override the settings from the LDAP group sync."
 msgstr ""
 
-msgid "MemberRole|This removes automatic syncing with your LDAP server. Users will keep their current role but future changes will require manual updates. %{confirmStart}Are you sure you want to remove LDAP synchronization?%{confirmEnd}"
+msgid "MemberRole|This removes automatic syncing with your LDAP server. Users will have their current role unassigned on the next sync. %{confirmStart}Are you sure you want to remove LDAP synchronization?%{confirmEnd}"
 msgstr ""
 
 msgid "MemberRole|This role has been manually selected and will not sync to the LDAP sync role."
@@ -37834,6 +37888,9 @@ msgid "MemberRole|To delete custom role, remove role from all users."
 msgstr ""
 
 msgid "MemberRole|Unable to export role report. Contact support if this error persists."
+msgstr ""
+
+msgid "MemberRole|Unknown LDAP server. Please check your server settings."
 msgstr ""
 
 msgid "MemberRole|Update role"
@@ -38883,6 +38940,9 @@ msgid "Milestone|Milestone ID copied to clipboard."
 msgstr ""
 
 msgid "Milestone|Milestone actions"
+msgstr ""
+
+msgid "Min"
 msgstr ""
 
 msgid "Min Value"
@@ -40326,9 +40386,6 @@ msgstr ""
 msgid "New %{type} in %{project}"
 msgstr ""
 
-msgid "New Application"
-msgstr ""
-
 msgid "New File"
 msgstr ""
 
@@ -40354,9 +40411,6 @@ msgid "New Protected Branch"
 msgstr ""
 
 msgid "New Security findings"
-msgstr ""
-
-msgid "New application"
 msgstr ""
 
 msgid "New branch"
@@ -41337,6 +41391,15 @@ msgstr ""
 msgid "NotificationEvent|New release"
 msgstr ""
 
+msgid "NotificationEvent|Pipeline by Service Account fails"
+msgstr ""
+
+msgid "NotificationEvent|Pipeline by Service Account is fixed"
+msgstr ""
+
+msgid "NotificationEvent|Pipeline by Service Account is successful"
+msgstr ""
+
 msgid "NotificationEvent|Pipeline fails"
 msgstr ""
 
@@ -42127,6 +42190,9 @@ msgid "Observability|Last 5 minutes"
 msgstr ""
 
 msgid "Observability|Last 7 days"
+msgstr ""
+
+msgid "Observability|Observability Dashboard"
 msgstr ""
 
 msgid "Observability|Related issues"
@@ -44637,6 +44703,9 @@ msgstr ""
 msgid "Pipeline editor"
 msgstr ""
 
+msgid "Pipeline job"
+msgstr ""
+
 msgid "Pipeline must succeed."
 msgstr ""
 
@@ -47119,7 +47188,7 @@ msgstr ""
 msgid "Profiles|Disconnect SAML for %{group_name}"
 msgstr ""
 
-msgid "Profiles|Disconnecting your SAML provider will remove your access from groups, subgroups and projects which require SAML authentication. Are your sure?"
+msgid "Profiles|Disconnecting your SAML provider will remove your access from groups, subgroups and projects which require SAML authentication. Are you sure?"
 msgstr ""
 
 msgid "Profiles|Discord ID is too long (maximum is %{max_length} characters)."
@@ -48960,6 +49029,9 @@ msgstr ""
 msgid "ProjectsNew|Direct transfer projects with a top-level Group"
 msgstr ""
 
+msgid "ProjectsNew|Enable Secret Detection"
+msgstr ""
+
 msgid "ProjectsNew|Enable Static Application Security Testing (SAST)"
 msgstr ""
 
@@ -49096,6 +49168,9 @@ msgid "ProjectsNew|Recommended if you're new to GitLab"
 msgstr ""
 
 msgid "ProjectsNew|Run CI/CD for external repository"
+msgstr ""
+
+msgid "ProjectsNew|Scan your code for secrets and credentials to prevent unauthorized access."
 msgstr ""
 
 msgid "ProjectsNew|Select"
@@ -49862,6 +49937,9 @@ msgid "Provider"
 msgstr ""
 
 msgid "Provider ID"
+msgstr ""
+
+msgid "Provider is invalid"
 msgstr ""
 
 msgid "Provision instructions"
@@ -51451,7 +51529,7 @@ msgstr ""
 msgid "Repository: %{counter_repositories} / Wikis: %{counter_wikis} / Build Artifacts: %{counter_build_artifacts} / Pipeline Artifacts: %{counter_pipeline_artifacts} / LFS: %{counter_lfs_objects} / Snippets: %{counter_snippets} / Packages: %{counter_packages} / Uploads: %{counter_uploads}"
 msgstr ""
 
-msgid "Repository|Filter (e.g. *.vue)"
+msgid "Repository|Filter (e.g. *.vue) (f)"
 msgstr ""
 
 msgid "Repository|New branch"
@@ -54320,6 +54398,9 @@ msgid "SearchToken|Assignee"
 msgstr ""
 
 msgid "SearchToken|Reviewer"
+msgstr ""
+
+msgid "Searching"
 msgstr ""
 
 msgid "Searching by both author and message is currently not supported."
@@ -59498,6 +59579,12 @@ msgstr ""
 msgid "Status checks must pass."
 msgstr ""
 
+msgid "Status feature not available"
+msgstr ""
+
+msgid "Status list requires either a system defined status or custom status"
+msgstr ""
+
 msgid "Status lists not available with your current license"
 msgstr ""
 
@@ -59937,12 +60024,6 @@ msgid "SubscriptionGroupsNew|Your group will be created at:"
 msgstr ""
 
 msgid "SubscriptionGroupsNew|Your group will only be displayed in the list above if:"
-msgstr ""
-
-msgid "SubscriptionMangement|If you'd like to add more seats, upgrade your plan, or purchase additional products, contact your GitLab sales representative."
-msgstr ""
-
-msgid "SubscriptionMangement|This is a custom subscription managed by the GitLab Sales team"
 msgstr ""
 
 msgid "SubscriptionMangement|To make changes to a read-only subscription or purchase additional products, contact your GitLab Partner."
@@ -66305,6 +66386,12 @@ msgstr ""
 msgid "UserMapping|Drop your file here or %{linkStart}click to upload%{linkEnd}."
 msgstr ""
 
+msgid "UserMapping|For more information, contact %{reassigned_by_name} or another administrator."
+msgstr ""
+
+msgid "UserMapping|For more information, contact %{reassigned_by_name} or another group owner."
+msgstr ""
+
 msgid "UserMapping|For more information, see %{link_start}accept contribution reassignment%{link_end}. %{strong_open}If you do not recognize this request, %{report_link_start}report abuse%{report_link_end}.%{strong_close}"
 msgstr ""
 
@@ -66419,6 +66506,9 @@ msgstr ""
 msgid "UserMapping|Reassigned by: %{reassigned_by_name} (%{reassigned_by_username})"
 msgstr ""
 
+msgid "UserMapping|Reassigned from: %{source_name} (%{source_username})"
+msgstr ""
+
 msgid "UserMapping|Reassigned to"
 msgstr ""
 
@@ -66467,6 +66557,9 @@ msgstr ""
 msgid "UserMapping|Reassignments cannot be undone, so check all data carefully before you continue."
 msgstr ""
 
+msgid "UserMapping|Reassignments in %{group} completed"
+msgstr ""
+
 msgid "UserMapping|Reassignments in %{group} rejected"
 msgstr ""
 
@@ -66497,7 +66590,7 @@ msgstr ""
 msgid "UserMapping|Source name"
 msgstr ""
 
-msgid "UserMapping|The %{strongStart}Skip confirmation when reassigning placeholder users%{strongEnd} setting is enabled. Users do not have to approve the reassignment, and contributions are reassigned immediately."
+msgid "UserMapping|The %{strongStart}Skip confirmation when administrators reassign placeholder users%{strongEnd} setting is enabled. Users do not have to approve the reassignment, and contributions are reassigned immediately."
 msgstr ""
 
 msgid "UserMapping|The file is being processed and you will receive an email when completed."
@@ -66561,6 +66654,9 @@ msgid "UserMapping|You might have already accepted or rejected the reassignment,
 msgstr ""
 
 msgid "UserMapping|You must upload a CSV file with a .csv file extension."
+msgstr ""
+
+msgid "UserMapping|You've been reassigned contributions and memberships in %{destination_group} on %{source_hostname}."
 msgstr ""
 
 msgid "UserProfile|%{count} %{file}"
@@ -67398,6 +67494,9 @@ msgid_plural "VirtualRegistry|%{hours} hours cache"
 msgstr[0] ""
 msgstr[1] ""
 
+msgid "VirtualRegistry|%{size} KB"
+msgstr ""
+
 msgid "VirtualRegistry|%{size} storage used"
 msgstr ""
 
@@ -67434,6 +67533,9 @@ msgstr ""
 msgid "VirtualRegistry|Delete Maven upstream"
 msgstr ""
 
+msgid "VirtualRegistry|Delete Maven upstream cache entry?"
+msgstr ""
+
 msgid "VirtualRegistry|Delete registry"
 msgstr ""
 
@@ -67450,6 +67552,12 @@ msgid "VirtualRegistry|Edit upstream"
 msgstr ""
 
 msgid "VirtualRegistry|Enter password"
+msgstr ""
+
+msgid "VirtualRegistry|Failed to delete cache entry."
+msgstr ""
+
+msgid "VirtualRegistry|Failed to fetch cache entries."
 msgstr ""
 
 msgid "VirtualRegistry|Failed to fetch list of maven virtual registries."
@@ -67534,6 +67642,9 @@ msgid "VirtualRegistry|Username (optional)"
 msgstr ""
 
 msgid "VirtualRegistry|Virtual registry"
+msgstr ""
+
+msgid "VirtualRegistry|last checked %{date}"
 msgstr ""
 
 msgid "Visibility"
@@ -68338,9 +68449,6 @@ msgid "We're experiencing difficulties and this tab content is currently unavail
 msgstr ""
 
 msgid "We're sorry, your GitLab Duo Enterprise trial could not be created because our system did not respond successfully."
-msgstr ""
-
-msgid "We're sorry, your GitLab Duo Pro trial could not be created because our system did not respond successfully."
 msgstr ""
 
 msgid "We're sorry, your trial could not be created because our system did not respond successfully."
@@ -70223,10 +70331,19 @@ msgstr ""
 msgid "Workspaces|Allowed agents"
 msgstr ""
 
+msgid "Workspaces|Availability"
+msgstr ""
+
+msgid "Workspaces|Available"
+msgstr ""
+
 msgid "Workspaces|Block agent"
 msgstr ""
 
 msgid "Workspaces|Block this agent for all group members?"
+msgstr ""
+
+msgid "Workspaces|Blocked"
 msgstr ""
 
 msgid "Workspaces|Blocking an agent doesn't delete it. Agents can only be deleted in the project where they were created."
@@ -70236,6 +70353,12 @@ msgid "Workspaces|Cancel"
 msgstr ""
 
 msgid "Workspaces|Cluster agent"
+msgstr ""
+
+msgid "Workspaces|Configure which Kubernetes agents are available for new workspaces. These settings do not affect existing workspaces."
+msgstr ""
+
+msgid "Workspaces|Connected"
 msgstr ""
 
 msgid "Workspaces|Could not load available agents. Refresh the page to try again."
@@ -70295,6 +70418,9 @@ msgstr ""
 msgid "Workspaces|GitLab devfile"
 msgstr ""
 
+msgid "Workspaces|Group"
+msgstr ""
+
 msgid "Workspaces|Group agents"
 msgstr ""
 
@@ -70313,16 +70439,25 @@ msgstr ""
 msgid "Workspaces|Learn more."
 msgstr ""
 
+msgid "Workspaces|Name"
+msgstr ""
+
 msgid "Workspaces|New workspace"
 msgstr ""
 
 msgid "Workspaces|No active workspaces"
 msgstr ""
 
+msgid "Workspaces|No agents available"
+msgstr ""
+
 msgid "Workspaces|No agents available to create workspaces. Please consult %{linkStart}Workspaces documentation%{linkEnd} for troubleshooting."
 msgstr ""
 
 msgid "Workspaces|No terminated workspaces"
+msgstr ""
+
+msgid "Workspaces|Not connected"
 msgstr ""
 
 msgid "Workspaces|Open workspace"
@@ -70353,6 +70488,9 @@ msgid "Workspaces|Starting"
 msgstr ""
 
 msgid "Workspaces|Starting workspace"
+msgstr ""
+
+msgid "Workspaces|Status"
 msgstr ""
 
 msgid "Workspaces|Stop"
@@ -70413,6 +70551,9 @@ msgid "Workspaces|When no devfile is provided, the GitLab default devfile will b
 msgstr ""
 
 msgid "Workspaces|Workspaces"
+msgstr ""
+
+msgid "Workspaces|Workspaces Agent Availability"
 msgstr ""
 
 msgid "Workspaces|Workspaces Settings"
@@ -71488,9 +71629,6 @@ msgid "Your activity"
 msgstr ""
 
 msgid "Your applications"
-msgstr ""
-
-msgid "Your authorized applications"
 msgstr ""
 
 msgid "Your browser doesn't support WebAuthn. Please use a supported browser, e.g. Chrome (67+) or Firefox (60+)."
@@ -73177,7 +73315,7 @@ msgstr ""
 msgid "mrWidget|%{boldStart}Merge blocked:%{boldEnd} denied licenses must be removed."
 msgstr ""
 
-msgid "mrWidget|%{boldStart}Merge blocked:%{boldEnd} new changes were just added."
+msgid "mrWidget|%{boldStart}Merge blocked:%{boldEnd} to see new changes and rerun this merge check, refresh this page."
 msgstr ""
 
 msgid "mrWidget|%{boldStart}Merge unavailable:%{boldEnd} merge requests are read-only in a secondary Geo node."

@@ -2,6 +2,7 @@
 stage: Create
 group: Source Code
 info: To determine the technical writer assigned to the Stage/Group associated with this page, see https://handbook.gitlab.com/handbook/product/ux/technical-writing/#assignments
+gitlab_dedicated: no
 description: Configure a faster SSH authorization method for GitLab instances with many users.
 title: Fast lookup of SSH keys
 ---
@@ -154,7 +155,7 @@ or for users to re-add their keys.
 
 ### How to go back to using the `authorized_keys` file
 
-This overview is brief. Refer to the above instructions for more context.
+This overview is brief. Refer to the previous instructions for more context.
 
 1. [Rebuild the `authorized_keys` file](../raketasks/maintenance.md#rebuild-authorized_keys-file).
 1. Enable writes to the `authorized_keys` file.

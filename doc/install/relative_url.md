@@ -61,13 +61,12 @@ relative URL. The relative URL support is implemented by GitLab Workhorse.
 
 ---
 
-Before following the steps below to enable relative URL in GitLab, some
-assumptions are made:
+This process assumes:
 
 - GitLab is served under `/gitlab`
 - The directory under which GitLab is installed is `/home/git/`
 
-Make sure to follow all steps below:
+To enable relative URLs in GitLab:
 
 1. Optional. If you run short on resources, you can temporarily free up some
    memory by shutting down the GitLab service with the following command:
@@ -135,5 +134,5 @@ To disable the relative URL:
 
 1. Remove `/home/git/gitlab/config/initializers/relative_url.rb`
 
-1. Follow the same as above starting from 2. and set up the
+1. Follow the previous steps starting from 2. and set up the
    GitLab URL to one that doesn't contain a relative path.

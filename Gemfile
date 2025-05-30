@@ -1,5 +1,9 @@
 # frozen_string_literal: true
 
+def next?
+  File.basename(__FILE__) == "Gemfile.next"
+end
+
 source 'https://rubygems.org'
 
 if ENV.fetch('BUNDLER_CHECKSUM_VERIFICATION_OPT_IN', 'false') != 'false' # this verification is still experimental
@@ -21,7 +25,11 @@ gem 'bundler-checksum', '~> 0.1.0', path: 'vendor/gems/bundler-checksum', requir
 
 # See https://docs.gitlab.com/ee/development/gemfile.html#upgrade-rails for guidelines when upgrading Rails
 
-gem 'rails', '~> 7.1.5.1', feature_category: :shared
+if next?
+  gem 'rails', '~> 7.2.2.1', feature_category: :shared
+else
+  gem 'rails', '~> 7.1.5.1', feature_category: :shared
+end
 
 gem 'activerecord-gitlab', path: 'gems/activerecord-gitlab', feature_category: :shared
 # This can be dropped after upgrading to Rails 7.2: https://github.com/rails/rails/pull/49674
@@ -34,9 +42,9 @@ gem 'bootsnap', '~> 1.18.3', require: false, feature_category: :shared
 # Avoid the precompiled native gems because Omnibus needs to build this to ensure
 # LD_LIBRARY_PATH is correct: https://gitlab.com/gitlab-org/omnibus-gitlab/-/merge_requests/7730
 if RUBY_PLATFORM.include?('darwin')
-  gem 'ffi', '~> 1.17', feature_category: :shared
+  gem 'ffi', '~> 1.17.2', feature_category: :shared
 else
-  gem 'ffi', '~> 1.17', force_ruby_platform: true, feature_category: :shared
+  gem 'ffi', '~> 1.17.2', force_ruby_platform: true, feature_category: :shared
 end
 
 gem 'openssl', '~> 3.0', feature_category: :shared
@@ -128,7 +136,7 @@ gem 'attr_encrypted', '~> 4.2', feature_category: :shared
 
 # GitLab Pages
 gem 'validates_hostname', '~> 1.0.13', feature_category: :pages
-gem 'rubyzip', '~> 2.3.2', require: 'zip', feature_category: :pages
+gem 'rubyzip', '~> 2.4.0', require: 'zip', feature_category: :pages
 # GitLab Pages letsencrypt support
 gem 'acme-client', '~> 2.0.19', feature_category: :pages
 
@@ -324,7 +332,7 @@ gem 'device_detector', feature_category: :shared
 # Redis
 gem 'redis', '~> 5.4.0', feature_category: :redis
 gem 'redis-clustering', '~> 5.4.0', feature_category: :redis
-gem 'connection_pool', '~> 2.4', feature_category: :shared
+gem 'connection_pool', '~> 2.5.3', feature_category: :shared
 
 # Redis session store
 gem 'redis-actionpack', '~> 5.5.0', feature_category: :redis

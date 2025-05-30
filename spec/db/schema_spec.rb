@@ -25,8 +25,9 @@ RSpec.describe 'Database schema',
     }.with_indifferent_access.freeze
   end
 
-  # List of columns historically missing a FK, don't add more columns
+  # List of columns, ending with `_id` but missing a FK
   # See: https://docs.gitlab.com/ee/development/database/foreign_keys.html#naming-foreign-keys
+  # TODO: Automate this to reduce the list of exceptions: https://gitlab.com/gitlab-org/gitlab/-/issues/544795
   let(:ignored_fk_columns_map) do
     {
       abuse_reports: %w[reporter_id user_id],
@@ -271,7 +272,7 @@ RSpec.describe 'Database schema',
       events: 16,
       group_type_ci_runners: 17,
       instance_type_ci_runners: 17,
-      issues: 29,
+      issues: 34,
       members: 21,
       merge_requests: 33,
       namespaces: 26,
@@ -436,7 +437,7 @@ RSpec.describe 'Database schema',
         'Project' => %w[auto_cancel_pending_pipelines],
         'ProjectAutoDevops' => %w[deploy_strategy],
         'ResourceLabelEvent' => %w[action],
-        'User' => %w[layout dashboard project_view],
+        'User' => %w[layout dashboard project_view role],
         'Users::Callout' => %w[feature_name],
         'Vulnerability' => %w[confidence] # this enum is in the process of being deprecated
       }.freeze

@@ -34,6 +34,7 @@ class User < ApplicationRecord
   include Todoable
 
   ignore_column :last_access_from_pipl_country_at, remove_after: '2024-11-17', remove_with: '17.7'
+  ignore_column :role, remove_after: '2025-09-13', remove_with: '18.5'
 
   DEFAULT_NOTIFICATION_LEVEL = :participating
 
@@ -184,6 +185,7 @@ class User < ApplicationRecord
   # Namespaces
   has_many :members
   has_many :member_namespaces, through: :members
+  has_many :namespace_deletion_schedules, class_name: '::Namespaces::DeletionSchedule', inverse_of: :deleting_user
 
   # Groups
   has_many :group_members, -> { where(requested_at: nil).where("access_level >= ?", Gitlab::Access::GUEST) }, class_name: 'GroupMember'
@@ -275,7 +277,8 @@ class User < ApplicationRecord
   belongs_to :created_by, class_name: 'User', optional: true
 
   has_many :organization_users, class_name: 'Organizations::OrganizationUser', inverse_of: :user
-  has_many :organization_user_aliases, class_name: 'Organizations::OrganizationUserAlias', inverse_of: :user
+  has_many :organization_user_aliases, class_name: 'Organizations::OrganizationUserAlias', inverse_of: :user # deprecated
+  has_many :organization_user_details, class_name: 'Organizations::OrganizationUserDetail', inverse_of: :user
 
   has_many :organizations, through: :organization_users, class_name: 'Organizations::Organization', inverse_of: :users,
     disable_joins: true
@@ -2634,7 +2637,7 @@ class User < ApplicationRecord
 
   # override, from Devise::Validatable
   def password_required?
-    return false if internal? || project_bot? || security_policy_bot?
+    return false if internal? || project_bot? || security_policy_bot? || placeholder?
 
     super
   end

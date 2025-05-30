@@ -1,7 +1,7 @@
 ---
 stage: Create
 group: Source Code
-info: Any user with at least the Maintainer role can merge updates to this content. For details, see https://docs.gitlab.com/ee/development/development_processes.html#development-guidelines-review.
+info: Any user with at least the Maintainer role can merge updates to this content. For details, see https://docs.gitlab.com/development/development_processes/#development-guidelines-review.
 title: FIPS 140-2 and 140-3
 ---
 
@@ -426,7 +426,7 @@ system for which FIPS Linux packages are available.
 ### Nightly Omnibus FIPS builds
 
 The Distribution team has created [nightly FIPS Omnibus builds](https://packages.gitlab.com/gitlab/nightly-fips-builds),
-which can be used for *testing* purposes. These should never be used for production environments.
+which can be used for testing purposes. These should never be used for production environments.
 
 ## Runner
 
