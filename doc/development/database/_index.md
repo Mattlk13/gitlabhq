@@ -1,7 +1,7 @@
 ---
 stage: Data Access
 group: Database Frameworks
-info: Any user with at least the Maintainer role can merge updates to this content. For details, see https://docs.gitlab.com/ee/development/development_processes.html#development-guidelines-review.
+info: Any user with at least the Maintainer role can merge updates to this content. For details, see https://docs.gitlab.com/development/development_processes/#development-guidelines-review.
 title: Database development guidelines
 ---
 
@@ -14,6 +14,10 @@ title: Database development guidelines
   It provides an introduction on database-related changes, migrations, and complex SQL queries.
 
 - If you're a database reviewer or want to become one, check out our [introduction to reviewing database changes](database_reviewer_guidelines.md).
+
+## Upgrade
+
+- [Timeline for version upgrades](pg_upgrade_timeline.md)
 
 ## Tooling
 

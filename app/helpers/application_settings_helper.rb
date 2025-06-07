@@ -75,6 +75,13 @@ module ApplicationSettingsHelper
   def global_search_settings_checkboxes(form)
     [
       form.gitlab_ui_checkbox_component(
+        :anonymous_searches_allowed,
+        _("Allow unauthenticated users to use search"),
+        checkbox_options: {
+          checked: @application_setting.anonymous_searches_allowed, multiple: false
+        }
+      ),
+      form.gitlab_ui_checkbox_component(
         :global_search_block_anonymous_searches_enabled,
         _("Restrict global search to authenticated users only"),
         checkbox_options: {
@@ -713,9 +720,6 @@ module ApplicationSettingsHelper
   end
 
   def vscode_extension_marketplace_settings_view
-    # NOTE: This is intentionally not scoped to a specific actor since it affects instance-level settings.
-    return unless Feature.enabled?(:vscode_extension_marketplace_settings, nil)
-
     presets = ::WebIde::ExtensionMarketplacePreset.all.map do |preset|
       preset.to_h.deep_transform_keys { |key| key.to_s.camelize(:lower) }
     end

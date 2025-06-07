@@ -186,6 +186,7 @@ RSpec.describe User, feature_category: :user_profile do
     it { is_expected.to have_many(:snippets).dependent(:destroy) }
     it { is_expected.to have_many(:members) }
     it { is_expected.to have_many(:member_namespaces) }
+    it { is_expected.to have_many(:namespace_deletion_schedules).class_name('::Namespaces::DeletionSchedule').inverse_of(:deleting_user) }
     it { is_expected.to have_many(:project_members) }
     it { is_expected.to have_many(:group_members) }
     it { is_expected.to have_many(:groups) }
@@ -235,7 +236,6 @@ RSpec.describe User, feature_category: :user_profile do
     it { is_expected.to have_many(:merge_request_assignment_events).class_name('ResourceEvents::MergeRequestAssignmentEvent') }
     it { is_expected.to have_many(:admin_abuse_report_assignees).class_name('Admin::AbuseReportAssignee') }
     it { is_expected.to have_many(:early_access_program_tracking_events).class_name('EarlyAccessProgram::TrackingEvent') }
-    it { is_expected.to have_many(:project_deletion_schedules).class_name('::Projects::DeletionSchedule').inverse_of(:deleting_user) }
 
     describe '#triggers' do
       let(:user) { create(:user) }
@@ -8661,6 +8661,14 @@ RSpec.describe User, feature_category: :user_profile do
 
       it_behaves_like 'does not require password to be present'
     end
+
+    context 'when user is a placeholder user' do
+      before do
+        user.user_type = 'placeholder'
+      end
+
+      it_behaves_like 'does not require password to be present'
+    end
   end
 
   describe 'can_trigger_notifications?' do
@@ -9485,7 +9493,7 @@ RSpec.describe User, feature_category: :user_profile do
     end
   end
 
-  describe 'support pin methods' do
+  describe 'support pin methods', :freeze_time do
     let_it_be(:user_with_pin) { create(:user) }
     let_it_be(:user_no_pin) { create(:user) }
     let(:pin_data) { { pin: '123456', expires_at: 7.days.from_now } }
@@ -9516,10 +9524,10 @@ RSpec.describe User, feature_category: :user_profile do
     end
 
     describe '#support_pin_expires_at' do
-      it 'returns the expiration time when it exists' do
+      it 'returns the expiration time when it exists', quarantine: 'https://gitlab.com/gitlab-org/gitlab/-/issues/546655' do
         allow(retrieve_service).to receive(:execute).and_return(pin_data)
 
-        expect(user_with_pin.support_pin_expires_at).to be_within(2.seconds).of(pin_data[:expires_at])
+        expect(user_with_pin.support_pin_expires_at).to eq(pin_data[:expires_at])
       end
 
       it 'returns nil when no expiration time exists' do

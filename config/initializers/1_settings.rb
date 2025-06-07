@@ -254,6 +254,9 @@ Settings.gitlab['weak_passwords_digest_set'] ||= YAML.safe_load(File.open(Rails.
 Settings.gitlab['log_decompressed_response_bytesize'] = ENV["GITLAB_LOG_DECOMPRESSED_RESPONSE_BYTESIZE"].to_i > 0 ? ENV["GITLAB_LOG_DECOMPRESSED_RESPONSE_BYTESIZE"].to_i : 0
 Settings.gitlab['initial_gitlab_product_usage_data'] = true if Settings.gitlab['initial_gitlab_product_usage_data'].nil?
 
+Settings['ci_id_tokens'] ||= {}
+Settings.ci_id_tokens['issuer_url'] = Settings.gitlab.url if Settings.ci_id_tokens['issuer_url'].blank?
+
 Gitlab.ee do
   Settings.gitlab['mirror_max_delay'] ||= 300
   Settings.gitlab['mirror_max_capacity'] ||= 30
@@ -845,9 +848,6 @@ Gitlab.ee do
   Settings.cron_jobs['ldap_admin_sync_worker'] ||= {}
   Settings.cron_jobs['ldap_admin_sync_worker']['cron'] ||= '0 * * * *'
   Settings.cron_jobs['ldap_admin_sync_worker']['job_class'] = 'Authz::LdapAdminRoleWorker'
-  Settings.cron_jobs['queue_refresh_of_broken_adherence_groups_worker'] ||= {}
-  Settings.cron_jobs['queue_refresh_of_broken_adherence_groups_worker']['cron'] ||= '*/20 * * * *'
-  Settings.cron_jobs['queue_refresh_of_broken_adherence_groups_worker']['job_class'] = 'ComplianceManagement::QueueRefreshOfBrokenAdherenceGroupsWorker'
   Settings.cron_jobs['elastic_index_bulk_cron_worker'] ||= {}
   Settings.cron_jobs['elastic_index_bulk_cron_worker']['cron'] ||= '*/1 * * * *'
   Settings.cron_jobs['elastic_index_bulk_cron_worker']['job_class'] ||= 'ElasticIndexBulkCronWorker'
@@ -984,6 +984,9 @@ Gitlab.ee do
   Settings.cron_jobs['click_house_user_add_on_assignments_sync_worker'] ||= {}
   Settings.cron_jobs['click_house_user_add_on_assignments_sync_worker']['cron'] = "*/3 * * * *"
   Settings.cron_jobs['click_house_user_add_on_assignments_sync_worker']['job_class'] = 'ClickHouse::UserAddOnAssignmentsSyncWorker'
+  Settings.cron_jobs['click_house_user_addon_assignment_versions_sync'] ||= {}
+  Settings.cron_jobs['click_house_user_addon_assignment_versions_sync']['cron'] = "*/3 * * * *"
+  Settings.cron_jobs['click_house_user_addon_assignment_versions_sync']['job_class'] = 'ClickHouse::UserAddonAssignmentVersionsSyncWorker'
   Settings.cron_jobs['click_house_event_authors_consistency_cron_worker'] ||= {}
   Settings.cron_jobs['click_house_event_authors_consistency_cron_worker']['cron'] ||= "*/30 * * * *"
   Settings.cron_jobs['click_house_event_authors_consistency_cron_worker']['job_class'] = 'ClickHouse::EventAuthorsConsistencyCronWorker'
@@ -1026,6 +1029,9 @@ Gitlab.ee do
   Settings.cron_jobs['ai_active_context_bulk_process_worker'] ||= {}
   Settings.cron_jobs['ai_active_context_bulk_process_worker']['cron'] ||= '*/1 * * * *'
   Settings.cron_jobs['ai_active_context_bulk_process_worker']['job_class'] ||= 'Ai::ActiveContext::BulkProcessWorker'
+  Settings.cron_jobs['ai_active_context_code_scheduling_worker'] ||= {}
+  Settings.cron_jobs['ai_active_context_code_scheduling_worker']['cron'] ||= '*/1 * * * *'
+  Settings.cron_jobs['ai_active_context_code_scheduling_worker']['job_class'] ||= 'Ai::ActiveContext::Code::SchedulingWorker'
   Settings.cron_jobs['ai_active_context_migration_worker'] ||= {}
   Settings.cron_jobs['ai_active_context_migration_worker']['cron'] ||= '*/5 * * * *'
   Settings.cron_jobs['ai_active_context_migration_worker']['job_class'] ||= 'Ai::ActiveContext::MigrationWorker'

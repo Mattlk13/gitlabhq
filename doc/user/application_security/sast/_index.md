@@ -74,9 +74,11 @@ The following table lists the GitLab tiers in which each feature is available.
 | [Ruleset customization](customize_rulesets.md)                                           | {{< icon name="dotted-circle" >}} No | {{< icon name="check-circle" >}} Yes |
 | [Advanced Vulnerability Tracking](#advanced-vulnerability-tracking)                      | {{< icon name="dotted-circle" >}} No | {{< icon name="check-circle" >}} Yes |
 
-## Requirements
+## Getting started
 
-Before you run a SAST analyzer in your instance, make sure you have the following:
+If you are new to SAST, the following steps show how to enable SAST for your project.
+
+Prerequisites:
 
 - Linux-based GitLab Runner with the [`docker`](https://docs.gitlab.com/runner/executors/docker.html) or
   [`kubernetes`](https://docs.gitlab.com/runner/install/kubernetes.html) executor. If you're using
@@ -84,6 +86,126 @@ Before you run a SAST analyzer in your instance, make sure you have the followin
   - Windows Runners are not supported.
   - CPU architectures other than amd64 are not supported.
 - GitLab CI/CD configuration (`.gitlab-ci.yml`) must include the `test` stage, which is included by default. If you redefine the stages in the `.gitlab-ci.yml` file, the `test` stage is required.
+
+To enable SAST:
+
+1. On the left sidebar, select **Search or go to** and find your project.
+1. If your project does not already have one, create a `.gitlab-ci.yml` file in the root directory.
+1. At the top of the `.gitlab-ci.yml` file, add one of the following lines:
+
+Using a template:
+
+   ```yaml
+   include:
+     - template: Jobs/SAST.gitlab-ci.yml
+   ```
+
+Or using a CI component:
+
+   ```yaml
+   include:
+     - component: gitlab.com/components/sast/sast@main
+   ```
+
+At this point, SAST is enabled in your pipeline.
+If supported source code is present, the appropriate analyzers and default rules automatically scan for vulnerabilities when a pipeline runs.
+The corresponding jobs will appear under the `test` stage in your pipeline.
+
+{{< alert type="note" >}}
+
+You can see a working example in
+[SAST example project](https://gitlab.com/gitlab-org/security-products/demos/analyzer-configurations/semgrep/sast-getting-started).
+
+{{< /alert >}}
+
+After completing these steps, you can:
+
+- Learn more about how to [understand the results](#understanding-the-results).
+- Review [optimization tips](#optimization).
+- Plan a [rollout to more projects](#roll-out).
+
+## Understanding the results
+
+You can review vulnerabilities in a pipeline:
+
+1. On the left sidebar, select **Search or go to** and find your project.
+1. On the left sidebar, select **Build > Pipelines**.
+1. Select the pipeline.
+1. Select the **Security** tab.
+1. Select a vulnerability to view its details, including:
+   - Description: Explains the cause of the vulnerability, its potential impact, and recommended remediation steps.
+   - Status: Indicates whether the vulnerability has been triaged or resolved.
+   - Severity: Categorized into six levels based on impact.
+     [Learn more about severity levels](../vulnerabilities/severities.md).
+   - Location: Shows the filename and line number where the issue was found.
+     Selecting the file path opens the corresponding line in the code view.
+   - Scanner: Identifies which analyzer detected the vulnerability.
+   - Identifiers: A list of references used to classify the vulnerability, such as CWE identifiers and the IDs of the rules that detected it.
+
+You can also download the security scan results:
+
+- In the pipeline's **Security** tab, select **Download results**.
+
+For more details, see [Pipeline security report](../vulnerability_report/pipeline.md).
+
+{{< alert type="note" >}}
+
+Findings are generated on feature branches. When they are merged into the default branch, they become vulnerabilities. This distinction is important when evaluating your security posture.
+
+{{< /alert >}}
+
+Additional ways to see SAST results:
+
+- [Merge request widget](#merge-request-widget): Shows newly introduced or resolved findings.
+- [Merge request changes view](#merge-request-changes-view): Shows inline annotations for changed lines.
+- [Vulnerability report](../vulnerability_report/_index.md): Shows confirmed vulnerabilities on the default branch.
+
+## Optimization
+
+To optimize SAST according to your requirements you can:
+
+- Disable a rule.
+- Exclude files or paths from being scanned.
+
+### Disable a rule
+
+To disable a rule, for example because it generates too many false positives:
+
+1. On the left sidebar, select **Search or go to** and find your project.
+1. Create a `.gitlab/sast-ruleset.toml` file at the root of your project if one does not already exist.
+1. In the vulnerability's details, locate the ID of the rule that triggered the finding.
+1. Use the rule ID to disable the rule. For example, to disable `gosec.G107-1`, add the following in `.gitlab/sast-ruleset.toml`:
+
+   ```yaml
+   [semgrep]
+     [[semgrep.ruleset]]
+       disable = true
+       [semgrep.ruleset.identifier]
+         type = "semgrep_id"
+         value = "gosec.G107-1"
+   ```
+
+For more details on customizing rulesets, see [Customize rulesets](customize_rulesets.md).
+
+### Exclude files or paths from being scanned
+
+To exclude files or paths from being scanned, for example test or temporary code, set the `SAST_EXCLUDED_PATHS` variable.
+For example, to skip `rule-template-injection.go`, add the following to your `.gitlab-ci.yml`:
+
+```yaml
+variables:
+  SAST_EXCLUDED_PATHS: "rule-template-injection.go"
+```
+
+For more information about configuration options, see [Available CI/CD variables](#available-cicd-variables).
+
+## Roll out
+
+After you are confident in the SAST results for a single project, you can extend its implementation to additional projects:
+
+- Use [enforced scan execution](../detect/security_configuration.md#create-a-shared-configuration) to apply SAST settings across groups.
+- Share and reuse a central ruleset by [specifying a remote configuration file](customize_rulesets.md#specify-a-remote-configuration-file).
+- If you have unique requirements, SAST can be run in [offline environments](#running-sast-in-an-offline-environment) or under [SELinux](#running-sast-in-selinux) constraints.
 
 ## Supported languages and frameworks
 
@@ -753,11 +875,11 @@ The following are Docker image-related CI/CD variables.
 
 1. <a id="sast-excluded-paths-description"></a>You might need to exclude temporary directories used by your build tool as
    these can generate false positives. To exclude paths, copy and paste the default excluded paths, then **add** your
-   own paths to be excluded. If you don't specify the default excluded paths, the defaults are overridden and _only_ the
+   own paths to be excluded. If you don't specify the default excluded paths, the defaults are overridden and only the
    paths you specify are excluded from SAST scans.
 
 1. <a id="sast-excluded-paths-semgrep"></a>For these analyzers, `SAST_EXCLUDED_PATHS` is implemented as a **pre-filter**,
-   which is applied _before_ the scan is executed.
+   which is applied before the scan is executed.
 
    The analyzer skips any files or directories whose path matches one of the comma-separated patterns.
 
@@ -774,7 +896,7 @@ The following are Docker image-related CI/CD variables.
    Each pattern is a glob-style pattern that uses the same syntax as [gitignore](https://git-scm.com/docs/gitignore#_pattern_format).
 
 1. <a id="sast-excluded-paths-all-other-sast-analyzers"></a>For these analyzers, `SAST_EXCLUDED_PATHS` is implemented as
-   a **post-filter**, which is applied _after_ the scan is executed.
+   a **post-filter**, which is applied after the scan is executed.
 
    Patterns can be globs (see [`doublestar.Match`](https://pkg.go.dev/github.com/bmatcuk/doublestar/v4@v4.0.2#Match) for supported
    patterns), or file or folder paths (for example, `doc,spec`). Parent directories also match patterns.
@@ -801,7 +923,7 @@ The following are Docker image-related CI/CD variables.
 
    For example, to exclude building and scanning a `maven` project containing a build file with the path `project/subdir/pom.xml`, pass a glob pattern that explicitly matches the build file, such as `project/*/*.xml` or `**/*.xml`, or an exact match such as `project/subdir/pom.xml`.
 
-   Passing a parent directory for the pattern, such as `project` or `project/subdir`, does _not_ exclude the directory from being built, because in this case, the build file is _not_ explicitly matched by the pattern.
+   Passing a parent directory for the pattern, such as `project` or `project/subdir`, does not exclude the directory from being built, because in this case, the build file is not explicitly matched by the pattern.
 
 1. <a id="search-max-depth-description"></a>The [SAST CI/CD template](https://gitlab.com/gitlab-org/gitlab/blob/v17.4.1-ee/lib/gitlab/ci/templates/Jobs/SAST.gitlab-ci.yml)
    searches the repository to detect the programming languages
@@ -812,28 +934,28 @@ The following are Docker image-related CI/CD variables.
 
 Some analyzers can be customized with CI/CD variables.
 
-| CI/CD variable                      | Analyzer             | Description |
-|-------------------------------------|----------------------|-------------|
-| `GITLAB_ADVANCED_SAST_ENABLED`      | GitLab Advanced SAST | Set to `true` to enable [GitLab Advanced SAST](gitlab_advanced_sast.md) scanning (available in GitLab Ultimate only). Default: `false`. |
-| `SCAN_KUBERNETES_MANIFESTS`         | Kubesec              | Set to `"true"` to scan Kubernetes manifests. |
-| `KUBESEC_HELM_CHARTS_PATH`          | Kubesec              | Optional path to Helm charts that `helm` uses to generate a Kubernetes manifest that `kubesec` scans. If dependencies are defined, `helm dependency build` should be ran in a `before_script` to fetch the necessary dependencies. |
-| `KUBESEC_HELM_OPTIONS`              | Kubesec              | Additional arguments for the `helm` executable. |
-| `COMPILE`                           | SpotBugs             | Set to `false` to disable project compilation and dependency fetching. |
-| `ANT_HOME`                          | SpotBugs             | The `ANT_HOME` variable. |
-| `ANT_PATH`                          | SpotBugs             | Path to the `ant` executable. |
-| `GRADLE_PATH`                       | SpotBugs             | Path to the `gradle` executable. |
-| `JAVA_OPTS`                         | SpotBugs             | Additional arguments for the `java` executable. |
-| `JAVA_PATH`                         | SpotBugs             | Path to the `java` executable. |
-| `SAST_JAVA_VERSION`                 | SpotBugs             | Which Java version to use. [Starting in GitLab 15.0](https://gitlab.com/gitlab-org/gitlab/-/issues/352549), supported versions are `11` and `17` (default). Before GitLab 15.0, supported versions are `8` (default) and `11`. |
-| `MAVEN_CLI_OPTS`                    | SpotBugs             | Additional arguments for the `mvn` or `mvnw` executable. |
-| `MAVEN_PATH`                        | SpotBugs             | Path to the `mvn` executable. |
-| `MAVEN_REPO_PATH`                   | SpotBugs             | Path to the Maven local repository (shortcut for the `maven.repo.local` property). |
-| `SBT_PATH`                          | SpotBugs             | Path to the `sbt` executable. |
-| `FAIL_NEVER`                        | SpotBugs             | Set to `1` to ignore compilation failure. |
-| `SAST_SEMGREP_METRICS`              | Semgrep              | Set to `"false"` to disable sending anonymized scan metrics to [r2c](https://semgrep.dev). Default: `true`. |
-| `SAST_SCANNER_ALLOWED_CLI_OPTS`     | Semgrep              | CLI options (arguments with value, or flags) that are passed to the underlying security scanner when running scan operation. Only a limited set of [options](#security-scanner-configuration) are accepted. Separate a CLI option and its value using either a blank space or equals (`=`) character. For example: `name1 value1` or `name1=value1`. Multiple options must be separated by blank spaces. For example: `name1 value1 name2 value2`. [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/368565) in GitLab 15.3. |
-| `SAST_RULESET_GIT_REFERENCE`        | All                  | Defines a path to a custom ruleset configuration. If a project has a `.gitlab/sast-ruleset.toml` file committed, that local configuration takes precedence and the file from `SAST_RULESET_GIT_REFERENCE` isn't used. This variable is available for the Ultimate tier only. |
-| `SECURE_ENABLE_LOCAL_CONFIGURATION` | All                  | Enables the option to use custom ruleset configuration. If `SECURE_ENABLE_LOCAL_CONFIGURATION` is set to `false`, the project's custom ruleset configuration file at `.gitlab/sast-ruleset.toml` is ignored and the file from `SAST_RULESET_GIT_REFERENCE` or the default configuration takes precedence. |
+| CI/CD variable                      | Analyzer             | Default                                         | Description                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+|-------------------------------------|----------------------|-------------------------------------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `GITLAB_ADVANCED_SAST_ENABLED`      | GitLab Advanced SAST | `false`                                         | Set to `true` to enable [GitLab Advanced SAST](gitlab_advanced_sast.md) scanning (available in GitLab Ultimate only).                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| `SCAN_KUBERNETES_MANIFESTS`         | Kubesec              | `"false"`                                       | Set to `"true"` to scan Kubernetes manifests.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| `KUBESEC_HELM_CHARTS_PATH`          | Kubesec              |                                                 | Optional path to Helm charts that `helm` uses to generate a Kubernetes manifest that `kubesec` scans. If dependencies are defined, `helm dependency build` should be ran in a `before_script` to fetch the necessary dependencies.                                                                                                                                                                                                                                                                                                    |
+| `KUBESEC_HELM_OPTIONS`              | Kubesec              |                                                 | Additional arguments for the `helm` executable.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| `COMPILE`                           | SpotBugs             | `true`                                          | Set to `false` to disable project compilation and dependency fetching.                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| `ANT_HOME`                          | SpotBugs             |                                                 | The `ANT_HOME` variable.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| `ANT_PATH`                          | SpotBugs             | `ant`                                           | Path to the `ant` executable.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| `GRADLE_PATH`                       | SpotBugs             | `gradle`                                        | Path to the `gradle` executable.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| `JAVA_OPTS`                         | SpotBugs             | `-XX:MaxRAMPercentage=80`                       | Additional arguments for the `java` executable.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| `JAVA_PATH`                         | SpotBugs             | `java`                                          | Path to the `java` executable.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| `SAST_JAVA_VERSION`                 | SpotBugs             | `8` for GitLab < 15 </br> `17` for GitLab >= 15 | Which Java version to use. [Starting in GitLab 15.0](https://gitlab.com/gitlab-org/gitlab/-/issues/352549), supported versions are `11` and `17`. Before GitLab 15.0, supported versions are `8` and `11`.                                                                                                                                                                                                                                                                                                                            |
+| `MAVEN_CLI_OPTS`                    | SpotBugs             | `--batch-mode -DskipTests=true`                 | Additional arguments for the `mvn` or `mvnw` executable.                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| `MAVEN_PATH`                        | SpotBugs             | `mvn`                                           | Path to the `mvn` executable.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| `MAVEN_REPO_PATH`                   | SpotBugs             | `$HOME/.m2/repository`                          | Path to the Maven local repository (shortcut for the `maven.repo.local` property).                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| `SBT_PATH`                          | SpotBugs             | `sbt`                                           | Path to the `sbt` executable.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| `FAIL_NEVER`                        | SpotBugs             | `false`                                         | Set to `true` or `1` to ignore compilation failure.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| `SAST_SEMGREP_METRICS`              | Semgrep              | `true`                                          | Set to `false` to disable sending anonymized scan metrics to [r2c](https://semgrep.dev).                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| `SAST_SCANNER_ALLOWED_CLI_OPTS`     | Semgrep              | `--max-target-bytes=1000000 --timeout=5`        | CLI options (arguments with value, or flags) that are passed to the underlying security scanner when running scan operation. Only a limited set of [options](#security-scanner-configuration) are accepted. Separate a CLI option and its value using either a blank space or equals (`=`) character. For example: `name1 value1` or `name1=value1`. Multiple options must be separated by blank spaces. For example: `name1 value1 name2 value2`. [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/368565) in GitLab 15.3. |
+| `SAST_RULESET_GIT_REFERENCE`        | All                  |                                                 | Defines a path to a custom ruleset configuration. If a project has a `.gitlab/sast-ruleset.toml` file committed, that local configuration takes precedence and the file from `SAST_RULESET_GIT_REFERENCE` isn't used. This variable is available for the Ultimate tier only.                                                                                                                                                                                                                                                          |
+| `SECURE_ENABLE_LOCAL_CONFIGURATION` | All                  | `false`                                         | Enables the option to use custom ruleset configuration. If `SECURE_ENABLE_LOCAL_CONFIGURATION` is set to `false`, the project's custom ruleset configuration file at `.gitlab/sast-ruleset.toml` is ignored and the file from `SAST_RULESET_GIT_REFERENCE` or the default configuration takes precedence.                                                                                                                                                                                                                             |
 
 #### Security scanner configuration
 
@@ -982,7 +1104,7 @@ run successfully. For more information, see [Offline environments](../offline_de
 
 To use SAST in an offline environment, you need:
 
-- GitLab Runner with the [`docker` or `kubernetes` executor](#requirements).
+- GitLab Runner with the [`docker`](https://docs.gitlab.com/runner/executors/docker.html) or [`kubernetes`](https://docs.gitlab.com/runner/install/kubernetes.html) executor. See [prerequisites](#getting-started) for details.
 - A Docker container registry with locally available copies of SAST [analyzer](https://gitlab.com/gitlab-org/security-products/analyzers) images.
 - Configure certificate checking of packages (optional).
 

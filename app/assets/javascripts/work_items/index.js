@@ -61,6 +61,8 @@ export const initWorkItemsRoot = ({ workspaceType, withTabs } = {}) => {
     newProjectPath,
     hasIssueDateFilterFeature,
     timeTrackingLimitToHours,
+    hasStatusFeature,
+    workItemPlanningViewEnabled,
   } = el.dataset;
 
   const isGroup = workspaceType === WORKSPACE_GROUP;
@@ -76,10 +78,7 @@ export const initWorkItemsRoot = ({ workspaceType, withTabs } = {}) => {
     breadcrumbParams.listPath = issuesListPath;
   }
 
-  injectVueAppBreadcrumbs(router, WorkItemBreadcrumb, apolloProvider, breadcrumbParams, {
-    // Cf. https://gitlab.com/gitlab-org/gitlab/-/merge_requests/186906
-    singleNavOptIn: true,
-  });
+  injectVueAppBreadcrumbs(router, WorkItemBreadcrumb, apolloProvider, breadcrumbParams);
 
   apolloProvider.clients.defaultClient.cache.writeQuery({
     query: activeDiscussionQuery,
@@ -134,6 +133,8 @@ export const initWorkItemsRoot = ({ workspaceType, withTabs } = {}) => {
       newProjectPath,
       hasIssueDateFilterFeature: parseBoolean(hasIssueDateFilterFeature),
       timeTrackingLimitToHours: parseBoolean(timeTrackingLimitToHours),
+      hasStatusFeature: parseBoolean(hasStatusFeature),
+      workItemPlanningViewEnabled: parseBoolean(workItemPlanningViewEnabled),
     },
     mounted() {
       performanceMarkAndMeasure({
@@ -149,6 +150,7 @@ export const initWorkItemsRoot = ({ workspaceType, withTabs } = {}) => {
       return createElement(App, {
         props: {
           newCommentTemplatePaths: JSON.parse(newCommentTemplatePaths),
+          rootPageFullPath: fullPath,
           withTabs,
         },
       });

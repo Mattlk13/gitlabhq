@@ -27,16 +27,40 @@ For larger GitLab instances, alternative backup strategies include:
 
 ## Data included in a backup
 
+GitLab provides a command-line interface to back up your entire instance.
 By default, the backup creates an archive in a single compressed tar file.
 This file includes:
 
 - Database data and configuration
-- Git repositories, container registry images, and uploaded content
-- Package registry data and CI/CD artifacts
 - Account and group settings
-- Project and group wikis
-- Project-level secure files
-- External merge request diffs
+- CI/CD artifacts and job logs
+- Git repositories and LFS objects
+- External merge request diffs ([introduced](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/154914) in GitLab 17.1)
+- Package registry data and container registry images
+- Project and [group](../../user/project/wiki/group.md) wikis.
+- Project-level attachments and uploads
+- Secure Files ([introduced](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/121142) in GitLab 16.1)
+- GitLab Pages content
+- Terraform states
+- Snippets
+
+## Data not included in a backup
+
+- [Mattermost data](../../integration/mattermost/_index.md#back-up-gitlab-mattermost)
+- Redis (and thus Sidekiq jobs)
+- [Object storage](#object-storage) on Linux package (Omnibus) / Docker / Self-compiled installations
+
+- [Global server hooks](../server_hooks.md#create-global-server-hooks-for-all-repositories)
+- [File hooks](../file_hooks.md)
+- GitLab configuration files (`/etc/gitlab`)
+- TLS- and SSH-related keys and certificates
+- Other system files
+
+{{< alert type="warning" >}}
+
+You are highly advised to read about [storing configuration files](#storing-configuration-files) to back up those separately.
+
+{{< /alert >}}
 
 ## Simple backup procedure
 
@@ -136,7 +160,7 @@ The backup command does not back up registry data when they are stored in Object
 
 {{< alert type="warning" >}}
 
-The backup Rake task GitLab provides does _not_ store your configuration files. The primary reason for this is that your database contains items including encrypted information for two-factor authentication and the CI/CD _secure variables_. Storing encrypted information in the same location as its key defeats the purpose of using encryption in the first place. For example, the secrets file contains your database encryption key. If you lose it, then the GitLab application will not be able to decrypt any encrypted values in the database.
+The backup Rake task GitLab provides does not store your configuration files. The primary reason for this is that your database contains items including encrypted information for two-factor authentication and the CI/CD secure variables. Storing encrypted information in the same location as its key defeats the purpose of using encryption in the first place. For example, the secrets file contains your database encryption key. If you lose it, then the GitLab application will not be able to decrypt any encrypted values in the database.
 
 {{< /alert >}}
 
@@ -191,45 +215,10 @@ In the unlikely event that the secrets file is lost, see
 
 ### Other data
 
-GitLab uses Redis both as a cache store and to hold persistent data for our background jobs system, Sidekiq. The provided [backup command](#backup-command) does _not_ back up Redis data. This means that in order to take a consistent backup with the [backup command](#backup-command), there must be no pending or running background jobs. It is possible to [manually back up Redis](https://redis.io/docs/latest/operate/oss_and_stack/management/persistence/#backing-up-redis-data).
+GitLab uses Redis both as a cache store and to hold persistent data for our background jobs system, Sidekiq. The provided [backup command](#backup-command) does not back up Redis data. This means that in order to take a consistent backup with the [backup command](#backup-command), there must be no pending or running background jobs. It is possible to [manually back up Redis](https://redis.io/docs/latest/operate/oss_and_stack/management/persistence/#backing-up-redis-data).
 
 Elasticsearch is an optional database for advanced search. It can improve search
-in both source-code level, and user generated content in issues, merge requests, and discussions. The [backup command](#backup-command) does _not_ back up Elasticsearch data. Elasticsearch data can be regenerated from PostgreSQL data after a restore. It is possible to [manually back up Elasticsearch](https://www.elastic.co/guide/en/elasticsearch/reference/current/snapshot-restore.html).
-
-## Command-line interface
-
-GitLab provides a command-line interface to back up your entire instance,
-including:
-
-- Database
-- Attachments
-- Git repositories data
-- CI/CD job output logs
-- CI/CD job artifacts
-- LFS objects
-- Terraform states
-- Container registry images
-- GitLab Pages content
-- Packages
-- Snippets
-- [Group wikis](../../user/project/wiki/group.md)
-- Project-level Secure Files ([introduced](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/121142) in GitLab 16.1)
-- External merge request diffs ([introduced](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/154914) in GitLab 17.1)
-
-Backups do not include:
-
-- [Mattermost data](../../integration/mattermost/_index.md#back-up-gitlab-mattermost)
-- Redis (and thus Sidekiq jobs)
-- [Object storage](#object-storage) on Linux package (Omnibus) / Docker / Self-compiled installations
-- [Global server hooks](../server_hooks.md#create-global-server-hooks-for-all-repositories)
-- [File hooks](../file_hooks.md)
-
-{{< alert type="warning" >}}
-
-GitLab does not back up any configuration files (`/etc/gitlab`), TLS keys and certificates, or system
-files. You are highly advised to read about [storing configuration files](#storing-configuration-files).
-
-{{< /alert >}}
+in both source-code level, and user generated content in issues, merge requests, and discussions. The [backup command](#backup-command) does not back up Elasticsearch data. Elasticsearch data can be regenerated from PostgreSQL data after a restore. It is possible to [manually back up Elasticsearch](https://www.elastic.co/guide/en/elasticsearch/reference/current/snapshot-restore.html).
 
 ### Requirements
 
@@ -815,7 +804,7 @@ You can back up specific repositories using the `REPOSITORIES_PATHS` option.
 Similarly, you can use `SKIP_REPOSITORIES_PATHS` to skip certain repositories.
 Both options accept a comma-separated list of project or group paths. If you
 specify a group path, all repositories in all projects in the group and
-descendent groups are included or skipped, depending on which option you used.
+descendant groups are included or skipped, depending on which option you used.
 
 For example, to back up all repositories for all projects in Group A (`group-a`), the repository for
 Project C in Group B (`group-b/project-c`),

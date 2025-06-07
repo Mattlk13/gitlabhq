@@ -709,6 +709,7 @@ class ProjectPolicy < BasePolicy
     enable :manage_protected_tags
     enable :change_restrict_user_defined_variables
     enable :create_protected_branch
+    enable :create_branch_rule
     enable :admin_protected_branch
     enable :admin_protected_environments
   end
@@ -907,7 +908,6 @@ class ProjectPolicy < BasePolicy
     prevent :update_cluster
     prevent :admin_cluster
     prevent :destroy_cluster
-    prevent :read_templates
   end
 
   rule { container_registry_disabled }.policy do
@@ -1060,7 +1060,6 @@ class ProjectPolicy < BasePolicy
     enable :read_design_activity
     enable :read_issue_link
     enable :read_work_item
-    enable :read_templates
   end
 
   rule { can?(:read_merge_request) }.policy do

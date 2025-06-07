@@ -183,6 +183,9 @@ ci_runners:
   - table: users
     column: creator_id
     on_delete: async_nullify
+  - table: organizations
+    column: organization_id
+    on_delete: async_delete
 ci_running_builds:
   - table: projects
     column: project_id
@@ -323,7 +326,7 @@ dependency_list_exports:
     column: organization_id
     on_delete: async_delete
 deployment_approvals:
-  - table: ci_builds
+  - table: p_ci_builds
     column: ci_build_id
     on_delete: async_delete
 deployment_clusters:
@@ -497,7 +500,8 @@ p_ci_pipelines:
     on_delete: async_delete
   - table: ci_triggers
     column: trigger_id
-    on_delete: async_delete
+    on_delete: async_nullify
+    delete_limit: 50
 p_ci_runner_machine_builds:
   - table: ci_runner_machines
     column: runner_machine_id

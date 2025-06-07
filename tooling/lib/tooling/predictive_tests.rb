@@ -68,13 +68,14 @@ module Tooling
       :predictive_tests_strategy
 
     def record_selected_test_count
-      test_count = File.read(rspec_matching_tests_path).lines.length
+      test_count = File.read(rspec_matching_tests_path).split(" ").length
 
       Tooling::Events::TrackPipelineEvents.new.send_event(
         "glci_predictive_tests_count",
         label: "test-count",
         value: test_count,
-        property: predictive_tests_strategy
+        property: predictive_tests_strategy,
+        extra_properties: { ci_job_id: ENV["CI_JOB_ID"] }
       )
     end
   end

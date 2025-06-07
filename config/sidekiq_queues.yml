@@ -639,6 +639,8 @@
   - 1
 - - namespaces_cascade_duo_features_enabled
   - 1
+- - namespaces_cascade_web_based_commit_signing_enabled
+  - 1
 - - namespaces_free_user_cap_group_over_limit_notification
   - 1
 - - namespaces_process_sync_events
@@ -811,6 +813,8 @@
   - 1
 - - sbom_create_occurrences_vulnerabilities
   - 1
+- - sbom_graphs
+  - 1
 - - sbom_process_transfer_events
   - 1
 - - sbom_process_vulnerabilities
@@ -881,6 +885,8 @@
   - 1
 - - security_analyzers_status_process_archived_events
   - 1
+- - security_analyzers_status_process_deleted_events
+  - 1
 - - security_configuration_set_group_secret_push_protection
   - 1
 - - security_create_security_policy_project
@@ -908,6 +914,8 @@
 - - security_pipeline_analyzers_status_update
   - 1
 - - security_pipeline_execution_policies_run_schedule
+  - 1
+- - security_policies_project_transfer
   - 1
 - - security_process_scan_result_policy
   - 1
@@ -1020,6 +1028,8 @@
 - - vulnerabilities_namespace_historical_statistics_update_traversal_ids
   - 1
 - - vulnerabilities_namespace_statistics_adjustment
+  - 1
+- - vulnerabilities_namespace_statistics_process_group_delete_events
   - 1
 - - vulnerabilities_namespace_statistics_process_group_transfer_events
   - 1

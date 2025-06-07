@@ -1,5 +1,9 @@
 # frozen_string_literal: true
 
+def next?
+  File.basename(__FILE__) == "Gemfile.next"
+end
+
 source 'https://rubygems.org'
 
 if ENV.fetch('BUNDLER_CHECKSUM_VERIFICATION_OPT_IN', 'false') != 'false' # this verification is still experimental
@@ -21,7 +25,11 @@ gem 'bundler-checksum', '~> 0.1.0', path: 'vendor/gems/bundler-checksum', requir
 
 # See https://docs.gitlab.com/ee/development/gemfile.html#upgrade-rails for guidelines when upgrading Rails
 
-gem 'rails', '~> 7.1.5.1', feature_category: :shared
+if next?
+  gem 'rails', '~> 7.2.2.1', feature_category: :shared
+else
+  gem 'rails', '~> 7.1.5.1', feature_category: :shared
+end
 
 gem 'activerecord-gitlab', path: 'gems/activerecord-gitlab', feature_category: :shared
 # This can be dropped after upgrading to Rails 7.2: https://github.com/rails/rails/pull/49674
@@ -34,9 +42,9 @@ gem 'bootsnap', '~> 1.18.3', require: false, feature_category: :shared
 # Avoid the precompiled native gems because Omnibus needs to build this to ensure
 # LD_LIBRARY_PATH is correct: https://gitlab.com/gitlab-org/omnibus-gitlab/-/merge_requests/7730
 if RUBY_PLATFORM.include?('darwin')
-  gem 'ffi', '~> 1.17', feature_category: :shared
+  gem 'ffi', '~> 1.17.2', feature_category: :shared
 else
-  gem 'ffi', '~> 1.17', force_ruby_platform: true, feature_category: :shared
+  gem 'ffi', '~> 1.17.2', force_ruby_platform: true, feature_category: :shared
 end
 
 gem 'openssl', '~> 3.0', feature_category: :shared
@@ -68,7 +76,7 @@ gem 'rugged', '~> 1.6', feature_category: :gitaly
 gem 'faraday', '~> 2', feature_category: :shared
 gem 'faraday-retry', '~> 2', feature_category: :shared
 # Logger is a dependency of Faraday, but Logger 1.6.0 does not work with Chef.
-gem 'logger', '~> 1.6.0', feature_category: :shared
+gem 'logger', '~> 1.7.0', feature_category: :shared
 
 gem 'marginalia', '~> 1.11.1', feature_category: :database
 
@@ -128,7 +136,7 @@ gem 'attr_encrypted', '~> 4.2', feature_category: :shared
 
 # GitLab Pages
 gem 'validates_hostname', '~> 1.0.13', feature_category: :pages
-gem 'rubyzip', '~> 2.3.2', require: 'zip', feature_category: :pages
+gem 'rubyzip', '~> 2.4.0', require: 'zip', feature_category: :pages
 # GitLab Pages letsencrypt support
 gem 'acme-client', '~> 2.0.19', feature_category: :pages
 
@@ -234,9 +242,9 @@ gem 'seed-fu', '~> 2.3.7', feature_category: :shared
 gem 'elasticsearch-model', '~> 7.2', feature_category: :global_search
 gem 'elasticsearch-rails', '~> 7.2', require: 'elasticsearch/rails/instrumentation', feature_category: :global_search
 gem 'elasticsearch-api', '7.17.11', feature_category: :global_search
-gem 'aws-sdk-core', '~> 3.224.0', feature_category: :global_search
+gem 'aws-sdk-core', '~> 3.225.0', feature_category: :global_search
 gem 'aws-sdk-cloudformation', '~> 1', feature_category: :global_search
-gem 'aws-sdk-s3', '~> 1.186.0', feature_category: :global_search
+gem 'aws-sdk-s3', '~> 1.189.0', feature_category: :global_search
 gem 'faraday-typhoeus', '~> 1.1', feature_category: :global_search
 gem 'faraday_middleware-aws-sigv4', '~> 1.0.1', feature_category: :global_search
 # Used with Elasticsearch to support http keep-alive connections
@@ -298,7 +306,7 @@ gem 'gitlab-sidekiq-fetcher',
 gem 'fugit', '~> 1.11.1', feature_category: :continuous_integration
 
 # HTTP requests
-gem 'httparty', '~> 0.22.0', feature_category: :shared
+gem 'httparty', '~> 0.23.0', feature_category: :shared
 
 # Colored output to console
 gem 'rainbow', '~> 3.0', feature_category: :shared
@@ -324,7 +332,7 @@ gem 'device_detector', feature_category: :shared
 # Redis
 gem 'redis', '~> 5.4.0', feature_category: :redis
 gem 'redis-clustering', '~> 5.4.0', feature_category: :redis
-gem 'connection_pool', '~> 2.4', feature_category: :shared
+gem 'connection_pool', '~> 2.5.3', feature_category: :shared
 
 # Redis session store
 gem 'redis-actionpack', '~> 5.5.0', feature_category: :redis
@@ -497,7 +505,7 @@ end
 
 group :development, :test do
   gem 'deprecation_toolkit', '~> 2.2.3', require: false, feature_category: :shared
-  gem 'bullet', '~> 7.2.0', feature_category: :shared
+  gem 'bullet', '~> 8.0.0', feature_category: :shared
   gem 'parser', '= 3.3.8.0', feature_category: :shared
   gem 'pry-byebug', feature_category: :shared
   gem 'pry-rails', '~> 0.3.9', feature_category: :shared
@@ -526,7 +534,7 @@ group :development, :test do
   gem 'influxdb-client', '~> 3.1', require: false, feature_category: :tooling
 
   gem 'knapsack', '~> 4.0.0', feature_category: :tooling
-  gem 'gitlab-crystalball', '~> 0.8.0', require: false, feature_category: :tooling
+  gem 'gitlab-crystalball', '~> 1.0.0', require: false, feature_category: :tooling
   gem 'test_file_finder', '~> 0.3.1', feature_category: :tooling
 
   gem 'simple_po_parser', '~> 1.1.6', require: false, feature_category: :shared
@@ -640,11 +648,7 @@ gem 'gitaly', '~> 17.11.2', feature_category: :gitaly
 # KAS GRPC protocol definitions
 gem 'gitlab-kas-grpc', '~> 17.11.0', feature_category: :deployment_management
 
-# Lock the version before issues below are resolved:
-# https://gitlab.com/gitlab-org/gitlab/-/issues/473169#note_2028352939
-# Or we can upgrade to a more recent version as long as we can confirm
-# that it doesn't have the same issues.
-gem 'grpc', '= 1.63.0', feature_category: :shared
+gem 'grpc', '~> 1.72.0', feature_category: :shared
 
 gem 'google-protobuf', '~> 3.25', '>= 3.25.3', feature_category: :shared
 
@@ -752,4 +756,4 @@ gem 'paper_trail', '~> 16.0', feature_category: :shared
 
 gem "i18n_data", "~> 0.13.1", feature_category: :system_access
 
-gem "gitlab-cloud-connector", "~> 1.11", require: 'gitlab/cloud_connector', feature_category: :cloud_connector
+gem "gitlab-cloud-connector", "~> 1.14", require: 'gitlab/cloud_connector', feature_category: :cloud_connector

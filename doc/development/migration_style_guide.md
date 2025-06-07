@@ -1,7 +1,7 @@
 ---
 stage: Data Access
 group: Database Frameworks
-info: Any user with at least the Maintainer role can merge updates to this content. For details, see https://docs.gitlab.com/ee/development/development_processes.html#development-guidelines-review.
+info: Any user with at least the Maintainer role can merge updates to this content. For details, see https://docs.gitlab.com/development/development_processes/#development-guidelines-review.
 title: Migration Style Guide
 ---
 
@@ -462,7 +462,7 @@ are run. It's important to maintain a rough correlation between:
 1. When a migration is added to the GitLab codebase.
 1. The timestamp of the migration itself.
 
-A new migration's timestamp should *never* be before the previous [required upgrade stop](database/required_stops.md).
+A new migration's timestamp should never be before the previous [required upgrade stop](database/required_stops.md).
 Migrations are occasionally squashed, and if a migration is added whose timestamp
 falls before the previous required stop, a problem like what happened in
 [issue 408304](https://gitlab.com/gitlab-org/gitlab/-/issues/408304) can occur.

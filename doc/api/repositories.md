@@ -25,13 +25,6 @@ in the Git internals documentation.
 
 {{< alert type="warning" >}}
 
-This endpoint changed to [keyset-based pagination](rest/_index.md#keyset-based-pagination)
-in GitLab 15.0. Iterating pages of results with a number (`?page=2`) is unsupported.
-
-{{< /alert >}}
-
-{{< alert type="warning" >}}
-
 In version 17.7, the error handling behavior when a requested path is not found is updated.
 The endpoint now returns a status code `404 Not Found`. Previously, the status code was `200 OK`.
 
@@ -270,7 +263,7 @@ Supported attributes:
 | :--------- | :------------- | :------- | :---------- |
 | `id`       | integer or string | yes      | The ID or [URL-encoded path of the project](rest/_index.md#namespaced-paths). |
 | `ref`      | string         | no       | The name of a repository branch or tag. If not given, the default branch. |
-| `order_by` | string         | no       | Return contributors ordered by `name`, `email`, or `commits` (orders by commit date) fields. Default is `commits`. |
+| `order_by` | string         | no       | Order contributors by `name`, `email`, or `commits` (number of commits). If not specified, contributors are ordered by commit date. |
 | `sort`     | string         | no       | Return contributors sorted in `asc` or `desc` order. Default is `asc`. |
 
 Example request:
@@ -341,8 +334,6 @@ Example response:
 
 {{< history >}}
 
-- Commit range limits [introduced](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/89032) in GitLab 15.1 [with a flag](../administration/feature_flags.md) named `changelog_commits_limitation`. Disabled by default.
-- [Enabled on GitLab.com and by default on GitLab Self-Managed](https://gitlab.com/gitlab-org/gitlab/-/issues/33893) in GitLab 15.3.
 - [Generally available](https://gitlab.com/gitlab-org/gitlab/-/issues/364101) in GitLab 17.3. Feature flag `changelog_commits_limitation` removed.
 
 {{< /history >}}
@@ -378,7 +369,7 @@ Changelogs support these attributes:
 | `file`    | string   | no | The file to commit the changes to. Defaults to `CHANGELOG.md`. |
 | `from`    | string   | no | The SHA of the commit that marks the beginning of the range of commits to include in the changelog. This commit isn't included in the changelog. |
 | `message` | string   | no | The commit message to use when committing the changes. Defaults to `Add changelog for version X`, where `X` is the value of the `version` argument. |
-| `to`      | string   | no | The SHA of the commit that marks the end of the range of commits to include in the changelog. This commit _is_ included in the changelog. Defaults to the branch specified in the `branch` attribute. Limited to 15000 commits. |
+| `to`      | string   | no | The SHA of the commit that marks the end of the range of commits to include in the changelog. This commit is included in the changelog. Defaults to the branch specified in the `branch` attribute. Limited to 15000 commits. |
 | `trailer` | string   | no | The Git trailer to use for including commits. Defaults to `Changelog`. Case-sensitive: `Example` does not match `example` or `eXaMpLE`. |
 
 ### Requirements for `from` attribute
@@ -510,7 +501,7 @@ Supported attributes:
 | `config_file` | string   | no | The path of changelog configuration file in the project's Git repository. Defaults to `.gitlab/changelog_config.yml`. |
 | `date`    | datetime | no | The date and time of the release. Uses ISO 8601 format. Example: `2016-03-11T03:45:40Z`. Defaults to the current time. |
 | `from`    | string   | no | The start of the range of commits (as a SHA) to use for generating the changelog. This commit itself isn't included in the list. |
-| `to`      | string   | no | The end of the range of commits (as a SHA) to use for the changelog. This commit _is_ included in the list. Defaults to the HEAD of the default project branch. |
+| `to`      | string   | no | The end of the range of commits (as a SHA) to use for the changelog. This commit is included in the list. Defaults to the HEAD of the default project branch. |
 | `trailer` | string   | no | The Git trailer to use for including commits. Defaults to `Changelog`. |
 
 ```shell

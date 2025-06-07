@@ -496,6 +496,22 @@ GitlabSecurity/PublicSend:
     - 'ee/lib/**/*.rake'
     - 'ee/spec/**/*'
 
+Gitlab/DeprecatedAuditEventService:
+  Enabled: true
+  Exclude:
+    - 'ee/app/services/ee/audit_event_service.rb'
+    - 'ee/app/services/ee/applications/create_service.rb'
+    - 'ee/app/services/audit_events/release_audit_event_service.rb'
+    - 'ee/app/services/ee/keys/create_service.rb'
+    - 'ee/app/services/ee/users/migrate_records_to_ghost_user_service.rb'
+    - 'ee/spec/features/admin/admin_audit_logs_spec.rb'
+    - 'ee/spec/controllers/groups/omniauth_callbacks_controller_spec.rb'
+    - 'ee/spec/services/audit_event_service_spec.rb'
+    - 'ee/lib/gitlab/auth/group_saml/membership_updater.rb'
+    - 'app/controllers/sessions_controller.rb'
+    - 'app/services/audit_event_service.rb'
+    - 'spec/services/audit_event_service_spec.rb'
+
 Database/MultipleDatabases:
   Enabled: true
   Exclude:
@@ -553,6 +569,18 @@ Gitlab/AvoidCurrentOrganization:
     - 'lib/gitlab/middleware/organizations/current.rb'
     - 'spec/**/*'
     - 'ee/spec/**/*'
+
+Gitlab/DisallowCurrentOrganizationIdSafeNavigation:
+  Description: 'Use `Current.organization.id` instead of `Current.organization&.id`. `Current.organization` is expected to be assigned.'
+  Enabled: true
+  Include:
+    - 'app/**/*.rb'
+    - 'ee/app/**/*.rb'
+    - 'lib/**/*.rb'
+    - 'ee/lib/**/*.rb'
+  Exclude:
+    # Exclude the cop's own spec file to prevent self-reporting.
+    - 'spec/rubocop/cop/gitlab/disallow_current_organization_id_safe_navigation_spec.rb'
 
 # See https://gitlab.com/groups/gitlab-org/-/epics/7374
 Gitlab/AvoidGitlabInstanceChecks:
@@ -1285,6 +1313,12 @@ Database/AvoidUsingPluckWithoutLimit:
     - 'spec/**/*.rb'
     - 'ee/spec/**/*.rb'
     - 'qa/qa/specs/**/*.rb'
+
+Database/AvoidUsingConnectionExecute:
+  Enabled: true
+  Include:
+    - '{,ee/}app/models/**/*'
+    - '{,ee/}lib/**/*'
 
 Style/SymbolProc:
   AllowedMethods:

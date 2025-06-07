@@ -619,7 +619,7 @@ processing them, such as before being enqueued.
 
 This log file follows the same structure as
 [`sidekiq.log`](#sidekiqlog), so it is structured as JSON if
-you've configured this for Sidekiq as mentioned above.
+you've configured this for Sidekiq as mentioned previously.
 
 ## `gitlab-shell.log`
 
@@ -863,7 +863,8 @@ This file is located at:
 - `/home/git/gitlab/log/mail_room_json.log` on self-compiled installations.
 
 This structured log file records internal activity in the `mail_room` gem.
-Its name and path are configurable, so the name and path may not match the above.
+Its name and path are configurable, so the name and path may not match this one
+documented previously.
 
 ## `web_hooks.log`
 
@@ -1122,7 +1123,6 @@ LLM prompt input and response output can be logged by enabling the `expanded_ai_
 This flag is disabled by default and can only be enabled:
 
 - For GitLab.com, when you provide consent through a GitLab [Support Ticket](https://about.gitlab.com/support/portal/).
-- For GitLab Self-Managed, when you enable this feature flag.
 
 By default, the log does not contain LLM prompt input and response output to support [data retention policies](../../user/gitlab_duo/data_usage.md#data-retention) of AI feature data.
 

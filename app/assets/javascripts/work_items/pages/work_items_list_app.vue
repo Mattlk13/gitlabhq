@@ -1,6 +1,6 @@
 <script>
 import { GlButton, GlFilteredSearchToken, GlLoadingIcon } from '@gitlab/ui';
-import { isEmpty, unionBy } from 'lodash';
+import { capitalize, isEmpty, unionBy } from 'lodash';
 import * as Sentry from '~/sentry/sentry_browser_wrapper';
 import IssueCardStatistics from 'ee_else_ce/issues/list/components/issue_card_statistics.vue';
 import IssueCardTimeInfo from 'ee_else_ce/issues/list/components/issue_card_time_info.vue';
@@ -45,6 +45,7 @@ import {
   OPERATOR_IS,
   OPERATORS_AFTER_BEFORE,
   OPERATORS_IS,
+  OPERATORS_IS_NOT,
   OPERATORS_IS_NOT_OR,
   TOKEN_TITLE_ASSIGNEE,
   TOKEN_TITLE_AUTHOR,
@@ -84,6 +85,7 @@ import glFeatureFlagMixin from '~/vue_shared/mixins/gl_feature_flags_mixin';
 import CreateWorkItemModal from '../components/create_work_item_modal.vue';
 import WorkItemHealthStatus from '../components/work_item_health_status.vue';
 import WorkItemDrawer from '../components/work_item_drawer.vue';
+import WorkItemListHeading from '../components/work_item_list_heading.vue';
 import {
   BASE_ALLOWED_CREATE_TYPES,
   DETAIL_VIEW_QUERY_PARAM_NAME,
@@ -131,13 +133,13 @@ export default {
     EmptyStateWithoutAnyIssues,
     CreateWorkItemModal,
     LocalBoard,
+    WorkItemListHeading,
   },
   mixins: [glFeatureFlagMixin()],
   inject: [
     'autocompleteAwardEmojisPath',
     'canBulkUpdate',
     'canBulkEditEpics',
-    'fullPath',
     'hasEpicsFeature',
     'hasGroupBulkEditFeature',
     'hasIssueDateFilterFeature',
@@ -180,6 +182,10 @@ export default {
       required: false,
       default: () => [],
     },
+    rootPageFullPath: {
+      type: String,
+      required: true,
+    },
   },
   data() {
     return {
@@ -202,6 +208,7 @@ export default {
       hasStateToken: false,
       initialLoadWasFiltered: false,
       showLocalBoard: false,
+      namespaceId: null,
     };
   },
   apollo: {
@@ -221,6 +228,7 @@ export default {
         return isEmpty(this.pageParams);
       },
       result({ data }) {
+        this.namespaceId = data?.[this.namespace]?.id;
         this.handleListDataResults(data);
       },
       error(error) {
@@ -288,6 +296,11 @@ export default {
         return this.workItemsSlim;
       }
       return this.workItemsFull;
+    },
+    shouldShowList() {
+      return (
+        this.hasAnyIssues || this.error || this.initialLoadWasFiltered || this.workItems.length > 0
+      );
     },
     detailLoading() {
       return this.$apollo.queries.workItemsFull.loading;
@@ -357,7 +370,7 @@ export default {
       const hasGroupFilter = Boolean(this.urlFilterParams.group_path);
       const singleWorkItemType = this.workItemType ? NAME_TO_ENUM_MAP[this.workItemType] : null;
       return {
-        fullPath: this.fullPath,
+        fullPath: this.rootPageFullPath,
         sort: this.sortKey,
         state: this.state,
         search: this.searchQuery,
@@ -392,9 +405,9 @@ export default {
           token: UserToken,
           dataType: 'user',
           operators: OPERATORS_IS_NOT_OR,
-          fullPath: this.fullPath,
+          fullPath: this.rootPageFullPath,
           isProject: !this.isGroup,
-          recentSuggestionsStorageKey: `${this.fullPath}-issues-recent-tokens-assignee`,
+          recentSuggestionsStorageKey: `${this.rootPageFullPath}-issues-recent-tokens-assignee`,
           preloadedUsers,
         },
         {
@@ -405,9 +418,9 @@ export default {
           dataType: 'user',
           defaultUsers: [],
           operators: OPERATORS_IS_NOT_OR,
-          fullPath: this.fullPath,
+          fullPath: this.rootPageFullPath,
           isProject: !this.isGroup,
-          recentSuggestionsStorageKey: `${this.fullPath}-issues-recent-tokens-author`,
+          recentSuggestionsStorageKey: `${this.rootPageFullPath}-issues-recent-tokens-author`,
           preloadedUsers,
         },
         {
@@ -418,16 +431,16 @@ export default {
           operators: OPERATORS_IS_NOT_OR,
           fetchLabels: this.fetchLabels,
           fetchLatestLabels: this.glFeatures.frontendCaching ? this.fetchLatestLabels : null,
-          recentSuggestionsStorageKey: `${this.fullPath}-issues-recent-tokens-label`,
+          recentSuggestionsStorageKey: `${this.rootPageFullPath}-issues-recent-tokens-label`,
         },
         {
           type: TOKEN_TYPE_MILESTONE,
           title: TOKEN_TITLE_MILESTONE,
           icon: 'milestone',
           token: MilestoneToken,
-          recentSuggestionsStorageKey: `${this.fullPath}-issues-recent-tokens-milestone`,
+          recentSuggestionsStorageKey: `${this.rootPageFullPath}-issues-recent-tokens-milestone`,
           shouldSkipSort: true,
-          fullPath: this.fullPath,
+          fullPath: this.rootPageFullPath,
           isProject: !this.isGroup,
         },
         {
@@ -452,7 +465,7 @@ export default {
           unique: true,
           token: GroupToken,
           operators: OPERATORS_IS,
-          fullPath: this.fullPath,
+          fullPath: this.rootPageFullPath,
         });
       }
 
@@ -461,8 +474,9 @@ export default {
           type: TOKEN_TYPE_TYPE,
           title: TOKEN_TITLE_TYPE,
           icon: 'issues',
+          unique: true,
           token: GlFilteredSearchToken,
-          operators: OPERATORS_IS,
+          operators: OPERATORS_IS_NOT,
           options: this.typeTokenOptions,
         });
       }
@@ -488,7 +502,7 @@ export default {
           token: EmojiToken,
           unique: true,
           fetchEmojis: this.fetchEmojis,
-          recentSuggestionsStorageKey: `${this.fullPath}-issues-recent-tokens-my_reaction`,
+          recentSuggestionsStorageKey: `${this.rootPageFullPath}-issues-recent-tokens-my_reaction`,
         });
 
         tokens.push({
@@ -626,6 +640,9 @@ export default {
     enableClientSideBoardsExperiment() {
       return this.glFeatures.workItemsClientSideBoards;
     },
+    isPlanningViewsEnabled() {
+      return this.glFeatures.workItemPlanningView;
+    },
     preselectedWorkItemType() {
       return this.isEpicsList ? WORK_ITEM_TYPE_NAME_EPIC : WORK_ITEM_TYPE_NAME_ISSUE;
     },
@@ -636,6 +653,7 @@ export default {
       if (!this.hasAnyIssues) {
         this.isInitialLoadComplete = false;
       }
+      this.$apollo.queries.workItemStateCounts.refetch();
       this.$apollo.queries.workItemsFull.refetch();
       this.$apollo.queries.workItemsSlim.refetch();
     },
@@ -664,11 +682,11 @@ export default {
       const findSlimItem = (id) => slim.find((item) => item.id === id);
       return full.map((fullItem) => {
         const slimVersion = findSlimItem(fullItem.id);
-        const combinedWidgets = unionBy(fullItem.widgets, slimVersion.widgets, 'type');
+        const combinedWidgets = unionBy(fullItem.widgets, slimVersion?.widgets, 'type');
         return {
           ...fullItem,
           widgets: combinedWidgets.reduce((acc, widget) => {
-            const slimWidget = slimVersion.widgets.find((w) => w.type === widget.type);
+            const slimWidget = slimVersion?.widgets.find((w) => w.type === widget.type);
             if (slimWidget && Object.keys(slimWidget).length > Object.keys(widget).length) {
               acc.push(slimWidget);
             } else {
@@ -706,7 +724,7 @@ export default {
     },
     calculateDocumentTitle(data) {
       const middleCrumb = this.isGroup ? data.group.name : data.project.name;
-      if (this.glFeatures.workItemPlanningView) {
+      if (this.isPlanningViewsEnabled) {
         return `${s__('WorkItem|Work items')} · ${middleCrumb} · GitLab`;
       }
       if (this.isGroup && this.isEpicsList) {
@@ -729,7 +747,7 @@ export default {
       return this.$apollo
         .query({
           query: searchLabelsQuery,
-          variables: { fullPath: this.fullPath, search, isProject: !this.isGroup },
+          variables: { fullPath: this.rootPageFullPath, search, isProject: !this.isGroup },
           fetchPolicy,
         })
         .then(({ data }) => {
@@ -826,24 +844,28 @@ export default {
     },
     deleteItem() {
       this.activeItem = null;
-      this.refetchItems();
+      this.refetchItems({ refetchCounts: true });
     },
     handleStatusChange(workItem) {
       if (this.state === STATUS_ALL) {
         return;
       }
       if (statusMap[this.state] !== workItem.state) {
-        this.refetchItems();
+        this.refetchItems({ refetchCounts: true });
       }
     },
     async refetchItems({ refetchCounts = false } = {}) {
-      this.isRefetching = true;
-      this.$apollo.queries.workItemsFull.refetch();
-      this.$apollo.queries.workItemsSlim.refetch();
       if (refetchCounts) {
         this.$apollo.queries.workItemStateCounts.refetch();
       }
-      this.isRefetching = false;
+
+      // evict the namespace's workItems cache to force a full refetch
+      const { cache } = this.$apollo.provider.defaultClient;
+      cache.evict({
+        id: cache.identify({ __typename: capitalize(this.namespace), id: this.namespaceId }),
+        fieldName: 'workItems',
+      });
+      cache.gc();
     },
     updateData(sort) {
       const firstPageSize = getParameterByName(PARAM_FIRST_PAGE_SIZE);
@@ -928,7 +950,7 @@ export default {
 <template>
   <gl-loading-icon v-if="!isInitialLoadComplete && !error" class="gl-mt-5" size="lg" />
 
-  <div v-else-if="hasAnyIssues || error || initialLoadWasFiltered">
+  <div v-else-if="shouldShowList">
     <div v-if="showLocalBoard">
       <local-board :work-item-list-data="workItems" @back="showLocalBoard = false" />
     </div>
@@ -947,7 +969,6 @@ export default {
       />
       <issuable-list
         :active-issuable="activeItem"
-        :add-padding="!withTabs"
         :current-tab="state"
         :default-page-size="pageSize"
         :error="error"
@@ -959,7 +980,7 @@ export default {
         :issuables-loading="isLoading"
         :show-bulk-edit-sidebar="showBulkEditSidebar"
         namespace="work-items"
-        :full-path="fullPath"
+        :full-path="rootPageFullPath"
         recent-searches-storage-key="issues"
         :search-tokens="searchTokens"
         show-filtered-search-friendly-text
@@ -982,7 +1003,7 @@ export default {
         @sort="handleSort"
         @select-issuable="handleToggle"
       >
-        <template #nav-actions>
+        <template v-if="!isPlanningViewsEnabled" #nav-actions>
           <div class="gl-flex gl-gap-3">
             <gl-button
               v-if="enableClientSideBoardsExperiment"
@@ -1003,11 +1024,43 @@ export default {
               v-if="showNewWorkItem"
               :allowed-work-item-types="allowedWorkItemTypes"
               :always-show-work-item-type-select="!isEpicsList"
+              :full-path="rootPageFullPath"
               :is-group="isGroup"
               :preselected-work-item-type="preselectedWorkItemType"
               @workItemCreated="refetchItems"
             />
           </div>
+        </template>
+
+        <template v-if="isPlanningViewsEnabled" #list-header>
+          <work-item-list-heading>
+            <div class="gl-flex gl-gap-3">
+              <gl-button
+                v-if="enableClientSideBoardsExperiment"
+                data-testid="show-local-board-button"
+                @click="showLocalBoard = true"
+              >
+                {{ __('Launch board') }}
+              </gl-button>
+              <gl-button
+                v-if="allowBulkEditing"
+                :disabled="showBulkEditSidebar"
+                data-testid="bulk-edit-start-button"
+                @click="showBulkEditSidebar = true"
+              >
+                {{ __('Bulk edit') }}
+              </gl-button>
+              <create-work-item-modal
+                v-if="showNewWorkItem"
+                :allowed-work-item-types="allowedWorkItemTypes"
+                :always-show-work-item-type-select="!isEpicsList"
+                :full-path="rootPageFullPath"
+                :is-group="isGroup"
+                :preselected-work-item-type="preselectedWorkItemType"
+                @workItemCreated="refetchItems"
+              />
+            </div>
+          </work-item-list-heading>
         </template>
 
         <template #timeframe="{ issuable = {} }">
@@ -1053,7 +1106,7 @@ export default {
           <work-item-bulk-edit-sidebar
             v-if="showBulkEditSidebar"
             :checked-items="checkedIssuables"
-            :full-path="fullPath"
+            :full-path="rootPageFullPath"
             :is-epics-list="isEpicsList"
             :is-group="isGroup"
             @finish="bulkEditInProgress = false"
@@ -1074,6 +1127,7 @@ export default {
       <empty-state-without-any-issues>
         <template #new-issue-button>
           <create-work-item-modal
+            :full-path="rootPageFullPath"
             :is-group="isGroup"
             :preselected-work-item-type="preselectedWorkItemType"
             @workItemCreated="handleWorkItemCreated"

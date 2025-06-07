@@ -113,8 +113,8 @@ Group permissions for [compliance](compliance/_index.md) features including comp
 | View [audit events](compliance/audit_events.md)                                       |       |         |          |     ✓     |     ✓      |   ✓   | Users can view only events based on their individual actions. For more details, see the [prerequisites](compliance/audit_events.md#prerequisites). |
 | View licenses in the [dependency list](application_security/dependency_list/_index.md) |       |         |          |     ✓     |     ✓      |   ✓   |       |
 | View the [compliance center](compliance/compliance_center/_index.md)                  |       |         |          |           |            |   ✓   |       |
-| Manage [compliance frameworks](compliance/compliance_frameworks.md)                        |       |         |          |           |            |   ✓   |       |
-| Assign [compliance frameworks](compliance/compliance_frameworks.md) to projects            |       |         |          |           |            |   ✓   |       |
+| Manage [compliance frameworks](compliance/compliance_frameworks/_index.md) |       |         |          |           |            |   ✓   |       |
+| Assign [compliance frameworks](compliance/compliance_frameworks/_index.md) to projects |       |         |          |           |            |   ✓   |       |
 | Manage [audit streams](compliance/audit_event_streaming.md)                           |       |         |          |           |            |   ✓   |       |
 
 ### GitLab Duo group permissions
@@ -123,11 +123,17 @@ Group permissions for [GitLab Duo](gitlab_duo/_index.md):
 
 | Action                                                                                                    | Non-member | Guest | Planner | Reporter | Developer | Maintainer | Owner | Notes |
 | --------------------------------------------------------------------------------------------------------- | :--------: | :---: | :-----: | :------: | :-------: | :--------: | :---: | ----- |
-| Use Duo features                                                                                          |            |       |         |    ✓     |     ✓     |     ✓      |   ✓   | Requires [user being assigned a seat to gain access to a Duo add-on](../subscriptions/subscription-add-ons.md#assign-gitlab-duo-seats). |
+| Use Duo features                                                                                          |            |       |         |    ✓     |     ✓     |     ✓      |   ✓   | Requirements differ depending on if the user has GitLab Duo Core, Pro, or Enterprise. <sup>1</sup> |
 | Configure [Duo feature availability](gitlab_duo/turn_on_off.md#for-a-group-or-subgroup)                      |            |       |         |          |           |     ✓      |   ✓   |       |
 | Configure [GitLab Duo Self Hosted](../administration/gitlab_duo_self_hosted/configure_duo_features.md)            |            |       |         |          |           |            |   ✓   |       |
 | Enable [beta and experimental features](gitlab_duo/turn_on_off.md#turn-on-beta-and-experimental-features) |            |       |         |          |           |            |   ✓   |       |
 | Purchase [Duo seats](../subscriptions/subscription-add-ons.md#purchase-additional-gitlab-duo-seats)       |            |       |         |          |           |            |   ✓   |       |
+
+**Footnotes**
+
+1. If the user has GitLab Duo Pro or Enterprise, the
+   [user must be assigned a seat to gain access to that Duo add-on](../subscriptions/subscription-add-ons.md#assign-gitlab-duo-seats). If the user has GitLab Duo Core, there are
+   no other requirements.
 
 ### Groups group permissions
 
@@ -305,9 +311,9 @@ Project permissions for [application security](application_security/secure_your_
 [GitLab CI/CD](../ci/_index.md) permissions for some roles can be modified by these settings:
 
 - [Public pipelines](../ci/pipelines/settings.md#change-which-users-can-view-your-pipelines):
-  When set to public, gives access to certain CI/CD features to *Guest* project members.
+  When set to public, gives access to certain CI/CD features to Guest project members.
 - [Pipeline visibility](../ci/pipelines/settings.md#change-pipeline-visibility-for-non-project-members-in-public-projects):
-  When set to **Everyone with Access**, gives access to certain CI/CD "view" features to *non-project* members.
+  When set to **Everyone with Access**, gives access to certain CI/CD "view" features to non-project members.
 
 Project Owners can perform any listed action, and can delete pipelines:
 
@@ -326,7 +332,7 @@ Project Owners can perform any listed action, and can delete pipelines:
 | View [agents for Kubernetes](clusters/agent/_index.md)                                                                          |            |       |         |          |     ✓     |     ✓      |       |
 | View project [Secure Files](../api/secure_files.md)                                                                            |            |       |         |          |     ✓     |     ✓      |       |
 | Download project [Secure Files](../api/secure_files.md)                                                                        |            |       |         |          |     ✓     |     ✓      |       |
-| View a job with [debug logging](../ci/variables/_index.md#enable-debug-logging)                                                 |            |       |         |          |     ✓     |     ✓      |       |
+| View a job with [debug logging](../ci/variables/variables_troubleshooting.md#enable-debug-logging)                             |            |       |         |          |     ✓     |     ✓      |       |
 | Create [environments](../ci/environments/_index.md)                                                                             |            |       |         |          |     ✓     |     ✓      |       |
 | Delete [environments](../ci/environments/_index.md)                                                                             |            |       |         |          |     ✓     |     ✓      |       |
 | Stop [environments](../ci/environments/_index.md)                                                                               |            |       |         |          |     ✓     |     ✓      |       |
@@ -669,7 +675,7 @@ To work around the issue, give these users the Guest role or higher to any proje
 - [Members](project/members/_index.md)
 - Customize permissions on [protected branches](project/repository/branches/protected.md)
 - [LDAP user permissions](group/access_and_permissions.md#manage-group-memberships-with-ldap)
-- [Value stream analytics permissions](group/value_stream_analytics/_index.md#access-permissions-for-value-stream-analytics)
+- [Value stream analytics permissions](group/value_stream_analytics/_index.md#access-permissions)
 - [Project aliases](project/working_with_projects.md#project-aliases)
 - [Auditor users](../administration/auditor_users.md)
 - [Confidential issues](project/issues/confidential_issues.md)

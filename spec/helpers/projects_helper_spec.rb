@@ -414,32 +414,6 @@ RSpec.describe ProjectsHelper, feature_category: :source_code_management do
     end
   end
 
-  describe '#show_projects' do
-    let(:projects) do
-      Project.all
-    end
-
-    it 'returns true when there are projects' do
-      expect(helper.show_projects?(projects, {})).to eq(true)
-    end
-
-    it 'returns true when there are no projects but a name is given' do
-      expect(helper.show_projects?(Project.none, name: 'foo')).to eq(true)
-    end
-
-    it 'returns true when there are no projects but personal is present' do
-      expect(helper.show_projects?(Project.none, personal: 'true')).to eq(true)
-    end
-
-    it 'returns false when there are no projects and there is no name' do
-      expect(helper.show_projects?(Project.none, {})).to eq(false)
-    end
-
-    it 'returns true when there are no projects but archived param is "only"' do
-      expect(helper.show_projects?(Project.none, archived: 'only')).to eq(true)
-    end
-  end
-
   describe '#push_to_create_project_command' do
     let(:user) { build_stubbed(:user, username: 'john') }
 
@@ -2085,106 +2059,6 @@ RSpec.describe ProjectsHelper, feature_category: :source_code_management do
 
       it 'returns the correct boolean response' do
         expect(helper.show_dashboard_projects_welcome_page?).to eq(result)
-      end
-    end
-  end
-
-  describe '#delete_delayed_project_message' do
-    subject(:message) { helper.delete_delayed_project_message(project) }
-
-    specify do
-      deletion_adjourned_period = ::Gitlab::CurrentSettings.deletion_adjourned_period
-
-      expect(message).to eq "This action will place this project, " \
-        "including all its resources, in a pending deletion state for #{deletion_adjourned_period} days, " \
-        "and delete it permanently on <strong>#{helper.permanent_deletion_date_formatted}</strong>."
-    end
-  end
-
-  describe '#delete_immediately_project_scheduled_for_deletion_message' do
-    let(:marked_for_deletion) { Date.parse('2024-01-01') }
-
-    subject(:message) { helper.delete_immediately_project_scheduled_for_deletion_message(project) }
-
-    before do
-      allow(project).to receive(:marked_for_deletion_on).and_return(marked_for_deletion)
-    end
-
-    it 'returns the delete permanently override message' do
-      deletion_date = helper.permanent_deletion_date_formatted(project)
-
-      expect(message).to eq "This project is scheduled for deletion on <strong>#{deletion_date}</strong>. " \
-        "This action will permanently delete this project, including all its resources, " \
-        "<strong>immediately</strong>. This action cannot be undone."
-    end
-  end
-
-  describe '#project_delete_delayed_button_data', time_travel_to: '2025-02-02' do
-    let(:base_button_data) do
-      {
-        button_text: 'Delete project',
-        restore_help_path: help_page_path('user/project/working_with_projects.md', anchor: 'restore-a-project'),
-        delayed_deletion_date: '2025-02-09',
-        form_path: project_path(project),
-        confirm_phrase: project.path_with_namespace,
-        name_with_namespace: project.name_with_namespace,
-        is_fork: 'false',
-        issues_count: '0',
-        merge_requests_count: '0',
-        forks_count: '0',
-        stars_count: '0'
-      }
-    end
-
-    before do
-      stub_application_setting(deletion_adjourned_period: 7)
-    end
-
-    describe 'with default button text' do
-      subject(:data) { helper.project_delete_delayed_button_data(project) }
-
-      it 'returns expected hash' do
-        expect(data).to match(base_button_data)
-      end
-    end
-
-    describe 'with custom button text' do
-      subject(:data) { helper.project_delete_delayed_button_data(project, 'Delete project immediately') }
-
-      it 'returns expected hash' do
-        expect(data).to match(base_button_data.merge(button_text: 'Delete project immediately'))
-      end
-    end
-  end
-
-  describe '#project_delete_immediately_button_data' do
-    let(:base_button_data) do
-      {
-        button_text: 'Delete project',
-        form_path: project_path(project, permanently_delete: true),
-        confirm_phrase: project.path_with_namespace,
-        name_with_namespace: project.name_with_namespace,
-        is_fork: 'false',
-        issues_count: '0',
-        merge_requests_count: '0',
-        forks_count: '0',
-        stars_count: '0'
-      }
-    end
-
-    describe 'with default button text' do
-      subject(:data) { helper.project_delete_immediately_button_data(project) }
-
-      it 'returns expected hash' do
-        expect(data).to match(base_button_data)
-      end
-    end
-
-    describe 'with custom button text' do
-      subject(:data) { helper.project_delete_immediately_button_data(project, 'Delete project immediately') }
-
-      it 'returns expected hash' do
-        expect(data).to match(base_button_data.merge(button_text: 'Delete project immediately'))
       end
     end
   end

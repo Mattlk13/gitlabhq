@@ -316,11 +316,11 @@ export default {
       <div
         class="align-items-start board-card-number-container gl-flex gl-flex-wrap-reverse gl-overflow-hidden"
       >
-        <span class="board-info-items gl-inline-block gl-leading-20">
+        <span class="board-info-items gl-flex gl-items-center gl-leading-20">
           <gl-loading-icon v-if="isLoading" size="lg" class="gl-mt-5" />
           <span
             v-if="showBoardCardNumber"
-            class="board-card-number gl-mr-3 gl-mt-3 gl-gap-2 gl-overflow-hidden gl-text-sm gl-text-subtle"
+            class="board-card-number gl-mr-3 gl-gap-2 gl-overflow-hidden gl-text-sm gl-text-subtle"
             :class="{ 'gl-text-base': isEpicBoard }"
           >
             <work-item-type-icon
@@ -373,7 +373,7 @@ export default {
           </span>
         </span>
       </div>
-      <div class="gl-flex gl-flex-1 gl-items-center gl-justify-end gl-gap-3">
+      <div class="gl-flex gl-flex-1 gl-flex-wrap gl-items-center gl-justify-end gl-gap-3">
         <div class="board-card-assignee gl-flex">
           <user-avatar-link
             v-for="assignee in cappedAssignees"
@@ -411,12 +411,14 @@ export default {
           :work-item-web-url="item.webUrl"
           :target-id="targetId"
         />
-        <work-item-status-badge
-          v-if="showStatus"
-          :name="item.status.name"
-          :icon-name="item.status.iconName"
-          :color="item.status.color"
-        />
+        <div class="gl-max-w-20">
+          <work-item-status-badge
+            v-if="showStatus"
+            :name="item.status.name"
+            :icon-name="item.status.iconName"
+            :color="item.status.color"
+          />
+        </div>
       </div>
     </div>
   </div>

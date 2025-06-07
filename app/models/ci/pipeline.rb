@@ -934,11 +934,7 @@ module Ci
 
     def protected_ref?
       strong_memoize(:protected_ref) do
-        if Feature.enabled?(:protect_merge_request_pipelines, project)
-          merge_request? ? protected_for_merge_request? : project.protected_for?(git_ref)
-        else
-          project.protected_for?(git_ref)
-        end
+        merge_request? ? protected_for_merge_request? : project.protected_for?(git_ref)
       end
     end
 
@@ -956,9 +952,11 @@ module Ci
     end
 
     def queued_duration
-      return unless started_at
+      queueing_finished_time = started_at || finished_at
+      return unless queueing_finished_time
+      return unless created_at
 
-      seconds = (started_at - created_at).to_i
+      seconds = (queueing_finished_time - created_at).to_i
       seconds unless seconds == 0
     end
 

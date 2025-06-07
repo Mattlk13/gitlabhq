@@ -15,6 +15,7 @@ RSpec.describe Gitlab::Database::LooseForeignKeys, feature_category: :database d
             on_delete: be_in([:async_delete, :async_nullify, :update_column_to]),
             target_column: be_a(String).or(be_a(NilClass)),
             target_value: be_a(String).or(be_a(Integer)).or(be_a(NilClass)),
+            delete_limit: be_a(Integer).or(be_a(NilClass)),
             conditions: be_nil.or(
               be_an(Array).and(
                 all(

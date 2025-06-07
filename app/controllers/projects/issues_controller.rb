@@ -18,6 +18,7 @@ class Projects::IssuesController < Projects::ApplicationController
 
   before_action :disable_query_limiting, only: [:create_merge_request, :move, :bulk_update]
   before_action :disable_show_query_limit!, only: :show
+  before_action :disable_create_query_limit!, only: :create
 
   before_action :check_issues_available!
   before_action :issue, unless: ->(c) { ISSUES_EXCEPT_ACTIONS.include?(c.action_name.to_sym) }
@@ -412,6 +413,12 @@ class Projects::IssuesController < Projects::ApplicationController
     Gitlab::QueryLimiting.disable!('https://gitlab.com/gitlab-org/gitlab/-/issues/544875', new_threshold: 120)
   end
 
+  def disable_create_query_limit!
+    # TODO: Investigate threshold after epic-work item sync
+    # issue: https://gitlab.com/gitlab-org/gitlab/-/issues/438295
+    Gitlab::QueryLimiting.disable!('https://gitlab.com/gitlab-org/gitlab/-/issues/546668', new_threshold: 150)
+  end
+
   def show_work_item?
     # Service Desk issues and incidents should not use the work item view
     !issue.from_service_desk? &&
@@ -431,7 +438,7 @@ class Projects::IssuesController < Projects::ApplicationController
       errors: result.errors,
       http_status: result.http_status
     )
-    error_method_name = "render_#{result.http_status}".to_sym
+    error_method_name = :"render_#{result.http_status}"
 
     if respond_to?(error_method_name, true)
       send(error_method_name) # rubocop:disable GitlabSecurity/PublicSend

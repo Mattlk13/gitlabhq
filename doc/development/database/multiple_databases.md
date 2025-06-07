@@ -1,7 +1,7 @@
 ---
 stage: Tenant Scale
 group: Cells Infrastructure
-info: Any user with at least the Maintainer role can merge updates to this content. For details, see https://docs.gitlab.com/ee/development/development_processes.html#development-guidelines-review.
+info: Any user with at least the Maintainer role can merge updates to this content. For details, see https://docs.gitlab.com/development/development_processes/#development-guidelines-review.
 title: Multiple Databases
 ---
 
@@ -51,15 +51,10 @@ The usage of schema enforces the base class to be used:
 - `PackageMetadata::ApplicationRecord` for `gitlab_pm`
 - `SecApplicationRecord` for `gitlab_sec`
 
-### Choose either the `gitlab_main_cell` or `gitlab_main_clusterwide` schema
-
-This content has been moved to a
-[new location](../cells/_index.md#choose-either-the-gitlab_main_cell-or-gitlab_main_clusterwide-schema)
-
 ### Defining a sharding key for all cell-local tables
 
 This content has been moved to a
-[new location](../cells/_index.md#defining-a-sharding-key-for-all-organizational-tables)
+[new location](../organization/_index.md#defining-a-sharding-key-for-all-organizational-tables)
 
 ### The impact of `gitlab_schema`
 

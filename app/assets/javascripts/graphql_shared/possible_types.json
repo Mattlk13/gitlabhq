@@ -60,6 +60,10 @@
     "MergeRequest",
     "WorkItemWidgetCurrentUserTodos"
   ],
+  "CustomRoleInterface": [
+    "AdminMemberRole",
+    "MemberRole"
+  ],
   "DependencyInterface": [
     "Dependency",
     "DependencyAggregation"
@@ -133,11 +137,20 @@
     "AbuseReportLabel",
     "Label"
   ],
+  "MarkdownPaths": [
+    "GroupNamespaceMarkdownPaths",
+    "ProjectNamespaceMarkdownPaths",
+    "UserNamespaceMarkdownPaths"
+  ],
   "MemberInterface": [
     "GroupMember",
     "PendingGroupMember",
     "PendingProjectMember",
     "ProjectMember"
+  ],
+  "MemberRoleInterface": [
+    "MemberRole",
+    "StandardRole"
   ],
   "NamespaceUnion": [
     "CiDeletedNamespace",

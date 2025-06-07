@@ -23,7 +23,7 @@ This topic is specifically related to user moderation in GitLab Self-Managed. Fo
 
 ## Users pending approval
 
-A user in _pending approval_ state requires action by an administrator. A user sign up can be in a
+A user in a pending approval state requires action by an administrator. A user sign up can be in a
 pending approval state because an administrator has enabled any of the following options:
 
 - [Require administrator approval for new sign-ups](settings/sign_up_restrictions.md#require-administrator-approval-for-new-sign-ups) setting.
@@ -228,6 +228,9 @@ To do this:
 When this feature is enabled, GitLab runs a daily job to deactivate the dormant users.
 
 A maximum of 100,000 users can be deactivated per day.
+
+By default, users receive an email notification when their account is deactivated.
+You can disable [user deactivation emails](settings/email.md#user-deactivation-emails).
 
 {{< alert type="note" >}}
 

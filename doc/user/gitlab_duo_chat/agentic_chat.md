@@ -38,11 +38,15 @@ files for you.
 Agentic Chat is only available in the
 [GitLab Workflow extension for VS Code](../../editor_extensions/visual_studio_code/_index.md) version 6.15.1 or later.
 
+<i class="fa fa-youtube-play youtube" aria-hidden="true"></i>
+For an overview, see [GitLab Duo Agentic Chat](https://youtu.be/uG9-QLAJrrg?si=c25SR7DoRAep7jvQ).
+<!-- Video published on 2025-06-02 -->
+
 ## Use Agentic Chat in VS Code
 
 Prerequisites:
 
-- A GitLab Duo Pro or Enterprise add-on.
+- A GitLab Duo Core, Pro, or Enterprise add-on.
 - A Premium or Ultimate subscription.
 - You have an assigned seat for or access to GitLab Duo Chat.
 - You have [installed and configured the GitLab Workflow extension for VS Code](../../editor_extensions/visual_studio_code/setup.md) version 6.15.1 or later.
@@ -153,3 +157,7 @@ used in the search.
 
 Because this is an experimental feature, your feedback is valuable in helping us improve it.
 Share your experiences, suggestions, or issues in [issue 542198](https://gitlab.com/gitlab-org/gitlab/-/issues/542198).
+
+## Related topics
+
+- [Blog: GitLab Duo Chat gets agentic AI makeover](https://about.gitlab.com/blog/2025/05/29/gitlab-duo-chat-gets-agentic-ai-makeover/)
