@@ -3,6 +3,7 @@ stage: none
 group: unassigned
 info: To determine the technical writer assigned to the Stage/Group associated with this page, see https://handbook.gitlab.com/handbook/product/ux/technical-writing/#assignments
 description: Monitor application performance and troubleshoot performance issues.
+ignore_in_report: true
 title: Observability
 ---
 
@@ -34,7 +35,9 @@ Use GitLab Observability (O11y) to:
 - View distributed traces, logs, and metrics in a single platform.
 - Identify and troubleshoot performance bottlenecks in your applications.
 
-Support for improvements is proposed in [issue 8](https://gitlab.com/experimental-observability/gitlab_o11y/-/issues/8).
+{{< alert type="disclaimer" />}}
+
+By adding observability to GitLab itself users can gain [these (planned) features](https://gitlab.com/gitlab-org/embody-team/experimental-observability/gitlab_o11y/-/issues/8).
 
 ## Set up a GitLab Observability instance
 
@@ -119,7 +122,7 @@ docker info | grep "Docker Root Dir"
 
 ```shell
 cd /mnt/data
-git clone -b main https://gitlab.com/experimental-observability/gitlab_o11y.git
+git clone -b main https://gitlab.com/gitlab-org/embody-team/experimental-observability/gitlab_o11y.git
 cd gitlab_o11y/deploy/docker
 docker-compose up -d
 ```
@@ -141,6 +144,9 @@ To properly receive telemetry data, you need to open specific ports in your GitL
    - Type: Custom TCP, Port: 8080, Source: Your IP or 0.0.0.0/0 (for UI access)
    - Type: Custom TCP, Port: 4317, Source: Your IP or 0.0.0.0/0 (for OTLP gRPC)
    - Type: Custom TCP, Port: 4318, Source: Your IP or 0.0.0.0/0 (for OTLP HTTP)
+   - Type: Custom TCP, Port: 9411, Source: Your IP or 0.0.0.0/0 (for Zipkin - optional)
+   - Type: Custom TCP, Port: 14268, Source: Your IP or 0.0.0.0/0 (for Jaeger HTTP - optional)
+   - Type: Custom TCP, Port: 14250, Source: Your IP or 0.0.0.0/0 (for Jaeger gRPC - optional)
 1. Select **Save rules**.
 
 ### Access GitLab Observability
@@ -185,9 +191,31 @@ docker run --detach \
   --publish 443:443 --publish 80:80 --publish 22:22 \
   --name gitlab \
   --restart always \
-  --env O11Y_URL="http://[your-o11y-instance-ip]:8080" \
   gitlab/gitlab-ce:latest
 ```
+
+The `O11Y_URL` environment variable must be configured in the GitLab configuration file:
+
+1. Access the container:
+
+   ```shell
+   docker exec -it gitlab /bin/bash
+   ```
+
+1. Edit `/etc/gitlab/gitlab.rb`:
+
+   ```ruby
+   gitlab_rails['env'] = {
+     'O11Y_URL' => 'http://[your-o11y-instance-ip]:8080'
+   }
+   ```
+
+1. Reconfigure GitLab:
+
+   ```shell
+   gitlab-ctl reconfigure
+   gitlab-ctl restart
+   ```
 
 {{< /tab >}}
 
@@ -200,23 +228,23 @@ The Observability feature is behind a feature flag. To enable it:
 1. Access the Rails console:
 
    {{< tabs >}}
- 
+
    {{< tab title="Linux package (Omnibus)" >}}
- 
+
    ```shell
    sudo gitlab-rails console
    ```
- 
+
    {{< /tab >}}
- 
+
    {{< tab title="Docker" >}}
- 
+
    ```shell
    docker exec -it gitlab gitlab-rails console
    ```
- 
+
    {{< /tab >}}
- 
+
    {{< /tabs >}}
 
 1. Enable the feature flag for your group:
@@ -390,7 +418,9 @@ If your telemetry data isn't appearing in GitLab O11y:
 1. Check container logs for any errors:
 
    ```shell
-   docker logs signoz-otel-collector
+   docker logs otel-collector-standard
+   docker logs o11y-otel-collector
+   docker logs o11y
    ```
 
 1. Try using the HTTP endpoint (4318) instead of gRPC (4317).

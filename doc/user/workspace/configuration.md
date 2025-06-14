@@ -15,8 +15,7 @@ title: Configure workspaces
 
 {{< history >}}
 
-- [Introduced](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/112397) in GitLab 15.11 [with a flag](../../administration/feature_flags.md) named `remote_development_feature_flag`. Disabled by default.
-- [Enabled on GitLab.com and GitLab Self-Managed](https://gitlab.com/gitlab-org/gitlab/-/issues/391543) in GitLab 16.0.
+- Feature flag `remote_development_feature_flag` [enabled on GitLab.com and GitLab Self-Managed](https://gitlab.com/gitlab-org/gitlab/-/issues/391543) in GitLab 16.0.
 - [Generally available](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/136744) in GitLab 16.7. Feature flag `remote_development_feature_flag` removed.
 
 {{< /history >}}
@@ -77,7 +76,7 @@ Prerequisites:
 1. Select **Edit > New workspace**.
 1. From the **Cluster agent** dropdown list, select a cluster agent owned by the group the project belongs to.
 1. From the **Git reference** dropdown list, select the branch, tag, or commit hash
-   GitLab uses to create the workspace.
+   GitLab uses to create the workspace. By default, this is the branch you're viewing.
 1. From the **Devfile** dropdown list, select one of the following:
    - [GitLab default devfile](_index.md#gitlab-default-devfile).
    - [Custom devfile](_index.md#custom-devfile).
@@ -90,11 +89,12 @@ Prerequisites:
 {{< tab title="From a merge request" >}}
 
 1. On the left sidebar, select **Search or go to** and find your project.
-1. On the left sidebar, Select **Code > Merge requests**.
+1. On the left sidebar, select **Code > Merge requests**.
+1. Select the merge request you want to create a workspace for.
 1. Select **Code > Open in Workspace**.
 1. From the **Cluster agent** dropdown list, select a cluster agent owned by the group the project belongs to.
 1. From the **Git reference** dropdown list, select the branch, tag, or commit hash
-   GitLab uses to create the workspace. By default this is the source branch of the merge request.
+   GitLab uses to create the workspace. By default, this is the source branch of the merge request.
 1. From the **Devfile** dropdown list, select one of the following:
    - [GitLab default devfile](_index.md#gitlab-default-devfile).
    - [Custom devfile](_index.md#custom-devfile).

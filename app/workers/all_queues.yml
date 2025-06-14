@@ -23,6 +23,16 @@
   :idempotent: true
   :tags: []
   :queue_namespace: :authorized_project_update
+- :name: authorized_project_update:authorized_project_update_enqueue_users_refresh_authorized_projects
+  :worker_name: AuthorizedProjectUpdate::EnqueueUsersRefreshAuthorizedProjectsWorker
+  :feature_category: :permissions
+  :has_external_dependencies: false
+  :urgency: :low
+  :resource_boundary: :unknown
+  :weight: 1
+  :idempotent: true
+  :tags: []
+  :queue_namespace: :authorized_project_update
 - :name: authorized_project_update:authorized_project_update_project_recalculate
   :worker_name: AuthorizedProjectUpdate::ProjectRecalculateWorker
   :feature_category: :permissions
@@ -509,6 +519,16 @@
 - :name: cronjob:container_registry_cleanup
   :worker_name: ContainerRegistry::CleanupWorker
   :feature_category: :container_registry
+  :has_external_dependencies: false
+  :urgency: :low
+  :resource_boundary: :unknown
+  :weight: 1
+  :idempotent: true
+  :tags: []
+  :queue_namespace: :cronjob
+- :name: cronjob:counters_flush_stale_counter_increments_cron
+  :worker_name: Gitlab::Counters::FlushStaleCounterIncrementsCronWorker
+  :feature_category: :continuous_integration
   :has_external_dependencies: false
   :urgency: :low
   :resource_boundary: :unknown
@@ -3477,6 +3497,16 @@
   :idempotent: true
   :tags: []
   :queue_namespace:
+- :name: ci_safe_disable_pipeline_variables
+  :worker_name: Ci::SafeDisablePipelineVariablesWorker
+  :feature_category: :ci_variables
+  :has_external_dependencies: false
+  :urgency: :low
+  :resource_boundary: :unknown
+  :weight: 1
+  :idempotent: true
+  :tags: []
+  :queue_namespace:
 - :name: ci_unlock_pipelines_in_queue
   :worker_name: Ci::UnlockPipelinesInQueueWorker
   :feature_category: :job_artifacts
@@ -3513,6 +3543,16 @@
   :feature_category: :not_owned
   :has_external_dependencies: false
   :urgency: :low
+  :resource_boundary: :unknown
+  :weight: 1
+  :idempotent: true
+  :tags: []
+  :queue_namespace:
+- :name: counters_flush_stale_counter_increments
+  :worker_name: Gitlab::Counters::FlushStaleCounterIncrementsWorker
+  :feature_category: :continuous_integration
+  :has_external_dependencies: false
+  :urgency: :throttled
   :resource_boundary: :unknown
   :weight: 1
   :idempotent: true
@@ -3780,7 +3820,7 @@
   :queue_namespace:
 - :name: flush_counter_increments
   :worker_name: FlushCounterIncrementsWorker
-  :feature_category: :not_owned
+  :feature_category: :continuous_integration
   :has_external_dependencies: false
   :urgency: :low
   :resource_boundary: :unknown
@@ -4582,7 +4622,8 @@
   :resource_boundary: :memory
   :weight: 1
   :idempotent: true
-  :tags: []
+  :tags:
+  - :import_shared_storage
   :queue_namespace:
 - :name: projects_import_export_relation_export
   :worker_name: Projects::ImportExport::RelationExportWorker

@@ -307,6 +307,38 @@ There is a limit when embedding metrics in GitLab Flavored Markdown (GLFM) for p
 
 - **Max limit**: 100 embeds.
 
+## HTTP response limits
+
+### Maximum Gzip-compressed size
+
+This setting is used to restrict the maximum allowed size in MiB for Gzip-compressed
+HTTP responses after decompression to prevent DoS.
+
+The default maximum size is 100 MiB. To disable this limit, set the value to 0.
+If the value is too high, it could expose the instance to DoS attacks.
+
+You can change this limit by using the GitLab Rails console or use
+[application setting API](../api/settings.md)
+
+ ```ruby
+ ApplicationSetting.update(max_http_decompressed_size: 50)
+ ```
+
+### Maximum HTTP responses size
+
+This setting is used to restrict the maximum allowed size in MiB for decompressed
+HTTP responses to prevent DoS. It applies to integrations, importers, and webhooks.
+
+The default maximum size is 100 MiB. To disable this limit, set the value to 0.
+If the value is too high, it could expose the instance to DoS attacks.
+
+You can change this limit by using the GitLab Rails console or use
+[application setting API](../api/settings.md)
+
+ ```ruby
+ ApplicationSetting.update(max_http_response_size_limit: 60)
+ ```
+
 ## Webhook limits
 
 Also see [Webhook rate limits](#webhook-rate-limit).
@@ -1219,7 +1251,7 @@ ApplicationSetting.update(math_rendering_limits_enabled: false)
 These limits can also be disabled per-group using the GraphQL or REST API.
 
 If the limits are disabled, math is rendered with mostly no limits in issues, merge requests, epics, wikis, and repository files.
-This means a malicious actor _could_ add math that would cause a DoS when viewing in the browser. You must ensure
+This means a malicious actor could add math that would cause a DoS when viewing in the browser. You must ensure
 that only people you trust can add content.
 
 ## Wiki limits

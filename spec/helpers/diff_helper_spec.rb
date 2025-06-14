@@ -498,7 +498,7 @@ RSpec.describe DiffHelper, feature_category: :code_review_workflow do
       end
 
       it "filters with safe_params" do
-        expect(helper.params_with_whitespace).to eq({ 'w' => 1 })
+        expect(helper.params_with_whitespace.to_h).to eq({ 'w' => 1 })
       end
     end
 
@@ -862,6 +862,6 @@ RSpec.describe DiffHelper, feature_category: :code_review_workflow do
   describe "#file_heading_id" do
     subject { helper.file_heading_id(diff_file) }
 
-    it { is_expected.to eq("#{diff_file.file_hash}-heading") }
+    it { is_expected.to eq("#{diff_file.file_hash[0..8]}-heading") }
   end
 end

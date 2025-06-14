@@ -11,11 +11,12 @@ import { apolloProvider } from '~/graphql_shared/issuable_client';
 import App from './components/app.vue';
 import WorkItemBreadcrumb from './components/work_item_breadcrumb.vue';
 import activeDiscussionQuery from './components/design_management/graphql/client/active_design_discussion.query.graphql';
+import { WORK_ITEM_TYPE_NAME_EPIC } from './constants';
 import { createRouter } from './router';
 
 Vue.use(VueApollo);
 
-export const initWorkItemsRoot = ({ workspaceType, withTabs } = {}) => {
+export const initWorkItemsRoot = ({ workItemType, workspaceType, withTabs } = {}) => {
   const el = document.querySelector('#js-work-items');
 
   if (!el) {
@@ -41,12 +42,12 @@ export const initWorkItemsRoot = ({ workspaceType, withTabs } = {}) => {
     hasOkrsFeature,
     hasSubepicsFeature,
     hasIssuableHealthStatusFeature,
+    hasCustomFieldsFeature,
     newCommentTemplatePaths,
     reportAbusePath,
     defaultBranch,
     initialSort,
     isSignedIn,
-    workItemType,
     hasEpicsFeature,
     showNewWorkItem,
     canCreateEpic,
@@ -61,6 +62,8 @@ export const initWorkItemsRoot = ({ workspaceType, withTabs } = {}) => {
     newProjectPath,
     hasIssueDateFilterFeature,
     timeTrackingLimitToHours,
+    hasStatusFeature,
+    workItemPlanningViewEnabled,
   } = el.dataset;
 
   const isGroup = workspaceType === WORKSPACE_GROUP;
@@ -69,17 +72,14 @@ export const initWorkItemsRoot = ({ workspaceType, withTabs } = {}) => {
 
   const breadcrumbParams = { workItemType, isGroup };
 
-  if (isGroup) {
+  if (workItemType === WORK_ITEM_TYPE_NAME_EPIC) {
     listPath = epicsListPath;
     breadcrumbParams.listPath = epicsListPath;
   } else {
     breadcrumbParams.listPath = issuesListPath;
   }
 
-  injectVueAppBreadcrumbs(router, WorkItemBreadcrumb, apolloProvider, breadcrumbParams, {
-    // Cf. https://gitlab.com/gitlab-org/gitlab/-/merge_requests/186906
-    singleNavOptIn: true,
-  });
+  injectVueAppBreadcrumbs(router, WorkItemBreadcrumb, apolloProvider, breadcrumbParams);
 
   apolloProvider.clients.defaultClient.cache.writeQuery({
     query: activeDiscussionQuery,
@@ -114,6 +114,7 @@ export const initWorkItemsRoot = ({ workspaceType, withTabs } = {}) => {
       signInPath,
       hasIterationsFeature: parseBoolean(hasIterationsFeature),
       hasIssuableHealthStatusFeature: parseBoolean(hasIssuableHealthStatusFeature),
+      hasCustomFieldsFeature: parseBoolean(hasCustomFieldsFeature),
       reportAbusePath,
       groupPath,
       groupId,
@@ -134,6 +135,8 @@ export const initWorkItemsRoot = ({ workspaceType, withTabs } = {}) => {
       newProjectPath,
       hasIssueDateFilterFeature: parseBoolean(hasIssueDateFilterFeature),
       timeTrackingLimitToHours: parseBoolean(timeTrackingLimitToHours),
+      hasStatusFeature: parseBoolean(hasStatusFeature),
+      workItemPlanningViewEnabled: parseBoolean(workItemPlanningViewEnabled),
     },
     mounted() {
       performanceMarkAndMeasure({
@@ -149,6 +152,7 @@ export const initWorkItemsRoot = ({ workspaceType, withTabs } = {}) => {
       return createElement(App, {
         props: {
           newCommentTemplatePaths: JSON.parse(newCommentTemplatePaths),
+          rootPageFullPath: fullPath,
           withTabs,
         },
       });

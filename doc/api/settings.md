@@ -463,7 +463,7 @@ to configure other related settings. These requirements are
 | `automatic_purchased_storage_allocation` | boolean          | no                                   | Enabling this permits automatic allocation of purchased storage in a namespace. Relevant only to EE distributions. |
 | `bulk_import_enabled`                    | boolean          | no                                   | Enable migrating GitLab groups by direct transfer. [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/383268) in GitLab 15.8. Setting also [available](../administration/settings/import_and_export_settings.md#enable-migration-of-groups-and-projects-by-direct-transfer) in the **Admin** area. |
 | `bulk_import_max_download_file_size`     | integer          | no                                   | Maximum download file size when importing from source GitLab instances by direct transfer. [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/384976) in GitLab 16.3. |
-| `allow_bypass_placeholder_confirmation`  | boolean          | no                                   | Skip confirmation when reassigning placeholder users. [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/534330) in GitLab 18.0. |
+| `allow_bypass_placeholder_confirmation`  | boolean          | no                                   | Skip confirmation when administrators reassign placeholder users. [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/534330) in GitLab 18.0. |
 | `can_create_group`                       | boolean          | no                                   | Indicates whether users can create top-level groups. [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/367754) in GitLab 15.5. Defaults to `true`. |
 | `check_namespace_plan`                   | boolean          | no                                   | Enabling this makes only licensed EE features available to projects if the project namespace's plan includes the feature or if the project is public. Premium and Ultimate only. |
 | `ci_delete_pipelines_in_seconds_limit_human_readable` | string | no                                | Maximum value that is allowed for configuring pipeline retention. Defaults to `1 year`. |
@@ -614,6 +614,8 @@ to configure other related settings. These requirements are
 | `max_export_size`                        | integer          | no                                   | Maximum export size in MB. 0 for unlimited. Default = 0 (unlimited). |
 | `max_github_response_size_limit`         | integer          | no                                   | Maximum allowed GitHub API response size in MB. 0 for unlimited. |
 | `max_github_response_json_value_count`   | integer          | no                                   | Maximum allowed value count for GitHub API responses. 0 for unlimited. Count is an estimate based on the number of `:` `,` `{` and `[` occurrences in the response. |
+| `max_http_decompressed_size`             | integer          | no                                   | Maximum allowed size in MiB for Gzip-compressed HTTP responses after decompression. 0 for unlimited. |
+| `max_http_response_size_limit`           | integer          | no                                   | Maximum allowed size in MiB for HTTP responses. 0 for unlimited. |
 | `max_import_size`                        | integer          | no                                   | Maximum import size in MB. 0 for unlimited. Default = 0 (unlimited). |
 | `max_import_remote_file_size`            | integer          | no                                   | Maximum remote file size for imports from external object storages. [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/384976) in GitLab 16.3. |
 | `max_login_attempts`                     | integer          | no                                   | Maximum number of sign-in attempts before locking out the user. |
@@ -823,7 +825,7 @@ of Git pushes you specify.
 
 The `housekeeping_enabled` field enables or disables
 Git housekeeping. To function properly, this field requires `housekeeping_optimize_repository_period`
-to be set, or _all_ of these values to be set:
+to be set, or all of these values to be set:
 
 - `housekeeping_bitmaps_enabled`
 - `housekeeping_full_repack_period`

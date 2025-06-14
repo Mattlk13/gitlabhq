@@ -1930,14 +1930,24 @@ RSpec.describe API::Commits, feature_category: :source_code_management do
         let(:commit) { note.commit }
         let(:commit_id) { note.commit_id }
 
-        it 'are returned without N + 1', quarantine: 'https://gitlab.com/gitlab-org/gitlab/-/issues/448459' do
+        it 'are returned without N + 1' do
           get api(route, current_user) # warm up the cache
 
           control = ActiveRecord::QueryRecorder.new { get api(route, current_user) }
 
           create(:diff_note_on_commit, project: project, author: create(:user))
 
-          expect { get api(route, current_user) }.not_to exceed_query_limit(control)
+          result = ActiveRecord::QueryRecorder.new { get api(route, current_user) }
+
+          notes_query = /SELECT "note_diff_files".*/
+          authors_query = /SELECT "users".*/
+
+          aggregate_failures "preloads authors and notes_diff_files" do
+            expect(result.occurrences_starting_with(authors_query).count)
+              .to eq(control.occurrences_starting_with(authors_query).count)
+            expect(result.occurrences_starting_with(notes_query).count)
+              .to eq(control.occurrences_starting_with(notes_query).count)
+          end
         end
       end
     end
@@ -2532,9 +2542,15 @@ RSpec.describe API::Commits, feature_category: :source_code_management do
 
       control = ActiveRecord::QueryRecorder.new { perform_request(user) }
 
-      create(:merge_request, :closed, source_project: project, source_branch: 'master', target_branch: 'feature')
+      # 5 queries are intermittently seen to update user_preferences, and select scan_result_policy_violations
+      query_buffer = 5
 
-      expect { perform_request(user) }.not_to exceed_query_limit(control)
+      # Make query_buffer + 1 new merge requests to ensure an n + 1 introduces more than query_buffer queries
+      (query_buffer + 1).times do
+        create(:merge_request, :closed, source_project: project, source_branch: 'master', target_branch: 'feature')
+      end
+
+      expect { perform_request(user) }.not_to exceed_query_limit(control).with_threshold(query_buffer)
     end
   end
 

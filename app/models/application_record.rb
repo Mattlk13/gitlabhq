@@ -12,6 +12,7 @@ class ApplicationRecord < ActiveRecord::Base
   include HasCheckConstraints
   include IgnorableColumns
   include PopulatesShardingKey
+  include EachBatch
 
   self.abstract_class = true
 
@@ -146,7 +147,7 @@ class ApplicationRecord < ActiveRecord::Base
   end
 
   def readable_by?(user)
-    Ability.allowed?(user, "read_#{to_ability_name}".to_sym, self)
+    Ability.allowed?(user, :"read_#{to_ability_name}", self)
   end
 
   def to_ability_name

@@ -219,6 +219,7 @@ module Ci
     scope :created_before, ->(time) { where(arel_table[:created_at].lt(time)) }
     scope :updated_after, ->(time) { where(arel_table[:updated_at].gt(time)) }
     scope :for_project_ids, ->(project_ids) { where(project_id: project_ids) }
+    scope :with_token_present, -> { where.not(token_encrypted: nil) }
 
     add_authentication_token_field :token,
       encrypted: :required,
@@ -745,7 +746,7 @@ module Ci
     end
 
     def ensure_trace_metadata!
-      Ci::BuildTraceMetadata.find_or_upsert_for!(id, partition_id)
+      Ci::BuildTraceMetadata.find_or_upsert_for!(id, partition_id, project_id)
     end
 
     def artifacts_expose_as

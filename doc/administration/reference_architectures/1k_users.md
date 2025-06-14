@@ -20,7 +20,6 @@ For a full list of reference architectures, see
 > - **Target Load**: API: 20 RPS, Web: 2 RPS, Git (Pull): 2 RPS, Git (Push): 1 RPS
 > - **High Availability**: No. For a high availability environment,
 >   follow a modified [3K reference architecture](3k_users.md#supported-modifications-for-lower-user-counts-ha).
-> - **Cost calculator template**: For more information, see [cost calculator templates](_index.md#cost-calculator-templates).
 > - **Cloud Native Hybrid**: No. For a cloud native hybrid environment, you
 >   can follow a [modified hybrid reference architecture](#cloud-native-hybrid-reference-architecture-with-helm-charts).
 > - **Unsure which Reference Architecture to use?** For more information, see [deciding which architecture to start with](_index.md#deciding-which-architecture-to-start-with).
@@ -82,7 +81,7 @@ Before proceeding, review the [requirements](_index.md#requirements) for the ref
 {{< alert type="warning" >}}
 
 **The node's specifications are based on high percentiles of both usage patterns and repository sizes in good health**.
-**However, if you have [large monorepos](_index.md#large-monorepos) (larger than several gigabytes) or [additional workloads](_index.md#additional-workloads), they might *significantly* impact the performance of the environment**.
+**However, if you have [large monorepos](_index.md#large-monorepos) (larger than several gigabytes) or [additional workloads](_index.md#additional-workloads), they might significantly impact the performance of the environment**.
 If this applies to you, [further adjustments might be required](_index.md#scaling-an-environment). See the linked documentation and contact us if required for further guidance.
 
 {{< /alert >}}
@@ -139,9 +138,9 @@ cluster alongside your instance, see
 
 ## Cloud Native Hybrid reference architecture with Helm Charts
 
-In the Cloud Native Hybrid reference architecture setup, the select _stateless_
+In the Cloud Native Hybrid reference architecture setup, the select stateless
 components are deployed in Kubernetes by using our official [Helm Charts](https://docs.gitlab.com/charts/).
-The _stateful_ components are deployed in compute VMs with the Linux package.
+The stateful components are deployed in compute VMs with the Linux package.
 
 The smallest reference architecture available for use in Kubernetes is the [2k or 40 RPS GitLab Cloud Native Hybrid](2k_users.md#cloud-native-hybrid-reference-architecture-with-helm-charts-alternative) (non HA) and [3k or 60 RPS GitLab Cloud Native Hybrid](3k_users.md#cloud-native-hybrid-reference-architecture-with-helm-charts-alternative) (HA).
 

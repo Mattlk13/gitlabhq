@@ -684,6 +684,9 @@ RSpec.describe API::Groups, :with_current_organization, feature_category: :group
 
     context "when authenticated as user" do
       it "returns one of user1's groups", :aggregate_failures do
+        # TODO remove this in https://gitlab.com/gitlab-org/gitlab/-/issues/545723.
+        allow(Gitlab::QueryLimiting::Transaction).to receive(:threshold).and_return(102)
+
         project = create(:project, namespace: group2, path: 'Foo')
         create(:project_group_link, project: project, group: group1)
         group = create(:group)
@@ -3248,27 +3251,7 @@ RSpec.describe API::Groups, :with_current_organization, feature_category: :group
 
     it_behaves_like 'marks group for delayed deletion'
 
-    context 'when deletion adjourned period is 0' do
-      before do
-        stub_application_setting(deletion_adjourned_period: 0)
-      end
-
-      it_behaves_like 'immediately enqueues the job to delete the group'
-    end
-
-    context 'when delayed group deletion is disabled' do
-      before do
-        stub_application_setting(delayed_group_deletion: false)
-      end
-
-      it_behaves_like 'marks group for delayed deletion'
-    end
-
     context 'when permanently_remove param is sent' do
-      before do
-        stub_application_setting(delayed_group_deletion: true)
-      end
-
       context 'if permanently_remove is true' do
         let(:params) { { permanently_remove: true } }
 

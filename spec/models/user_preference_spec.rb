@@ -16,6 +16,11 @@ RSpec.describe UserPreference, feature_category: :user_profile do
                        .is_less_than_or_equal_to(Gitlab::TabWidth::MAX)
     end
 
+    describe 'dark_color_scheme_id' do
+      it { is_expected.to allow_value(*Gitlab::ColorSchemes.valid_ids).for(:dark_color_scheme_id) }
+      it { is_expected.not_to allow_value(Gitlab::ColorSchemes.available_schemes.size + 1).for(:dark_color_scheme_id) }
+    end
+
     describe 'diffs_deletion_color and diffs_addition_color' do
       using RSpec::Parameterized::TableSyntax
 
@@ -397,6 +402,42 @@ RSpec.describe UserPreference, feature_category: :user_profile do
 
         expect(user_preference).to be_valid
         expect(user_preference.timezone).to be_nil
+      end
+    end
+  end
+
+  describe 'work_items_display_settings' do
+    describe 'validations' do
+      it 'validates json schema' do
+        user_preference.work_items_display_settings = { 'shouldOpenItemsInSidePanel' => true }
+        expect(user_preference).to be_valid
+
+        user_preference.work_items_display_settings = { 'shouldOpenItemsInSidePanel' => false }
+        expect(user_preference).to be_valid
+
+        user_preference.work_items_display_settings = { 'invalidKey' => 'value' }
+        expect(user_preference).not_to be_valid
+        expect(user_preference.errors[:work_items_display_settings]).to include('must be a valid json schema')
+
+        user_preference.work_items_display_settings = { 'shouldOpenItemsInSidePanel' => 'not_boolean' }
+        expect(user_preference).not_to be_valid
+        expect(user_preference.errors[:work_items_display_settings]).to include('must be a valid json schema')
+      end
+
+      it 'allows empty object' do
+        user_preference.work_items_display_settings = {}
+        expect(user_preference).to be_valid
+      end
+
+      it 'has default empty hash' do
+        new_preference = described_class.new(user: user)
+        expect(new_preference.work_items_display_settings).to eq({})
+      end
+
+      it 'persists changes correctly' do
+        user_preference.update!(work_items_display_settings: { 'shouldOpenItemsInSidePanel' => false })
+
+        expect(user_preference.reload.work_items_display_settings).to eq({ 'shouldOpenItemsInSidePanel' => false })
       end
     end
   end

@@ -1658,6 +1658,22 @@ RSpec.describe Ci::Pipeline, :mailer, factory_default: :keep, feature_category: 
             is_expected.to be_falsey
           end
         end
+
+        context 'when ref is ambiguous' do
+          let(:merge_request) do
+            create(:merge_request, source_branch: 'ambiguous', source_project: project, target_branch: 'master', target_project: project)
+          end
+
+          before do
+            repository = project.repository
+            repository.add_branch(user, 'ambiguous', 'feature')
+            repository.add_tag(user, 'ambiguous', 'master')
+          end
+
+          it 'returns false if source or target branch ref is ambiguous' do
+            is_expected.to be_falsey
+          end
+        end
       end
 
       context 'when protect_merge_request_pipelines setting is disabled' do
@@ -1667,19 +1683,6 @@ RSpec.describe Ci::Pipeline, :mailer, factory_default: :keep, feature_category: 
 
         it 'returns false even if both the source branch ref and target branch ref is protected' do
           expect(project).not_to receive(:protected_for?)
-
-          is_expected.to be_falsey
-        end
-      end
-
-      context 'when the protect_merge_request_pipelines feature flag is disabled' do
-        before do
-          stub_feature_flags(protect_merge_request_pipelines: false)
-          project.project_setting.update!(protect_merge_request_pipelines: true)
-        end
-
-        it 'checks if the branch ref is protected' do
-          expect(pipeline.project).to receive(:protected_for?).with("refs/heads/#{pipeline.ref}").and_return(false)
 
           is_expected.to be_falsey
         end
@@ -6444,6 +6447,54 @@ RSpec.describe Ci::Pipeline, :mailer, factory_default: :keep, feature_category: 
       end
 
       it { is_expected.not_to be_archived }
+    end
+  end
+
+  describe '#queued_duration', :freeze_time do
+    it 'returns nil when pipeline has not started' do
+      # Build a pipeline created 1 hour ago with no start or finish time
+      pipeline = build(:ci_pipeline, created_at: 1.hour.ago, started_at: nil, finished_at: nil)
+      # We expect queued_duration to return nil because there is no start or finish info
+      expect(pipeline.queued_duration).to be_nil
+    end
+
+    it 'returns the correct duration when the pipeline has started but not finished' do
+      # Simulate a pipeline that was created 1 hour ago and started 30 minutes ago
+      created_time = 1.hour.ago
+      start_time = 30.minutes.ago
+      pipeline = build(:ci_pipeline, created_at: created_time, started_at: start_time)
+      expected_duration = (start_time - created_time).to_i
+      # Expect the queued_duration to be within 1 second of the actual time between creation and start
+      expect(pipeline.queued_duration).to eq(expected_duration)
+    end
+
+    it 'returns duration when pipeline has finished but not started' do
+      # Simulate a pipeline that was created 2 hours ago and finished 30 minutes ago without starting
+      created_time = 2.hours.ago
+      finish_time = 30.minutes.ago
+      pipeline = build(:ci_pipeline, created_at: created_time, started_at: nil, finished_at: finish_time)
+      expected_duration = (finish_time - created_time).to_i
+      # Expect queued_duration to be the time from creation to finish( since it never started within 1 second)
+      expect(pipeline.queued_duration).to eq(expected_duration)
+    end
+
+    it 'returns the correct duration based on start time when pipeline has started and finished' do
+      # Simulate a pipeline that was created 2 hours ago, started 1 hour ago, and finished 30 minutes ago
+      created_time = 2.hours.ago
+      start_time = 1.hour.ago
+      finish_time = 30.minutes.ago
+      pipeline = build(:ci_pipeline, created_at: created_time, started_at: start_time, finished_at: finish_time)
+      expected_duration = (start_time - created_time).to_i
+      # Expect queued_duration to be the time between creation and start, ignoring finish time
+      expect(pipeline.queued_duration).to eq(expected_duration)
+    end
+
+    it 'returns nil queued duration when created and finished at the same time' do
+      # Simulate a pipeline that was created and finished instantly
+      now = Time.current
+      pipeline = build(:ci_pipeline, created_at: now, finished_at: now, started_at: nil)
+      # Expect the queued duration to be nil
+      expect(pipeline.queued_duration).to be_nil
     end
   end
 end
