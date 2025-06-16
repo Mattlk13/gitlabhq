@@ -8,8 +8,9 @@ import {
   ROUTES,
   RELATED_ITEM_ID_URL_QUERY_PARAM,
   BASE_ALLOWED_CREATE_TYPES,
-  WORK_ITEM_TYPE_NAME_ISSUE,
+  WORK_ITEM_TYPE_NAME_EPIC,
   WORK_ITEM_TYPE_NAME_INCIDENT,
+  WORK_ITEM_TYPE_NAME_ISSUE,
   WORK_ITEM_TYPE_NAME_TASK,
 } from '../constants';
 import workItemRelatedItemQuery from '../graphql/work_item_related_item.query.graphql';
@@ -23,6 +24,10 @@ export default {
   },
   inject: ['isGroup'],
   props: {
+    rootPageFullPath: {
+      type: String,
+      required: true,
+    },
     workItemTypeEnum: {
       type: String,
       required: false,
@@ -70,6 +75,9 @@ export default {
     },
   },
   computed: {
+    isEpic() {
+      return this.workItemType === WORK_ITEM_TYPE_NAME_EPIC;
+    },
     isIncident() {
       return this.workItemType === WORK_ITEM_TYPE_NAME_INCIDENT;
     },
@@ -86,13 +94,16 @@ export default {
 
       return [];
     },
+    isNewGroupWorkItem() {
+      return !this.isEpic && this.isGroup;
+    },
   },
   methods: {
     updateWorkItemType(type) {
       this.workItemType = type;
     },
     workItemCreated({ workItem, numberOfDiscussionsResolved }) {
-      if (this.$router && !this.isIncident) {
+      if (this.$router && !this.isIncident && !this.isNewGroupWorkItem) {
         const routerPushObject = {
           name: ROUTES.workItem,
           params: { iid: workItem.iid },
@@ -150,11 +161,13 @@ export default {
 <template>
   <div>
     <create-work-item
+      :full-path="rootPageFullPath"
       :preselected-work-item-type="workItemType"
       :is-group="isGroup"
       :related-item="relatedItem"
       :should-discard-draft="shouldDiscardDraft"
-      :always-show-work-item-type-select="!isGroup"
+      :always-show-work-item-type-select="!isEpic"
+      :show-project-selector="isNewGroupWorkItem"
       :allowed-work-item-types="allowedWorkItemTypes"
       @updateType="updateWorkItemType($event)"
       @confirmCancel="handleConfirmCancellation"

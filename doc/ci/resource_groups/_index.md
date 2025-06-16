@@ -194,7 +194,7 @@ there is a case that it doesn't work well with the other CI features.
 
 For example, when you run [a child pipeline](../pipelines/downstream_pipelines.md#parent-child-pipelines)
 that requires the same resource group with the parent pipeline,
-a dead lock could happen. Here is an example of a _bad_ setup:
+a dead lock could happen. Here is an example of a bad setup:
 
 ```yaml
 # BAD
@@ -278,7 +278,7 @@ As a temporary workaround, you can:
 - Re-run a finished job that has the same resource group as the stuck job.
 
   For example, if you have a `setup_job` and a `deploy_job` with the same resource group,
-  the `setup_job` might finish while the `deploy_job` is stuck at "waiting for resource".
+  the `setup_job` might finish while the `deploy_job` is stuck `waiting for resource`.
   Re-run the `setup_job` to restart the whole process and allow `deploy_job` to finish.
 
 #### Get job details through GraphQL

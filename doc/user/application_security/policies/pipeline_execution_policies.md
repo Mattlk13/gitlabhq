@@ -235,6 +235,9 @@ User-defined variables can affect the behavior of any policy jobs in the pipelin
 
 When the `variables_override` option is not specified, the "highest precedence" behavior is maintained. For more information about this behavior, see [precedence of variables in pipeline execution policies](#precedence-of-variables-in-pipeline-execution-policies).
 
+When the pipeline execution policy controls variable precedence, the job logs include the configured `variables_override` options and the policy name.
+To view these logs, `gitlab-runner` must be updated to version 18.1 or later.
+
 #### Example `variables_override` configuration
 
 Add the `variables_override` option to your pipeline execution policy configuration:
@@ -815,7 +818,7 @@ These examples demonstrate what you can achieve with pipeline execution policies
 ### Pipeline execution policy
 
 You can use the following example in a `.gitlab/security-policies/policy.yml` file stored in a
-[security policy project](_index.md#security-policy-project):
+[security policy project](security_policy_projects.md):
 
 ```yaml
 ---

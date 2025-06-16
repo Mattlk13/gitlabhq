@@ -2,6 +2,7 @@
 stage: Verify
 group: Runner
 info: To determine the technical writer assigned to the Stage/Group associated with this page, see https://handbook.gitlab.com/handbook/product/ux/technical-writing/#assignments
+description: Set timeouts, protect sensitive information, control behavior with tags and variables, and configure artifact and cache settings of your GitLab Runner. 
 title: Configuring runners
 ---
 
@@ -76,22 +77,22 @@ To set the maximum job timeout:
 
 **Example 1 - Runner timeout bigger than project timeout**
 
-1. You set the _maximum job timeout_ for a runner to 24 hours.
-1. You set the _CI/CD Timeout_ for a project to **2 hours**.
+1. You set the `maximum_timeout` parameter for a runner to 24 hours.
+1. You set the **Maximum job timeout** for a project to **2 hours**.
 1. You start a job.
 1. The job, if running longer, times out after **2 hours**.
 
 **Example 2 - Runner timeout not configured**
 
-1. You remove the _maximum job timeout_ configuration from a runner.
-1. You set the _CI/CD Timeout_ for a project to **2 hours**.
+1. You remove the `maximum_timeout` parameter configuration from a runner.
+1. You set the **Maximum job timeout** for a project to **2 hours**.
 1. You start a job.
 1. The job, if running longer, times out after **2 hours**.
 
 **Example 3 - Runner timeout smaller than project timeout**
 
-1. You set the _maximum job timeout_ for a runner to **30 minutes**.
-1. You set the _CI/CD Timeout_ for a project to 2 hours.
+1. You set the `maximum_timeout` parameter for a runner to **30 minutes**.
+1. You set the **Maximum job timeout** for a project to 2 hours.
 1. You start a job.
 1. The job, if running longer, times out after **30 minutes**.
 
@@ -289,7 +290,7 @@ For more information about token rotation, see
 To ensure runners don't reveal sensitive information, you can configure them to only run jobs
 on [protected branches](../../user/project/repository/branches/protected.md), or jobs that have [protected tags](../../user/project/protected_tags.md).
 
-Runners configured to run jobs on protected branches can 
+Runners configured to run jobs on protected branches can
 [optionally run jobs in merge request pipelines](../pipelines/merge_request_pipelines.md#control-access-to-protected-variables-and-runners).
 
 ### For an instance runner
@@ -685,7 +686,7 @@ script:
 The previous configuration results in `git fetch` being called this way:
 
 ```shell
-git fetch origin $REFSPECS --depth 50  --prune
+git fetch origin $REFSPECS --depth 20  --prune
 ```
 
 Where `$REFSPECS` is a value provided to the runner internally by GitLab.
@@ -732,7 +733,7 @@ subcommand. However, `GIT_SUBMODULE_UPDATE_FLAGS` flags are appended after a few
 
 - `--init`, if [`GIT_SUBMODULE_STRATEGY`](#git-submodule-strategy) was set to `normal` or `recursive`.
 - `--recursive`, if [`GIT_SUBMODULE_STRATEGY`](#git-submodule-strategy) was set to `recursive`.
-- [`GIT_DEPTH`](#shallow-cloning). See the default value below.
+- `GIT_DEPTH`. See the default value in the [shallow cloning](#shallow-cloning) section.
 
 Git honors the last occurrence of a flag in the list of arguments, so manually
 providing them in `GIT_SUBMODULE_UPDATE_FLAGS` overrides these default flags.
@@ -740,7 +741,7 @@ providing them in `GIT_SUBMODULE_UPDATE_FLAGS` overrides these default flags.
 For example, you can use this variable to:
 
 - Fetch the latest remote `HEAD` instead of the tracked commit in the
-  repository (default) to automatically updated all submodules with the
+  repository (default) to automatically update all submodules with the
   `--remote` flag.
 - Speed up the checkout by fetching submodules in multiple parallel jobs with
   the `--jobs 4` flag.
@@ -756,7 +757,7 @@ script:
 The previous configuration results in `git submodule update` being called this way:
 
 ```shell
-git submodule update --init --depth 50 --recursive --remote --jobs 4
+git submodule update --init --depth 20 --recursive --remote --jobs 4
 ```
 
 {{< alert type="warning" >}}
@@ -767,14 +768,14 @@ it is better to explicitly track submodule commits as designed, and update them
 using an auto-remediation/dependency bot.
 
 The `--remote` flag is not required to check out submodules at their committed
-revisions. Use this flag only when you want to automatically updated submodules
+revisions. Use this flag only when you want to automatically update submodules
 to their latest remote versions.
 
 {{< /alert >}}
 
-The behavior of `--remote` depends on your Git version. Some Git versions might
-fail, with the error below, when the branch in the superproject's `.gitmodules`
-differs from the default branch of the submodule repository:
+The behavior of `--remote` depends on your Git version.
+If the branch specified in your superproject's `.gitmodules` file is different from the
+default branch of the submodule repository, some Git versions will fail with this error:
 
 `fatal: Unable to find refs/remotes/origin/<branch> revision in submodule path '<submodule-path>'`
 
@@ -819,7 +820,7 @@ It can be helpful for repositories with a large number of commits or old, large 
 passed to `git fetch` and `git clone`.
 
 Newly-created projects automatically have a
-[default `git depth` value of `50`](../pipelines/settings.md#limit-the-number-of-changes-fetched-during-clone).
+[default `git depth` value of `20`](../pipelines/settings.md#limit-the-number-of-changes-fetched-during-clone).
 
 If you use a depth of `1` and have a queue of jobs or retry
 jobs, jobs may fail.
@@ -934,7 +935,7 @@ test:
 The value of `GIT_CLONE_PATH` expands once. You cannot nest variables
 in this value.
 
-For example, you define both the variables below in your
+For example, you define the following variables in your
 `.gitlab-ci.yml` file:
 
 ```yaml

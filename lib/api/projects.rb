@@ -96,13 +96,13 @@ module API
       def delete_project(user_project)
         permanently_remove = ::Gitlab::Utils.to_boolean(params[:permanently_remove])
 
-        if permanently_remove && user_project.adjourned_deletion_configured?
+        if permanently_remove
           error = immediately_delete_project_error(user_project)
 
           return render_api_error!(error, 400) if error
         end
 
-        if permanently_remove || !user_project.adjourned_deletion_configured?
+        if permanently_remove
           destroy_conditionally!(user_project) do
             ::Projects::DestroyService.new(user_project, current_user, {}).async_execute
           end
@@ -333,7 +333,6 @@ module API
       end
       post ':id/restore', feature_category: :system_access do
         authorize!(:remove_project, user_project)
-        break not_found! unless user_project.adjourned_deletion?
 
         result = ::Projects::RestoreService.new(user_project, current_user).execute
         if result[:status] == :success
@@ -1022,6 +1021,7 @@ module API
       end
       put ":id/transfer", feature_category: :groups_and_projects do
         authorize! :change_namespace, user_project
+        Gitlab::QueryLimiting.disable!('https://gitlab.com/gitlab-org/gitlab/-/issues/546376')
 
         namespace = find_namespace!(params[:namespace])
         result = ::Projects::TransferService.new(user_project, current_user).execute(namespace)

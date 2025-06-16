@@ -188,6 +188,7 @@ module Types
     mount_mutation Mutations::Ci::JobTokenScope::UpdateJobTokenPolicies, experiment: { milestone: '17.6' }
     mount_mutation Mutations::Ci::JobTokenScope::AutopopulateAllowlist, experiment: { milestone: '17.9' }
     mount_mutation Mutations::Ci::JobTokenScope::ClearAllowlistAutopopulations, experiment: { milestone: '17.9' }
+    mount_mutation Mutations::Ci::Lint, experiment: { milestone: '18.1' }
     mount_mutation Mutations::Ci::NamespaceSettingsUpdate, experiment: { milestone: '17.9' }
     mount_mutation Mutations::Ci::Pipeline::Cancel
     mount_mutation Mutations::Ci::Pipeline::Create
@@ -258,6 +259,7 @@ module Types
     mount_mutation Mutations::BranchRules::Delete, experiment: { milestone: '16.9' }
     mount_mutation Mutations::Pages::Deployment::Delete, experiment: { milestone: '17.1' }
     mount_mutation Mutations::Pages::Deployment::Restore, experiment: { milestone: '17.1' }
+    mount_mutation Mutations::Wikis::WikiPageSubscribe, experiment: { milestone: '18.1' }
   end
 end
 

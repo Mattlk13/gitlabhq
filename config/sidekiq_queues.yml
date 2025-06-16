@@ -71,6 +71,8 @@
   - 1
 - - auth_saml_group_sync
   - 1
+- - authn_cleanup_scim_group_memberships
+  - 1
 - - authn_sync_group_scim_identity_record
   - 1
 - - authn_sync_group_scim_token_record
@@ -84,6 +86,8 @@
 - - authorized_keys
   - 2
 - - authorized_project_update:authorized_project_update_enqueue_group_members_refresh_authorized_projects
+  - 1
+- - authorized_project_update:authorized_project_update_enqueue_users_refresh_authorized_projects
   - 1
 - - authorized_project_update:authorized_project_update_project_recalculate
   - 1
@@ -215,6 +219,8 @@
   - 1
 - - ci_runners_update_project_runners_owner
   - 1
+- - ci_safe_disable_pipeline_variables
+  - 1
 - - ci_unlock_pipelines_in_queue
   - 1
 - - ci_update_approval_rules_for_related_mrs
@@ -314,6 +320,8 @@
 - - container_repository_delete
   - 1
 - - counters_cleanup_refresh
+  - 1
+- - counters_flush_stale_counter_increments
   - 1
 - - create_commit_signature
   - 2
@@ -639,6 +647,8 @@
   - 1
 - - namespaces_cascade_duo_features_enabled
   - 1
+- - namespaces_cascade_web_based_commit_signing_enabled
+  - 1
 - - namespaces_free_user_cap_group_over_limit_notification
   - 1
 - - namespaces_process_sync_events
@@ -811,6 +821,8 @@
   - 1
 - - sbom_create_occurrences_vulnerabilities
   - 1
+- - sbom_graphs
+  - 1
 - - sbom_process_transfer_events
   - 1
 - - sbom_process_vulnerabilities
@@ -881,6 +893,12 @@
   - 1
 - - security_analyzers_status_process_archived_events
   - 1
+- - security_analyzers_status_process_deleted_events
+  - 1
+- - security_analyzers_status_process_group_transfer_events
+  - 1
+- - security_analyzers_status_process_project_transfer_events
+  - 1
 - - security_configuration_set_group_secret_push_protection
   - 1
 - - security_create_security_policy_project
@@ -908,6 +926,8 @@
 - - security_pipeline_analyzers_status_update
   - 1
 - - security_pipeline_execution_policies_run_schedule
+  - 1
+- - security_policies_project_transfer
   - 1
 - - security_process_scan_result_policy
   - 1
@@ -1020,6 +1040,8 @@
 - - vulnerabilities_namespace_historical_statistics_update_traversal_ids
   - 1
 - - vulnerabilities_namespace_statistics_adjustment
+  - 1
+- - vulnerabilities_namespace_statistics_process_group_delete_events
   - 1
 - - vulnerabilities_namespace_statistics_process_group_transfer_events
   - 1

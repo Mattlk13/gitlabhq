@@ -34,7 +34,7 @@ When the changes are deployed to the environments it is time to start
 rolling out the feature to our users. The exact procedure of rolling out a
 change is unspecified, as this can vary from change to change. However, in
 general we recommend rolling out changes incrementally, instead of enabling them
-for everybody right away. We also recommend you to _not_ enable a feature
+for everybody right away. We also recommend you to not enable a feature
 _before_ the code is being deployed.
 This allows you to separate rolling out a feature from a deploy, making it
 easier to measure the impact of both separately.
@@ -101,7 +101,7 @@ This depends on the feature and what sort of impact it might have.
 Guidelines:
 
 - Notify `#support_gitlab-com` beforehand. So in case if the feature has any side effects on user experience, they can mitigate and disable the feature flag to reduce some impact.
-- If the feature meets the requirements for creating a [Change Management](https://handbook.gitlab.com/handbook/engineering/infrastructure/change-management/#feature-flags-and-the-change-management-process) issue, create a Change Management issue per [criticality guidelines](https://handbook.gitlab.com/handbook/engineering/infrastructure/change-management/#change-request-workflows).
+- If the feature meets the requirements for creating a [Change Management](https://handbook.gitlab.com/handbook/engineering/infrastructure-platforms/change-management/#feature-flags-and-the-change-management-process) issue, create a Change Management issue per [criticality guidelines](https://handbook.gitlab.com/handbook/engineering/infrastructure-platforms/change-management/#change-request-workflows).
 - For simple, low-risk, easily reverted features, proceed and [enable the feature in `#production`](#process).
 - For support requests to toggle feature flags for specific groups or projects, follow the process outlined in the [support workflows](https://handbook.gitlab.com/handbook/support/workflows/saas_feature_flags/).
 
@@ -195,7 +195,7 @@ incidents or in-progress change issues, for example:
   2021-06-29 Canary deployment failing QA tests
 ```
 
-Before enabling a feature flag, verify that you are not violating any [Production Change Lock periods](https://handbook.gitlab.com/handbook/engineering/infrastructure/change-management/#production-change-lock-pcl) and are in compliance with the [Feature flags and the Change Management Process](https://handbook.gitlab.com/handbook/engineering/infrastructure/change-management/#feature-flags-and-the-change-management-process).
+Before enabling a feature flag, verify that you are not violating any [Production Change Lock periods](https://handbook.gitlab.com/handbook/engineering/infrastructure-platforms/change-management/#production-change-lock-pcl) and are in compliance with the [Feature flags and the Change Management Process](https://handbook.gitlab.com/handbook/engineering/infrastructure-platforms/change-management/#feature-flags-and-the-change-management-process).
 
 The following `/chatops` commands must be performed in the Slack
 `#production` channel.
@@ -342,7 +342,7 @@ Previously, to enable a feature 25% of the time, we would run the following in S
 /chatops run feature set new_navigation_bar 25 --random
 ```
 
-This command enables the `new_navigation_bar` feature for GitLab.com. However, this command does *not* enable the feature for 25% of the total users.
+This command enables the `new_navigation_bar` feature for GitLab.com. However, this command does not enable the feature for 25% of the total users.
 Instead, when the feature is checked with `enabled?`, it returns `true` 25% of the time.
 
 Percentage of time feature flags are now deprecated in favor of [percentage of actors](#percentage-based-actor-selection)

@@ -55,6 +55,7 @@ module Users
       # Rails attempts to load all related records into memory before
       # destroying: https://github.com/rails/rails/issues/22510
       # This ensures we delete records in batches.
+      user.delete_dependent_associations_in_batches(exclude: [:project_authorizations])
       user.destroy_dependent_associations_in_batches(exclude: [:snippets])
       user.nullify_dependent_associations_in_batches
 
@@ -86,6 +87,9 @@ module Users
 
     def migrate_notes
       batched_migrate(Note, :author_id)
+
+      # Migrate label change event system notes as they are stored in a different table
+      batched_migrate(ResourceLabelEvent, :user_id)
     end
 
     def migrate_abuse_reports

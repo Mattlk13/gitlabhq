@@ -123,8 +123,7 @@ RSpec.describe DeployToken, feature_category: :continuous_delivery do
 
   describe '#has_access_to_group?' do
     let_it_be(:group) { create(:group) }
-    let_it_be_with_reload(:deploy_token) { create(:deploy_token, :group) }
-    let_it_be(:group_deploy_token) { create(:group_deploy_token, group: group, deploy_token: deploy_token) }
+    let_it_be_with_reload(:deploy_token) { create(:deploy_token, :group, groups: [group]) }
 
     let(:test_group) { group }
 
@@ -320,11 +319,7 @@ RSpec.describe DeployToken, feature_category: :continuous_delivery do
       context 'and when the token is of group type' do
         let_it_be(:group) { create(:group) }
 
-        let(:deploy_token) { create(:deploy_token, :group) }
-
-        before do
-          deploy_token.groups << group
-        end
+        let(:deploy_token) { create(:deploy_token, :group, groups: [group]) }
 
         context 'and the passed-in project does not belong to any group' do
           it { is_expected.to be_falsy }
@@ -514,6 +509,20 @@ RSpec.describe DeployToken, feature_category: :continuous_delivery do
       result = described_class.with_encrypted_tokens([])
 
       expect(result).to be_empty
+    end
+  end
+
+  describe '.encode' do
+    let(:token_string) { 'test_token_123' }
+
+    it 'encodes the provided token' do
+      expect(Authn::TokenField::EncryptionHelper).to receive(:encrypt_token)
+        .with(token_string)
+        .and_return('fake_encrypted_token')
+
+      encoded_token = described_class.encode(token_string)
+
+      expect(encoded_token).to eq('fake_encrypted_token')
     end
   end
 end

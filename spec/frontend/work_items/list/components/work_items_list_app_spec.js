@@ -9,6 +9,7 @@ import IssueCardStatistics from 'ee_else_ce/issues/list/components/issue_card_st
 import IssueCardTimeInfo from 'ee_else_ce/issues/list/components/issue_card_time_info.vue';
 import WorkItemBulkEditSidebar from '~/work_items/components/work_item_bulk_edit/work_item_bulk_edit_sidebar.vue';
 import WorkItemHealthStatus from '~/work_items/components/work_item_health_status.vue';
+import WorkItemListHeading from '~/work_items/components/work_item_list_heading.vue';
 import EmptyStateWithoutAnyIssues from '~/issues/list/components/empty_state_without_any_issues.vue';
 import createMockApollo from 'helpers/mock_apollo_helper';
 import { describeSkipVue3, SkipReason } from 'helpers/vue3_conditional';
@@ -47,7 +48,7 @@ import IssuableList from '~/vue_shared/issuable/list/components/issuable_list_ro
 import CreateWorkItemModal from '~/work_items/components/create_work_item_modal.vue';
 import WorkItemsListApp from '~/work_items/pages/work_items_list_app.vue';
 import { sortOptions, urlSortParams } from '~/work_items/pages/list/constants';
-import getWorkItemStateCountsQuery from '~/work_items/graphql/list/get_work_item_state_counts.query.graphql';
+import getWorkItemStateCountsQuery from 'ee_else_ce/work_items/graphql/list/get_work_item_state_counts.query.graphql';
 import getWorkItemsQuery from '~/work_items/graphql/list/get_work_items.query.graphql';
 import WorkItemDrawer from '~/work_items/components/work_item_drawer.vue';
 import {
@@ -103,21 +104,21 @@ describeSkipVue3(skipReason, () => {
   const findCreateWorkItemModal = () => wrapper.findComponent(CreateWorkItemModal);
   const findBulkEditStartButton = () => wrapper.find('[data-testid="bulk-edit-start-button"]');
   const findBulkEditSidebar = () => wrapper.findComponent(WorkItemBulkEditSidebar);
+  const findWorkItemListHeading = () => wrapper.findComponent(WorkItemListHeading);
 
   const mountComponent = ({
     provide = {},
     queryHandler = defaultQueryHandler,
     countsQueryHandler = defaultCountsQueryHandler,
     sortPreferenceMutationResponse = mutationHandler,
-    workItemsViewPreference = false,
     workItemsToggleEnabled = true,
+    workItemPlanningView = false,
     props = {},
     additionalHandlers = [],
   } = {}) => {
     window.gon = {
       ...window.gon,
       features: {
-        workItemsViewPreference,
         workItemsClientSideBoards: false,
       },
       current_user_use_work_items_view: workItemsToggleEnabled,
@@ -133,15 +134,16 @@ describeSkipVue3(skipReason, () => {
       provide: {
         glFeatures: {
           okrsMvc: true,
+          workItemPlanningView,
         },
         autocompleteAwardEmojisPath: 'autocomplete/award/emojis/path',
         canBulkUpdate: true,
         canBulkEditEpics: true,
-        fullPath: 'full/path',
         hasEpicsFeature: false,
         hasGroupBulkEditFeature: true,
         hasOkrsFeature: false,
         hasQualityManagementFeature: false,
+        hasCustomFieldsFeature: false,
         initialSort: CREATED_DESC,
         isGroup: true,
         isSignedIn: true,
@@ -152,6 +154,7 @@ describeSkipVue3(skipReason, () => {
         ...provide,
       },
       propsData: {
+        rootPageFullPath: 'full/path',
         ...props,
       },
     });
@@ -399,10 +402,12 @@ describeSkipVue3(skipReason, () => {
         await waitForPromises();
 
         expect(defaultQueryHandler).toHaveBeenCalledTimes(1);
+        expect(defaultCountsQueryHandler).toHaveBeenCalledTimes(1);
 
         await wrapper.setProps({ eeWorkItemUpdateCount: 1 });
 
         expect(defaultQueryHandler).toHaveBeenCalledTimes(2);
+        expect(defaultCountsQueryHandler).toHaveBeenCalledTimes(2);
       });
     });
   });
@@ -709,8 +714,8 @@ describeSkipVue3(skipReason, () => {
             checkThatDrawerPropsAreEmpty();
           });
 
-          it('refetches and resets when work item is deleted', async () => {
-            expect(defaultQueryHandler).toHaveBeenCalledTimes(1);
+          it('refetches counts and resets when work item is deleted', async () => {
+            expect(defaultCountsQueryHandler).toHaveBeenCalledTimes(1);
 
             findDrawer().vm.$emit('workItemDeleted');
 
@@ -718,11 +723,11 @@ describeSkipVue3(skipReason, () => {
 
             checkThatDrawerPropsAreEmpty();
 
-            expect(defaultQueryHandler).toHaveBeenCalledTimes(2);
+            expect(defaultCountsQueryHandler).toHaveBeenCalledTimes(2);
           });
 
-          it('refetches when the selected work item is closed', async () => {
-            expect(defaultQueryHandler).toHaveBeenCalledTimes(1);
+          it('refetches counts when the selected work item is closed', async () => {
+            expect(defaultCountsQueryHandler).toHaveBeenCalledTimes(1);
 
             // component displays open work items by default
             findDrawer().vm.$emit('work-item-updated', {
@@ -731,7 +736,7 @@ describeSkipVue3(skipReason, () => {
 
             await nextTick();
 
-            expect(defaultQueryHandler).toHaveBeenCalledTimes(2);
+            expect(defaultCountsQueryHandler).toHaveBeenCalledTimes(2);
           });
         });
       });
@@ -1099,6 +1104,15 @@ describeSkipVue3(skipReason, () => {
       await nextTick();
 
       expect(findIssuableList().props('showBulkEditSidebar')).toBe(true);
+    });
+  });
+
+  describe('when workItemPlanningView flag is enabled', () => {
+    it('renders the WorkItemListHeading component', async () => {
+      mountComponent({ workItemPlanningView: true });
+      await waitForPromises();
+
+      expect(findWorkItemListHeading().exists()).toBe(true);
     });
   });
 });

@@ -40,6 +40,7 @@ import {
   preserveDetailsState,
   getParentGroupName,
   createBranchMRApiPathHelper,
+  getNewWorkItemAutoSaveKey,
 } from '~/work_items/utils';
 import { useLocalStorageSpy } from 'helpers/local_storage_helper';
 import { TYPE_EPIC } from '~/issues/constants';
@@ -400,6 +401,51 @@ describe('`makeDrawerUrlParam`', () => {
     expect(result).toEqual(
       btoa(JSON.stringify({ iid: '123', full_path: 'gitlab-org/gitlab', id: 1 })),
     );
+  });
+});
+
+describe('getNewWorkItemAutoSaveKey', () => {
+  let originalWindowLocation;
+
+  beforeEach(() => {
+    originalWindowLocation = window.location;
+    delete window.location;
+    window.location = new URL('https://gitlab.example.com');
+  });
+
+  afterEach(() => {
+    window.location = originalWindowLocation;
+  });
+
+  it('returns autosave key for a new work item', () => {
+    const autosaveKey = getNewWorkItemAutoSaveKey({
+      fullPath: 'gitlab-org/gitlab',
+      workItemType: 'issue',
+    });
+    expect(autosaveKey).toEqual('new-gitlab-org/gitlab-issue-draft');
+  });
+
+  it('returns autosave key with only allowed params', () => {
+    window.location.search = '?vulnerability_id=1';
+    let autosaveKey = getNewWorkItemAutoSaveKey({
+      fullPath: 'gitlab-org/gitlab',
+      workItemType: 'issue',
+    });
+    expect(autosaveKey).toEqual('new-gitlab-org/gitlab-issue-vulnerability_id=1-draft');
+
+    window.location.search = '?discussion_to_resolve=2';
+    autosaveKey = getNewWorkItemAutoSaveKey({
+      fullPath: 'gitlab-org/gitlab',
+      workItemType: 'issue',
+    });
+    expect(autosaveKey).toEqual('new-gitlab-org/gitlab-issue-discussion_to_resolve=2-draft');
+
+    window.location.search = '?discussion_to_resolve=2&state=opened';
+    autosaveKey = getNewWorkItemAutoSaveKey({
+      fullPath: 'gitlab-org/gitlab',
+      workItemType: 'issue',
+    });
+    expect(autosaveKey).toEqual('new-gitlab-org/gitlab-issue-discussion_to_resolve=2-draft');
   });
 });
 

@@ -1320,6 +1320,13 @@ test_job_2:
 
 ### `artifacts`
 
+{{< history >}}
+
+- [Updated](https://gitlab.com/gitlab-org/gitlab-runner/-/merge_requests/5543) in GitLab Runner 18.1. During the caching process,
+  `symlinks` are no longer followed, which happened in some edge cases with previous GitLab Runner versions.
+
+{{< /history >}}
+
 Use `artifacts` to specify which files to save as [job artifacts](../jobs/job_artifacts.md).
 Job artifacts are a list of files and directories that are
 attached to the job when it [succeeds, fails, or always](#artifactswhen).
@@ -1696,7 +1703,7 @@ failure.
 - `on_success` (default): Upload artifacts only when the job succeeds.
 - `on_failure`: Upload artifacts only when the job fails.
 - `always`: Always upload artifacts (except when jobs time out). For example, when
-  [uploading artifacts](../testing/unit_test_reports.md#view-junit-screenshots-on-gitlab)
+  [uploading artifacts](../testing/unit_test_reports.md#add-screenshots-to-test-reports)
   required to troubleshoot failing tests.
 
 **Example of `artifacts:when`**:
@@ -1759,6 +1766,8 @@ job:
 {{< history >}}
 
 - [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/330047) in GitLab 15.0, caches are not shared between protected and unprotected branches.
+- [Updated](https://gitlab.com/gitlab-org/gitlab-runner/-/merge_requests/5543) in GitLab Runner 18.1. During the caching process,
+  `symlinks` are no longer followed, which happened in some edge cases with previous GitLab Runner versions.
 
 {{< /history >}}
 
@@ -2237,8 +2246,8 @@ to select a specific site profile and scanner profile.
 
 **Related topics**:
 
-- [Site profile](../../user/application_security/dast/on-demand_scan.md#site-profile).
-- [Scanner profile](../../user/application_security/dast/on-demand_scan.md#scanner-profile).
+- [Site profile](../../user/application_security/dast/profiles.md#site-profile).
+- [Scanner profile](../../user/application_security/dast/profiles.md#scanner-profile).
 
 ### `dependencies`
 
@@ -4204,7 +4213,7 @@ job:
 
 - The `description` is evaluated by the shell that runs `release-cli`.
   You can use CI/CD variables to define the description, but some shells
-  [use different syntax](../variables/_index.md#use-cicd-variables-in-job-scripts)
+  [use different syntax](../variables/job_scripts.md)
   to reference variables. Similarly, some shells might require special characters
   to be escaped. For example, backticks (`` ` ``) might need to be escaped with a backslash (` \ `).
 
@@ -4349,7 +4358,7 @@ Use `retry:when` with `retry:max` to retry jobs for only specific failure cases.
 - A single failure type, or an array of one or more failure types:
 
 <!--
-  If you change any of the values below, make sure to update the `RETRY_WHEN_IN_DOCUMENTATION`
+  If you change any of the following values, make sure to update the `RETRY_WHEN_IN_DOCUMENTATION`
   array in `spec/lib/gitlab/ci/config/entry/retry_spec.rb`.
   The test there makes sure that all documented
   values are valid as a configuration option and therefore should always
@@ -4449,7 +4458,7 @@ using variables.
 
 Use `rules` to include or exclude jobs in pipelines.
 
-Rules are evaluated when the pipeline is created, and evaluated *in order*. When a match is found,
+Rules are evaluated when the pipeline is created, and evaluated in order. When a match is found,
 no more rules are checked and the job is either included or excluded from the pipeline
 depending on the configuration. If no rules match, the job is not added to the pipeline.
 
@@ -4525,7 +4534,7 @@ job:
   defined for the job, which defaults to `on_success` if not defined.
 - You can [mix `when` at the job-level with `when` in rules](https://gitlab.com/gitlab-org/gitlab/-/issues/219437).
   `when` configuration in `rules` takes precedence over `when` at the job-level.
-- Unlike variables in [`script`](../variables/_index.md#use-cicd-variables-in-job-scripts)
+- Unlike variables in [`script`](../variables/job_scripts.md)
   sections, variables in rules expressions are always formatted as `$VARIABLE`.
   - You can use `rules:if` with `include` to [conditionally include other configuration files](includes.md#use-rules-with-include).
 - CI/CD variables on the right side of `=~` and `!~` expressions are [evaluated as regular expressions](../jobs/job_rules.md#store-a-regular-expression-in-a-variable).
@@ -5573,7 +5582,7 @@ job2:
 
 job3:
   script:
-    - echo "This job also runs in the test stage".
+    - echo "This job also runs in the test stage."
 
 job4:
   stage: deploy
@@ -5695,7 +5704,7 @@ job:
     - postgres
 ```
 
-In this example, only runners with *both* the `ruby` and `postgres` tags can run the job.
+In this example, only runners with both the `ruby` and `postgres` tags can run the job.
 
 **Additional details**:
 

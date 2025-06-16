@@ -39,6 +39,11 @@ export const INACTIVE_TAB = {
   value: 'inactive',
   countsQueryPath: 'inactive',
   variables: { active: false },
+  emptyStateComponentProps: {
+    svgPath: groupsEmptyStateIllustration,
+    title: s__("Groups|You don't have any inactive groups."),
+    description: s__('Groups|Groups that are archived or pending deletion will appear here.'),
+  },
 };
 
 export const SORT_OPTION_NAME = {
@@ -47,12 +52,12 @@ export const SORT_OPTION_NAME = {
 };
 
 export const SORT_OPTION_CREATED = {
-  value: 'created',
+  value: 'created_at',
   text: SORT_LABEL_CREATED,
 };
 
 export const SORT_OPTION_UPDATED = {
-  value: 'latest_activity',
+  value: 'updated_at',
   text: SORT_LABEL_UPDATED,
 };
 

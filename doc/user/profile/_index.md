@@ -41,7 +41,7 @@ You might need the user ID if you want to interact with it using the [GitLab API
 To find the user ID:
 
 1. Go to the users' profile page.
-1. On the profile page, in the upper-right corner, select **Actions** (**{ellipsis_v}**).
+1. On the profile page, in the upper-right corner, select **Actions** ({{< icon name="ellipsis_v" >}}).
 1. Select **Copy user ID**.
 
 ## Access your user settings
@@ -478,7 +478,7 @@ To disconnect a sign-in service used for signing in to GitLab:
 
 ## Session duration
 
-### Stay signed in for two weeks
+### Stay signed in for one week
 
 By default, you are signed out of GitLab after seven days (10080 minutes) of inactivity or until you close your browser
 window, whichever comes first.
