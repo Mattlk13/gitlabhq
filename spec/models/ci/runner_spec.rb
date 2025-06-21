@@ -2164,6 +2164,48 @@ RSpec.describe Ci::Runner, type: :model, factory_default: :keep, feature_categor
     end
   end
 
+  describe '#ensure_organization_id' do
+    context 'with group runner' do
+      let(:runner) { build(:ci_runner, :group, groups: [group]) }
+
+      specify { expect(runner).to be_valid }
+
+      context 'when organization_id is not present' do
+        before do
+          runner.save!
+
+          # Simulate a pre-existing record with a NULL organization_id value
+          runner.update_columns(organization_id: nil)
+        end
+
+        it 'populates organization_id from owner on save', :aggregate_failures do
+          expect { runner.save! }
+            .to change { runner.organization_id }.from(nil).to(runner.owner.organization_id)
+        end
+      end
+    end
+
+    context 'with project runner' do
+      let(:runner) { build(:ci_runner, :project, projects: [project]) }
+
+      specify { expect(runner).to be_valid }
+
+      context 'when organization_id is not present' do
+        before do
+          runner.save!
+
+          # Simulate a pre-existing record with a NULL organization_id value
+          runner.update_columns(organization_id: nil)
+        end
+
+        it 'populates organization_id from owner on save', :aggregate_failures do
+          expect { runner.save! }
+            .to change { runner.organization_id }.from(nil).to(runner.owner.organization_id)
+        end
+      end
+    end
+  end
+
   describe '.with_upgrade_status' do
     subject(:scope) { described_class.with_upgrade_status(upgrade_status) }
 
@@ -2546,6 +2588,53 @@ RSpec.describe Ci::Runner, type: :model, factory_default: :keep, feature_categor
         let(:sharding_key_id) { non_existing_record_id }
 
         it { is_expected.to eq [] }
+      end
+    end
+  end
+
+  describe '.encode' do
+    let(:token_string) { 'test_token_123' }
+
+    it 'encodes the provided token' do
+      expect(Authn::TokenField::EncryptionHelper).to receive(:encrypt_token)
+        .with(token_string)
+        .and_return('fake_encrypted_token')
+
+      encoded_token = described_class.encode(token_string)
+
+      expect(encoded_token).to eq('fake_encrypted_token')
+    end
+  end
+
+  describe 'scopes' do
+    let_it_be(:runner_contacted_yesterday) { create(:ci_runner, contacted_at: 1.day.ago) }
+    let_it_be(:runner_contacted_today) { create(:ci_runner, contacted_at: Time.current) }
+    let_it_be(:runner_contacted_week_ago) { create(:ci_runner, contacted_at: 1.week.ago) }
+    let_it_be(:runner_never_contacted) { create_list(:ci_runner, 2, contacted_at: nil) }
+
+    describe '.order_contacted_at_asc' do
+      subject { described_class.order_contacted_at_asc }
+
+      it 'orders runners by contacted_at in ascending order with nulls first' do
+        is_expected.to eq([
+          *runner_never_contacted,
+          runner_contacted_week_ago,
+          runner_contacted_yesterday,
+          runner_contacted_today
+        ])
+      end
+    end
+
+    describe '.order_contacted_at_desc' do
+      subject { described_class.order_contacted_at_desc }
+
+      it 'orders runners by contacted_at in descending order with nulls last' do
+        is_expected.to eq([
+          runner_contacted_today,
+          runner_contacted_yesterday,
+          runner_contacted_week_ago,
+          *runner_never_contacted
+        ])
       end
     end
   end

@@ -11,13 +11,13 @@ import {
 } from '@gitlab/ui';
 import { mapActions } from 'pinia';
 import { helpPagePath } from '~/helpers/help_page_helper';
-import { fallsBefore, nWeeksAfter } from '~/lib/utils/datetime_utility';
 import { __, s__, sprintf } from '~/locale';
 import HelpIcon from '~/vue_shared/components/help_icon/help_icon.vue';
 import TimeAgoTooltip from '~/vue_shared/components/time_ago_tooltip.vue';
 import UserDate from '~/vue_shared/components/user_date.vue';
 
 import { useAccessTokens } from '../stores/access_tokens';
+import { fifteenDaysFromNow } from '../utils';
 
 const REVOKE = 'revoke';
 const ROTATE = 'rotate';
@@ -85,7 +85,7 @@ export default {
     },
     isExpiring(expiresAt) {
       if (expiresAt) {
-        return fallsBefore(new Date(expiresAt), nWeeksAfter(new Date(), 2));
+        return expiresAt < fifteenDaysFromNow();
       }
 
       return false;
@@ -176,6 +176,7 @@ export default {
 <template>
   <div>
     <gl-table
+      data-testid="access-token-table"
       :items="tokens"
       :fields="$options.fields"
       :empty-text="s__('AccessTokens|No access tokens')"
@@ -279,6 +280,7 @@ export default {
       <template #cell(options)="{ item }">
         <gl-disclosure-dropdown
           v-if="item.active"
+          data-testid="access-token-options"
           icon="ellipsis_v"
           :no-caret="true"
           :disabled="busy"

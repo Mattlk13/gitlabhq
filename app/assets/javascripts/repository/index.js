@@ -48,7 +48,7 @@ export default function setupVueRepositoryList() {
     refType,
   } = dataset;
   const router = createRouter(projectPath, escapedRef, fullName);
-  initFileTreeBrowser(router, { projectPath, ref, refType });
+  initFileTreeBrowser(router, { projectPath, ref, refType }, apolloProvider);
 
   apolloProvider.clients.defaultClient.cache.writeQuery({
     query: commitsQuery,
@@ -197,10 +197,9 @@ export default function setupVueRepositoryList() {
       projectId,
     } = codeDropdownEl.dataset;
 
-    const CodeDropdownComponent =
-      gon.features.directoryCodeDropdownUpdates && gon.features.blobRepositoryVueHeaderApp
-        ? CompactCodeDropdown
-        : CodeDropdown;
+    const CodeDropdownComponent = gon.features.directoryCodeDropdownUpdates
+      ? CompactCodeDropdown
+      : CodeDropdown;
 
     return new Vue({
       el: codeDropdownEl,

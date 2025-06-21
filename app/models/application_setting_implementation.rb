@@ -142,6 +142,8 @@ module ApplicationSettingImplementation
         max_export_size: 0,
         max_github_response_size_limit: 8,
         max_github_response_json_value_count: 250_000,
+        max_http_decompressed_size: 100,
+        max_http_response_size_limit: 100,
         max_import_size: 0,
         max_import_remote_file_size: 10240,
         max_login_attempts: nil,
@@ -178,6 +180,7 @@ module ApplicationSettingImplementation
         raw_blob_request_limit: 300,
         recaptcha_enabled: false,
         receptive_cluster_agents_enabled: false,
+        relation_export_batch_size: 50,
         repository_checks_enabled: true,
         repository_storages_weighted: { 'default' => 100 },
         require_admin_approval_after_user_signup: true,
@@ -212,6 +215,11 @@ module ApplicationSettingImplementation
         throttle_authenticated_api_enabled: false,
         throttle_authenticated_api_period_in_seconds: 3600,
         throttle_authenticated_api_requests_per_period: 7200,
+        throttle_authenticated_git_http_enabled: false,
+        throttle_authenticated_git_http_requests_per_period:
+          ApplicationSetting::DEFAULT_AUTHENTICATED_GIT_HTTP_LIMIT,
+        throttle_authenticated_git_http_period_in_seconds:
+          ApplicationSetting::DEFAULT_AUTHENTICATED_GIT_HTTP_PERIOD,
         throttle_authenticated_git_lfs_enabled: false,
         throttle_authenticated_git_lfs_period_in_seconds: 60,
         throttle_authenticated_git_lfs_requests_per_period: 1000,
@@ -337,7 +345,8 @@ module ApplicationSettingImplementation
         reindexing_minimum_index_size: 1.gigabyte,
         reindexing_minimum_relative_bloat_size: 0.2,
         git_push_pipeline_limit: 4,
-        disable_invite_members: false
+        disable_invite_members: false,
+        enforce_pipl_compliance: true
       }.tap do |hsh|
         hsh.merge!(non_production_defaults) unless Rails.env.production?
       end

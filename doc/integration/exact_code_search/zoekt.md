@@ -8,14 +8,14 @@ title: Zoekt
 {{< details >}}
 
 - Tier: Premium, Ultimate
-- Offering: GitLab Self-Managed
+- Offering: GitLab.com, GitLab Self-Managed
 - Status: Beta
 
 {{< /details >}}
 
 {{< history >}}
 
-- [Introduced](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/105049) as a [beta](../../policy/development_stages_support.md#beta) in GitLab 15.9 [with flags](../../administration/feature_flags.md) named `index_code_with_zoekt` and `search_code_with_zoekt`. Disabled by default.
+- [Introduced](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/105049) as a [beta](../../policy/development_stages_support.md#beta) in GitLab 15.9 [with flags](../../administration/feature_flags/_index.md) named `index_code_with_zoekt` and `search_code_with_zoekt`. Disabled by default.
 - [Enabled on GitLab.com](https://gitlab.com/gitlab-org/gitlab/-/issues/388519) in GitLab 16.6.
 - Feature flags `index_code_with_zoekt` and `search_code_with_zoekt` [removed](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/148378) in GitLab 17.1.
 
@@ -74,7 +74,7 @@ To enable [exact code search](../../user/search/exact_code_search.md) in GitLab:
 
 {{< history >}}
 
-- Stopping indexing when Zoekt node storage exceeds the critical watermark [introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/504945) in GitLab 17.7 [with a flag](../../administration/feature_flags.md) named `zoekt_critical_watermark_stop_indexing`. Disabled by default.
+- Stopping indexing when Zoekt node storage exceeds the critical watermark [introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/504945) in GitLab 17.7 [with a flag](../../administration/feature_flags/_index.md) named `zoekt_critical_watermark_stop_indexing`. Disabled by default.
 - [Enabled on GitLab.com, GitLab Self-Managed, and GitLab Dedicated](https://gitlab.com/gitlab-org/gitlab/-/issues/505334) in GitLab 18.0.
 - [Generally available](https://gitlab.com/gitlab-org/gitlab/-/issues/505334) in GitLab 18.1. Feature flag `zoekt_critical_watermark_stop_indexing` removed.
 
@@ -300,6 +300,56 @@ To define when offline nodes are automatically deleted:
 1. In the **Offline nodes automatically deleted after** text box, enter a value
    (for example, `30m` (30 minutes), `2h` (two hours), or `1d` (one day)).
    To disable automatic deletion, set to `0`.
+1. Select **Save changes**.
+
+## Define the indexing timeout for a project
+
+{{< history >}}
+
+- [Introduced](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/182581) in GitLab 18.2.
+
+{{< /history >}}
+
+Prerequisites:
+
+- You must have administrator access to the instance.
+
+You can define the indexing timeout for a project.
+The default value is `30m` (30 minutes).
+
+To define the indexing timeout for a project:
+
+1. On the left sidebar, at the bottom, select **Admin**.
+1. Select **Settings > Search**.
+1. Expand **Exact code search configuration**.
+1. In the **Indexing timeout per project** text box, enter a value
+   (for example, `30m` (30 minutes), `2h` (two hours), or `1d` (one day)).
+1. Select **Save changes**.
+
+## Set the maximum number of files in a project to be indexed
+
+{{< history >}}
+
+- [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/539526) in GitLab 18.2.
+
+{{< /history >}}
+
+Prerequisites:
+
+- You must have administrator access to the instance.
+
+You can set the maximum number of files in a project that can be indexed.
+Projects with more files than this limit in the default branch are not indexed.
+
+The default value is `500,000`.
+
+You can adjust this value based on the node's performance and workload.
+To set the maximum number of files in a project to be indexed:
+
+1. On the left sidebar, at the bottom, select **Admin**.
+1. Select **Settings > Search**.
+1. Expand **Exact code search configuration**.
+1. In the **Maximum number of files per project to be indexed** text box, enter a number greater than zero.
 1. Select **Save changes**.
 
 ## Define the retry interval for failed namespaces

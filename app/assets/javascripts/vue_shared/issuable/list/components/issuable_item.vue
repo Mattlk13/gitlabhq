@@ -183,7 +183,7 @@ export default {
       return (
         this.issuable.assignees?.nodes ||
         this.issuable.assignees ||
-        this.issuable.widgets?.find(isAssigneesWidget)?.assignees.nodes ||
+        this.issuable.widgets?.find(isAssigneesWidget)?.assignees?.nodes ||
         []
       );
     },
@@ -285,8 +285,7 @@ export default {
         !this.isIncident &&
         !this.isServiceDeskIssue &&
         !this.isTestCase &&
-        (this.glFeatures.workItemViewForIssues ||
-          (this.glFeatures.workItemsViewPreference && gon.current_user_use_work_items_view))
+        (this.glFeatures.workItemViewForIssues || gon.current_user_use_work_items_view)
       );
     },
     hiddenIssuableTitle() {
@@ -405,29 +404,33 @@ export default {
       <span class="gl-sr-only">{{ issuable.title }}</span>
     </gl-form-checkbox>
     <div class="issuable-main-info">
-      <div data-testid="issuable-title" class="issue-title title gl-font-size-0">
+      <div data-testid="issuable-title" class="issue-title title">
         <work-item-type-icon
           v-if="showWorkItemTypeIcon"
           class="gl-mr-2"
           :work-item-type="type"
           show-tooltip-on-hover
         />
-        <gl-icon
+        <span
           v-if="issuable.confidential"
           v-gl-tooltip
-          name="eye-slash"
           :title="__('Confidential')"
+          class="gl-mr-2 gl-inline-block gl-w-5"
+          data-testid="confidential-icon-container"
           :aria-label="__('Confidential')"
-          class="gl-mr-2"
-        />
-        <gl-icon
+        >
+          <gl-icon name="eye-slash" />
+        </span>
+        <span
           v-if="issuable.hidden"
           v-gl-tooltip
-          class="gl-mr-2"
-          name="spam"
           :title="hiddenIssuableTitle"
+          class="gl-mr-2 gl-inline-block gl-w-5"
+          data-testid="hidden-icon-container"
           :aria-label="__('Hidden')"
-        />
+        >
+          <gl-icon name="spam" />
+        </span>
         <work-item-prefetch
           v-if="preventRedirect"
           :work-item-iid="issuableIid"
@@ -581,14 +584,14 @@ export default {
             class="!gl-mr-0 gl-hidden sm:gl-inline-flex"
             data-testid="issuable-comments"
           >
-            <div
-              v-gl-tooltip.top
+            <span
+              v-gl-tooltip
               :title="__('Comments')"
               class="gl-flex gl-items-center !gl-text-inherit"
             >
               <gl-icon name="comments" class="gl-mr-2" />
               {{ notesCount }}
-            </div>
+            </span>
           </li>
           <div v-else-if="detailLoading">
             <gl-skeleton-loader :width="30" :lines="1" equal-width-lines />
@@ -613,7 +616,7 @@ export default {
         class="gl-hidden sm:gl-flex sm:gl-flex-col sm:gl-items-end md:gl-flex-row md:gl-items-center"
       >
         <slot name="health-status"></slot>
-        <div
+        <span
           v-if="timestamp"
           v-gl-tooltip.bottom
           class="gl-text-subtle sm:gl-inline-block"
@@ -621,7 +624,7 @@ export default {
           data-testid="issuable-timestamp"
         >
           {{ formattedTimestamp }}
-        </div>
+        </span>
       </div>
     </div>
   </li>

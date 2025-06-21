@@ -1,7 +1,7 @@
 ---
 stage: none
 group: unassigned
-info: Any user with at least the Maintainer role can merge updates to this content. For details, see https://docs.gitlab.com/ee/development/development_processes.html#development-guidelines-review.
+info: Any user with at least the Maintainer role can merge updates to this content. For details, see https://docs.gitlab.com/development/development_processes/#development-guidelines-review.
 title: GraphQL Authorization
 ---
 
@@ -137,7 +137,7 @@ helps avoid unnecessary queries.
 Fields can be authorized with the `authorize` option.
 
 Fields authorization is checked against the current object, and
-authorization happens _before_ resolution, which means that
+authorization happens before resolution, which means that
 fields do not have access to the resolved resource. If you need to
 apply an authorization check to a field, you probably want to add
 authorization to the resolver, or ideally to the type.

@@ -11,11 +11,12 @@ import {
 import { joinPaths } from '~/lib/utils/url_utility';
 import { s__ } from '~/locale';
 import { SORT_OPTIONS, DEFAULT_SORT } from '~/access_tokens/constants';
-import { serializeParams, update2WeekFromNow, updateUrlWithQueryParams } from '../utils';
+import { serializeParams, update15DaysFromNow, updateUrlWithQueryParams } from '../utils';
 
 /**
  * @typedef {{type: string, value: {data: string, operator: string}}} Filter
  * @typedef {Array<string|Filter>} Filters
+ * @typedef {{isAsc: boolean, value: string}} Sorting
  */
 
 /**
@@ -97,7 +98,7 @@ export const useAccessTokens = defineStore('accessTokens', {
     },
     async fetchStatistics() {
       try {
-        const updatedFilters = update2WeekFromNow();
+        const updatedFilters = update15DaysFromNow();
         this.statistics = await Promise.all(
           updatedFilters.map(async (stat) => {
             const params = serializeParams(stat.filters);
@@ -236,7 +237,7 @@ export const useAccessTokens = defineStore('accessTokens', {
       this.token = token;
     },
     /**
-     * @param {{isAsc: boolean, value: string}} sorting
+     * @param {Sorting} sorting
      */
     setSorting(sorting) {
       this.sorting = sorting;
@@ -245,15 +246,29 @@ export const useAccessTokens = defineStore('accessTokens', {
      * @param {Object} options
      *    @param {Filters} options.filters
      *    @param {number} options.id
+     *    @param {number} options.page
+     *    @param {boolean} options.showCreateForm
+     *    @param {Sorting} options.sorting
      *    @param {string} options.urlCreate
      *    @param {string} options.urlRevoke
      *    @param {string} options.urlRotate
      *    @param {string} options.urlShow
      */
-    setup({ filters, id, page, sorting, urlCreate, urlRevoke, urlRotate, urlShow }) {
+    setup({
+      filters,
+      id,
+      page,
+      showCreateForm,
+      sorting,
+      urlCreate,
+      urlRevoke,
+      urlRotate,
+      urlShow,
+    }) {
       this.filters = filters;
       this.id = id;
       this.page = page;
+      this.showCreateForm = showCreateForm;
       this.sorting = sorting;
       this.urlCreate = urlCreate;
       this.urlRevoke = urlRevoke;

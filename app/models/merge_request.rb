@@ -618,7 +618,8 @@ class MergeRequest < ApplicationRecord
       .pick(MergeRequest::Metrics.time_to_merge_expression)
   end
 
-  alias_attribute :project, :target_project
+  alias_method :project, :target_project
+  alias_method :project=, :target_project=
   alias_attribute :project_id, :target_project_id
 
   # Currently, `merge_when_pipeline_succeeds` column is used as a flag
@@ -2317,20 +2318,38 @@ class MergeRequest < ApplicationRecord
 
   # Overridden in EE
   def use_merge_base_pipeline_for_comparison?(_)
+    return true if Feature.enabled?(:use_merge_base_for_all_report_comparisons, project)
+
     false
   end
 
   def comparison_base_pipeline(service_class)
-    (use_merge_base_pipeline_for_comparison?(service_class) && merge_base_pipeline) || base_pipeline
-  end
+    target_shas = [
+      (diff_head_pipeline&.target_sha if use_merge_base_pipeline_for_comparison?(service_class)),
+      diff_base_sha,
+      diff_start_sha
+    ]
 
-  def base_pipeline
-    @base_pipeline ||= base_pipelines.last
+    target_shas
+      .compact
+      .lazy
+      .filter_map { |sha| target_branch_pipelines_for(sha: sha).last }
+      .first
   end
 
   def merge_base_pipeline
-    @merge_base_pipeline ||= merge_base_pipelines.last
+    target_sha = diff_head_pipeline&.target_sha
+
+    return unless target_sha
+
+    target_branch_pipelines_for(sha: target_sha).last
   end
+  strong_memoize_attr :merge_base_pipeline
+
+  def base_pipeline
+    target_branch_pipelines_for(sha: diff_base_sha).last
+  end
+  strong_memoize_attr :base_pipeline
 
   def discussions_rendered_on_frontend?
     true
@@ -2586,16 +2605,6 @@ class MergeRequest < ApplicationRecord
   end
 
   private
-
-  def merge_base_pipelines
-    return ::Ci::Pipeline.none unless diff_head_pipeline&.target_sha
-
-    target_branch_pipelines_for(sha: diff_head_pipeline.target_sha)
-  end
-
-  def base_pipelines
-    target_branch_pipelines_for(sha: diff_base_sha)
-  end
 
   def target_branch_pipelines_for(sha:)
     project.ci_pipelines

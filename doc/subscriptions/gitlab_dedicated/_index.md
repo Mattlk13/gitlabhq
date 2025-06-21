@@ -246,7 +246,7 @@ The following operational features are not available:
 
 ### Feature flags
 
-GitLab uses [feature flags](../../user/feature_flags.md) to support the development and rollout of new or experimental features.
+GitLab uses [feature flags](../../administration/feature_flags/_index.md) to support the development and rollout of new or experimental features.
 In GitLab Dedicated:
 
 - Features behind feature flags that are **enabled by default** are available.
@@ -257,6 +257,29 @@ Features behind flags that are disabled by default are not ready for production 
 When a feature becomes generally available and the flag is enabled or removed, the feature becomes available in
 GitLab Dedicated in the same GitLab version. GitLab Dedicated follows its own
 [release schedule](maintenance.md) for version deployments.
+
+## Service level availability
+
+GitLab Dedicated maintains a monthly service level objective of 99.5% availability.
+
+Service level availability measures the percentage of time that GitLab Dedicated is available for use during a calendar month. GitLab calculates availability based on the following core services:
+
+| Service area | Included features |
+|--|--|
+| Web interface | GitLab issues, merge requests, CI job logs, GitLab API, Git operations over HTTPS |
+| Container Registry | Registry HTTPS requests |
+| Git operations | Git push, pull, and clone operations over SSH |
+
+### Service level exclusions
+
+The following are not included in service level availability calculations:
+
+- Service interruptions caused by customer misconfigurations
+- Issues with customer or cloud provider infrastructure outside of GitLab control
+- Scheduled maintenance windows
+- Emergency maintenance for critical security or data issues
+- Service disruptions caused by natural disasters, widespread internet outages, 
+  datacenter failures, or other events outside of GitLab control.
 
 ## Migrate to GitLab Dedicated
 

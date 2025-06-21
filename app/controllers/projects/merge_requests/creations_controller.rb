@@ -150,9 +150,13 @@ class Projects::MergeRequests::CreationsController < Projects::MergeRequests::Ap
   end
 
   def rapid_diffs?
-    params[:rapid_diffs_disabled] != 'true' &&
-      ::Feature.enabled?(:rapid_diffs, current_user, type: :wip) &&
-      ::Feature.enabled?(:rapid_diffs_on_mr_creation, current_user, type: :wip)
+    ::Feature.enabled?(:rapid_diffs, current_user, type: :wip) &&
+      ::Feature.enabled?(:rapid_diffs_on_mr_creation, current_user, type: :wip) &&
+      !rapid_diffs_disabled?
+  end
+
+  def rapid_diffs_disabled?
+    ::Feature.enabled?(:rapid_diffs_debug, current_user, type: :ops) && params[:rapid_diffs_disabled] == 'true'
   end
 
   def define_rapid_diffs_vars
@@ -161,6 +165,7 @@ class Projects::MergeRequests::CreationsController < Projects::MergeRequests::Ap
     @stream_url = project_new_merge_request_diffs_stream_path(@project, merge_request: merge_request)
     @reload_stream_url = project_new_merge_request_diffs_stream_path(@project, merge_request: merge_request)
     @diff_files_endpoint = project_new_merge_request_diff_files_metadata_path(@project, merge_request: merge_request)
+    @diff_file_endpoint = project_new_merge_request_diff_file_path(@project, merge_request: merge_request)
     @diffs_stats_endpoint = project_new_merge_request_diffs_stats_path(@project, merge_request: merge_request)
   end
 

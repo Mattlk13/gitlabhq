@@ -10,13 +10,13 @@ title: GitLab Duo Workflow
 - Tier: Ultimate
 - Offering: GitLab.com
 - Status: Private beta
-- LLM: Anthropic [Claude 3.5 Sonnet](https://console.cloud.google.com/vertex-ai/publishers/anthropic/model-garden/claude-3-5-sonnet)
+- LLM: Anthropic [Claude Sonnet 4](https://www.anthropic.com/claude/sonnet)
 
 {{< /details >}}
 
 {{< history >}}
 
-- [Introduced](https://gitlab.com/groups/gitlab-org/-/epics/14153) in GitLab 17.4 [with a flag](../../administration/feature_flags.md) named `duo_workflow`. Enabled for GitLab team members only. This feature is a [private beta](../../policy/development_stages_support.md).
+- [Introduced](https://gitlab.com/groups/gitlab-org/-/epics/14153) in GitLab 17.4 [with a flag](../../administration/feature_flags/_index.md) named `duo_workflow`. Enabled for GitLab team members only. This feature is a [private beta](../../policy/development_stages_support.md).
 
 {{< /history >}}
 
@@ -108,9 +108,9 @@ Now you can use Workflow to help solve your coding tasks.
 
 To use Workflow in VS Code:
 
-1. Open the command palette:
-   - On macOS: <kbd>Cmd</kbd> + <kbd>Shift</kbd> + <kbd>P</kbd>
-   - On Windows and Linux: <kbd>Ctrl</kbd> + <kbd>P</kbd>.
+1. Open the Command Palette:
+   - On macOS: <kbd>Cmd</kbd>+<kbd>Shift</kbd>+<kbd>P</kbd>.
+   - On Windows and Linux: <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>P</kbd>.
 1. Type `GitLab Duo Workflow` and select **GitLab: Show Duo Workflow**.
 1. In the text box, specify a code task in detail.
    - For assistance writing your prompt, see [use case examples](use_cases.md) and [best practices](best_practices.md).

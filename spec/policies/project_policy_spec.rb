@@ -381,6 +381,167 @@ RSpec.describe ProjectPolicy, feature_category: :system_access do
     end
   end
 
+  context 'with archive_group feature flag' do
+    let_it_be_with_reload(:group) { create(:group) }
+    let_it_be_with_reload(:subgroup) { create(:group, parent: group) }
+    let_it_be_with_reload(:group_project) { create(:project, :repository, group: group) }
+    let_it_be_with_reload(:subgroup_project) { create(:project, :repository, group: subgroup) }
+    let_it_be_with_reload(:user_namespace_project) { create(:project, :repository) }
+
+    let(:current_user) { maintainer }
+
+    before_all do
+      [group_project, subgroup_project, user_namespace_project].each do |project|
+        project.add_developer(developer)
+        project.add_maintainer(maintainer)
+      end
+    end
+
+    shared_examples 'archived project behavior' do
+      it 'disallows write operations' do
+        expect_disallowed(*%i[
+          create_issue create_merge_request_in create_merge_request_from
+          push_code create_wiki create_deployment create_pipeline
+          update_pipeline create_pipeline_schedule create_environment
+          create_release update_release create_package destroy_package
+        ])
+      end
+
+      it 'allows read operations' do
+        expect_allowed(*%i[
+          read_project download_code read_issue read_merge_request
+          read_wiki read_deployment read_pipeline read_environment
+          read_release read_package
+        ])
+      end
+    end
+
+    context 'when archive_group feature flag is enabled' do
+      context 'when parent group is archived' do
+        before do
+          group.archive
+        end
+
+        context 'project in parent group' do
+          let(:project) { group_project }
+
+          subject(:policy) { described_class.new(current_user, project) }
+
+          it_behaves_like 'archived project behavior'
+        end
+
+        context 'project in subgroup of parent group' do
+          let(:project) { subgroup_project }
+
+          subject(:policy) { described_class.new(current_user, project) }
+
+          it_behaves_like 'archived project behavior'
+        end
+
+        context 'project with no group' do
+          let(:project) { user_namespace_project }
+
+          subject(:policy) { described_class.new(current_user, project) }
+
+          it 'allows read and write operations' do
+            expect_allowed(:create_issue, :push_code, :create_merge_request_in)
+          end
+        end
+      end
+
+      context 'when ancestor group is archived' do
+        before do
+          subgroup.archive
+        end
+
+        context 'project in subgroup (with ancestor archived)' do
+          let(:project) { subgroup_project }
+
+          subject(:policy) { described_class.new(current_user, project) }
+
+          it_behaves_like 'archived project behavior'
+        end
+
+        context 'project in parent group (not archived)' do
+          let(:project) { group_project }
+
+          subject(:policy) { described_class.new(current_user, project) }
+
+          it 'allows read and write operations' do
+            expect_allowed(:create_issue, :push_code, :create_merge_request_in)
+          end
+        end
+      end
+
+      context 'when project itself is archived' do
+        before do
+          group_project.update!(archived: true)
+        end
+
+        let(:project) { group_project }
+
+        subject(:policy) { described_class.new(current_user, project) }
+
+        it_behaves_like 'archived project behavior'
+      end
+
+      context 'when both project and group are archived' do
+        before do
+          group.archive
+          group_project.update!(archived: true)
+        end
+
+        let(:project) { group_project }
+
+        subject(:policy) { described_class.new(current_user, project) }
+
+        it_behaves_like 'archived project behavior'
+      end
+
+      context 'when neither project nor group is archived' do
+        let(:project) { group_project }
+
+        subject(:policy) { described_class.new(current_user, project) }
+
+        it 'allows read and write operations' do
+          expect_allowed(:create_issue, :push_code, :create_merge_request_in, :create_wiki)
+        end
+      end
+    end
+
+    context 'when archive_group feature flag is disabled' do
+      before do
+        stub_feature_flags(archive_group: false)
+      end
+
+      context 'when group is archived but project is not' do
+        before do
+          group.archive
+        end
+
+        let(:project) { group_project }
+
+        subject(:policy) { described_class.new(current_user, project) }
+
+        it 'ignores group archived status' do
+          expect_allowed(:create_issue, :push_code, :create_merge_request_in, :create_wiki)
+        end
+      end
+
+      context 'when project is archived' do
+        before do
+          group_project.update!(archived: true)
+        end
+
+        let(:project) { group_project }
+
+        subject(:policy) { described_class.new(current_user, project) }
+
+        it_behaves_like 'archived project behavior'
+      end
+    end
+  end
+
   context 'manage_trigger' do
     using RSpec::Parameterized::TableSyntax
 
@@ -1028,79 +1189,43 @@ RSpec.describe ProjectPolicy, feature_category: :system_access do
     context 'when `pipeline_variables_minimum_override_role` is defined' do
       using RSpec::Parameterized::TableSyntax
 
-      where(:user_role, :admin_mode, :minimum_role, :restrict_variables, :allowed) do
-        :developer   | false | :no_one_allowed | true | false
-        :maintainer  | false | :no_one_allowed | true | false
-        :owner       | false | :no_one_allowed | true | false
-        :guest       | false | :no_one_allowed | true | false
-        :planner     | false | :no_one_allowed | true | false
-        :reporter    | false | :no_one_allowed | true | false
-        :anonymous   | false | :no_one_allowed | true | false
-        :developer   | false | :developer      | true | true
-        :maintainer  | false | :developer      | true | true
-        :owner       | false | :developer      | true | true
-        :guest       | false | :developer      | true | true
-        :planner     | false | :developer      | true | true
-        :reporter    | false | :developer      | true | true
-        :anonymous   | false | :developer      | true | true
-        :developer   | false | :maintainer     | true | false
-        :maintainer  | false | :maintainer     | true | true
-        :owner       | false | :maintainer     | true | true
-        :guest       | false | :maintainer     | true | false
-        :planner     | false | :maintainer     | true | false
-        :reporter    | false | :maintainer     | true | false
-        :anonymous   | false | :maintainer     | true | false
-        :developer   | false | :owner          | true | false
-        :maintainer  | false | :owner          | true | false
-        :owner       | false | :owner          | true | true
-        :guest       | false | :owner          | true | false
-        :planner     | false | :owner          | true | false
-        :reporter    | false | :owner          | true | false
-        :anonymous   | false | :owner          | true | false
-        :developer   | false | :no_one_allowed | false | true
-        :maintainer  | false | :no_one_allowed | false | true
-        :owner       | false | :no_one_allowed | false | true
-        :guest       | false | :no_one_allowed | false | true
-        :planner     | false | :no_one_allowed | false | true
-        :reporter    | false | :no_one_allowed | false | true
-        :anonymous   | false | :no_one_allowed | false | true
-        :developer   | false | :developer      | false | true
-        :maintainer  | false | :developer      | false | true
-        :owner       | false | :developer      | false | true
-        :guest       | false | :developer      | false | true
-        :planner     | false | :developer      | false | true
-        :reporter    | false | :developer      | false | true
-        :anonymous   | false | :developer      | false | true
-        :developer   | false | :maintainer     | false | true
-        :maintainer  | false | :maintainer     | false | true
-        :owner       | false | :maintainer     | false | true
-        :guest       | false | :maintainer     | false | true
-        :planner     | false | :maintainer     | false | true
-        :reporter    | false | :maintainer     | false | true
-        :anonymous   | false | :maintainer     | false | true
-        :developer   | false | :owner          | false | true
-        :maintainer  | false | :owner          | false | true
-        :owner       | false | :owner          | false | true
-        :guest       | false | :owner          | false | true
-        :planner     | false | :owner          | false | true
-        :reporter    | false | :owner          | false | true
-        :anonymous   | false | :owner          | false | true
-        :admin       | false | :no_one_allowed | false | true
-        :admin       | false | :owner          | false | true
-        :admin       | false | :maintainer     | false | true
-        :admin       | false | :developer      | false | true
-        :admin       | false | :no_one_allowed | true  | false
-        :admin       | false | :owner          | true  | false
-        :admin       | false | :maintainer     | true  | false
-        :admin       | false | :developer      | true  | true
-        :admin       | true  | :no_one_allowed | false | true
-        :admin       | true  | :developer      | false | true
-        :admin       | true  | :maintainer     | false | true
-        :admin       | true  | :owner          | false | true
-        :admin       | true  | :no_one_allowed | true  | false
-        :admin       | true  | :developer      | true  | true
-        :admin       | true  | :maintainer     | true  | true
-        :admin       | true  | :owner          | true  | true
+      where(:user_role, :admin_mode, :minimum_role, :allowed) do
+        :developer   | false | :no_one_allowed | false
+        :maintainer  | false | :no_one_allowed | false
+        :owner       | false | :no_one_allowed | false
+        :guest       | false | :no_one_allowed | false
+        :planner     | false | :no_one_allowed | false
+        :reporter    | false | :no_one_allowed | false
+        :anonymous   | false | :no_one_allowed | false
+        :developer   | false | :developer      | true
+        :maintainer  | false | :developer      | true
+        :owner       | false | :developer      | true
+        :guest       | false | :developer      | true
+        :planner     | false | :developer      | true
+        :reporter    | false | :developer      | true
+        :anonymous   | false | :developer      | true
+        :developer   | false | :maintainer     | false
+        :maintainer  | false | :maintainer     | true
+        :owner       | false | :maintainer     | true
+        :guest       | false | :maintainer     | false
+        :planner     | false | :maintainer     | false
+        :reporter    | false | :maintainer     | false
+        :anonymous   | false | :maintainer     | false
+        :developer   | false | :owner          | false
+        :maintainer  | false | :owner          | false
+        :owner       | false | :owner          | true
+        :guest       | false | :owner          | false
+        :planner     | false | :owner          | false
+        :reporter    | false | :owner          | false
+        :anonymous   | false | :owner          | false
+        :admin       | false | :no_one_allowed | false
+        :admin       | false | :owner          | false
+        :admin       | false | :maintainer     | false
+        :admin       | false | :developer      | true
+        :admin       | true  | :no_one_allowed | false
+        :admin       | true  | :developer      | true
+        :admin       | true  | :maintainer     | true
+        :admin       | true  | :owner          | true
       end
       with_them do
         let(:current_user) { public_send(user_role) }
@@ -1108,7 +1233,6 @@ RSpec.describe ProjectPolicy, feature_category: :system_access do
         before do
           ci_cd_settings = project.ci_cd_settings
           ci_cd_settings[:pipeline_variables_minimum_override_role] = minimum_role
-          ci_cd_settings[:restrict_user_defined_variables] = restrict_variables
           ci_cd_settings.save!
 
           enable_admin_mode!(current_user) if admin_mode
@@ -1130,7 +1254,7 @@ RSpec.describe ProjectPolicy, feature_category: :system_access do
 
         context 'when project allows user defined variables' do
           before do
-            project.update!(restrict_user_defined_variables: false)
+            project.update!(ci_pipeline_variables_minimum_override_role: :developer)
           end
 
           it { is_expected.to be_allowed(:set_pipeline_variables) }
@@ -1150,7 +1274,7 @@ RSpec.describe ProjectPolicy, feature_category: :system_access do
 
         context 'when project allows user defined variables' do
           before do
-            project.update!(restrict_user_defined_variables: false)
+            project.update!(ci_pipeline_variables_minimum_override_role: :developer)
           end
 
           it { is_expected.to be_allowed(:set_pipeline_variables) }
@@ -1427,17 +1551,13 @@ RSpec.describe ProjectPolicy, feature_category: :system_access do
   end
 
   context 'deploy token access' do
-    let!(:project_deploy_token) do
-      create(:project_deploy_token, project: project, deploy_token: deploy_token)
-    end
-
     subject { described_class.new(deploy_token, project) }
 
     context 'private project' do
       let(:project) { private_project }
 
       context 'a deploy token with read_registry scope' do
-        let(:deploy_token) { create(:deploy_token, read_registry: true, write_registry: false) }
+        let(:deploy_token) { create(:deploy_token, read_registry: true, write_registry: false, projects: [project]) }
 
         it { is_expected.to be_allowed(:read_container_image) }
         it { is_expected.to be_disallowed(:create_container_image) }
@@ -1452,7 +1572,7 @@ RSpec.describe ProjectPolicy, feature_category: :system_access do
       end
 
       context 'a deploy token with write_registry scope' do
-        let(:deploy_token) { create(:deploy_token, read_registry: false, write_registry: true) }
+        let(:deploy_token) { create(:deploy_token, read_registry: false, write_registry: true, projects: [project]) }
 
         it { is_expected.to be_disallowed(:read_container_image) }
         it { is_expected.to be_allowed(:create_container_image) }
@@ -1466,14 +1586,14 @@ RSpec.describe ProjectPolicy, feature_category: :system_access do
       end
 
       context 'a deploy token with no registry scope' do
-        let(:deploy_token) { create(:deploy_token, read_registry: false, write_registry: false) }
+        let(:deploy_token) { create(:deploy_token, read_registry: false, write_registry: false, projects: [project]) }
 
         it { is_expected.to be_disallowed(:read_container_image) }
         it { is_expected.to be_disallowed(:create_container_image) }
       end
 
       context 'a deploy token with read_package_registry scope' do
-        let(:deploy_token) { create(:deploy_token, read_repository: false, read_registry: false, read_package_registry: true) }
+        let(:deploy_token) { create(:deploy_token, read_repository: false, read_registry: false, read_package_registry: true, projects: [project]) }
 
         it { is_expected.to be_allowed(:read_project) }
         it { is_expected.to be_allowed(:read_package) }
@@ -1483,7 +1603,7 @@ RSpec.describe ProjectPolicy, feature_category: :system_access do
       end
 
       context 'a deploy token with write_package_registry scope' do
-        let(:deploy_token) { create(:deploy_token, read_repository: false, read_registry: false, write_package_registry: true) }
+        let(:deploy_token) { create(:deploy_token, read_repository: false, read_registry: false, write_package_registry: true, projects: [project]) }
 
         it { is_expected.to be_allowed(:create_package) }
         it { is_expected.to be_allowed(:read_package) }
@@ -1498,7 +1618,7 @@ RSpec.describe ProjectPolicy, feature_category: :system_access do
       let(:project) { public_project }
 
       context 'a deploy token with read_registry scope' do
-        let(:deploy_token) { create(:deploy_token, read_registry: true, write_registry: false) }
+        let(:deploy_token) { create(:deploy_token, read_registry: true, write_registry: false, projects: [project]) }
 
         it { is_expected.to be_allowed(:read_container_image) }
         it { is_expected.to be_disallowed(:create_container_image) }
@@ -1519,7 +1639,7 @@ RSpec.describe ProjectPolicy, feature_category: :system_access do
       end
 
       context 'a deploy token with write_registry scope' do
-        let(:deploy_token) { create(:deploy_token, read_registry: false, write_registry: true) }
+        let(:deploy_token) { create(:deploy_token, read_registry: false, write_registry: true, projects: [project]) }
 
         it { is_expected.to be_allowed(:read_container_image) }
         it { is_expected.to be_allowed(:create_container_image) }
@@ -4159,76 +4279,6 @@ RSpec.describe ProjectPolicy, feature_category: :system_access do
       end
 
       it { is_expected.to send(expected_result, :create_container_registry_protection_immutable_tag_rule) }
-    end
-  end
-
-  describe 'read_templates' do
-    context 'when user is a member' do
-      %w[guest planner reporter developer].each do |role|
-        context "and user is a #{role}" do
-          let(:current_user) { send(role) }
-
-          context 'and issues and repository access is private' do
-            before do
-              project.project_feature.update!(
-                issues_access_level: ProjectFeature::PRIVATE,
-                merge_requests_access_level: ProjectFeature::PRIVATE,
-                repository_access_level: ProjectFeature::PRIVATE,
-                builds_access_level: ProjectFeature::PRIVATE,
-                forking_access_level: ProjectFeature::PRIVATE
-              )
-            end
-
-            it { is_expected.to be_allowed(:read_templates) }
-          end
-
-          context 'and only issues feature is disabled' do
-            before do
-              project.project_feature.update!(
-                issues_access_level: ProjectFeature::DISABLED,
-                merge_requests_access_level: ProjectFeature::ENABLED,
-                repository_access_level: ProjectFeature::ENABLED,
-                builds_access_level: ProjectFeature::ENABLED,
-                forking_access_level: ProjectFeature::ENABLED
-              )
-            end
-
-            it { is_expected.to be_disallowed(:read_templates) }
-          end
-
-          context 'and only repository feature is disabled' do
-            before do
-              project.project_feature.update!(
-                issues_access_level: ProjectFeature::ENABLED,
-                merge_requests_access_level: ProjectFeature::DISABLED,
-                repository_access_level: ProjectFeature::DISABLED,
-                builds_access_level: ProjectFeature::DISABLED,
-                forking_access_level: ProjectFeature::DISABLED
-              )
-            end
-
-            it { is_expected.to be_disallowed(:read_templates) }
-          end
-        end
-      end
-    end
-
-    context 'when user is not a member' do
-      let(:current_user) { non_member }
-
-      context 'and issues and repository features are private' do
-        before do
-          project.project_feature.update!(
-            issues_access_level: ProjectFeature::PRIVATE,
-            merge_requests_access_level: ProjectFeature::PRIVATE,
-            repository_access_level: ProjectFeature::PRIVATE,
-            builds_access_level: ProjectFeature::PRIVATE,
-            forking_access_level: ProjectFeature::PRIVATE
-          )
-        end
-
-        it { is_expected.to be_disallowed(:read_templates) }
-      end
     end
   end
 

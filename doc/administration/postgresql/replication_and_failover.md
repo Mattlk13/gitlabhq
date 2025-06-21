@@ -98,7 +98,7 @@ Each database node runs four services:
 
 ### Consul server node
 
-The Consul server node runs the Consul server service. These nodes must have reached the quorum and elected a leader _before_ Patroni cluster bootstrap; otherwise, database nodes wait until such Consul leader is elected.
+The Consul server node runs the Consul server service. These nodes must have reached the quorum and elected a leader before Patroni cluster bootstrap; otherwise, database nodes wait until such Consul leader is elected.
 
 ### PgBouncer node
 
@@ -733,7 +733,7 @@ After deploying the configuration follow these steps:
 
 Patroni is an opinionated solution for PostgreSQL high-availability. It takes the control of PostgreSQL, overrides its configuration, and manages its lifecycle (start, stop, restart). Patroni is the only option for PostgreSQL 12+ clustering and for cascading replication for Geo deployments.
 
-The fundamental [architecture](#example-recommended-setup-manual-steps) (mentioned above) does not change for Patroni.
+The fundamental [architecture](#example-recommended-setup-manual-steps) does not change for Patroni.
 You do not need any special consideration for Patroni while provisioning your database nodes. Patroni heavily relies on Consul to store the state of the cluster and elect a leader. Any failure in Consul cluster and its leader election propagates to the Patroni cluster as well.
 
 Patroni monitors the cluster and handles any failover. When the primary node fails, it works with Consul to notify PgBouncer. On failure, Patroni handles the transitioning of the old primary to a replica and rejoins it to the cluster automatically.
@@ -1054,6 +1054,15 @@ Considering these, you should carefully plan your PostgreSQL upgrade:
 
    ```shell
    sudo gitlab-ctl pg-upgrade
+   ```
+
+1. Ensure that the compatible versions of `pg_dump` and `pg_restore` are used
+   on the GitLab Rails instance to avoid version mismatch errors when performing
+   a backup or restore. You can do this by specifying the PostgreSQL version
+   in `/etc/gitlab/gitlab.rb` on the Rails instance:
+
+   ```shell
+   postgresql['version'] = 16
    ```
 
 If issues are encountered upgrading the replicas,

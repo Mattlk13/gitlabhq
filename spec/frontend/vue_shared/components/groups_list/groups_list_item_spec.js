@@ -68,6 +68,10 @@ describe('GroupsListItem', () => {
   const findLeaveModal = () => wrapper.findComponent(GroupListItemLeaveModal);
   const findAccessLevelBadge = () => wrapper.findByTestId('user-access-role');
   const findTimeAgoTooltip = () => wrapper.findComponent(TimeAgoTooltip);
+  const findSubgroupCount = () => wrapper.findByTestId('subgroups-count');
+  const findProjectsCount = () => wrapper.findByTestId('projects-count');
+  const findMembersCount = () => wrapper.findByTestId('members-count');
+  const findStorageSize = () => wrapper.findByTestId('storage-size');
 
   const findInactiveBadge = () => wrapper.findComponent(GroupListItemInactiveBadge);
 
@@ -117,30 +121,54 @@ describe('GroupsListItem', () => {
   it('renders subgroup count', () => {
     createComponent();
 
-    expect(wrapper.findByTestId('subgroups-count').props()).toMatchObject({
+    expect(findSubgroupCount().props()).toMatchObject({
       tooltipText: 'Subgroups',
       iconName: 'subgroup',
       stat: group.descendantGroupsCount.toString(),
     });
   });
 
+  describe('when subgroup count is not available', () => {
+    it.each([undefined, null])('does not render subgroup count', (descendantGroupsCount) => {
+      createComponent({ propsData: { group: { ...group, descendantGroupsCount } } });
+
+      expect(findSubgroupCount().exists()).toBe(false);
+    });
+  });
+
   it('renders projects count', () => {
     createComponent();
 
-    expect(wrapper.findByTestId('projects-count').props()).toMatchObject({
+    expect(findProjectsCount().props()).toMatchObject({
       tooltipText: 'Projects',
       iconName: 'project',
       stat: group.projectsCount.toString(),
     });
   });
 
+  describe('when projects count is not available', () => {
+    it.each([undefined, null])('does not render projects count', (projectsCount) => {
+      createComponent({ propsData: { group: { ...group, projectsCount } } });
+
+      expect(findProjectsCount().exists()).toBe(false);
+    });
+  });
+
   it('renders members count', () => {
     createComponent();
 
-    expect(wrapper.findByTestId('members-count').props()).toMatchObject({
+    expect(findMembersCount().props()).toMatchObject({
       tooltipText: 'Direct members',
       iconName: 'users',
       stat: group.groupMembersCount.toString(),
+    });
+  });
+
+  describe('when members count is not available', () => {
+    it.each([undefined, null])('does not render members count', (groupMembersCount) => {
+      createComponent({ propsData: { group: { ...group, groupMembersCount } } });
+
+      expect(findMembersCount().exists()).toBe(false);
     });
   });
 
@@ -179,6 +207,38 @@ describe('GroupsListItem', () => {
 
     it('does not render level role badge', () => {
       expect(findAccessLevelBadge().exists()).toBe(false);
+    });
+  });
+
+  describe('when group does not have rootStorageStatistics key', () => {
+    beforeEach(() => {
+      createComponent();
+    });
+
+    it('does not render storage size', () => {
+      expect(findStorageSize().exists()).toBe(false);
+    });
+  });
+
+  describe('when group has rootStorageStatistics key', () => {
+    it('renders storage size in human size', () => {
+      createComponent({
+        propsData: { group: { ...group, rootStorageStatistics: { storageSize: 3072 } } },
+      });
+
+      expect(findStorageSize().text()).toBe('3.00 KiB');
+    });
+
+    describe('when storage size is null', () => {
+      beforeEach(() => {
+        createComponent({
+          propsData: { group: { ...group, rootStorageStatistics: { storageSize: null } } },
+        });
+      });
+
+      it('renders 0 B', () => {
+        expect(findStorageSize().text()).toBe('0 B');
+      });
     });
   });
 

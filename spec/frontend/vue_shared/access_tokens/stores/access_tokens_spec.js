@@ -1,7 +1,7 @@
 import MockAdapter from 'axios-mock-adapter';
 import { setActivePinia, createPinia } from 'pinia';
 import { useAccessTokens } from '~/vue_shared/access_tokens/stores/access_tokens';
-import { update2WeekFromNow } from '~/vue_shared/access_tokens/utils';
+import { update15DaysFromNow } from '~/vue_shared/access_tokens/utils';
 import { createAlert } from '~/alert';
 import { smoothScrollTop } from '~/behaviors/smooth_scroll';
 import axios from '~/lib/utils/axios_utils';
@@ -21,7 +21,7 @@ jest.mock('~/alert', () => ({
 
 jest.mock('~/vue_shared/access_tokens/utils', () => ({
   ...jest.requireActual('~/vue_shared/access_tokens/utils'),
-  update2WeekFromNow: jest.fn(),
+  update15DaysFromNow: jest.fn(),
 }));
 
 jest.mock('~/behaviors/smooth_scroll');
@@ -184,7 +184,7 @@ describe('useAccessTokens store', () => {
       const tooltipTitle = 'Filter for active tokens';
       beforeEach(() => {
         store.setup({ filters, id, page, sorting, urlShow });
-        update2WeekFromNow.mockReturnValueOnce([{ title, tooltipTitle, filters }]);
+        update15DaysFromNow.mockReturnValueOnce([{ title, tooltipTitle, filters }]);
       });
 
       it('uses correct params in the fetch', async () => {
@@ -560,11 +560,22 @@ describe('useAccessTokens store', () => {
 
     describe('setup', () => {
       it('sets up the store', () => {
-        store.setup({ filters, id, page, sorting, urlCreate, urlRevoke, urlRotate, urlShow });
+        store.setup({
+          filters,
+          id,
+          page,
+          showCreateForm: true,
+          sorting,
+          urlCreate,
+          urlRevoke,
+          urlRotate,
+          urlShow,
+        });
 
         expect(store.filters).toEqual(filters);
         expect(store.id).toBe(id);
         expect(store.page).toBe(page);
+        expect(store.showCreateForm).toBe(true);
         expect(store.sorting).toEqual(sorting);
         expect(store.urlCreate).toBe(urlCreate);
         expect(store.urlRevoke).toBe(urlRevoke);

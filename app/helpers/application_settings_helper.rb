@@ -75,6 +75,13 @@ module ApplicationSettingsHelper
   def global_search_settings_checkboxes(form)
     [
       form.gitlab_ui_checkbox_component(
+        :anonymous_searches_allowed,
+        _("Allow unauthenticated users to use search"),
+        checkbox_options: {
+          checked: @application_setting.anonymous_searches_allowed, multiple: false
+        }
+      ),
+      form.gitlab_ui_checkbox_component(
         :global_search_block_anonymous_searches_enabled,
         _("Restrict global search to authenticated users only"),
         checkbox_options: {
@@ -370,6 +377,8 @@ module ApplicationSettingsHelper
       :max_export_size,
       :max_github_response_size_limit,
       :max_github_response_json_value_count,
+      :max_http_decompressed_size,
+      :max_http_response_size_limit,
       :max_import_size,
       :max_import_remote_file_size,
       :max_login_attempts,
@@ -437,6 +446,9 @@ module ApplicationSettingsHelper
       :throttle_authenticated_api_enabled,
       :throttle_authenticated_api_period_in_seconds,
       :throttle_authenticated_api_requests_per_period,
+      :throttle_authenticated_git_http_enabled,
+      :throttle_authenticated_git_http_period_in_seconds,
+      :throttle_authenticated_git_http_requests_per_period,
       :throttle_authenticated_git_lfs_enabled,
       :throttle_authenticated_git_lfs_period_in_seconds,
       :throttle_authenticated_git_lfs_requests_per_period,
@@ -558,6 +570,7 @@ module ApplicationSettingsHelper
       :can_create_organization,
       :bulk_import_concurrent_pipeline_batch_limit,
       :concurrent_relation_batch_export_limit,
+      :relation_export_batch_size,
       :bulk_import_enabled,
       :bulk_import_max_download_file_size,
       :silent_admin_exports_enabled,
@@ -609,6 +622,8 @@ module ApplicationSettingsHelper
       :global_search_issues_enabled,
       :global_search_merge_requests_enabled,
       :global_search_block_anonymous_searches_enabled,
+      :enable_language_server_restrictions,
+      :minimum_language_server_version,
       :vscode_extension_marketplace,
       :vscode_extension_marketplace_enabled,
       :reindexing_minimum_index_size,
@@ -713,9 +728,6 @@ module ApplicationSettingsHelper
   end
 
   def vscode_extension_marketplace_settings_view
-    # NOTE: This is intentionally not scoped to a specific actor since it affects instance-level settings.
-    return unless Feature.enabled?(:vscode_extension_marketplace_settings, nil)
-
     presets = ::WebIde::ExtensionMarketplacePreset.all.map do |preset|
       preset.to_h.deep_transform_keys { |key| key.to_s.camelize(:lower) }
     end

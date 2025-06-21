@@ -87,6 +87,8 @@ class Projects::MergeRequestsController < Projects::MergeRequests::ApplicationCo
   ]
   urgency :low, [:pipeline_status, :pipelines, :exposed_artifacts]
 
+  helper_method :rapid_diffs_page_enabled?
+
   def index
     @merge_requests = @issuables
 
@@ -105,14 +107,14 @@ class Projects::MergeRequestsController < Projects::MergeRequests::ApplicationCo
   end
 
   def rapid_diffs
-    return render_404 unless ::Feature.enabled?(:rapid_diffs, current_user, type: :wip) &&
-      ::Feature.enabled?(:rapid_diffs_on_mr_show, current_user, type: :wip)
+    return render_404 unless rapid_diffs_page_enabled?
 
     streaming_offset = 5
     @reload_stream_url = diffs_stream_url(@merge_request)
     @stream_url = diffs_stream_url(@merge_request, streaming_offset, diff_view)
     @diffs_slice = @merge_request.first_diffs_slice(streaming_offset, diff_options)
     @diff_files_endpoint = diff_files_metadata_namespace_project_merge_request_path
+    @diff_file_endpoint = diff_file_namespace_project_merge_request_path
     @diffs_stats_endpoint = diffs_stats_namespace_project_merge_request_path
 
     show_merge_request
@@ -154,6 +156,8 @@ class Projects::MergeRequestsController < Projects::MergeRequests::ApplicationCo
 
   def pipelines
     set_pipeline_variables
+    # Capture total count before pagination to ensure accurate count regardless of current page
+    @pipelines_count = @pipelines.count
     @pipelines = @pipelines.page(params[:page])
 
     Gitlab::PollingInterval.set_header(response, interval: 10_000)
@@ -172,7 +176,7 @@ class Projects::MergeRequestsController < Projects::MergeRequests::ApplicationCo
           preload_downstream_statuses: false
         ),
       count: {
-        all: @pipelines.count
+        all: @pipelines_count
       }
     }
   end
@@ -720,6 +724,12 @@ class Projects::MergeRequestsController < Projects::MergeRequests::ApplicationCo
 
   def email_format_path
     merge_request_path(merge_request, format: :patch)
+  end
+
+  def rapid_diffs_page_enabled?
+    ::Feature.enabled?(:rapid_diffs, current_user, type: :wip) &&
+      ::Feature.enabled?(:rapid_diffs_on_mr_show, current_user, type: :wip) &&
+      params[:rapid_diffs] == 'true'
   end
 end
 

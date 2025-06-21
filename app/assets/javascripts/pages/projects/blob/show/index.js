@@ -91,11 +91,10 @@ if (viewBlobEl) {
     explainCodeAvailable,
     refType,
     canDownloadCode,
-    showDuoWorkflowAction,
-    duoWorkflowInvokePath,
+    fullName,
     ...dataset
   } = viewBlobEl.dataset;
-  const router = createRouter(projectPath, originalBranch);
+  const router = createRouter(projectPath, originalBranch, fullName);
   initFileTreeBrowser(router, { projectPath, ref: originalBranch, refType });
 
   initHeaderApp({ router, isBlobView: true });
@@ -114,8 +113,6 @@ if (viewBlobEl) {
       userId,
       explainCodeAvailable: parseBoolean(explainCodeAvailable),
       canDownloadCode: parseBoolean(canDownloadCode),
-      duoWorkflowInvokePath,
-      showDuoWorkflowAction: parseBoolean(showDuoWorkflowAction),
       ...provideWebIdeLink(dataset),
     },
     render(createElement) {

@@ -58,9 +58,11 @@ describe('parse', () => {
       hasNextPage
       hasPreviousPage
     }
+    count
   }
 }
 ",
+  "variables": [],
 }
 `);
   });
@@ -121,9 +123,11 @@ assignee = currentUser()`),
       hasNextPage
       hasPreviousPage
     }
+    count
   }
 }
 ",
+  "variables": [],
 }
 `);
   });
@@ -185,9 +189,11 @@ query: assignee = currentUser()
       hasNextPage
       hasPreviousPage
     }
+    count
   }
 }
 ",
+  "variables": [],
 }
 `);
   });

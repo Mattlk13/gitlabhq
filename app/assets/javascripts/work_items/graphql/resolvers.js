@@ -4,12 +4,13 @@ import * as Sentry from '~/sentry/sentry_browser_wrapper';
 import { findWidget } from '~/issues/list/utils';
 import { newDate, toISODateFormat } from '~/lib/utils/datetime_utility';
 import { updateDraft } from '~/lib/utils/autosave';
-import { getParameterByName } from '~/lib/utils/url_utility';
 import {
   findCustomFieldsWidget,
   findStartAndDueDateWidget,
   getNewWorkItemAutoSaveKey,
+  getNewWorkItemWidgetsAutoSaveKey,
   newWorkItemFullPath,
+  getWorkItemWidgets,
 } from '../utils';
 import {
   WIDGET_TYPE_ASSIGNEES,
@@ -197,23 +198,16 @@ export const updateNewWorkItemCache = (input, cache) => {
 
     const newData = cache.readQuery({ query, variables });
 
-    const autosaveKey = getNewWorkItemAutoSaveKey(fullPath, workItemType);
+    const autosaveKey = getNewWorkItemAutoSaveKey({ fullPath, workItemType });
 
     const isQueryDataValid = !isEmpty(newData) && newData?.workspace?.workItem;
 
-    const isWorkItemToResolveDiscussion = getParameterByName(
-      'merge_request_to_resolve_discussions_of',
-    );
-
-    const isNewIssueForVulnerability = getParameterByName('vulnerability_id');
-
-    if (
-      isQueryDataValid &&
-      autosaveKey &&
-      !isWorkItemToResolveDiscussion &&
-      !isNewIssueForVulnerability
-    ) {
+    if (isQueryDataValid && autosaveKey) {
       updateDraft(autosaveKey, JSON.stringify(newData));
+      updateDraft(
+        getNewWorkItemWidgetsAutoSaveKey({ fullPath }),
+        JSON.stringify(getWorkItemWidgets(newData)),
+      );
     }
   } catch (e) {
     Sentry.captureException(e);

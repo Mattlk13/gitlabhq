@@ -16,9 +16,6 @@ description: Static site hosting, documentation publishing, project websites, an
 
 GitLab Pages publishes static websites directly from a repository in GitLab.
 
-<div class="row">
-<div class="col-md-9">
-<p style="margin-top: 18px;">
 These websites:
 
 - Deploy automatically with GitLab CI/CD pipelines.
@@ -27,11 +24,6 @@ These websites:
 - Connect with custom domains and SSL/TLS certificates.
 - Control access through built-in authentication.
 - Scale reliably for personal, business, or project documentation sites.
-
-</p>
-</div>
-<div class="col-md-3"><img src="img/ssgs_pages_v11_3.png" alt="Examples of SSGs supported by Pages" class="middle display-block"></div>
-</div>
 
 To publish a website with Pages, use any static site generator like Gatsby, Jekyll, Hugo, Middleman, Harp, Hexo, or Brunch.
 Pages also supports websites written directly in plain HTML, CSS, and JavaScript.
@@ -88,10 +80,6 @@ GitLab aware that you're deploying a GitLab Pages website.
 You can either use the GitLab [default domain for GitLab Pages websites](getting_started_part_one.md#gitlab-pages-default-domain-names),
 `*.gitlab.io`, or your own domain (`example.com`). In that case, you
 must be an administrator in your domain's registrar (or control panel) to set it up with Pages.
-
-The following diagrams show the workflows you might follow to get started with Pages.
-
-<img src="img/new_project_for_pages_v12_5.png" alt="New projects for GitLab Pages">
 
 ## Access to your Pages site
 
@@ -164,7 +152,7 @@ To ensure each project uses different cookies, enable the Pages [unique domains]
 
 {{< history >}}
 
-- [Introduced](https://gitlab.com/groups/gitlab-org/-/epics/9347) in GitLab 15.9 [with a flag](../../../administration/feature_flags.md) named `pages_unique_domain`. Disabled by default.
+- [Introduced](https://gitlab.com/groups/gitlab-org/-/epics/9347) in GitLab 15.9 [with a flag](../../../administration/feature_flags/_index.md) named `pages_unique_domain`. Disabled by default.
 - [Enabled by default](https://gitlab.com/gitlab-org/gitlab/-/issues/388151) in GitLab 15.11.
 - [Feature flag removed](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/122229) in GitLab 16.3.
 - [Changed](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/163523) unique domain URLs to be shorter in GitLab 17.4.
@@ -231,8 +219,8 @@ Stopped deployments are subsequently deleted by another cron job that also
 runs every 10 minutes. To recover it, follow the steps described in
 [Recover a stopped deployment](#recover-a-stopped-deployment).
 
-A stopped or deleted deployment is no longer available on the web.
-Users see a `404 Not found` error page at its URL, until another deployment is created
+A stopped or deleted deployment is no longer available on the web. You
+see a 404 Not found error page at its URL, until another deployment is created
 with the same URL configuration.
 
 The previous YAML example uses [user-defined job names](#user-defined-job-names).

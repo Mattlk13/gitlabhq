@@ -80,7 +80,7 @@ A database may not use an index even when a regular sequence scan
 (iterating over all rows) is faster, especially for small tables.
 
 Consider adding an index if a table is expected to grow, and your query has to filter a lot of rows.
-You may _not_ want to add an index if the table size is small (<`1,000` records),
+You may not want to add an index if the table size is small (<`1,000` records),
 or if existing indexes already filter out enough rows.
 
 ## Maintenance Overhead
@@ -328,12 +328,12 @@ Be aware that certain factors can give the false impression that an index is unu
           parent_idx.relname = '<PARENT_INDEX_NAME>';
         ```
 
-1. For GitLab.com, you can view index usage data in [Grafana](https://dashboards.gitlab.net/goto/shHCmIxHg?orgId=1).
+1. For GitLab.com, you can view index usage data in [Grafana](https://dashboards.gitlab.net/goto/TsYVxcBHR?orgId=1).
    - Query the metric `pg_stat_user_indexes_idx_scan` filtered by the relevant index(s) for at least the last 6 months.
-     The query below shows index usage across all database instances combined.
+     The query below shows index usage rate across all database instances combined.
 
      ```sql
-     sum by (indexrelname) (pg_stat_user_indexes_idx_scan{env="gprd", relname=~"<TABLE_NAME_REGEX>", indexrelname=~"<INDEX_NAME_REGEX>"})
+     sum by (indexrelname) (rate(pg_stat_user_indexes_idx_scan{env="gprd", relname=~"<TABLE_NAME_REGEX>", indexrelname=~"<INDEX_NAME_REGEX>"}[30d]))
      ```
 
    - For partitioned tables, we must check that **all child indexes are unused** prior to dropping the parent.
@@ -349,7 +349,7 @@ account for the occasional usage.
 
 #### Investigating related queries
 
-The following are ways to find all queries that _may_ utilize the index. It's important to understand the context in
+The following are ways to find all queries that may utilize the index. It's important to understand the context in
 which the queries are or may be executed so that we can determine if the index either:
 
 - Has no queries on GitLab.com nor on self-managed that depend on it.
@@ -649,6 +649,13 @@ def down
   unprepare_partitioned_async_index :p_ci_builds, :some_column, name: PARTITIONED_INDEX_NAME
 end
 ```
+
+{{< alert type="note" >}}
+
+Async indexes are only supported for GitLab.com environments,
+so `prepare_async_index` and `prepare_partitioned_async_index` are no-ops for other environments.
+
+{{< /alert >}}
 
 {{< alert type="note" >}}
 

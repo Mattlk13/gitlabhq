@@ -15,7 +15,7 @@ title: GitLab Query Language (GLQL)
 
 {{< history >}}
 
-- [Introduced](https://gitlab.com/groups/gitlab-org/-/epics/14767) in GitLab 17.4 [with a flag](../../administration/feature_flags.md) named `glql_integration`. Disabled by default.
+- [Introduced](https://gitlab.com/groups/gitlab-org/-/epics/14767) in GitLab 17.4 [with a flag](../../administration/feature_flags/_index.md) named `glql_integration`. Disabled by default.
 - Enabled on GitLab.com in GitLab 17.4 for a subset of groups and projects.
 - [Changed](https://gitlab.com/gitlab-org/gitlab/-/issues/476990) from experiment to beta in GitLab 17.10.
 - Enabled on GitLab.com, GitLab Self-Managed, and GitLab Dedicated in GitLab 17.10.
@@ -81,7 +81,7 @@ Values can include:
 - Booleans (`true` or `false`)
 - Nullable values (like `null`, `none`, or `any`)
 - GitLab references (like `~label` for a label, `%Backlog` for a milestone, or `@username` for a user)
-- Lists containing any of the above (surrounded by parenthesis: `()` and delimited by commas: `,`)
+- Lists containing any of the previous values (surrounded by parenthesis: `()` and delimited by commas: `,`)
 
 ## GLQL views
 
@@ -135,6 +135,7 @@ This source should render a table like the one below:
 
 - [Changed](https://gitlab.com/gitlab-org/gitlab/-/issues/508956) in GitLab 17.7: Configuring the presentation layer using YAML front matter is deprecated.
 - Parameters `title` and `description` [introduced](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/183709) in GitLab 17.10.
+- Support for sorting GLQL views [introduced](https://gitlab.com/gitlab-org/gitlab-query-language/glql-rust/-/merge_requests/178) in GitLab 18.2.
 
 {{< /history >}}
 
@@ -147,8 +148,9 @@ Supported parameters:
 | ------------- | --------------------------- | ----------- |
 | `description` | None                        | An optional description to display below the title. |
 | `display`     | `table`                     | How to display the data. Supported options: `table`, `list`, or `orderedList`. |
-| `fields`      | `title`                     | A comma-separated list of [fields](fields.md#fields-in-glql-views). |
+| `fields`      | `title`                     | A comma-separated list of [fields](fields.md#fields-in-glql-views) to include in the view. |
 | `limit`       | `100`                       | How many items to display. The maximum value is `100`. |
+| `sort`        | `updated desc`              | The [field to sort the data by](fields.md#fields-to-sort-glql-views-by) followed by a sort order (`asc` or `desc`). |
 | `title`       | `GLQL table` or `GLQL list` | A title displayed at the top of the GLQL view. |
 
 For example, to display first five issues assigned to current user in the `gitlab-org/gitlab`

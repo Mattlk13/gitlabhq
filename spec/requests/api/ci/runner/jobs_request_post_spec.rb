@@ -352,6 +352,8 @@ RSpec.describe API::Ci::Runner, :clean_gitlab_redis_shared_state, feature_catego
               end
 
               it 'fails the job as a scheduler failure' do
+                allow(Gitlab::ErrorTracking).to receive(:track_and_raise_for_dev_exception)
+
                 request_job
 
                 expect(response).to have_gitlab_http_status(:no_content)
@@ -442,7 +444,7 @@ RSpec.describe API::Ci::Runner, :clean_gitlab_redis_shared_state, feature_catego
                     },
                     {
                       "name" => "release",
-                      "script" => [a_string_including("glab -R $CI_PROJECT_PATH release create")],
+                      "script" => [a_string_including("glab release create -R $CI_PROJECT_PATH")],
                       "timeout" => 3600,
                       "when" => "on_success",
                       "allow_failure" => false

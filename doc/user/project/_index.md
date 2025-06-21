@@ -34,6 +34,8 @@ To create a blank project:
    create a default branch, and enable cloning of this project's repository.
    1. **Enable Static Application Security Testing (SAST)**: Select this option to analyze the
    source code for known security vulnerabilities.
+   1. **Enable Secret Detection**: Select this option to analyze the
+   source code for secrets and credentials to prevent unauthorized access.
 1. Select **Create project**.
 
 ## Create a project from a built-in template
@@ -124,7 +126,7 @@ To create a project from a custom template:
 
 {{< history >}}
 
-- [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/431864) in GitLab 16.7 [with a flag](../../administration/feature_flags.md) named `support_sha256_repositories`. Disabled by default. This feature is an [experiment](../../policy/development_stages_support.md#experiment).
+- [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/431864) in GitLab 16.7 [with a flag](../../administration/feature_flags/_index.md) named `support_sha256_repositories`. Disabled by default. This feature is an [experiment](../../policy/development_stages_support.md#experiment).
 
 {{< /history >}}
 

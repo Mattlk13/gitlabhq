@@ -1,7 +1,7 @@
 ---
 stage: none
 group: unassigned
-info: Any user with at least the Maintainer role can merge updates to this content. For details, see https://docs.gitlab.com/ee/development/development_processes.html#development-guidelines-review.
+info: Any user with at least the Maintainer role can merge updates to this content. For details, see https://docs.gitlab.com/development/development_processes/#development-guidelines-review.
 title: npm package publishing guidelines
 ---
 
@@ -126,6 +126,6 @@ publish:
 
 Manual workflows should be avoided to ensure that:
 
-- **Secrets remain secure:** Tokens and other sensitive information should only exist in secure CI/CD environments.
-- **Workflows are consistent and auditable:** CI/CD pipelines ensure that all publishing steps are repeatable and documented.
-- **Complexity is reduced:** Centralized CI/CD pipelines simplify project handovers and minimize risks.
+- **Secrets remain secure**: Tokens and other sensitive information should only exist in secure CI/CD environments.
+- **Workflows are consistent and auditable**: CI/CD pipelines ensure that all publishing steps are repeatable and documented.
+- **Complexity is reduced**: Centralized CI/CD pipelines simplify project handovers and minimize risks.

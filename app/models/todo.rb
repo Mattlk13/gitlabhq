@@ -40,11 +40,8 @@ class Todo < ApplicationRecord
     APPROVAL_REQUIRED => :approval_required,
     UNMERGEABLE => :unmergeable,
     DIRECTLY_ADDRESSED => :directly_addressed,
-    MERGE_TRAIN_REMOVED => :merge_train_removed,
     MEMBER_ACCESS_REQUESTED => :member_access_requested,
     REVIEW_SUBMITTED => :review_submitted,
-    OKR_CHECKIN_REQUESTED => :okr_checkin_requested,
-    ADDED_APPROVER => :added_approver,
     SSH_KEY_EXPIRED => :ssh_key_expired,
     SSH_KEY_EXPIRING_SOON => :ssh_key_expiring_soon
   }.freeze
@@ -270,7 +267,8 @@ class Todo < ApplicationRecord
     end
 
     def distinct_user_ids
-      distinct.pluck(:user_id)
+      # When used from the todos finder that applies a default order, we need to reset it.
+      reorder(nil).distinct.pluck(:user_id)
     end
 
     # Count pending todos grouped by user_id and state

@@ -1,7 +1,7 @@
 ---
 stage: Data Access
 group: Database Frameworks
-info: Any user with at least the Maintainer role can merge updates to this content. For details, see https://docs.gitlab.com/ee/development/development_processes.html#development-guidelines-review.
+info: Any user with at least the Maintainer role can merge updates to this content. For details, see https://docs.gitlab.com/development/development_processes/#development-guidelines-review.
 title: Loose foreign keys
 ---
 
@@ -556,7 +556,7 @@ cron job where the schedule depends on the configuration of the GitLab instance.
 To avoid lock contention and the processing of the same database rows, the worker does not run
 parallel. This behavior is ensured with a Redis lock.
 
-**Record cleanup procedure:**
+**Record cleanup procedure**:
 
 1. Acquire the Redis lock.
 1. Determine which database to clean up.

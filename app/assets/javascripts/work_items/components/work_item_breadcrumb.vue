@@ -27,9 +27,8 @@ export default {
   },
   props: {
     staticBreadcrumbs: {
-      type: Object,
-      required: false,
-      default: () => ({ items: [] }),
+      type: Array,
+      required: true,
     },
   },
   computed: {
@@ -48,13 +47,12 @@ export default {
         return __('Epics');
       }
 
-      return this.isGroup ? s__('WorkItem|Work items') : __('Issues');
+      return __('Issues');
     },
     issueAsWorkItem() {
       return (
         !this.isGroup &&
-        (this.glFeatures.workItemViewForIssues ||
-          (this.glFeatures.workItemsViewPreference && gon.current_user_use_work_items_view)) &&
+        (this.glFeatures.workItemViewForIssues || gon.current_user_use_work_items_view) &&
         this.glFeatures.workItemsAlpha
       );
     },
@@ -63,15 +61,13 @@ export default {
         text: this.listName,
       };
 
-      if (this.isWorkItemOnly || this.glFeatures.workItemEpicsList || this.issueAsWorkItem) {
+      if (this.isWorkItemOnly || this.isGroup || this.issueAsWorkItem) {
         indexCrumb.to = { name: ROUTES.index, query: this.$route.query };
       } else {
         indexCrumb.href = this.listPath;
       }
 
-      const staticCrumbs = this.staticBreadcrumbs.items;
-
-      const crumbs = [...staticCrumbs, indexCrumb];
+      const crumbs = [...this.staticBreadcrumbs, indexCrumb];
 
       if (this.$route.name === ROUTES.new) {
         crumbs.push({

@@ -88,7 +88,7 @@ RSpec.describe Ci::Processable, feature_category: :continuous_integration do
       let(:ignore_accessors) do
         %i[type namespace lock_version target_url base_tags trace_sections
            commit_id deployment erased_by_id project_id project_mirror
-           runner_id taggings tags trigger_request_id trigger trigger_id
+           runner_id taggings tags trigger trigger_id
            user_id auto_canceled_by_id retried failure_reason
            sourced_pipelines sourced_pipeline artifacts_file_store artifacts_metadata_store
            metadata runner_manager_build runner_manager runner_session trace_chunks
@@ -686,6 +686,15 @@ RSpec.describe Ci::Processable, feature_category: :continuous_integration do
     it 'delegates to trigger' do
       expect(processable.trigger).to receive(:short_token)
       processable.trigger_short_token
+    end
+  end
+
+  describe '#redis_state' do
+    let(:processable) { build_stubbed(:ci_processable, pipeline: pipeline) }
+
+    it 'is a memoized Ci::JobRedisState record' do
+      expect(processable.redis_state).to be_an_instance_of(Ci::JobRedisState)
+      expect(processable.strong_memoized?(:redis_state)).to be(true)
     end
   end
 end

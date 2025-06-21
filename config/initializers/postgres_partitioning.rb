@@ -52,11 +52,15 @@ if Gitlab.ee?
       Ai::CodeSuggestionEvent,
       Ai::DuoChatEvent,
       Ai::TroubleshootJobEvent,
+      Ai::UsageEvent,
       Vulnerabilities::Archive,
       Vulnerabilities::ArchivedRecord,
       Vulnerabilities::ArchiveExport,
+      Ai::ActiveContext::Code::EnabledNamespace,
+      Ai::ActiveContext::Code::Repository,
       Ai::KnowledgeGraph::EnabledNamespace,
-      Ai::KnowledgeGraph::Replica
+      Ai::KnowledgeGraph::Replica,
+      Ai::KnowledgeGraph::Task
     ])
 else
   Gitlab::Database::Partitioning.register_tables(
@@ -87,5 +91,16 @@ unless Gitlab.jh?
       }
     ])
 end
+
+# The following table will not be used with a model yet. Will just be backfilled for now.
+Gitlab::Database::Partitioning.register_tables(
+  [
+    {
+      limit_connection_names: %i[main],
+      table_name: 'sent_notifications_7abbf02cb6',
+      partitioned_column: :created_at, strategy: :monthly, retain_for: 1.year
+    }
+  ]
+)
 
 Gitlab::Database::Partitioning.sync_partitions_ignore_db_error

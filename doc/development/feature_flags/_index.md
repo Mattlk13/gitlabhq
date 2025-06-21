@@ -9,7 +9,7 @@ title: Feature flags in the development of GitLab
 This page explains how developers contribute to the development and operations of the GitLab product
 through feature flags. To create custom feature flags to show and hide features in your own applications,
 see [Create a feature flag](../../operations/feature_flags.md#create-a-feature-flag).
-A [complete list of feature flags](../../user/feature_flags.md) in GitLab is also available.
+A [complete list of feature flags](../../administration/feature_flags/list.md) in GitLab is also available.
 
 {{< alert type="warning" >}}
 
@@ -118,7 +118,7 @@ GitLab are of the `gitlab_com_derisk` type.
 - `default_enabled`: **Must not** be set to true. This kind of feature flag is meant to lower the risk on GitLab.com, thus there's no need to keep the flag in the codebase after it's been enabled on GitLab.com. `default_enabled: true` will not have any effect for this type of feature flag.
 - Maximum Lifespan: 2 months after it's merged into the default branch
 - Documentation: This type of feature flag doesn't need to be documented in the
-  [All feature flags in GitLab](../../user/feature_flags.md) page given they're short-lived and deployment-related
+  [All feature flags in GitLab](../../administration/feature_flags/list.md) page given they're short-lived and deployment-related
 - Rollout issue: **Must** have a rollout issue created from the
   [Feature flag Roll Out template](https://gitlab.com/gitlab-org/gitlab/-/blob/master/.gitlab/issue_templates/Feature%20Flag%20Roll%20Out.md)
 
@@ -166,7 +166,7 @@ Once the feature is complete, the feature flag type can be changed to the `gitla
 - `default_enabled`: **Must not** be set to true. If needed, this type can be changed to beta once the feature is complete.
 - Maximum Lifespan: 4 months after it's merged into the default branch
 - Documentation: This type of feature flag doesn't need to be documented in the
-  [All feature flags in GitLab](../../user/feature_flags.md) page given they're mostly hiding unfinished code
+  [All feature flags in GitLab](../../administration/feature_flags/list.md) page given they're mostly hiding unfinished code
 - Rollout issue: Likely no need for a rollout issues, as `wip` feature flags should be transitioned to
   another type before being enabled
 
@@ -196,7 +196,7 @@ Providing a flag in this case allows engineers and customers to disable the new 
   reason on specific on-premise installations)
 - Maximum Lifespan: 6 months after it's merged into the default branch
 - Documentation: This type of feature flag **must** be documented in the
-  [All feature flags in GitLab](../../user/feature_flags.md) page
+  [All feature flags in GitLab](../../administration/feature_flags/list.md) page
 - Rollout issue: **Must** have a rollout issue
   created from the
   [Feature flag Roll Out template](https://gitlab.com/gitlab-org/gitlab/-/blob/master/.gitlab/issue_templates/Feature%20Flag%20Roll%20Out.md)
@@ -232,7 +232,7 @@ they are still necessary.
   issues or help debug production issues.
 - Maximum Lifespan: Unlimited, but must be evaluated every 12 months
 - Documentation: This type of feature flag **must** be documented in the
-  [All feature flags in GitLab](../../user/feature_flags.md) page as well as be associated with an operational
+  [All feature flags in GitLab](../../administration/feature_flags/list.md) page as well as be associated with an operational
   runbook describing the circumstances when it can be used.
 - Rollout issue: Likely no need for a rollout issues, as it is hard to predict when they are enabled or disabled
 
@@ -449,24 +449,61 @@ deleting feature flags.
 
 ## Migrate an `ops` feature flag to an application setting
 
-To migrate an `ops` feature flag to an application setting:
-
-1. In application settings, create or identify an existing `JSONB` column to store the setting.
-1. Write a migration to backfill the column. Avoid using `Feature.enabled?` in the migration. Use the `feature_flag_enabled?` migration helper method.
-1. Optional. In application settings, update the documentation for the setting.
-1. In the **Admin** area, create a setting to enable or disable the feature.
-1. Replace the feature flag everywhere with the application setting.
-1. Update all the relevant documentation pages.
-1. To remove a feature flag from an existing migration, replace `Feature.enabled?` with migration helper method `feature_flag_enabled?`.
-
 {{< alert type="warning" >}}
 
 The changes to backfill application settings and use the settings in the code must be merged in the same milestone.
 
 {{< /alert >}}
 
-If frontend changes are merged in a later milestone, you should add documentation about how to update the settings
-by using the [application settings API](../../api/settings.md) or the Rails console.
+To migrate an `ops` feature flag to an application setting:
+
+1. In application settings, create or identify an existing `JSONB` column to store the setting.
+1. The application setting default should match `default_enabled:` in the feature flag YAML definition
+1. Write a migration to backfill the column. This allows instances which have
+   opted out of the default behavior to remain in the same state. Avoid using `Feature.enabled?` or `Feature.disabled?`
+   in the migration. Use the `Gitlab::Database::MigrationHelpers::FeatureFlagMigratorHelpers` migration helpers. These
+   helpers will only migrate feature flags that are explicitly set to `true` or `false`. If a feature flag is set for a
+   percentage or specific actor, the default value will be used.
+1. In the **Admin** area, create a setting to enable or disable the feature.
+1. Replace the feature flag everywhere with the application setting.
+1. Update all the relevant documentation pages. If frontend changes are merged in a later milestone, you should add
+   documentation about how to update the settings by using the [application settings API](../../api/settings.md) or
+   the Rails console.
+
+An example migration for a `JSONB` column:
+
+```ruby
+# default_enabled copied from feature flag definition YAML before it is removed
+DEFAULT_ENABLED = true
+
+def up
+  up_migrate_to_jsonb_setting(feature_flag_name: :my_flag_name,
+    setting_name: :my_setting,
+    jsonb_column_name: :settings,
+    default_enabled: DEFAULT_ENABLED)
+end
+
+def down
+  down_migrate_to_jsonb_setting(setting_name: :my_setting, jsonb_column_name: :settings)
+end
+```
+
+An example migration for a boolean column:
+
+```ruby
+# default_enabled copied from feature flag definition YAML before it is removed
+DEFAULT_ENABLED = true
+
+def up
+  up_migrate_to_setting(feature_flag_name: :my_flag_name,
+    setting_name: :my_setting,
+    default_enabled: DEFAULT_ENABLED)
+end
+
+def down
+  down_migrate_to_setting(setting_name: :my_setting, default_enabled: DEFAULT_ENABLED)
+end
+```
 
 ## Develop with a feature flag
 
@@ -551,7 +588,7 @@ happens, we track a `Feature::RecursionError` exception to the error tracker.
 
 ### Frontend
 
-When using a feature flag for UI elements, make sure to _also_ use a feature
+When using a feature flag for UI elements, make sure to also use a feature
 flag for the underlying backend code, if there is any. This ensures there is
 absolutely no way to use the feature until it is enabled.
 

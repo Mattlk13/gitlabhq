@@ -187,30 +187,55 @@ The external redirect warning page is displayed by default. To hide it:
 1. Clear the **Enable the external redirect page for job artifacts** checkbox.
 1. Select **Save changes**.
 
-### Jobs
+### Pipelines
 
-#### Archive older jobs
+#### Archive pipelines
 
-Archive older jobs automatically after a specified time period. Archived jobs:
+Archive old pipelines and all their jobs automatically after a specified time period. Archived jobs:
 
 - Display a lock icon ({{< icon name="lock" >}}) and **This job is archived** at the top of the job log.
-- Cannot be re-run individually.
-- Are still visible in job logs.
-- Can still be retried.
-- Are no longer subject to expiration settings.
+- Cannot be re-run or retried.
+- Cannot run as [on-stop deployment actions](../../ci/environments/_index.md#stopping-an-environment) when environments auto-stop.
+- Continue to have visible job logs.
 
-The archive duration must be at least 1 day.
+The archive duration is measured from the time the pipeline is created. It must be at least 1 day.
 Examples of valid durations include `15 days`, `1 month`, and `2 years`.
-Leave this field empty to never archive jobs automatically.
+Leave this field empty to never archive pipelines automatically.
 
 For GitLab.com, see [Scheduled job archiving](../../user/gitlab_com/_index.md#cicd).
 
 To set up job archiving:
 
-1. Enter a value in the **Archive jobs** field.
+1. Enter a value in the **Archive pipelines** field.
 1. Select **Save changes**.
 
-### Pipelines
+#### Allow pipeline variables by default
+
+{{< history >}}
+
+- [Introduced](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/190833) in GitLab 18.1.
+
+{{< /history >}}
+
+Control whether pipeline variables are allowed by default in new projects in new groups.
+
+When disabled, the [default role to use pipeline variables](../../user/group/access_and_permissions.md#set-the-default-role-that-can-use-pipeline-variables)
+setting is set to **No one allowed** for new groups, which cascades to new projects in the new groups.
+When enabled, the setting defaults to **Developer** instead.
+
+{{< alert type="warning" >}}
+
+To keep the most secure defaults for new groups and projects, the recommendation is
+to set this setting to disabled.
+
+{{< /alert >}}
+
+To allow pipeline variables by default in all new projects in new groups:
+
+1. Select the **Allow pipeline variables by default in new groups** checkbox.
+1. Select **Save changes**.
+
+After group or project creation, maintainers can choose a different setting.
 
 #### Protect CI/CD variables by default
 
