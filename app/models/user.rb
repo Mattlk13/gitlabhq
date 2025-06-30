@@ -21,6 +21,7 @@ class User < ApplicationRecord
   include OptionallySearch
   include FromUnion
   include BatchDestroyDependentAssociations
+  include BatchDeleteDependentAssociations
   include BatchNullifyDependentAssociations
   include UpdateHighestRole
   include HasUserType
@@ -34,6 +35,7 @@ class User < ApplicationRecord
   include Todoable
 
   ignore_column :last_access_from_pipl_country_at, remove_after: '2024-11-17', remove_with: '17.7'
+  ignore_column %i[role skype], remove_after: '2025-09-18', remove_with: '18.4'
 
   DEFAULT_NOTIFICATION_LEVEL = :participating
 
@@ -184,6 +186,7 @@ class User < ApplicationRecord
   # Namespaces
   has_many :members
   has_many :member_namespaces, through: :members
+  has_many :namespace_deletion_schedules, class_name: '::Namespaces::DeletionSchedule', inverse_of: :deleting_user
 
   # Groups
   has_many :group_members, -> { where(requested_at: nil).where("access_level >= ?", Gitlab::Access::GUEST) }, class_name: 'GroupMember'
@@ -212,7 +215,6 @@ class User < ApplicationRecord
   has_many :personal_projects,        through: :namespace, source: :projects
   has_many :project_members, -> { where(requested_at: nil) }
   has_many :projects, through: :project_members
-  has_many :project_deletion_schedules, class_name: '::Projects::DeletionSchedule', inverse_of: :deleting_user
   has_many :created_projects, foreign_key: :creator_id, class_name: 'Project', dependent: :nullify # rubocop:disable Cop/ActiveRecordDependent
   has_many :created_namespace_details, foreign_key: :creator_id, class_name: 'Namespace::Detail'
   has_many :projects_with_active_memberships, -> { where(members: { state: ::Member::STATE_ACTIVE }) }, through: :project_members, source: :project
@@ -245,7 +247,7 @@ class User < ApplicationRecord
   has_many :abuse_trust_scores,       class_name: 'AntiAbuse::TrustScore', foreign_key: :user_id
   has_many :builds,                   class_name: 'Ci::Build'
   has_many :pipelines,                class_name: 'Ci::Pipeline'
-  has_many :todos,                    dependent: :destroy # rubocop:disable Cop/ActiveRecordDependent
+  has_many :todos,                    dependent: :delete_all # rubocop:disable Cop/ActiveRecordDependent -- legacy behavior
   has_many :authored_todos, class_name: 'Todo', dependent: :destroy, foreign_key: :author_id # rubocop:disable Cop/ActiveRecordDependent
   has_many :notification_settings
   has_many :award_emoji, dependent: :destroy # rubocop:disable Cop/ActiveRecordDependent
@@ -275,7 +277,8 @@ class User < ApplicationRecord
   belongs_to :created_by, class_name: 'User', optional: true
 
   has_many :organization_users, class_name: 'Organizations::OrganizationUser', inverse_of: :user
-  has_many :organization_user_aliases, class_name: 'Organizations::OrganizationUserAlias', inverse_of: :user
+  has_many :organization_user_aliases, class_name: 'Organizations::OrganizationUserAlias', inverse_of: :user # deprecated
+  has_many :organization_user_details, class_name: 'Organizations::OrganizationUserDetail', inverse_of: :user
 
   has_many :organizations, through: :organization_users, class_name: 'Organizations::Organization', inverse_of: :users,
     disable_joins: true
@@ -408,7 +411,8 @@ class User < ApplicationRecord
     issues: 6,
     merge_requests: 7,
     operations: 8,
-    followed_user_activity: 9
+    followed_user_activity: 9,
+    homepage: 12
   }
 
   # User's Project preference
@@ -426,6 +430,7 @@ class User < ApplicationRecord
     :show_whitespace_in_diffs, :show_whitespace_in_diffs=,
     :view_diffs_file_by_file, :view_diffs_file_by_file=,
     :pass_user_identities_to_ci_jwt, :pass_user_identities_to_ci_jwt=,
+    :dark_color_scheme_id, :dark_color_scheme_id=,
     :tab_width, :tab_width=,
     :sourcegraph_enabled, :sourcegraph_enabled=,
     :gitpod_enabled, :gitpod_enabled=,
@@ -463,7 +468,6 @@ class User < ApplicationRecord
   delegate :mastodon, :mastodon=, to: :user_detail, allow_nil: true
   delegate :linkedin, :linkedin=, to: :user_detail, allow_nil: true
   delegate :twitter, :twitter=, to: :user_detail, allow_nil: true
-  delegate :skype, :skype=, to: :user_detail, allow_nil: true
   delegate :website_url, :website_url=, to: :user_detail, allow_nil: true
   delegate :location, :location=, to: :user_detail, allow_nil: true
   delegate :organization, :organization=, to: :user_detail, allow_nil: true
@@ -681,11 +685,23 @@ class User < ApplicationRecord
     .includes(:projects)
   end
 
+  scope :with_organization_user_details, -> do
+    includes(organization_user_details: [:organization])
+  end
+
   scope :left_join_user_detail, -> { left_joins(:user_detail) }
   scope :preload_user_detail, -> { preload(:user_detail) }
 
   scope :by_bot_namespace_ids, ->(namespace_ids) do
     project_bot.joins(:user_detail).where(user_detail: { bot_namespace_id: namespace_ids })
+  end
+
+  scope :with_incoming_email_token, ->(token_values) do
+    where(incoming_email_token: Array.wrap(token_values))
+  end
+
+  scope :with_feed_token, ->(token_values) do
+    where(feed_token: Array.wrap(token_values))
   end
 
   def self.supported_keyset_orderings
@@ -1468,16 +1484,6 @@ class User < ApplicationRecord
     authorizations.where('project_authorizations.access_level >= ?', min_access_level)
   end
 
-  # Returns the projects this user has reporter (or greater) access to, limited
-  # to at most the given projects.
-  #
-  # This method is useful when you have a list of projects and want to
-  # efficiently check to which of these projects the user has at least reporter
-  # access.
-  def projects_with_reporter_access_limited_to(projects)
-    authorized_projects(Gitlab::Access::REPORTER).where(id: projects)
-  end
-
   def owned_projects
     @owned_projects ||= Project.from_union(
       [
@@ -2166,23 +2172,15 @@ class User < ApplicationRecord
   end
 
   def merge_request_dashboard_enabled?
-    Feature.enabled?(:merge_request_dashboard, self, type: :wip)
-  end
-
-  def merge_request_dashboard_author_or_assignee_enabled?
-    ::Feature.enabled?(:merge_request_dashboard_author_or_assignee, self)
+    Feature.enabled?(:merge_request_dashboard, self, type: :beta)
   end
 
   def assigned_open_merge_requests_count(force: false)
-    Rails.cache.fetch(['users', id, 'assigned_open_merge_requests_count', merge_request_dashboard_enabled?, merge_request_dashboard_author_or_assignee_enabled?], force: force, expires_in: COUNT_CACHE_VALIDITY_PERIOD) do
+    Rails.cache.fetch(['users', id, 'assigned_open_merge_requests_count', merge_request_dashboard_enabled?], force: force, expires_in: COUNT_CACHE_VALIDITY_PERIOD) do
       params = { state: 'opened', non_archived: true }
 
       if merge_request_dashboard_enabled?
-        params = params.merge(or: { reviewer_wildcard: 'none', review_states: %w[reviewed requested_changes], only_reviewer_username: ::Users::Internal.duo_code_review_bot.username })
-      end
-
-      if merge_request_dashboard_author_or_assignee_enabled? && merge_request_dashboard_enabled?
-        params = params.merge(include_assigned: true, author_id: id)
+        params = params.merge(include_assigned: true, author_id: id, or: { reviewer_wildcard: 'none', review_states: %w[reviewed requested_changes], only_reviewer_username: ::Users::Internal.duo_code_review_bot.username })
       else
         params[:assignee_id] = id
       end
@@ -2208,7 +2206,7 @@ class User < ApplicationRecord
 
   def todos_pending_count(force: false)
     Rails.cache.fetch(['users', id, 'todos_pending_count'], force: force, expires_in: COUNT_CACHE_VALIDITY_PERIOD) do
-      TodosFinder.new(self, state: :pending).execute.count
+      TodosFinder.new(users: self, state: :pending).execute.count
     end
   end
 
@@ -2235,7 +2233,7 @@ class User < ApplicationRecord
   end
 
   def invalidate_merge_request_cache_counts
-    Rails.cache.delete(['users', id, 'assigned_open_merge_requests_count', merge_request_dashboard_enabled?, merge_request_dashboard_author_or_assignee_enabled?])
+    Rails.cache.delete(['users', id, 'assigned_open_merge_requests_count', merge_request_dashboard_enabled?])
     Rails.cache.delete(['users', id, 'review_requested_open_merge_requests_count', merge_request_dashboard_enabled?])
   end
 
@@ -2593,15 +2591,6 @@ class User < ApplicationRecord
     true
   end
 
-  def has_composite_identity?
-    # Since this is called in a number of places in both Sidekiq and Web,
-    # be extra paranoid that this column exists before reading it. This check
-    # can be removed in GitLab 17.8 or later.
-    return false unless has_attribute?(:composite_identity_enforced)
-
-    composite_identity_enforced
-  end
-
   def uploads_sharding_key
     {}
   end
@@ -2634,7 +2623,7 @@ class User < ApplicationRecord
 
   # override, from Devise::Validatable
   def password_required?
-    return false if internal? || project_bot? || security_policy_bot?
+    return false if internal? || project_bot? || security_policy_bot? || placeholder?
 
     super
   end

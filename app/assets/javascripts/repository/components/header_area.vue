@@ -223,6 +223,7 @@ export default {
         data-testid="ref-dropdown-container"
         :project-id="projectId"
         :value="refSelectorValue"
+        :default-branch="rootRef"
         use-symbolic-ref-names
         :query-params="refSelectorQueryParams"
         @input="onInput"
@@ -299,7 +300,7 @@ export default {
           :upload-path="uploadPath"
           :new-dir-path="newDirPath"
         />
-        <!-- EE: = render_if_exists 'projects/tree/lock_link' -->
+        <!-- EE lock directory -->
         <lock-directory-button
           v-if="!isRoot"
           :project-path="projectPath"

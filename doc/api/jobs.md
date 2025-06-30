@@ -12,6 +12,8 @@ title: Jobs API
 
 {{< /details >}}
 
+Use this API to interact with [CI/CD jobs](../ci/jobs/_index.md).
+
 ## List project jobs
 
 {{< history >}}
@@ -137,7 +139,6 @@ Example of response:
       "bio": null,
       "location": null,
       "public_email": "",
-      "skype": "",
       "linkedin": "",
       "twitter": "",
       "website_url": "",
@@ -200,7 +201,6 @@ Example of response:
       "bio": null,
       "location": null,
       "public_email": "",
-      "skype": "",
       "linkedin": "",
       "twitter": "",
       "website_url": "",
@@ -337,7 +337,6 @@ Example of response:
       "bio": null,
       "location": null,
       "public_email": "",
-      "skype": "",
       "linkedin": "",
       "twitter": "",
       "website_url": "",
@@ -409,7 +408,6 @@ Example of response:
       "bio": null,
       "location": null,
       "public_email": "",
-      "skype": "",
       "linkedin": "",
       "twitter": "",
       "website_url": "",
@@ -494,7 +492,6 @@ Example of response:
       "bio": null,
       "location": null,
       "public_email": "",
-      "skype": "",
       "linkedin": "",
       "twitter": "",
       "website_url": "",
@@ -592,7 +589,6 @@ Example of response:
     "bio": null,
     "location": null,
     "public_email": "",
-    "skype": "",
     "linkedin": "",
     "twitter": "",
     "website_url": "",
@@ -752,7 +748,6 @@ Example of response:
     "bio": null,
     "location": null,
     "public_email": "",
-    "skype": "",
     "linkedin": "",
     "twitter": "",
     "website_url": "",

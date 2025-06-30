@@ -49,7 +49,8 @@ README @group @group/with-nested/subgroup
 # Specify a Code Owner to a directory and all its contents:
 /docs/ @all-docs
 /docs/* @root-docs
-/docs/**/*.md @root-docs
+/docs/**/*.md @markdown-docs  # Match specific file types in any subdirectory
+/db/**/index.md @index-docs   # Match a specific file name in any subdirectory
 
 # Use a section to group related rules:
 [Documentation]
@@ -86,7 +87,7 @@ internal/README.md @user4
 README.md @user3
 ```
 
-- The Code Owners for the `README.md` in the _root_ directory are:
+- The Code Owners for the `README.md` in the root directory are:
   - `@admin`, from the unnamed section.
   - `@user1` and `@user2`, from `[README Owners]`.
   - `@user3`, from `[README other owners]`.
@@ -147,13 +148,6 @@ Examples:
 ```
 
 ### Set default Code Owner for a section
-
-{{< history >}}
-
-- [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/371711) in GitLab 15.11 [with a flag](../../../administration/feature_flags.md) named `codeowners_default_owners`. Disabled by default.
-- [Generally available](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/115888) in GitLab 15.11. Feature flag `codeowners_default_owners` removed.
-
-{{< /history >}}
 
 If multiple file paths inside a section share the same ownership, define default
 Code Owners for the section.
@@ -266,7 +260,7 @@ see [Group inheritance and eligibility](advanced.md#group-inheritance-and-eligib
 
 {{< history >}}
 
-- [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/282438) in GitLab 17.7 [with a flag](../../../administration/feature_flags.md) named `codeowner_role_approvers`.
+- [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/282438) in GitLab 17.7 [with a flag](../../../administration/feature_flags/_index.md) named `codeowner_role_approvers`.
 - [Enabled on GitLab.com](https://gitlab.com/gitlab-org/gitlab/-/issues/497504) in GitLab 17.8.
 - [Generally available](https://gitlab.com/gitlab-org/gitlab/-/issues/512623) in GitLab 17.9 Feature flag `codeowner_role_approvers` removed.
 
@@ -387,16 +381,16 @@ file in any directory or subdirectory of the repository.
 
 ### Directory paths
 
-Paths ending with `/` match any file in the directory:
+End a path with `/` to match all files in the directory and its subdirectories:
 
 ```plaintext
-# This is the same as `/docs/**/*`
+# Matches all files in /docs/ and its subdirectories
 /docs/
 ```
 
 ### Wildcard paths
 
-Use wildcards to match multiple characters:
+Use `*` to match multiple characters:
 
 ```plaintext
 # Any markdown files in the docs directory
@@ -417,18 +411,21 @@ Use wildcards to match multiple characters:
 
 ### Globstar paths
 
-Use `**` to match zero or more directories recursively:
+Use `**` to match files or patterns across multiple directory levels:
 
 ```plaintext
-# Matches /docs/index.md, /docs/api/index.md, and /docs/api/graphql/index.md.
+# For example: /docs/index.md, /docs/api/index.md, and /docs/api/graphql/index.md.
 /docs/**/index.md
 ```
+
+To match all files in a directory,
+use [directory paths](#directory-paths) with a trailing slash (`/`).
 
 ### Exclusion patterns
 
 {{< history >}}
 
-- [Introduced](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/180162) in GitLab 17.10 [with a flag](../../../administration/feature_flags.md) named `codeowners_file_exclusions`.
+- [Introduced](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/180162) in GitLab 17.10 [with a flag](../../../administration/feature_flags/_index.md) named `codeowners_file_exclusions`.
 - [Enabled on GitLab.com](https://gitlab.com/gitlab-org/gitlab/-/issues/517075) in GitLab 17.10.
 - [Generally available](https://gitlab.com/gitlab-org/gitlab/-/issues/517309) in GitLab 17.11. Feature flag `codeowners_file_exclusions` removed.
 
@@ -483,7 +480,7 @@ The following guidelines explain how exclusion patterns behave:
   !/config/**/*.rb        # Config Ruby files don't need Ruby team approval.
 
   [Config]
-  /config/**/* @ops-team  # Config files still require ops-team approval.
+  /config/ @ops-team      # Config files still require ops-team approval.
   ```
 
 - Use exclusions for files that are automatically updated:
@@ -494,7 +491,7 @@ The following guidelines explain how exclusion patterns behave:
   # Files updated by automation don't need approval.
   !package-lock.json
   !yarn.lock
-  !**/generated/**/*      # Any files in generated directories.
+  !**/generated/          # Any files in generated directories.
   !.gitlab-ci.yml
   ```
 

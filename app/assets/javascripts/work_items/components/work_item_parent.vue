@@ -24,7 +24,6 @@ import {
   NAME_TO_ENUM_MAP,
   NAME_TO_TEXT_LOWERCASE_MAP,
   NO_WORK_ITEM_IID,
-  WORK_ITEM_TYPE_ENUM_EPIC,
   WORK_ITEM_TYPE_NAME_EPIC,
   WORK_ITEM_TYPE_NAME_ISSUE,
 } from '../constants';
@@ -39,11 +38,14 @@ export default {
     IssuePopover: () => import('~/issuable/popover/components/issue_popover.vue'),
     WorkItemSidebarDropdownWidget,
   },
-  inject: ['fullPath'],
   props: {
     workItemId: {
       type: String,
       required: true,
+    },
+    fullPath: {
+      required: true,
+      type: String,
     },
     parent: {
       type: Object,
@@ -64,6 +66,11 @@ export default {
       type: String,
       required: false,
       default: '',
+    },
+    allowedParentTypesForNewWorkItem: {
+      type: Array,
+      required: false,
+      default: () => [],
     },
     hasParent: {
       type: Boolean,
@@ -133,8 +140,8 @@ export default {
     isSearchingByReference() {
       return isReference(this.searchTerm) || isValidURL(this.searchTerm);
     },
-    allowedParentTypesForNewWorkItem() {
-      return this.workItemId === newWorkItemId(this.workItemType) ? [WORK_ITEM_TYPE_ENUM_EPIC] : [];
+    allowedParentTypesForNewWorkItemEnums() {
+      return this.allowedParentTypesForNewWorkItem.map((type) => NAME_TO_ENUM_MAP[type.name]) || [];
     },
   },
   watch: {
@@ -158,7 +165,7 @@ export default {
         return {
           fullPath: this.isIssue ? this.groupPath : this.fullPath,
           searchTerm: this.searchTerm,
-          types: [...this.allowedParentTypes, ...this.allowedParentTypesForNewWorkItem],
+          types: [...this.allowedParentTypes, ...this.allowedParentTypesForNewWorkItemEnums],
           in: this.searchTerm ? 'TITLE' : undefined,
           iid: null,
           isNumber: false,

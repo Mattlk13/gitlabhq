@@ -30,6 +30,8 @@ import PageHeading from '~/vue_shared/components/page_heading.vue';
 import {
   getDisplayReference,
   getNewWorkItemAutoSaveKey,
+  getNewWorkItemWidgetsAutoSaveKey,
+  updateDraftWorkItemType,
   newWorkItemFullPath,
 } from '~/work_items/utils';
 import {
@@ -71,6 +73,7 @@ import namespaceWorkItemTypesQuery from '../graphql/namespace_work_item_types.qu
 import workItemByIidQuery from '../graphql/work_item_by_iid.query.graphql';
 import updateNewWorkItemMutation from '../graphql/update_new_work_item.mutation.graphql';
 import WorkItemProjectsListbox from './work_item_links/work_item_projects_listbox.vue';
+import WorkItemNamespaceListbox from './shared/work_item_namespace_listbox.vue';
 import WorkItemTitle from './work_item_title.vue';
 import WorkItemDescription from './work_item_description.vue';
 import WorkItemAssignees from './work_item_assignees.vue';
@@ -99,6 +102,7 @@ export default {
     WorkItemLoading,
     WorkItemCrmContacts,
     WorkItemProjectsListbox,
+    WorkItemNamespaceListbox,
     TitleSuggestions,
     WorkItemParent,
     WorkItemDates,
@@ -113,7 +117,17 @@ export default {
     PageHeading,
   },
   mixins: [glFeatureFlagMixin()],
-  inject: ['fullPath', 'groupPath'],
+  inject: {
+    groupPath: {
+      default: '',
+    },
+    projectNamespaceFullPath: {
+      default: '',
+    },
+    workItemPlanningViewEnabled: {
+      default: false,
+    },
+  },
   i18n: {
     suggestionTitle: s__('WorkItem|Similar items'),
     similarWorkItemHelpText: s__(
@@ -139,6 +153,10 @@ export default {
       type: String,
       required: false,
       default: '',
+    },
+    fullPath: {
+      type: String,
+      required: true,
     },
     hideFormTitle: {
       type: Boolean,
@@ -211,6 +229,7 @@ export default {
       loading: false,
       initialLoadingWorkItem: true,
       initialLoadingWorkItemTypes: true,
+      selectedNamespacePath: null,
       showWorkItemTypeSelect: false,
       discussionToResolve: getParameterByName('discussion_to_resolve'),
       mergeRequestToResolveDiscussionsOf: getParameterByName('merge_request_id'),
@@ -269,25 +288,39 @@ export default {
           ?.textContent.trim();
 
         for await (const workItemType of this.workItemTypes) {
-          await setNewWorkItemCache(
-            this.selectedProjectFullPath,
-            workItemType?.widgetDefinitions,
-            workItemType.name,
-            workItemType.id,
-            workItemType.iconName,
+          await setNewWorkItemCache({
+            fullPath: this.selectedProjectFullPath,
+            widgetDefinitions: workItemType?.widgetDefinitions,
+            workItemType: workItemType.name,
+            workItemTypeId: workItemType.id,
+            workItemTypeIconName: workItemType.iconName,
             workItemTitle,
             workItemDescription,
-          );
+            confidential: this.isConfidential,
+          });
         }
 
-        const selectedWorkItemType = this.workItemTypes?.find(
-          (workItemType) => workItemType.name === this.preselectedWorkItemType,
-        );
+        const selectedWorkItemType = this.findWorkItemType(this.preselectedWorkItemType);
+
+        if (selectedWorkItemType) {
+          updateDraftWorkItemType({
+            fullPath: this.selectedProjectFullPath,
+            workItemType: {
+              id: selectedWorkItemType.id,
+              name: selectedWorkItemType.name,
+              iconName: selectedWorkItemType.iconName,
+            },
+          });
+        }
 
         if (selectedWorkItemType) {
           this.selectedWorkItemTypeId = selectedWorkItemType?.id;
         } else {
           this.showWorkItemTypeSelect = true;
+          const defaultSelectedWorkItemType =
+            this.findWorkItemType(WORK_ITEM_TYPE_NAME_ISSUE) || this.workItemTypes?.at(0);
+          this.selectedWorkItemTypeId = defaultSelectedWorkItemType?.id;
+          this.$emit('changeType', defaultSelectedWorkItemType);
         }
       },
       error() {
@@ -385,8 +418,21 @@ export default {
     selectedWorkItemType() {
       return this.workItemTypes?.find((item) => item.id === this.selectedWorkItemTypeId);
     },
+    allowedParentTypesForSelectedType() {
+      if (this.workItemTypes.length) {
+        const widgetDefinitionsForCurrentType =
+          this.workItemTypes.find((workItemType) => workItemType.id === this.selectedWorkItemTypeId)
+            ?.widgetDefinitions || [];
+
+        return (
+          widgetDefinitionsForCurrentType.find((widget) => widget.type === WIDGET_TYPE_HIERARCHY)
+            ?.allowedParentTypes?.nodes || []
+        );
+      }
+      return [];
+    },
     selectedWorkItemTypeName() {
-      return this.selectedWorkItemType?.name;
+      return this.selectedWorkItemType?.name || '';
     },
     selectedWorkItemTypeIconName() {
       return this.selectedWorkItemType?.iconName;
@@ -552,6 +598,18 @@ export default {
       }
       return this.isGroupWorkItem ? `${rootPath}/-/uploads` : `${rootPath}/uploads`;
     },
+    inputNamespacePath() {
+      if (this.workItemPlanningViewEnabled) {
+        return this.selectedNamespacePath;
+      }
+      return this.selectedProjectFullPath;
+    },
+    showItemTypeSelect() {
+      if (this.workItemPlanningViewEnabled) {
+        return true;
+      }
+      return this.showWorkItemTypeSelect || this.alwaysShowWorkItemTypeSelect;
+    },
   },
   watch: {
     shouldDiscardDraft: {
@@ -587,6 +645,9 @@ export default {
     document.removeEventListener('keydown', this.handleKeydown);
   },
   methods: {
+    findWorkItemType(workItemTypeName) {
+      return this.workItemTypes?.find((workItemType) => workItemType.name === workItemTypeName);
+    },
     initialSelectedProject() {
       if (this.relatedItem) {
         return this.relatedItem.reference.substring(0, this.relatedItem.reference.lastIndexOf('#'));
@@ -619,6 +680,38 @@ export default {
         this.numberOfDiscussionsResolved =
           this.discussionToResolve && this.mergeRequestToResolveDiscussionsOf ? '1' : 'all';
       }
+    },
+    clearAutosaveDraft({ fullPath, workItemType }) {
+      const fullDraftAutosaveKey = getNewWorkItemAutoSaveKey({
+        fullPath,
+        workItemType,
+      });
+      clearDraft(fullDraftAutosaveKey);
+
+      const widgetsAutosaveKey = getNewWorkItemWidgetsAutoSaveKey({
+        fullPath,
+      });
+      clearDraft(widgetsAutosaveKey);
+    },
+    handleChangeType() {
+      setNewWorkItemCache({
+        fullPath: this.selectedProjectFullPath,
+        widgetDefinitions: this.selectedWorkItemType?.widgetDefinitions || [],
+        workItemType: this.selectedWorkItemTypeName,
+        workItemTypeId: this.selectedWorkItemTypeId,
+        workItemTypeIconName: this.selectedWorkItemTypeIconName,
+      });
+
+      updateDraftWorkItemType({
+        fullPath: this.selectedProjectFullPath,
+        workItemType: {
+          id: this.selectedWorkItemTypeId,
+          name: this.selectedWorkItemTypeName,
+          iconName: this.selectedWorkItemTypeIconName,
+        },
+      });
+
+      this.$emit('changeType', this.selectedWorkItemTypeName);
     },
     async updateDraftData(type, value) {
       if (type === 'title') {
@@ -653,7 +746,7 @@ export default {
       const workItemCreateInput = {
         title: this.workItemTitle,
         workItemTypeId: this.selectedWorkItemTypeId,
-        namespacePath: this.selectedProjectFullPath,
+        namespacePath: this.inputNamespacePath || this.fullPath,
         confidential: this.workItem.confidential,
         descriptionWidget: {
           description: this.workItemDescription || '',
@@ -821,11 +914,10 @@ export default {
           numberOfDiscussionsResolved: this.numberOfDiscussionsResolved,
         });
 
-        const autosaveKey = getNewWorkItemAutoSaveKey(
-          this.selectedProjectFullPath,
-          this.selectedWorkItemTypeName,
-        );
-        clearDraft(autosaveKey);
+        this.clearAutosaveDraft({
+          fullPath: this.selectedProjectFullPath,
+          workItemType: this.selectedWorkItemTypeName,
+        });
       } catch {
         this.error = this.createErrorText;
         this.loading = false;
@@ -844,21 +936,20 @@ export default {
       }
     },
     handleDiscardDraft() {
-      const autosaveKey = getNewWorkItemAutoSaveKey(
-        this.selectedProjectFullPath,
-        this.selectedWorkItemTypeName,
-      );
-      clearDraft(autosaveKey);
+      this.clearAutosaveDraft({
+        fullPath: this.selectedProjectFullPath,
+        workItemType: this.selectedWorkItemTypeName,
+      });
 
       const selectedWorkItemWidgets = this.selectedWorkItemType?.widgetDefinitions || [];
 
-      setNewWorkItemCache(
-        this.selectedProjectFullPath,
-        selectedWorkItemWidgets,
-        this.selectedWorkItemTypeName,
-        this.selectedWorkItemTypeId,
-        this.selectedWorkItemTypeIconName,
-      );
+      setNewWorkItemCache({
+        fullPath: this.selectedProjectFullPath,
+        widgetDefinitions: selectedWorkItemWidgets,
+        workItemType: this.selectedWorkItemTypeName,
+        workItemTypeId: this.selectedWorkItemTypeId,
+        workItemTypeIconName: this.selectedWorkItemTypeIconName,
+      });
     },
     onParentMilestone(parentMilestone) {
       this.selectedParentMilestone = parentMilestone;
@@ -877,23 +968,39 @@ export default {
         {{ error }}
       </gl-alert>
       <page-heading v-if="!hideFormTitle" :heading="titleText" />
+
       <div class="gl-flex gl-items-center gl-gap-4">
-        <gl-form-group
-          v-if="showProjectSelector"
-          class="gl-max-w-26 gl-flex-grow"
-          :label="__('Project')"
-        >
-          <work-item-projects-listbox
-            v-model="selectedProjectFullPath"
-            :full-path="fullPath"
-            :is-group="isGroup"
-            :current-project-name="namespaceFullName"
-          />
-        </gl-form-group>
+        <template v-if="workItemPlanningViewEnabled">
+          <gl-form-group class="gl-mr-4 gl-max-w-26 gl-flex-grow" :label="__('Group/project')">
+            <work-item-namespace-listbox
+              v-model="selectedNamespacePath"
+              :full-path="fullPath"
+              :is-group="isGroup"
+            />
+          </gl-form-group>
+        </template>
+
+        <template v-else>
+          <gl-form-group
+            v-if="showProjectSelector"
+            class="gl-max-w-26 gl-flex-grow"
+            :label="__('Project')"
+            label-for="create-work-item-project"
+          >
+            <work-item-projects-listbox
+              v-model="selectedProjectFullPath"
+              :full-path="fullPath"
+              :is-group="isGroup"
+              :current-project-name="namespaceFullName"
+              :project-namespace-full-path="projectNamespaceFullPath"
+              toggle-id="create-work-item-project"
+            />
+          </gl-form-group>
+        </template>
 
         <gl-loading-icon v-if="$apollo.queries.namespace.loading" size="lg" />
         <gl-form-group
-          v-else-if="showWorkItemTypeSelect || alwaysShowWorkItemTypeSelect"
+          v-else-if="showItemTypeSelect"
           class="gl-max-w-26 gl-flex-grow"
           :label="__('Type')"
           label-for="work-item-type"
@@ -903,7 +1010,7 @@ export default {
             v-model="selectedWorkItemTypeId"
             data-testid="work-item-types-select"
             :options="formOptions"
-            @change="$emit('changeType', selectedWorkItemTypeName)"
+            @change="handleChangeType"
           />
         </gl-form-group>
       </div>
@@ -1032,6 +1139,7 @@ export default {
               :full-path="selectedProjectFullPath"
               :parent="workItemParent"
               :is-group="isGroup"
+              :allowed-parent-types-for-new-work-item="allowedParentTypesForSelectedType"
               @error="$emit('error', $event)"
               @parentMilestone="onParentMilestone"
             />

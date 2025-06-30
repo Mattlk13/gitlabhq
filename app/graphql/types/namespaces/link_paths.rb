@@ -52,7 +52,7 @@ module Types
         fallback_value: nil
 
       field :new_comment_template,
-        GraphQL::Types::String,
+        [Types::Namespaces::LinkPaths::CommentTemplateType],
         null: true,
         description: 'Namespace new_comment_template_paths.',
         fallback_value: nil
@@ -71,6 +71,13 @@ module Types
         GraphQL::Types::String,
         null: true,
         description: 'Namespace sign_in_path.'
+
+      field :contribution_guide_path,
+        GraphQL::Types::String,
+        null: true,
+        description: 'Namespace contribution guide path.',
+        fallback_value: nil,
+        calls_gitaly: true
 
       def self.type_mappings
         TYPE_MAPPINGS

@@ -163,7 +163,7 @@ It's shown as either **Showing latest version** or **Showing version #N**.
 
 ### Skipped designs
 
-When you upload an image with the same filename as an existing uploaded design _and_ that is the
+When you upload an image with the same filename as an existing uploaded design and that is the
 same, it's skipped. This means that no new version of the design is created.
 When designs are skipped, a warning message is displayed.
 
@@ -216,7 +216,7 @@ and in GitLab 16.1 and later it can be [verified by Geo as well](https://gitlab.
 
 {{< history >}}
 
-- [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/388449) in GitLab 16.1 [with a flag](../../../administration/feature_flags.md) named `content_editor_on_issues`. Disabled by default.
+- [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/388449) in GitLab 16.1 [with a flag](../../../administration/feature_flags/_index.md) named `content_editor_on_issues`. Disabled by default.
 - [Enabled on GitLab.com and GitLab Self-Managed](https://gitlab.com/gitlab-org/gitlab/-/issues/375172) in GitLab 16.2.
 - Feature flag `content_editor_on_issues` removed in GitLab 16.5.
 

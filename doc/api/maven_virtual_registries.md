@@ -31,7 +31,7 @@ Use the following endpoints to create and manage Maven virtual registries.
 
 {{< history >}}
 
-- [Introduced](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/161615) in GitLab 17.4 [with a flag](../administration/feature_flags.md) named `virtual_registry_maven`. Disabled by default.
+- [Introduced](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/161615) in GitLab 17.4 [with a flag](../administration/feature_flags/_index.md) named `virtual_registry_maven`. Disabled by default.
 - Feature flag [renamed](https://gitlab.com/gitlab-org/gitlab/-/issues/540276) to `maven_virtual_registry` in GitLab 18.1.
 - [Changed](https://gitlab.com/gitlab-org/gitlab/-/issues/540276) from experiment to beta in GitLab 18.1.
 
@@ -76,7 +76,7 @@ Example response:
 
 {{< history >}}
 
-- [Introduced](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/161615) in GitLab 17.4 [with a flag](../administration/feature_flags.md) named `virtual_registry_maven`. Disabled by default.
+- [Introduced](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/161615) in GitLab 17.4 [with a flag](../administration/feature_flags/_index.md) named `virtual_registry_maven`. Disabled by default.
 - Feature flag [renamed](https://gitlab.com/gitlab-org/gitlab/-/issues/540276) to `maven_virtual_registry` in GitLab 18.1.
 - [Changed](https://gitlab.com/gitlab-org/gitlab/-/issues/540276) from experiment to beta in GitLab 18.1.
 
@@ -122,7 +122,7 @@ Example response:
 
 {{< history >}}
 
-- [Introduced](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/161615) in GitLab 17.4 [with a flag](../administration/feature_flags.md) named `virtual_registry_maven`. Disabled by default.
+- [Introduced](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/161615) in GitLab 17.4 [with a flag](../administration/feature_flags/_index.md) named `virtual_registry_maven`. Disabled by default.
 - Feature flag [renamed](https://gitlab.com/gitlab-org/gitlab/-/issues/540276) to `maven_virtual_registry` in GitLab 18.1.
 - [Changed](https://gitlab.com/gitlab-org/gitlab/-/issues/540276) from experiment to beta in GitLab 18.1.
 
@@ -165,7 +165,7 @@ Example response:
 
 {{< history >}}
 
-- [Introduced](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/189070) in GitLab 18.0 [with a flag](../administration/feature_flags.md) named `virtual_registry_maven`. Disabled by default.
+- [Introduced](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/189070) in GitLab 18.0 [with a flag](../administration/feature_flags/_index.md) named `virtual_registry_maven`. Disabled by default.
 - Feature flag [renamed](https://gitlab.com/gitlab-org/gitlab/-/issues/540276) to `maven_virtual_registry` in GitLab 18.1.
 - [Changed](https://gitlab.com/gitlab-org/gitlab/-/issues/540276) from experiment to beta in GitLab 18.1.
 
@@ -199,7 +199,7 @@ If successful, returns a [`200 OK`](rest/troubleshooting.md#status-codes) status
 
 {{< history >}}
 
-- [Introduced](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/161615) in GitLab 17.4 [with a flag](../administration/feature_flags.md) named `virtual_registry_maven`. Disabled by default.
+- [Introduced](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/161615) in GitLab 17.4 [with a flag](../administration/feature_flags/_index.md) named `virtual_registry_maven`. Disabled by default.
 - Feature flag [renamed](https://gitlab.com/gitlab-org/gitlab/-/issues/540276) to `maven_virtual_registry` in GitLab 18.1.
 - [Changed](https://gitlab.com/gitlab-org/gitlab/-/issues/540276) from experiment to beta in GitLab 18.1.
 
@@ -233,7 +233,7 @@ Use the following endpoints to configure and manage upstream Maven registries.
 
 {{< history >}}
 
-- [Introduced](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/162019) in GitLab 17.4 [with a flag](../administration/feature_flags.md) named `virtual_registry_maven`. Disabled by default.
+- [Introduced](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/162019) in GitLab 17.4 [with a flag](../administration/feature_flags/_index.md) named `virtual_registry_maven`. Disabled by default.
 - Feature flag [renamed](https://gitlab.com/gitlab-org/gitlab/-/issues/540276) to `maven_virtual_registry` in GitLab 18.1.
 - [Changed](https://gitlab.com/gitlab-org/gitlab/-/issues/540276) from experiment to beta in GitLab 18.1.
 
@@ -275,6 +275,7 @@ Example response:
     "updated_at": "2024-05-30T12:28:27.855Z",
     "registry_upstream": {
       "id": 1,
+      "registry_id": 1,
       "position": 1
     }
   }
@@ -285,7 +286,7 @@ Example response:
 
 {{< history >}}
 
-- [Introduced](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/162019) in GitLab 17.4 [with a flag](../administration/feature_flags.md) named `virtual_registry_maven`. Disabled by default.
+- [Introduced](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/162019) in GitLab 17.4 [with a flag](../administration/feature_flags/_index.md) named `virtual_registry_maven`. Disabled by default.
 - Feature flag [renamed](https://gitlab.com/gitlab-org/gitlab/-/issues/540276) to `maven_virtual_registry` in GitLab 18.1.
 - [Changed](https://gitlab.com/gitlab-org/gitlab/-/issues/540276) from experiment to beta in GitLab 18.1.
 
@@ -335,6 +336,7 @@ Example response:
   "updated_at": "2024-05-30T12:28:27.855Z",
   "registry_upstream": {
     "id": 1,
+    "registry_id": 1,
     "position": 1
   }
 }
@@ -344,7 +346,7 @@ Example response:
 
 {{< history >}}
 
-- [Introduced](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/162019) in GitLab 17.4 [with a flag](../administration/feature_flags.md) named `virtual_registry_maven`. Disabled by default.
+- [Introduced](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/162019) in GitLab 17.4 [with a flag](../administration/feature_flags/_index.md) named `virtual_registry_maven`. Disabled by default.
 - Feature flag [renamed](https://gitlab.com/gitlab-org/gitlab/-/issues/540276) to `maven_virtual_registry` in GitLab 18.1.
 - [Changed](https://gitlab.com/gitlab-org/gitlab/-/issues/540276) from experiment to beta in GitLab 18.1.
 
@@ -382,7 +384,14 @@ Example response:
   "cache_validity_hours": 24,
   "username": "user",
   "created_at": "2024-05-30T12:28:27.855Z",
-  "updated_at": "2024-05-30T12:28:27.855Z"
+  "updated_at": "2024-05-30T12:28:27.855Z",
+  "registry_upstreams": [
+    {
+      "id": 1,
+      "registry_id": 1,
+      "position": 1
+    }
+  ]
 }
 ```
 
@@ -390,7 +399,7 @@ Example response:
 
 {{< history >}}
 
-- [Introduced](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/162019) in GitLab 17.4 [with a flag](../administration/feature_flags.md) named `virtual_registry_maven`. Disabled by default.
+- [Introduced](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/162019) in GitLab 17.4 [with a flag](../administration/feature_flags/_index.md) named `virtual_registry_maven`. Disabled by default.
 - Feature flag [renamed](https://gitlab.com/gitlab-org/gitlab/-/issues/540276) to `maven_virtual_registry` in GitLab 18.1.
 - [Changed](https://gitlab.com/gitlab-org/gitlab/-/issues/540276) from experiment to beta in GitLab 18.1.
 
@@ -435,7 +444,7 @@ If successful, returns a [`200 OK`](rest/troubleshooting.md#status-codes) status
 
 {{< history >}}
 
-- [Introduced](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/186890) in GitLab 18.0 [with a flag](../administration/feature_flags.md) named `virtual_registry_maven`. Disabled by default.
+- [Introduced](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/186890) in GitLab 18.0 [with a flag](../administration/feature_flags/_index.md) named `virtual_registry_maven`. Disabled by default.
 - Feature flag [renamed](https://gitlab.com/gitlab-org/gitlab/-/issues/540276) to `maven_virtual_registry` in GitLab 18.1.
 - [Changed](https://gitlab.com/gitlab-org/gitlab/-/issues/540276) from experiment to beta in GitLab 18.1.
 
@@ -467,7 +476,7 @@ If successful, returns a [`200 OK`](rest/troubleshooting.md#status-codes) status
 
 {{< history >}}
 
-- [Introduced](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/162019) in GitLab 17.4 [with a flag](../administration/feature_flags.md) named `virtual_registry_maven`. Disabled by default.
+- [Introduced](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/162019) in GitLab 17.4 [with a flag](../administration/feature_flags/_index.md) named `virtual_registry_maven`. Disabled by default.
 - Feature flag [renamed](https://gitlab.com/gitlab-org/gitlab/-/issues/540276) to `maven_virtual_registry` in GitLab 18.1.
 - [Changed](https://gitlab.com/gitlab-org/gitlab/-/issues/540276) from experiment to beta in GitLab 18.1.
 
@@ -493,6 +502,83 @@ curl --request DELETE --header "PRIVATE-TOKEN: <your_access_token>" \
 
 If successful, returns a [`204 No Content`](rest/troubleshooting.md#status-codes) status code.
 
+### Associate an upstream with a registry
+
+{{< history >}}
+
+- [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/540276) in GitLab 18.1 [with a flag](../administration/feature_flags/_index.md) named `maven_virtual_registry`. Disabled by default.
+
+{{< /history >}}
+
+Associates an existing upstream registry with a Maven virtual registry.
+
+```plaintext
+POST /virtual_registries/packages/maven/registry_upstreams
+```
+
+| Attribute | Type | Required | Description |
+| --------- | ---- | -------- | ----------- |
+| `registry_id` | integer | yes | The ID of the Maven virtual registry. |
+| `upstream_id` | integer | yes | The ID of the Maven upstream registry. |
+
+Example request:
+
+```shell
+curl --request POST \
+     --header "PRIVATE-TOKEN: <your_access_token>" \
+     --header "Content-Type: application/json" \
+     --header "Accept: application/json" \
+     --data '{"registry_id": 1, "upstream_id": 2}' \
+     --url "https://gitlab.example.com/api/v4/virtual_registries/packages/maven/registry_upstreams"
+```
+
+Example response:
+
+```json
+{
+  "id": 5,
+  "registry_id": 1,
+  "upstream_id": 2,
+  "position": 2
+}
+```
+
+### Disassociate an upstream from a registry
+
+{{< history >}}
+
+- [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/540276) in GitLab 18.1 [with a flag](../administration/feature_flags/_index.md) named `maven_virtual_registry`. Disabled by default.
+
+{{< /history >}}
+
+Removes the association between an upstream registry and a Maven virtual registry.
+
+{{< alert type="warning" >}}
+
+If this is the last association for the upstream, removal of the association deletes the upstream itself and all its cache entries.
+
+{{< /alert >}}
+
+```plaintext
+DELETE /virtual_registries/packages/maven/registry_upstreams/:id
+```
+
+| Attribute | Type | Required | Description |
+| --------- | ---- | -------- | ----------- |
+| `id` | integer | yes | The ID of the registry upstream association. |
+
+Example request:
+
+```shell
+curl --request DELETE \
+     --header "PRIVATE-TOKEN: <your_access_token>" \
+     --header "Content-Type: application/json" \
+     --header "Accept: application/json" \
+     --url "https://gitlab.example.com/api/v4/virtual_registries/packages/maven/registry_upstreams/1"
+```
+
+If successful, returns a [`204 No Content`](rest/troubleshooting.md#status-codes) status code.
+
 ## Manage cache entries
 
 Use the following endpoints to manage cache entries for a Maven virtual registry.
@@ -501,7 +587,7 @@ Use the following endpoints to manage cache entries for a Maven virtual registry
 
 {{< history >}}
 
-- [Introduced](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/162614) in GitLab 17.4 [with a flag](../administration/feature_flags.md) named `virtual_registry_maven`. Disabled by default.
+- [Introduced](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/162614) in GitLab 17.4 [with a flag](../administration/feature_flags/_index.md) named `virtual_registry_maven`. Disabled by default.
 - Feature flag [renamed](https://gitlab.com/gitlab-org/gitlab/-/issues/540276) to `maven_virtual_registry` in GitLab 18.1.
 - [Changed](https://gitlab.com/gitlab-org/gitlab/-/issues/540276) from experiment to beta in GitLab 18.1.
 
@@ -555,7 +641,7 @@ Example response:
 
 {{< history >}}
 
-- [Introduced](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/162614) in GitLab 17.4 [with a flag](../administration/feature_flags.md) named `virtual_registry_maven`. Disabled by default.
+- [Introduced](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/162614) in GitLab 17.4 [with a flag](../administration/feature_flags/_index.md) named `virtual_registry_maven`. Disabled by default.
 - Feature flag [renamed](https://gitlab.com/gitlab-org/gitlab/-/issues/540276) to `maven_virtual_registry` in GitLab 18.1.
 - [Changed](https://gitlab.com/gitlab-org/gitlab/-/issues/540276) from experiment to beta in GitLab 18.1.
 
@@ -595,7 +681,7 @@ These endpoints are intended for internal use by GitLab, and generally not meant
 
 These endpoints do not adhere to the [REST API authentication methods](rest/authentication.md).
 For more information on which headers and token types are supported,
-see [Maven package registry](../user/packages/maven_repository/_index.md). Undocumented authentication methods might be removed in the future.
+see [Maven virtual registry](../user/packages/virtual_registry/maven/_index.md). Undocumented authentication methods might be removed in the future.
 
 {{< /alert >}}
 
@@ -603,7 +689,7 @@ see [Maven package registry](../user/packages/maven_repository/_index.md). Undoc
 
 {{< history >}}
 
-- [Introduced](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/160891) in GitLab 17.3 [with a flag](../administration/feature_flags.md) named `virtual_registry_maven`. Disabled by default.
+- [Introduced](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/160891) in GitLab 17.3 [with a flag](../administration/feature_flags/_index.md) named `virtual_registry_maven`. Disabled by default.
 - Feature flag [renamed](https://gitlab.com/gitlab-org/gitlab/-/issues/540276) to `maven_virtual_registry` in GitLab 18.1.
 - [Changed](https://gitlab.com/gitlab-org/gitlab/-/issues/540276) from experiment to beta in GitLab 18.1.
 
@@ -642,7 +728,7 @@ the following response headers:
 
 {{< history >}}
 
-- [Introduced](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/163641) in GitLab 17.4 [with a flag](../administration/feature_flags.md) named `virtual_registry_maven`. Disabled by default.
+- [Introduced](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/163641) in GitLab 17.4 [with a flag](../administration/feature_flags/_index.md) named `virtual_registry_maven`. Disabled by default.
 - Feature flag [renamed](https://gitlab.com/gitlab-org/gitlab/-/issues/540276) to `maven_virtual_registry` in GitLab 18.1.
 - [Changed](https://gitlab.com/gitlab-org/gitlab/-/issues/540276) from experiment to beta in GitLab 18.1.
 

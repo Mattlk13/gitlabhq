@@ -30,33 +30,27 @@ describe('GroupListItemDelayedDeletionModalFooter', () => {
   const findGlLink = () => wrapper.findComponent(GlLink);
 
   describe.each`
-    isAdjournedDeletionEnabled | markedForDeletionOn | footer                                                                        | link
-    ${false}                   | ${null}             | ${false}                                                                      | ${false}
-    ${false}                   | ${'2024-03-24'}     | ${false}                                                                      | ${false}
-    ${true}                    | ${null}             | ${`This group can be restored until ${MOCK_PERM_DELETION_DATE}. Learn more.`} | ${HELP_PATH}
-    ${true}                    | ${'2024-03-24'}     | ${false}                                                                      | ${false}
-  `(
-    'when group.isAdjournedDeletionEnabled is $isAdjournedDeletionEnabled and group.markedForDeletionOn is $markedForDeletionOn',
-    ({ isAdjournedDeletionEnabled, markedForDeletionOn, footer, link }) => {
-      beforeEach(() => {
-        createComponent({
-          props: {
-            group: {
-              ...group,
-              isAdjournedDeletionEnabled,
-              markedForDeletionOn,
-              permanentDeletionDate: MOCK_PERM_DELETION_DATE,
-            },
+    markedForDeletion | footer                                                                        | link
+    ${false}          | ${`This group can be restored until ${MOCK_PERM_DELETION_DATE}. Learn more.`} | ${HELP_PATH}
+    ${true}           | ${false}                                                                      | ${false}
+  `('when group.markedForDeletion is $markedForDeletion', ({ markedForDeletion, footer, link }) => {
+    beforeEach(() => {
+      createComponent({
+        props: {
+          group: {
+            ...group,
+            markedForDeletion,
+            permanentDeletionDate: MOCK_PERM_DELETION_DATE,
           },
-        });
+        },
       });
+    });
 
-      it(`does ${footer ? 'render' : 'not render'} the delayed deletion modal footer`, () => {
-        expect(
-          findDelayedDeletionModalFooter().exists() && findDelayedDeletionModalFooter().text(),
-        ).toBe(footer);
-        expect(findGlLink().exists() && findGlLink().attributes('href')).toBe(link);
-      });
-    },
-  );
+    it(`does ${footer ? 'render' : 'not render'} the delayed deletion modal footer`, () => {
+      expect(
+        findDelayedDeletionModalFooter().exists() && findDelayedDeletionModalFooter().text(),
+      ).toBe(footer);
+      expect(findGlLink().exists() && findGlLink().attributes('href')).toBe(link);
+    });
+  });
 });

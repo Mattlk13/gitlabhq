@@ -15,7 +15,7 @@ RSpec.describe UsersHelper, feature_category: :user_management do
   describe 'has_contact_info?' do
     subject { helper.has_contact_info?(user) }
 
-    context 'when user has skype profile' do
+    context 'when user has bluesky profile' do
       let_it_be(:user) { create(:user, bluesky: 'did:plc:ewvi7nxzyoun6zhxrhs64oiz') }
 
       it { is_expected.to be true }
@@ -328,7 +328,7 @@ RSpec.describe UsersHelper, feature_category: :user_management do
     context 'with an external user' do
       let(:user) { create(:user, external: true) }
 
-      it { is_expected.to match_array([{ text: s_("AdminUsers|External"), variant: "secondary" }]) }
+      it { is_expected.to match_array([{ text: s_("AdminUsers|External"), variant: "muted" }]) }
     end
 
     context 'with the current user' do
@@ -351,7 +351,7 @@ RSpec.describe UsersHelper, feature_category: :user_management do
           [
             { text: s_("AdminUsers|Blocked"), variant: "danger" },
             { text: s_("AdminUsers|Admin"), variant: "success" },
-            { text: s_("AdminUsers|External"), variant: "secondary" }
+            { text: s_("AdminUsers|External"), variant: "muted" }
           ])
       end
     end

@@ -109,7 +109,8 @@ You can enforce 2FA for all users in a group or subgroup.
 
 {{< alert type="note" >}}
 
-2FA enforcement applies to both [direct and inherited members](../user/project/members/_index.md#membership-types) group members. If 2FA is enforced on a subgroup, members of the parent group must also enroll an authentication factor.
+2FA enforcement applies to both [direct and inherited members](../user/project/members/_index.md#membership-types) group members.
+If 2FA is enforced on a subgroup, inherited members (members of the ancestor groups) must also enroll an authentication factor.
 
 {{< /alert >}}
 
@@ -138,6 +139,13 @@ The GitLab [incoming email](../administration/incoming_email.md) feature does no
 
 By default, each subgroup can configure 2FA requirements that might differ from the parent group.
 
+{{< alert type="note" >}}
+
+Inherited members might also have different 2FA requirements applied at higher levels in the hierarchy.
+In such cases, the most restrictive requirement takes precedence.
+
+{{< /alert >}}
+
 To prevent subgroups from setting individual 2FA requirements:
 
 1. Go to the top-level group's **Settings > General**.
@@ -150,9 +158,9 @@ If a project belonging to a group that enables or enforces 2FA is [shared](../us
 with a group that does not enable or enforce 2FA, members of the non-2FA group can access that project
 without using 2FA. For example:
 
-- Group *A* has 2FA enabled and enforced. Group *B* does not have 2FA enabled.
-- If a project, *P*, that belongs to group *A* is shared with group *B*, members
-  of group *B* can access project *P* without 2FA.
+- Group A has 2FA enabled and enforced. Group B does not have 2FA enabled.
+- If a project, P, that belongs to group A is shared with group B, members
+  of group B can access project P without 2FA.
 
 To ensure this does not occur, [prevent sharing of projects](../user/project/members/sharing_projects_groups.md#prevent-a-project-from-being-shared-with-groups)
 for the 2FA group.
@@ -252,7 +260,7 @@ To disable 2FA:
 1. Find a user with the **Enterprise** and **2FA** badges.
 1. Select **More actions** ({{< icon name="ellipsis_v" >}}) and select **Disable two-factor authentication**.
 
-You can also [use the API](../api/group_enterprise_users.md#disable-two-factor-authentication-for-an-enterprise-user) to disable 2FA for enterprise users.
+You can also [use the API](../api/group_enterprise_users.md#disable-two-factor-authentication-for-an-enterprise-user) to disable 2FA for enterprise users, including enterprise users who are no longer a member of the group.
 
 ## 2FA for Git over SSH operations
 
@@ -272,7 +280,7 @@ You can also [use the API](../api/group_enterprise_users.md#disable-two-factor-a
 
 {{< alert type="flag" >}}
 
-On GitLab Self-Managed, by default this feature is not available. To make it available, an administrator can [enable the feature flag](../administration/feature_flags.md) named `two_factor_for_cli`. On GitLab.com and GitLab Dedicated, this feature is not available. This feature is not ready for production use. This feature flag also affects [session duration for Git Operations when 2FA is enabled](../administration/settings/account_and_limit_settings.md#customize-session-duration-for-git-operations-when-2fa-is-enabled).
+On GitLab Self-Managed, by default this feature is not available. To make it available, an administrator can [enable the feature flag](../administration/feature_flags/_index.md) named `two_factor_for_cli`. On GitLab.com and GitLab Dedicated, this feature is not available. This feature is not ready for production use. This feature flag also affects [session duration for Git Operations when 2FA is enabled](../administration/settings/account_and_limit_settings.md#customize-session-duration-for-git-operations-when-2fa-is-enabled).
 
 {{< /alert >}}
 
@@ -296,7 +304,7 @@ SSH key.
 
 ### Security limitation
 
-2FA does not protect users with compromised *private* SSH keys.
+2FA does not protect users with compromised private SSH keys.
 
 Once an OTP is verified, anyone can run Git over SSH with that private SSH key for
 the configured [session duration](../administration/settings/account_and_limit_settings.md#customize-session-duration-for-git-operations-when-2fa-is-enabled).

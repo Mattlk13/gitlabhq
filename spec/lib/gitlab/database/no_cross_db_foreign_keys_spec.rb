@@ -3,14 +3,12 @@
 require 'spec_helper'
 
 RSpec.describe 'cross-database foreign keys', feature_category: :database do
-  # While we are building out Cells, we will be moving tables from gitlab_main schema
-  # to either gitlab_main_clusterwide schema or gitlab_main_cell schema.
-  # During this transition phase, cross database foreign keys need
-  # to be temporarily allowed to exist, until we can work on converting these columns to loose foreign keys.
+  # Pre-existing FK that needs to be convered to loose foreign keys
+  #
   # The issue corresponding to the loose foreign key conversion
   # should be added as a comment along with the name of the column.
   let!(:allowed_cross_database_foreign_keys) do
-    [
+    keys = [
       'zoekt_indices.zoekt_enabled_namespace_id',
       'zoekt_repositories.project_id',
       'zoekt_replicas.zoekt_enabled_namespace_id',
@@ -32,21 +30,19 @@ RSpec.describe 'cross-database foreign keys', feature_category: :database do
       'snippet_repositories.snippet_organization_id',                    # https://gitlab.com/groups/gitlab-org/-/epics/17347
       'snippet_repositories.snippet_project_id',                         # https://gitlab.com/groups/gitlab-org/-/epics/17347
       'upload_states.upload_id',                                         # https://gitlab.com/groups/gitlab-org/-/epics/17347
-      'application_settings.web_ide_oauth_application_id',          # https://gitlab.com/gitlab-org/gitlab/-/issues/531355
-      'ai_settings.amazon_q_oauth_application_id',                  # https://gitlab.com/gitlab-org/gitlab/-/issues/531356
-      'ai_settings.duo_workflow_oauth_application_id',              # https://gitlab.com/gitlab-org/gitlab/-/issues/531356
       'ai_settings.duo_workflow_service_account_user_id',           # https://gitlab.com/gitlab-org/gitlab/-/issues/531356
       'ai_settings.amazon_q_service_account_user_id',               # https://gitlab.com/gitlab-org/gitlab/-/issues/531356
       'targeted_message_dismissals.targeted_message_id',            # https://gitlab.com/gitlab-org/gitlab/-/issues/531357
       'user_broadcast_message_dismissals.broadcast_message_id',     # https://gitlab.com/gitlab-org/gitlab/-/issues/531358
       'targeted_message_namespaces.targeted_message_id',            # https://gitlab.com/gitlab-org/gitlab/-/issues/531357
-      'plan_limits.plan_id',                                        # https://gitlab.com/gitlab-org/gitlab/-/issues/519892
       'term_agreements.term_id',                                    # https://gitlab.com/gitlab-org/gitlab/-/issues/531367
       'appearance_uploads.uploaded_by_user_id',                     # https://gitlab.com/gitlab-org/gitlab/-/issues/534207
       'appearance_uploads.project_id',                              # https://gitlab.com/gitlab-org/gitlab/-/issues/534207
       'appearance_uploads.namespace_id',                            # https://gitlab.com/gitlab-org/gitlab/-/issues/534207
       'appearance_uploads.organization_id'                          # https://gitlab.com/gitlab-org/gitlab/-/issues/534207
     ]
+
+    keys
   end
 
   def foreign_keys_for(table_name)
@@ -61,6 +57,22 @@ RSpec.describe 'cross-database foreign keys', feature_category: :database do
     !Gitlab::Database::GitlabSchema.cross_foreign_key_allowed?(table_schemas, tables)
   end
 
+  def cross_db_failure_message(column, fk)
+    tables = [fk.from_table, fk.to_table]
+    table_schemas = Gitlab::Database::GitlabSchema.table_schemas!(tables)
+
+    if table_schemas.all? { |schema| Gitlab::Database::GitlabSchema.require_sharding_key?(schema) }
+      "Found extra cross-database foreign key #{column} referencing #{fk.to_table} with constraint name #{fk.name}. " \
+      "When a foreign key references another database you must use a Loose Foreign Key instead https://docs.gitlab.com/ee/development/database/loose_foreign_keys.html."
+    else
+      # Any FK that references to / from a non-sharded table (e.g. gitlab_main_clusterwide) is not allowed
+      "Found extra cross-database foreign key #{column} referencing #{fk.to_table} with constraint name #{fk.name}. " \
+      "Sharded tables referencing from / to non-sharded tables are not allowed in Cells architecture. " \
+      "Consult https://docs.gitlab.com/development/cells for possible solutions. " \
+      "(gitlab_schemas: #{table_schemas.join(', ')})"
+    end
+  end
+
   it 'onlies have allowed list of cross-database foreign keys', :aggregate_failures do
     all_tables = ApplicationRecord.connection.data_sources
     allowlist = allowed_cross_database_foreign_keys.dup
@@ -72,7 +84,7 @@ RSpec.describe 'cross-database foreign keys', feature_category: :database do
         column = "#{fk.from_table}.#{Array.wrap(fk.column).join('.')}"
         allowlist.delete(column)
 
-        expect(allowed_cross_database_foreign_keys).to include(column), "Found extra cross-database foreign key #{column} referencing #{fk.to_table} with constraint name #{fk.name}. When a foreign key references another database you must use a Loose Foreign Key instead https://docs.gitlab.com/ee/development/database/loose_foreign_keys.html ."
+        expect(allowed_cross_database_foreign_keys).to include(column), cross_db_failure_message(column, fk)
       end
     end
 

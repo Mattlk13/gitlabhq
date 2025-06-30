@@ -59,7 +59,7 @@ RSpec.describe API::MergeRequests, :aggregate_failures, feature_category: :sourc
           merge_request.mark_as_unchecked!
         end
 
-        context 'with merge status recheck projection' do
+        context 'with merge status recheck protection' do
           it 'does not check mergeability', :sidekiq_inline do
             expect(check_service_class).not_to receive(:new)
 
@@ -114,7 +114,7 @@ RSpec.describe API::MergeRequests, :aggregate_failures, feature_category: :sourc
             project.add_developer(user2)
           end
 
-          context 'with merge status recheck projection' do
+          context 'with merge status recheck protection' do
             it 'checks mergeability asynchronously in batch', :sidekiq_inline do
               get(api(endpoint_path, user2), params: { with_merge_status_recheck: true })
 
@@ -124,7 +124,7 @@ RSpec.describe API::MergeRequests, :aggregate_failures, feature_category: :sourc
             end
           end
 
-          context 'without merge status recheck projection' do
+          context 'without merge status recheck protection' do
             it 'does not enqueue a merge status recheck' do
               expect(check_service_class).not_to receive(:new)
 
@@ -137,7 +137,7 @@ RSpec.describe API::MergeRequests, :aggregate_failures, feature_category: :sourc
         end
 
         context 'with a reporter role' do
-          context 'with merge status recheck projection' do
+          context 'with merge status recheck protection' do
             it 'does not check mergeability', :sidekiq_inline do
               expect(check_service_class).not_to receive(:new)
 
@@ -287,35 +287,6 @@ RSpec.describe API::MergeRequests, :aggregate_failures, feature_category: :sourc
 
         expect(response).to have_gitlab_http_status(:ok)
         expect(response).to match_response_schema('public_api/v4/merge_requests')
-      end
-
-      context 'with approved param' do
-        let(:approved_mr) { create(:merge_request, target_project: project, source_project: project) }
-
-        before do
-          create(:approval, merge_request: approved_mr)
-        end
-
-        it 'returns only approved merge requests' do
-          path = endpoint_path + '?approved=yes'
-
-          get api(path, user)
-
-          expect_paginated_array_response([approved_mr.id])
-        end
-
-        it 'returns only non-approved merge requests' do
-          path = endpoint_path + '?approved=no'
-
-          get api(path, user)
-
-          expect_paginated_array_response([
-            merge_request_merged.id,
-            merge_request_locked.id,
-            merge_request_closed.id,
-            merge_request.id
-          ])
-        end
       end
 
       it 'returns an empty array if no issue matches milestone' do
@@ -1817,13 +1788,12 @@ RSpec.describe API::MergeRequests, :aggregate_failures, feature_category: :sourc
       expect(json_response.first['parent_ids']).to be_present
     end
 
-    context 'when commits_from_gitaly and optimized_commit_storage feature flags are disabled' do
+    context 'when optimized_commit_storage feature flag is disabled' do
       before do
-        stub_feature_flags(commits_from_gitaly: false)
         stub_feature_flags(optimized_commit_storage: false)
       end
 
-      it 'returns a 200 without parent_ids' do
+      it 'returns a 200 with parent_ids' do
         get api("/projects/#{project.id}/merge_requests/#{merge_request.iid}/commits", user)
         commit = merge_request.merge_request_diff.last_commit
 
@@ -1831,8 +1801,7 @@ RSpec.describe API::MergeRequests, :aggregate_failures, feature_category: :sourc
         expect(json_response.size).to eq(merge_request.commits.size)
         expect(json_response.first['id']).to eq(commit.id)
         expect(json_response.first['title']).to eq(commit.title)
-
-        expect(json_response.first['parent_ids']).to eq([])
+        expect(json_response.first['parent_ids']).to be_present
       end
     end
 
@@ -2538,7 +2507,7 @@ RSpec.describe API::MergeRequests, :aggregate_failures, feature_category: :sourc
                 target_branch: 'master',
                 author: user
               }
-          end.to change { MergeRequest.count }.by(0)
+          end.not_to change { MergeRequest.count }
 
           expect(response).to have_gitlab_http_status(:conflict)
           expect(json_response['message']).to eq(["Another open merge request already exists for this source branch: !1"])

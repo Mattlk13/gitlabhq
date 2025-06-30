@@ -67,7 +67,7 @@ class ProjectPolicy < BasePolicy
   condition(:external_user) { user.external? }
 
   desc "Project is archived"
-  condition(:archived, scope: :subject, score: 0) { project.archived? }
+  condition(:archived, scope: :subject, score: 0) { project_archived_or_ancestors_archived? }
 
   desc "Project user pipeline variables minimum override role"
   condition(:project_pipeline_override_role_owner) { project.ci_pipeline_variables_minimum_override_role == 'owner' }
@@ -424,6 +424,13 @@ class ProjectPolicy < BasePolicy
 
   rule { can?(:create_issue) }.enable :create_work_item
 
+  # We cannot use `guest_access` because that includes non-members on public projects
+  # Only guests that are project members are allowed to set metadata when creating new issues
+  rule { guest | can?(:admin_issue) }.policy do
+    enable :set_new_issue_metadata
+    enable :set_new_work_item_metadata
+  end
+
   rule { can?(:create_issue) }.enable :create_task
 
   # These abilities are not allowed to admins that are not members of the project,
@@ -709,6 +716,7 @@ class ProjectPolicy < BasePolicy
     enable :manage_protected_tags
     enable :change_restrict_user_defined_variables
     enable :create_protected_branch
+    enable :create_branch_rule
     enable :admin_protected_branch
     enable :admin_protected_environments
   end
@@ -907,7 +915,6 @@ class ProjectPolicy < BasePolicy
     prevent :update_cluster
     prevent :admin_cluster
     prevent :destroy_cluster
-    prevent :read_templates
   end
 
   rule { container_registry_disabled }.policy do
@@ -1060,7 +1067,6 @@ class ProjectPolicy < BasePolicy
     enable :read_design_activity
     enable :read_issue_link
     enable :read_work_item
-    enable :read_templates
   end
 
   rule { can?(:read_merge_request) }.policy do
@@ -1250,6 +1256,10 @@ class ProjectPolicy < BasePolicy
   end
 
   private
+
+  def project_archived_or_ancestors_archived?
+    project.archived? || (Feature.enabled?(:archive_group, project.root_ancestor) && project.self_or_ancestors_archived?)
+  end
 
   def team_member?
     return false if @user.nil?

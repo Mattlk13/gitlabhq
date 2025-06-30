@@ -155,6 +155,18 @@ To run `gitlab:check`, run:
   bundle exec rake gitlab:check RAILS_ENV=production
   ```
 
+- Kubernetes installations:
+
+  ```shell
+  kubectl exec -it <toolbox-pod-name> -- sudo gitlab-rake gitlab:check
+  ```
+
+  {{< alert type="note" >}}
+  Due to the specific architecture of Helm-based GitLab installations, the output may contain
+  false negatives for connectivity verification to `gitlab-shell`, Sidekiq, and `systemd`-related files.
+  These reported failures are expected and do not indicate actual issues, disregard them when reviewing diagnostic results.
+  {{< /alert >}}
+  
 Use `SANITIZE=true` for `gitlab:check` if you want to omit project names from the output.
 
 Example output:
@@ -389,7 +401,7 @@ order that conforms to the GitLab release cadence.
 
 {{< history >}}
 
-- [Introduced](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/42705) in GitLab 13.5 [with a flag](../../administration/feature_flags.md) named `database_reindexing`. Disabled by default.
+- [Introduced](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/42705) in GitLab 13.5 [with a flag](../../administration/feature_flags/_index.md) named `database_reindexing`. Disabled by default.
 - [Enabled on GitLab.com](https://gitlab.com/groups/gitlab-org/-/epics/3989) in GitLab 13.9.
 - [Enabled on GitLab Self-Managed and GitLab Dedicated](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/188548) in GitLab 18.0.
 
@@ -486,7 +498,7 @@ For Kubernetes deployments, you can create a similar schedule using the CronJob 
 
 - Rebuilding database indexes is a disk-intensive task, so you should perform the
   task during off-peak hours. Running the task during peak hours can lead to
-  _increased_ bloat, and can also cause certain queries to perform slowly.
+  increased bloat, and can also cause certain queries to perform slowly.
 - The task requires free disk space for the index being restored. The created
   indexes are appended with `_ccnew`. If the reindexing task fails, re-running the
   task cleans up the temporary indexes.

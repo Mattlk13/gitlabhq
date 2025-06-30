@@ -25,8 +25,9 @@ RSpec.describe 'Database schema',
     }.with_indifferent_access.freeze
   end
 
-  # List of columns historically missing a FK, don't add more columns
+  # List of columns, ending with `_id` but missing a FK
   # See: https://docs.gitlab.com/ee/development/database/foreign_keys.html#naming-foreign-keys
+  # TODO: Automate this to reduce the list of exceptions: https://gitlab.com/gitlab-org/gitlab/-/issues/544795
   let(:ignored_fk_columns_map) do
     {
       abuse_reports: %w[reporter_id user_id],
@@ -34,6 +35,7 @@ RSpec.describe 'Database schema',
       ai_code_suggestion_events: %w[user_id],
       ai_duo_chat_events: %w[user_id],
       ai_troubleshoot_job_events: %w[user_id job_id],
+      ai_usage_events: %w[user_id],
       application_settings: %w[performance_bar_allowed_group_id slack_app_id snowplow_app_id eks_account_id
         eks_access_key_id],
       approvals: %w[user_id project_id],
@@ -62,10 +64,8 @@ RSpec.describe 'Database schema',
       boards: %w[milestone_id iteration_id],
       broadcast_messages: %w[namespace_id],
       catalog_resource_component_last_usages: %w[used_by_project_id], # No FK constraint because we want to preserve usage data even if project is deleted.
-      chat_names: %w[chat_id team_id user_id],
+      chat_names: %w[chat_id team_id],
       chat_teams: %w[team_id],
-      ci_builds: %w[project_id runner_id user_id erased_by_id trigger_request_id partition_id
-        auto_canceled_by_partition_id execution_config_id upstream_pipeline_partition_id],
       ci_build_needs: %w[project_id],
       ci_build_pending_states: %w[project_id],
       ci_build_trace_chunks: %w[project_id],
@@ -80,28 +80,26 @@ RSpec.describe 'Database schema',
       ci_pipeline_metadata: %w[partition_id],
       ci_pipeline_schedule_variables: %w[project_id],
       ci_pipelines_config: %w[partition_id project_id],
-      ci_pipelines: %w[partition_id auto_canceled_by_partition_id project_id user_id merge_request_id trigger_id], # LFKs are defined on the routing table
       ci_secure_file_states: %w[project_id],
       ci_unit_test_failures: %w[project_id],
       ci_resources: %w[project_id],
       p_ci_pipelines: %w[partition_id auto_canceled_by_partition_id auto_canceled_by_id trigger_id],
       p_ci_runner_machine_builds: %w[project_id],
-      ci_runner_taggings: %w[runner_id sharding_key_id], # The sharding_key_id value is meant to populate the partitioned table, no other usage. The runner_id FK exists at the partition level
-      ci_runner_taggings_instance_type: %w[tag_id sharding_key_id], # sharding_key_id is always NULL in this partition, tag_id is handled on ci_runner_taggings
-      ci_runner_taggings_group_type: %w[tag_id], # tag_id is handled on ci_runner_taggings
-      ci_runner_taggings_project_type: %w[tag_id], # tag_id is handled on ci_runner_taggings
+      ci_runner_taggings: %w[runner_id organization_id sharding_key_id], # The organization_id/sharding_key_id values are meant to populate the partitioned table, no other usage. The runner_id FK exists at the partition level
+      ci_runner_taggings_instance_type: %w[tag_id organization_id sharding_key_id], # organization_id/sharding_key_id are always NULL in this partition, tag_id is handled on ci_runner_taggings
+      ci_runner_taggings_group_type: %w[tag_id organization_id], # tag_id is handled on ci_runner_taggings. These records are indirectly deleted by the FK to group_type_ci_runners
+      ci_runner_taggings_project_type: %w[tag_id organization_id], # tag_id is handled on ci_runner_taggings. These records are indirectly deleted by the FK to project_type_ci_runners
       ci_runners: %w[sharding_key_id], # This value is meant to populate the partitioned table, no other usage
-      instance_type_ci_runners: %w[creator_id sharding_key_id], # No need for LFKs on partition, already handled on ci_runners routing table.
-      group_type_ci_runners: %w[creator_id sharding_key_id], # No need for LFKs on partition, already handled on ci_runners routing table.
-      project_type_ci_runners: %w[creator_id sharding_key_id], # No need for LFKs on partition, already handled on ci_runners routing table.
-      ci_runner_machines: %w[runner_id sharding_key_id], # The runner_id and sharding_key_id fields are only used in the partitions, and have the appropriate FKs. The runner_id field will be removed with https://gitlab.com/gitlab-org/gitlab/-/issues/503749.
-      instance_type_ci_runner_machines: %w[sharding_key_id], # This field is always NULL in this partition.
-      group_type_ci_runner_machines: %w[sharding_key_id], # No need for LFK, rows will be deleted by the FK to ci_runners.
-      project_type_ci_runner_machines: %w[sharding_key_id], # No need for LFK, rows will be deleted by the FK to ci_runners.
+      instance_type_ci_runners: %w[creator_id organization_id sharding_key_id], # No need for LFKs on partition, already handled on ci_runners routing table.
+      group_type_ci_runners: %w[creator_id organization_id sharding_key_id], # No need for LFKs on partition, already handled on ci_runners routing table.
+      project_type_ci_runners: %w[creator_id organization_id sharding_key_id], # No need for LFKs on partition, already handled on ci_runners routing table.
+      ci_runner_machines: %w[runner_id organization_id sharding_key_id], # The runner_id and sharding_key_id fields are only used in the partitions, and have the appropriate FKs. The runner_id field will be removed with https://gitlab.com/gitlab-org/gitlab/-/issues/503749.
+      instance_type_ci_runner_machines: %w[organization_id sharding_key_id], # This field is always NULL in this partition.
+      group_type_ci_runner_machines: %w[organization_id sharding_key_id], # No need for LFK, rows will be deleted by the FK to ci_runners.
+      project_type_ci_runner_machines: %w[organization_id sharding_key_id], # No need for LFK, rows will be deleted by the FK to ci_runners.
       ci_runner_projects: %w[runner_id],
       ci_sources_pipelines: %w[partition_id source_partition_id source_job_id],
       ci_sources_projects: %w[partition_id],
-      ci_trigger_requests: %w[commit_id project_id],
       ci_job_artifact_states: %w[partition_id project_id],
       cluster_providers_aws: %w[security_group_id vpc_id access_key_id],
       cluster_providers_gcp: %w[gcp_project_id operation_id],
@@ -154,7 +152,7 @@ RSpec.describe 'Database schema',
       oauth_device_grants: %w[resource_owner_id application_id],
       packages_nuget_symbols: %w[project_id],
       packages_package_files: %w[project_id],
-      p_ci_builds: %w[erased_by_id trigger_request_id partition_id auto_canceled_by_partition_id execution_config_id
+      p_ci_builds: %w[erased_by_id partition_id auto_canceled_by_partition_id execution_config_id
         upstream_pipeline_partition_id],
       p_ci_builds_metadata: %w[project_id build_id partition_id],
       p_ci_build_trace_metadata: %w[project_id],
@@ -179,10 +177,11 @@ RSpec.describe 'Database schema',
       repository_languages: %w[programming_language_id],
       routes: %w[source_id],
       security_findings: %w[project_id],
-      sent_notifications: %w[project_id noteable_id recipient_id commit_id in_reply_to_discussion_id namespace_id], # namespace_id FK will be added after index creation
+      sent_notifications: %w[project_id noteable_id recipient_id commit_id in_reply_to_discussion_id namespace_id], # namespace_id FK will be added to partitioned table
+      sent_notifications_7abbf02cb6: %w[project_id noteable_id recipient_id commit_id in_reply_to_discussion_id],
       slack_integrations: %w[team_id user_id bot_user_id], # these are external Slack IDs
       snippets: %w[author_id],
-      spam_logs: %w[user_id],
+      spam_logs: %w[user_id target_id],
       status_check_responses: %w[external_approval_rule_id],
       subscriptions: %w[user_id subscribable_id],
       suggestions: %w[commit_id],
@@ -216,6 +215,7 @@ RSpec.describe 'Database schema',
       vulnerability_remediation_uploads: %w[model_id],
       user_agent_details: %w[subject_id],
       users: %w[color_mode_id color_scheme_id created_by_id theme_id managing_group_id accepted_term_id],
+      user_preferences: %w[dark_color_scheme_id],
       users_star_projects: %w[user_id],
       vulnerability_finding_links: %w[project_id],
       vulnerability_identifiers: %w[external_id],
@@ -223,6 +223,7 @@ RSpec.describe 'Database schema',
       vulnerability_scanners: %w[external_id],
       security_scans: %w[pipeline_id project_id], # foreign key is not added as ci_pipeline table will be moved into different db soon
       dependency_list_exports: %w[pipeline_id], # foreign key is not added as ci_pipeline table is in different db
+      vulnerability_archived_records: %w[archive_id], # having a FK on this table prevents partitions from being detached. See: https://gitlab.com/gitlab-org/gitlab/-/issues/547116
       vulnerability_reads: %w[cluster_agent_id namespace_id], # namespace_id is a denormalization of `project.namespace`
       # See: https://gitlab.com/gitlab-org/gitlab/-/merge_requests/87584
       # Fixes performance issues with the deletion of web-hooks with many log entries
@@ -235,6 +236,7 @@ RSpec.describe 'Database schema',
       zoekt_indices: %w[namespace_id], # needed for cells sharding key
       zoekt_repositories: %w[namespace_id project_identifier], # needed for cells sharding key
       zoekt_tasks: %w[project_identifier partition_id zoekt_repository_id zoekt_node_id], # needed for: cells sharding key, partitioning, and performance reasons
+      p_knowledge_graph_tasks: %w[partition_id knowledge_graph_replica_id zoekt_node_id namespace_id], # needed for: partitioning, and performance reasons
       # TODO: To remove with https://gitlab.com/gitlab-org/gitlab/-/merge_requests/155256
       approval_group_rules: %w[approval_policy_rule_id],
       approval_project_rules: %w[approval_policy_rule_id],
@@ -263,15 +265,13 @@ RSpec.describe 'Database schema',
   let(:ignored_tables_with_too_many_indexes) do
     {
       approval_merge_request_rules: 17,
-      ci_builds: 26,
-      ci_pipelines: 24,
-      ci_runners: 16,
+      ci_runners: 17,
       deployments: 18,
       epics: 19,
       events: 16,
-      group_type_ci_runners: 17,
-      instance_type_ci_runners: 17,
-      issues: 29,
+      group_type_ci_runners: 18,
+      instance_type_ci_runners: 18,
+      issues: 35,
       members: 21,
       merge_requests: 33,
       namespaces: 26,
@@ -280,7 +280,7 @@ RSpec.describe 'Database schema',
       p_ci_pipelines: 24,
       packages_package_files: 16,
       packages_packages: 27,
-      project_type_ci_runners: 17,
+      project_type_ci_runners: 18,
       projects: 55,
       sbom_occurrences: 25,
       users: 33, # To decrement back to 32 after the removal of a temporary index https://gitlab.com/gitlab-org/gitlab/-/merge_requests/184848
@@ -416,6 +416,7 @@ RSpec.describe 'Database schema',
     # These pre-existing enums have limits > 2 bytes
     let(:ignored_limit_enums_map) do
       {
+        'Ai::UsageEvent' => %w[event],
         'Analytics::CycleAnalytics::Stage' => %w[start_event_identifier end_event_identifier],
         'Ci::Bridge' => %w[failure_reason],
         'Ci::Build' => %w[failure_reason],
@@ -436,7 +437,7 @@ RSpec.describe 'Database schema',
         'Project' => %w[auto_cancel_pending_pipelines],
         'ProjectAutoDevops' => %w[deploy_strategy],
         'ResourceLabelEvent' => %w[action],
-        'User' => %w[layout dashboard project_view],
+        'User' => %w[layout dashboard project_view role],
         'Users::Callout' => %w[feature_name],
         'Vulnerability' => %w[confidence] # this enum is in the process of being deprecated
       }.freeze

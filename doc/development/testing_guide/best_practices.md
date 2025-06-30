@@ -13,7 +13,7 @@ as we do the design of our features.
 
 When implementing a feature, we think about developing the right capabilities the right way. This helps us
 narrow our scope to a manageable level. When implementing tests for a feature, we must think about developing
-the right tests, but then cover _all_ the important ways the test may fail. This can quickly widen our scope to
+the right tests, but then cover all the important ways the test may fail. This can quickly widen our scope to
 a level that is difficult to manage.
 
 Test heuristics can help solve this problem. They concisely address many of the common ways bugs
@@ -1085,7 +1085,7 @@ end
 
 #### Timestamp truncation
 
-Active Record timestamps are [set by the Rails’ `ActiveRecord::Timestamp`](https://github.com/rails/rails/blob/1eb5cc13a2ed8922b47df4ae47faf5f23faf3d35/activerecord/lib/active_record/timestamp.rb#L105)
+Active Record timestamps are [set by the Rails' `ActiveRecord::Timestamp`](https://github.com/rails/rails/blob/1eb5cc13a2ed8922b47df4ae47faf5f23faf3d35/activerecord/lib/active_record/timestamp.rb#L105)
 module [using `Time.now`](https://github.com/rails/rails/blob/1eb5cc13a2ed8922b47df4ae47faf5f23faf3d35/activerecord/lib/active_record/timestamp.rb#L78).
 Time precision is [OS-dependent](https://ruby-doc.org/core-2.6.3/Time.html#method-c-new),
 and as the docs state, may include fractional seconds.

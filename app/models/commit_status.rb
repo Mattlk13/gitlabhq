@@ -9,7 +9,7 @@ class CommitStatus < Ci::ApplicationRecord
   include BulkInsertableAssociations
   include TaggableQueries
 
-  ignore_column :trigger_request_id, remove_with: '18.2', remove_after: '2025-06-14'
+  ignore_column :environment_auto_stop_in, remove_with: '18.4', remove_after: '2025-09-01'
 
   self.table_name = :p_ci_builds
   self.sequence_name = :ci_builds_id_seq
@@ -51,7 +51,9 @@ class CommitStatus < Ci::ApplicationRecord
   validates :ref, :target_url, :description, length: { maximum: 255 }
   validates :project, presence: true
 
-  alias_attribute :author, :user
+  alias_method :author, :user
+  alias_method :author=, :user=
+
   alias_attribute :pipeline_id, :commit_id
 
   scope :failed_but_allowed, -> do
@@ -276,7 +278,7 @@ class CommitStatus < Ci::ApplicationRecord
 
   # Time spent in the pending state.
   def queued_duration
-    calculate_duration(queued_at, started_at)
+    calculate_duration(queued_at, started_at || finished_at)
   end
 
   def latest?
@@ -299,8 +301,8 @@ class CommitStatus < Ci::ApplicationRecord
     false
   end
 
-  def archived?
-    pipeline.archived?
+  def archived?(...)
+    pipeline.archived?(...)
   end
 
   def stuck?
@@ -363,6 +365,10 @@ class CommitStatus < Ci::ApplicationRecord
   # For AiAction
   def to_ability_name
     'build'
+  end
+
+  def test_suite_name
+    nil
   end
 
   # For AiAction

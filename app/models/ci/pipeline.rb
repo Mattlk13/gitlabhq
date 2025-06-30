@@ -494,6 +494,12 @@ module Ci
     scope :order_id_asc, -> { order(id: :asc) }
     scope :order_id_desc, -> { order(id: :desc) }
 
+    scope :not_archived, -> do
+      archive_cutoff = Gitlab::CurrentSettings.archive_builds_older_than
+
+      archive_cutoff ? created_after(archive_cutoff) : all
+    end
+
     # Returns the pipelines in descending order (= newest first), optionally
     # limited to a number of references.
     #
@@ -541,6 +547,16 @@ module Ci
         .from("(VALUES #{refs_values}) refs_values (ref)")
         .joins("INNER JOIN LATERAL (#{join_query.to_sql}) #{quoted_table_name} ON TRUE")
         .index_by(&:ref)
+    end
+
+    def self.latest_pipelines_for_ref_by_statuses(ref, statuses = AVAILABLE_STATUSES)
+      status_values = Arel::Nodes::ValuesList.new(statuses.map { |s| [s] }).to_sql
+      query = Arel.sql("status_values.status = #{quoted_table_name}.status")
+      join_query = for_ref(ref).where(query).order(id: :desc).limit(1)
+
+      Ci::Pipeline
+        .from(sanitize_sql_array(["(#{status_values}) AS status_values(status)"]))
+        .joins(sanitize_sql_array(["INNER JOIN LATERAL (#{join_query.to_sql}) #{quoted_table_name} ON TRUE"]))
     end
 
     def self.latest_running_for_ref(ref)
@@ -736,9 +752,17 @@ module Ci
       retryable_builds.any?
     end
 
-    def archived?
+    def archived?(log: false)
       archive_builds_older_than = Gitlab::CurrentSettings.current_application_settings.archive_builds_older_than
-      archive_builds_older_than.present? && created_at < archive_builds_older_than
+      is_archived = archive_builds_older_than.present? && created_at < archive_builds_older_than
+
+      if log
+        ::Gitlab::Ci::Pipeline::AccessLogger
+          .new(pipeline: self, archived: is_archived)
+          .log
+      end
+
+      is_archived
     end
 
     def cancelable?
@@ -934,11 +958,7 @@ module Ci
 
     def protected_ref?
       strong_memoize(:protected_ref) do
-        if Feature.enabled?(:protect_merge_request_pipelines, project)
-          merge_request? ? protected_for_merge_request? : project.protected_for?(git_ref)
-        else
-          project.protected_for?(git_ref)
-        end
+        merge_request? ? protected_for_merge_request? : project.protected_for?(git_ref)
       end
     end
 
@@ -956,9 +976,11 @@ module Ci
     end
 
     def queued_duration
-      return unless started_at
+      queueing_finished_time = started_at || finished_at
+      return unless queueing_finished_time
+      return unless created_at
 
-      seconds = (started_at - created_at).to_i
+      seconds = (queueing_finished_time - created_at).to_i
       seconds unless seconds == 0
     end
 
@@ -1594,6 +1616,9 @@ module Ci
 
       project.protected_for?(merge_request.source_branch) &&
         project.protected_for?(merge_request.target_branch)
+
+    rescue Repository::AmbiguousRefError
+      false
     end
   end
 end

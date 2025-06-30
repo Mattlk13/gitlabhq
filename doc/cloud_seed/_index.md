@@ -2,6 +2,7 @@
 stage: none
 group: unassigned
 info: To determine the technical writer assigned to the Stage/Group associated with this page, see https://handbook.gitlab.com/handbook/product/ux/technical-writing/#assignments
+ignore_in_report: true
 title: Cloud Seed
 ---
 
@@ -14,7 +15,7 @@ title: Cloud Seed
 
 {{< history >}}
 
-- [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/371332) in GitLab 15.4 [with a flag](../administration/feature_flags.md) named `google_cloud`. Disabled by default.
+- [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/371332) in GitLab 15.4 [with a flag](../administration/feature_flags/_index.md) named `google_cloud`. Disabled by default.
 - [Enabled on GitLab Self-Managed and GitLab.com](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/100545) in GitLab 15.5.
 
 {{< /history >}}

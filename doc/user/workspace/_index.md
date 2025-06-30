@@ -15,8 +15,7 @@ title: Workspaces
 
 {{< history >}}
 
-- [Introduced](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/112397) in GitLab 15.11 [with a flag](../../administration/feature_flags.md) named `remote_development_feature_flag`. Disabled by default.
-- [Enabled on GitLab.com and GitLab Self-Managed](https://gitlab.com/gitlab-org/gitlab/-/issues/391543) in GitLab 16.0.
+- Feature flag `remote_development_feature_flag` [enabled on GitLab.com and GitLab Self-Managed](https://gitlab.com/gitlab-org/gitlab/-/issues/391543) in GitLab 16.0.
 - [Generally available](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/136744) in GitLab 16.7. Feature flag `remote_development_feature_flag` removed.
 
 {{< /history >}}
@@ -31,6 +30,15 @@ which you can customize to meet the specific needs of each project.
 A Workspace can exist for a maximum of approximately one calendar year, `8760` hours. After this, it is automatically terminated.
 
 For a click-through demo, see [GitLab workspaces](https://tech-marketing.gitlab.io/static-demos/workspaces/ws_html.html).
+
+{{< alert type="note" >}}
+
+A Workspace runs on any `linux/amd64` Kubernetes cluster. If you need to run sudo commands, or
+build and run containers in your workspace, there might be platform-specific requirements.
+
+For more information, see [Platform compatibility](configuration.md#platform-compatibility).
+
+{{< /alert >}}
 
 ## Workspaces and projects
 
@@ -48,14 +56,13 @@ A running workspace remains accessible to the user even if user permissions are 
 {{< history >}}
 
 - [Introduced](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/125331) in GitLab 16.2.
-- Managing workspaces from the **Code** menu [introduced](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/178492) in GitLab 17.11.
 
 {{< /history >}}
 
 To manage workspaces from a project:
 
 1. On the left sidebar, select **Search or go to** and find your project.
-1. In the upper right, select **Code**.
+1. In the upper right, select **Edit**.
 1. From the dropdown list, under **Your workspaces**, you can:
    - Restart, stop, or terminate an existing workspace.
    - Create a new workspace.
@@ -174,13 +181,19 @@ You can define a devfile in the following locations, relative to your project's 
 
 - `schemaVersion` must be [`2.2.0`](https://devfile.io/docs/2.2.0/devfile-schema).
 - The devfile must have at least one component.
+- The devfile size must not exceed 3 MB.
 - For `components`:
   - Names must not start with `gl-`.
   - Only [`container`](#container-component-type) and `volume` are supported.
-- For `commands`, IDs must not start with `gl-`.
+- For `commands`:
+  - IDs must not start with `gl-`.
+  - Only `exec` and `apply` command types are supported.
+  - For `exec` commands, only the following options are supported: `commandLine`, `component`, `label`, and `hotReloadCapable`.
+  - When `hotReloadCapable` is specified for `exec` commands, it must be set to `false`.
 - For `events`:
   - Names must not start with `gl-`.
-  - Only `preStart` is supported.
+  - Only `preStart` and [`postStart`](#user-defined-poststart-events) are supported.
+  - The Devfile standard only allows exec commands to be linked to `postStart` events. If you want an apply command, you must use a `preStart` event.
 - `parent`, `projects`, and `starterProjects` are not supported.
 - For `variables`, keys must not start with `gl-`, `gl_`, `GL-`, or `GL_`.
 - For `attributes`:
@@ -205,6 +218,19 @@ The `container` component type supports the following schema properties only:
 | `endpoints`    | Port mappings to expose from the container. Names must not start with `gl-`.                                                   |
 | `volumeMounts` | Storage volume to mount in the container.                                                                                      |
 
+### User-defined `postStart` events
+
+You can define custom `postStart` events in your devfile to run commands after the workspace starts. Use this type of event to:
+
+- Set up development dependencies.
+- Configure the workspace environment.
+- Run initialization scripts.
+
+`postStart` event names must not start with `gl-` and can only reference `exec` type commands.
+
+For an example that shows how to configure `postStart` events,
+see the [example configurations](#example-configurations).
+
 ### Example configurations
 
 The following is an example devfile configuration:
@@ -225,13 +251,30 @@ components:
       endpoints:
         - name: http-3000
           targetPort: 3000
+commands:
+  - id: install-dependencies
+    exec:
+      component: tooling-container
+      commandLine: "npm install"
+  - id: setup-environment
+    exec:
+      component: tooling-container
+      commandLine: "echo 'Setting up development environment'"
+events:
+  postStart:
+    - install-dependencies
+    - setup-environment
 ```
+
+{{< alert type="note" >}}
+
+This container image is for demonstration purposes only. To use your own container image,
+see [Arbitrary user IDs](#arbitrary-user-ids).
+
+{{< /alert >}}
 
 For more information, see the [devfile documentation](https://devfile.io/docs/2.2.0/devfile-schema).
 For other examples, see the [`examples` projects](https://gitlab.com/gitlab-org/remote-development/examples).
-
-This container image is for demonstration purposes only.
-To use your own container image, see [Arbitrary user IDs](#arbitrary-user-ids).
 
 ## Workspace container requirements
 
@@ -286,7 +329,7 @@ For more information, see [GitLab Workflow extension for VS Code](https://gitlab
 
 {{< history >}}
 
-- [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/438491) as a [beta](../../policy/development_stages_support.md#beta) in GitLab 16.9 [with a flag](../../administration/feature_flags.md) named `allow_extensions_marketplace_in_workspace`. Disabled by default.
+- [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/438491) as a [beta](../../policy/development_stages_support.md#beta) in GitLab 16.9 [with a flag](../../administration/feature_flags/_index.md) named `allow_extensions_marketplace_in_workspace`. Disabled by default.
 - Feature flag `allow_extensions_marketplace_in_workspace` [removed](https://gitlab.com/gitlab-org/gitlab/-/issues/454669) in GitLab 17.6.
 
 {{< /history >}}

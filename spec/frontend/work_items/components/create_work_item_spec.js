@@ -1,9 +1,8 @@
 import Vue, { nextTick } from 'vue';
 import VueApollo from 'vue-apollo';
 import { GlAlert, GlButton, GlFormSelect, GlLink, GlSprintf } from '@gitlab/ui';
-import { shallowMount } from '@vue/test-utils';
 import { cloneDeep } from 'lodash';
-import namespaceWorkItemTypesQueryResponse from 'test_fixtures/graphql/work_items/project_namespace_work_item_types.query.graphql.json';
+import { shallowMountExtended } from 'helpers/vue_test_utils_helper';
 import { setHTMLFixture } from 'helpers/fixtures';
 import { useLocalStorageSpy } from 'helpers/local_storage_helper';
 import createMockApollo from 'helpers/mock_apollo_helper';
@@ -18,6 +17,7 @@ import WorkItemCrmContacts from '~/work_items/components/work_item_crm_contacts.
 import WorkItemMilestone from '~/work_items/components/work_item_milestone.vue';
 import WorkItemParent from '~/work_items/components/work_item_parent.vue';
 import WorkItemProjectsListbox from '~/work_items/components/work_item_links/work_item_projects_listbox.vue';
+import WorkItemNamespaceListbox from '~/work_items/components/shared/work_item_namespace_listbox.vue';
 import TitleSuggestions from '~/issues/new/components/title_suggestions.vue';
 import {
   WORK_ITEM_TYPE_NAME_EPIC,
@@ -32,6 +32,7 @@ import {
 } from '~/work_items/constants';
 import PageHeading from '~/vue_shared/components/page_heading.vue';
 import { setNewWorkItemCache } from '~/work_items/graphql/cache_utils';
+import { updateDraftWorkItemType } from '~/work_items/utils';
 import namespaceWorkItemTypesQuery from '~/work_items/graphql/namespace_work_item_types.query.graphql';
 import createWorkItemMutation from '~/work_items/graphql/create_work_item.mutation.graphql';
 import workItemByIidQuery from '~/work_items/graphql/work_item_by_iid.query.graphql';
@@ -41,17 +42,25 @@ import {
   createWorkItemMutationResponse,
   createWorkItemMutationErrorResponse,
   createWorkItemQueryResponse,
+  namespaceWorkItemTypesQueryResponse,
 } from 'ee_else_ce_jest/work_items/mock_data';
 
 jest.mock('~/alert');
 jest.mock('~/work_items/graphql/cache_utils', () => ({
   setNewWorkItemCache: jest.fn(),
 }));
+jest.mock('~/work_items/utils', () => {
+  return {
+    ...jest.requireActual('~/work_items/utils'),
+    updateDraftWorkItemType: jest.fn(),
+  };
+});
 
 Vue.use(VueApollo);
 
 describe('Create work item component', () => {
   /** @type {import('@vue/test-utils').Wrapper} */
+  const originalFeatures = gon.features;
   let wrapper;
   let mockApollo;
 
@@ -75,24 +84,25 @@ describe('Create work item component', () => {
   const findMilestoneWidget = () => wrapper.findComponent(WorkItemMilestone);
   const findParentWidget = () => wrapper.findComponent(WorkItemParent);
   const findProjectsSelector = () => wrapper.findComponent(WorkItemProjectsListbox);
+  const findGroupProjectSelector = () => wrapper.findComponent(WorkItemNamespaceListbox);
   const findSelect = () => wrapper.findComponent(GlFormSelect);
   const findTitleSuggestions = () => wrapper.findComponent(TitleSuggestions);
-  const findConfidentialCheckbox = () => wrapper.find('[data-testid="confidential-checkbox"]');
-  const findRelatesToCheckbox = () => wrapper.find('[data-testid="relates-to-checkbox"]');
-  const findCreateWorkItemView = () => wrapper.find('[data-testid="create-work-item-view"]');
-  const findFormButtons = () => wrapper.find('[data-testid="form-buttons"]');
-  const findCreateButton = () => wrapper.find('[data-testid="create-button"]');
-  const findCancelButton = () => wrapper.find('[data-testid="cancel-button"]');
-  const findResolveDiscussionSection = () =>
-    wrapper.find('[data-testid="work-item-resolve-discussion"]');
+  const findConfidentialCheckbox = () => wrapper.findByTestId('confidential-checkbox');
+  const findRelatesToCheckbox = () => wrapper.findByTestId('relates-to-checkbox');
+  const findCreateWorkItemView = () => wrapper.findByTestId('create-work-item-view');
+  const findFormButtons = () => wrapper.findByTestId('form-buttons');
+  const findCreateButton = () => wrapper.findByTestId('create-button');
+  const findCancelButton = () => wrapper.findByTestId('cancel-button');
+  const findResolveDiscussionSection = () => wrapper.findByTestId('work-item-resolve-discussion');
   const findResolveDiscussionLink = () =>
-    wrapper.find('[data-testid="work-item-resolve-discussion"]').findComponent(GlLink);
+    wrapper.findByTestId('work-item-resolve-discussion').findComponent(GlLink);
 
   const createComponent = ({
     props = {},
     mutationHandler = createWorkItemSuccessHandler,
     preselectedWorkItemType = WORK_ITEM_TYPE_NAME_EPIC,
     isGroupWorkItem = false,
+    workItemPlanningViewEnabled = false,
   } = {}) => {
     const namespaceResponseCopy = cloneDeep(namespaceWorkItemTypesQueryResponse);
     namespaceResponseCopy.data.workspace.id = 'gid://gitlab/Group/33';
@@ -111,18 +121,20 @@ describe('Create work item component', () => {
       resolvers,
     );
 
-    wrapper = shallowMount(CreateWorkItem, {
+    wrapper = shallowMountExtended(CreateWorkItem, {
       apolloProvider: mockApollo,
       propsData: {
+        fullPath: 'full-path',
+        projectNamespaceFullPath: 'full-path',
         preselectedWorkItemType,
         ...props,
       },
       provide: {
-        fullPath: 'full-path',
         groupPath: 'group-path',
         hasIssuableHealthStatusFeature: false,
         hasIterationsFeature: true,
         hasIssueWeightsFeature: false,
+        workItemPlanningViewEnabled,
       },
       stubs: {
         PageHeading,
@@ -154,6 +166,11 @@ describe('Create work item component', () => {
     gon.current_user_fullname = mockCurrentUser.name;
     gon.current_username = mockCurrentUser.username;
     gon.current_user_avatar_url = mockCurrentUser.avatar_url;
+    gon.features = {};
+  });
+
+  afterAll(() => {
+    gon.features = originalFeatures;
   });
 
   describe('Default', () => {
@@ -185,12 +202,18 @@ describe('Create work item component', () => {
     it('Default', async () => {
       createComponent();
       await waitForPromises();
-      const AUTO_SAVE_KEY = 'autosave/new-full-path-epic-draft';
+      const typeSpecificAutosaveKey = `autosave/new-full-path-epic-draft`;
+      const sharedWidgetsAutosaveKey = 'autosave/new-full-path-widgets-draft';
 
       findCancelButton().vm.$emit('click');
       await nextTick();
 
-      expect(localStorage.removeItem).toHaveBeenCalledWith(AUTO_SAVE_KEY);
+      // clearDraft internally calls localStorage.removeItem twice per key,
+      // first with actual keyname, and then with `keyname/lockVersion`.
+      // We're only interested in actual call to remove by keyname.
+      expect(localStorage.removeItem).toHaveBeenCalledTimes(4);
+      expect(localStorage.removeItem).toHaveBeenNthCalledWith(1, typeSpecificAutosaveKey);
+      expect(localStorage.removeItem).toHaveBeenNthCalledWith(3, sharedWidgetsAutosaveKey);
       expect(setNewWorkItemCache).toHaveBeenCalled();
     });
 
@@ -217,13 +240,13 @@ describe('Create work item component', () => {
         findCancelButton().vm.$emit('click');
         await nextTick();
 
-        expect(setNewWorkItemCache).toHaveBeenCalledWith(
-          'full-path',
-          expectedWorkItemTypeData.widgetDefinitions,
-          expectedWorkItemTypeData.name,
-          expectedWorkItemTypeData.id,
-          expectedWorkItemTypeData.iconName,
-        );
+        expect(setNewWorkItemCache).toHaveBeenCalledWith({
+          fullPath: 'full-path',
+          widgetDefinitions: expect.any(Array),
+          workItemType: expectedWorkItemTypeData.name,
+          workItemTypeId: expectedWorkItemTypeData.id,
+          workItemTypeIconName: expectedWorkItemTypeData.iconName,
+        });
       },
     );
   });
@@ -263,6 +286,16 @@ describe('Create work item component', () => {
 
       expect(findProjectsSelector().props('currentProjectName')).toBe(namespaceFullName);
       expect(findProjectsSelector().props('selectedProjectFullPath')).toBe('full-path');
+    });
+  });
+
+  describe('Group/project selector', () => {
+    it('renders with the current namespace selected by default', async () => {
+      createComponent({ workItemPlanningViewEnabled: true });
+      await waitForPromises();
+
+      expect(findGroupProjectSelector().exists()).toBe(true);
+      expect(findGroupProjectSelector().props('fullPath')).toBe('full-path');
     });
   });
 
@@ -332,6 +365,43 @@ describe('Create work item component', () => {
       await nextTick();
 
       expect(findSelect().attributes('value')).toBe(mockId);
+    });
+
+    it('sets new work item cache and emits changeType on select', async () => {
+      createComponent({ props: { preselectedWorkItemType: null } });
+      await waitForPromises();
+      const mockId = 'Issue';
+
+      findSelect().vm.$emit('change', mockId);
+      await nextTick();
+
+      expect(setNewWorkItemCache).toHaveBeenCalledWith({
+        fullPath: 'full-path',
+        widgetDefinitions: expect.any(Array),
+        workItemType: mockId,
+        workItemTypeId: 'gid://gitlab/WorkItems::Type/1',
+        workItemTypeIconName: 'issue-type-issue',
+      });
+
+      expect(wrapper.emitted('changeType')).toBeDefined();
+    });
+
+    it('sets selected work item type in localStorage draft', async () => {
+      createComponent({ props: { preselectedWorkItemType: null } });
+      await waitForPromises();
+      const mockId = 'Issue';
+
+      findSelect().vm.$emit('change', mockId);
+      await nextTick();
+
+      expect(updateDraftWorkItemType).toHaveBeenCalledWith({
+        fullPath: 'full-path',
+        workItemType: {
+          id: 'gid://gitlab/WorkItems::Type/1',
+          name: mockId,
+          iconName: 'issue-type-issue',
+        },
+      });
     });
 
     it('hides title if set', async () => {
@@ -791,18 +861,19 @@ describe('Create work item component', () => {
       createComponent();
       await waitForPromises();
 
-      expect(setNewWorkItemCache).toHaveBeenCalledWith(
-        expect.anything(),
-        expect.anything(),
-        expect.anything(),
-        expect.anything(),
-        expect.anything(),
-        'i am a title',
-        `i
+      expect(setNewWorkItemCache).toHaveBeenCalledWith({
+        fullPath: expect.anything(),
+        widgetDefinitions: expect.anything(),
+        workItemType: expect.anything(),
+        workItemTypeId: expect.anything(),
+        workItemTypeIconName: expect.anything(),
+        workItemTitle: 'i am a title',
+        workItemDescription: `i
             am
             a
             description!`,
-      );
+        confidential: false,
+      });
     });
   });
 

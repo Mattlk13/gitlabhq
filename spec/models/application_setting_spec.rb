@@ -76,6 +76,7 @@ RSpec.describe ApplicationSetting, feature_category: :shared, type: :model do
           'developer_can_initial_push' => false
         },
         default_ci_config_path: nil,
+        default_dark_syntax_highlighting_theme: 2,
         default_group_visibility: Settings.gitlab.default_projects_features['visibility_level'],
         default_project_creation: Settings.gitlab['default_project_creation'],
         default_project_visibility: Settings.gitlab.default_projects_features['visibility_level'],
@@ -103,6 +104,7 @@ RSpec.describe ApplicationSetting, feature_category: :shared, type: :model do
         ecdsa_sk_key_restriction: 0,
         ed25519_key_restriction: 0,
         ed25519_sk_key_restriction: 0,
+        enable_language_server_restrictions: false,
         eks_integration_enabled: false,
         email_confirmation_setting: 'off',
         email_restrictions_enabled: false,
@@ -175,6 +177,7 @@ RSpec.describe ApplicationSetting, feature_category: :shared, type: :model do
         max_yaml_depth: 100,
         max_yaml_size_bytes: 2.megabytes,
         members_delete_limit: 60,
+        minimum_language_server_version: '0.1.0',
         minimum_password_length: ApplicationSettingImplementation::DEFAULT_MINIMUM_PASSWORD_LENGTH,
         mirror_available: true,
         notes_create_limit: 300,
@@ -211,6 +214,7 @@ RSpec.describe ApplicationSetting, feature_category: :shared, type: :model do
         recaptcha_enabled: false,
         reindexing_minimum_index_size: 1.gigabyte,
         reindexing_minimum_relative_bloat_size: 0.2,
+        relation_export_batch_size: 50,
         remember_me_enabled: true,
         repository_checks_enabled: true,
         repository_storages_weighted: { 'default' => 100 },
@@ -252,6 +256,11 @@ RSpec.describe ApplicationSetting, feature_category: :shared, type: :model do
         spam_check_endpoint_enabled: false,
         suggest_pipeline_enabled: true,
         terminal_max_session_time: 0,
+        throttle_authenticated_git_http_enabled: false,
+        throttle_authenticated_git_http_requests_per_period:
+          ApplicationSetting::DEFAULT_AUTHENTICATED_GIT_HTTP_LIMIT,
+        throttle_authenticated_git_http_period_in_seconds:
+          ApplicationSetting::DEFAULT_AUTHENTICATED_GIT_HTTP_PERIOD,
         throttle_unauthenticated_git_http_enabled: false,
         throttle_unauthenticated_git_http_period_in_seconds: 3600,
         throttle_unauthenticated_git_http_requests_per_period: 3600,
@@ -590,6 +599,7 @@ RSpec.describe ApplicationSetting, feature_category: :shared, type: :model do
           max_yaml_size_bytes
           namespace_aggregation_schedule_lease_duration_in_seconds
           project_jobs_api_rate_limit
+          relation_export_batch_size
           session_expire_delay
           snippet_size_limit
           throttle_authenticated_api_period_in_seconds
@@ -598,6 +608,8 @@ RSpec.describe ApplicationSetting, feature_category: :shared, type: :model do
           throttle_authenticated_deprecated_api_requests_per_period
           throttle_authenticated_files_api_period_in_seconds
           throttle_authenticated_files_api_requests_per_period
+          throttle_authenticated_git_http_requests_per_period
+          throttle_authenticated_git_http_period_in_seconds
           throttle_authenticated_git_lfs_period_in_seconds
           throttle_authenticated_git_lfs_requests_per_period
           throttle_authenticated_packages_api_period_in_seconds
@@ -910,6 +922,12 @@ RSpec.describe ApplicationSetting, feature_category: :shared, type: :model do
         it { is_expected.to allow_value('token').for(:slack_app_verification_token) }
         it { is_expected.not_to allow_value(nil).for(:slack_app_verification_token) }
       end
+    end
+
+    describe 'import_sources' do
+      let(:valid_import_sources) { Gitlab::ImportSources.values }
+
+      it { is_expected.to allow_value(valid_import_sources).for(:import_sources) }
     end
 
     describe 'default_artifacts_expire_in' do
@@ -1352,11 +1370,15 @@ RSpec.describe ApplicationSetting, feature_category: :shared, type: :model do
           expect(setting).to be_valid
         end
 
-        it 'is encrypted' do
-          setting.asset_proxy_secret_key = 'shared secret'
+        context 'with asset_proxy_url set' do
+          before do
+            setting.asset_proxy_url = 'https://example.com'
+          end
 
-          expect(setting.encrypted_asset_proxy_secret_key).to be_present
-          expect(setting.encrypted_asset_proxy_secret_key).not_to eq(setting.asset_proxy_secret_key)
+          it_behaves_like 'encrypted attribute being migrated to the new encryption framework',
+            :asset_proxy_secret_key do
+            let(:record) { setting }
+          end
         end
       end
 
@@ -1589,6 +1611,15 @@ RSpec.describe ApplicationSetting, feature_category: :shared, type: :model do
       it 'rejects invalid values for default syntax highlighting theme' do
         is_expected.not_to allow_value(nil, 0,
           Gitlab::ColorSchemes.available_schemes.size + 1).for(:default_syntax_highlighting_theme)
+      end
+    end
+
+    context 'for default_dark_syntax_highlighting_theme' do
+      it { is_expected.to allow_value(*Gitlab::ColorSchemes.valid_ids).for(:default_dark_syntax_highlighting_theme) }
+
+      it 'rejects invalid values for default dark syntax highlighting theme' do
+        is_expected.not_to allow_value(nil, 0,
+          Gitlab::ColorSchemes.available_schemes.size + 1).for(:default_dark_syntax_highlighting_theme)
       end
     end
 
@@ -2143,6 +2174,54 @@ RSpec.describe ApplicationSetting, feature_category: :shared, type: :model do
 
       # invalid json
       it { is_expected.not_to allow_value({ foo: 'bar' }).for(:default_branch_protection_defaults) }
+    end
+  end
+
+  describe '#editor_extensions' do
+    it 'sets the correct default values' do
+      expect(setting.enable_language_server_restrictions).to be(false)
+      expect(setting.minimum_language_server_version).to eq('0.1.0')
+    end
+
+    context 'when provided different invalid values' do
+      using RSpec::Parameterized::TableSyntax
+
+      where(:enable_language_server_restrictions, :minimum_language_server_version) do
+        false | nil
+        true | 'invalid semantic version'
+        true | ''
+      end
+
+      with_them do
+        let(:value) do
+          {
+            enable_language_server_restrictions: enable_language_server_restrictions,
+            minimum_language_server_version: minimum_language_server_version
+          }
+        end
+
+        it { is_expected.not_to allow_value(value).for(:editor_extensions) }
+      end
+    end
+
+    context 'when provided different valid values' do
+      using RSpec::Parameterized::TableSyntax
+
+      where(:enable_language_server_restrictions, :minimum_language_server_version) do
+        false | '0.1.0'
+        true | '8.0.0'
+      end
+
+      with_them do
+        let(:value) do
+          {
+            enable_language_server_restrictions: enable_language_server_restrictions,
+            minimum_language_server_version: minimum_language_server_version
+          }
+        end
+
+        it { is_expected.to allow_value(value).for(:editor_extensions) }
+      end
     end
   end
 

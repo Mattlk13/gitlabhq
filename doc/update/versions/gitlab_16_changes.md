@@ -864,7 +864,7 @@ Specific information applies to installations using Geo:
 
 - **Update to GitLab 16.3.5 or later**. This avoids [issue 425971](https://gitlab.com/gitlab-org/gitlab/-/issues/425971) that causes an excessive use of database disk space for GitLab 16.3.3 and 16.3.4.
 
-- A unique index was added to ensure that there’s no duplicate NPM packages in the database. If you have duplicate NPM packages, you need to upgrade to 16.1 first, or you are likely to run into the following error: `PG::UniqueViolation: ERROR:  could not create unique index "idx_packages_on_project_id_name_version_unique_when_npm"`.
+- A unique index was added to ensure that there's no duplicate NPM packages in the database. If you have duplicate NPM packages, you need to upgrade to 16.1 first, or you are likely to run into the following error: `PG::UniqueViolation: ERROR:  could not create unique index "idx_packages_on_project_id_name_version_unique_when_npm"`.
 
 - For Go applications, [`crypto/tls`: verifying certificate chains containing large RSA keys is slow (CVE-2023-29409)](https://github.com/golang/go/issues/61460)
   introduced a hard limit of 8192 bits for RSA keys. In the context of Go applications at GitLab, RSA keys can be configured for:
@@ -875,7 +875,7 @@ Specific information applies to installations using Geo:
   - Workhorse
 
   You should check the size of your RSA keys (`openssl rsa -in <your-key-file> -text -noout | grep "Key:"`)
-  for any of the applications above before
+  for any of the previous applications before
   upgrading.
 
 - A `BackfillCiPipelineVariablesForPipelineIdBigintConversion` background migration is finalized with
@@ -1323,7 +1323,7 @@ To protect against configuration mistakes, temporarily disable repository verifi
    Configure `verification_interval: 0`, and apply with `gitlab-ctl reconfigure`.
 1. To apply the new structure to your configuration:
    1. Replace the `...` with the value from the old key.
-   1. When configuring `storage` to replace `git_data_dirs`, **append `/repositories` to value of `path`** as documented below. If
+   1. When configuring `storage` to replace `git_data_dirs`, **append `/repositories` to value of `path`** as documented in the following script. If
       you don't complete this step, your Git repositories are inaccessible until the configuration is fixed. This
       misconfiguration can cause metadata deletion.
    1. Skip any keys you haven't configured a value for previously.
@@ -1334,7 +1334,7 @@ To protect against configuration mistakes, temporarily disable repository verifi
 1. Recommended, if you're running Gitaly Cluster. Reinstate Praefect [repository verification](../../administration/gitaly/praefect.md#repository-verification)
    by removing `verification_interval: 0`.
 
-The new structure is documented below with the old keys described in a comment above the new keys.
+The new structure is documented in the following script with the old keys described in a comment above the new keys.
 
 {{< alert type="warning" >}}
 
@@ -1408,9 +1408,9 @@ gitaly['configuration'] = {
       },
     ],
   },
-  # Storage could previously be configured through either gitaly['storage'] or 'git_data_dirs'. Migrate
-  # the relevant configuration according to the instructions below.
-  # For 'git_data_dirs', migrate only the 'path' to the gitaly['configuration'] and leave the rest of it untouched.
+  # Storage was previously configured with the gitaly['storage'] or 'git_data_dirs' parameters. Use
+  # the following instructions to migrate. For 'git_data_dirs', migrate only the 'path' to the
+  # gitaly['configuration'] and leave the rest untouched.
   storage: [
     {
       # gitaly['storage'][<index>]['name']
@@ -1513,14 +1513,14 @@ To protect against configuration mistakes, temporarily disable repository verifi
 
 1. When applying the new structure to your configuration:
    - Replace the `...` with the value from the old key.
-   - Disable repository verification using `verification_interval: 0`, as shown below.
+   - Disable repository verification using `verification_interval: 0`, as shown in the following script.
    - Skip any keys you haven't configured a value for previously.
    - Recommended. Include a trailing comma for all hash keys so the hash remains valid when keys are re-ordered or additional keys are added.
 1. Apply the change with `gitlab-ctl reconfigure`.
 1. Test Git repository functionality in GitLab.
 1. Remove the old keys from the configuration once migrated, and then re-run `gitlab-ctl reconfigure`.
 
-The new structure is documented below with the old keys described in a comment above the new keys.
+The new structure is documented in the following script with the old keys described in a comment above the new keys.
 
 ```ruby
 praefect['configuration'] = {
@@ -1557,7 +1557,7 @@ praefect['configuration'] = {
     #
     # IMPORTANT:
     # As part of reconfiguring Praefect, disable this feature.
-    # Read about this above.
+    # Read about this as described previously.
     #
     verification_interval: 0,
   },

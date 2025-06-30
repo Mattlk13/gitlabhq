@@ -15,7 +15,7 @@ title: Maven virtual registry
 
 {{< history >}}
 
-- [Introduced](https://gitlab.com/groups/gitlab-org/-/epics/14137) in GitLab 18.0 [with a flag](../../../../administration/feature_flags.md) named `virtual_registry_maven`. Disabled by default.
+- [Introduced](https://gitlab.com/groups/gitlab-org/-/epics/14137) in GitLab 18.0 [with a flag](../../../../administration/feature_flags/_index.md) named `virtual_registry_maven`. Disabled by default.
 - Feature flag [renamed](https://gitlab.com/gitlab-org/gitlab/-/issues/540276) to `maven_virtual_registry` in GitLab 18.1.
 - [Changed](https://gitlab.com/gitlab-org/gitlab/-/issues/540276) from experiment to beta in GitLab 18.1.
 
@@ -326,7 +326,7 @@ credentials += Credentials("GitLab Virtual Registry", "<host>", "<username>", "<
 - `<username>`: The username.
 - `<token>`: The configured token.
 
-Make sure that the first argument of `Credentials` is `"GitLab Virtual Registry"`. This realm name must _exactly match_ the [Basic Auth realm](https://developer.mozilla.org/en-US/docs/Web/HTTP/Guides/Authentication#www-authenticate_and_proxy-authenticate_headers) sent by the Maven virtual registry.
+Make sure that the first argument of `Credentials` is `"GitLab Virtual Registry"`. This realm name must exactly match the [Basic Auth realm](https://developer.mozilla.org/en-US/docs/Web/HTTP/Guides/Authentication#www-authenticate_and_proxy-authenticate_headers) sent by the Maven virtual registry.
 
 {{< /tab >}}
 

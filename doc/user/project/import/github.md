@@ -1,6 +1,6 @@
 ---
-stage: Foundations
-group: Import and Integrate
+stage: Create
+group: Import
 info: To determine the technical writer assigned to the Stage/Group associated with this page, see https://handbook.gitlab.com/handbook/product/ux/technical-writing/#assignments
 title: Import your project from GitHub to GitLab
 ---
@@ -345,12 +345,12 @@ Sidekiq workers that process the following queues:
 - `github_importer_advance_stage`
 
 For an optimal experience, it's recommended having at least 4 Sidekiq processes (each running a number of threads equal
-to the number of CPU cores) that *only* process these queues. It's also recommended that these processes run on separate
+to the number of CPU cores) that only process these queues. It's also recommended that these processes run on separate
 servers. For 4 servers with 8 cores this means you can import up to 32 objects (for example, issues) in parallel.
 
 Reducing the time spent in cloning a repository can be done by increasing network throughput, CPU capacity, and disk
 performance (by using high performance SSDs, for example) of the disks that store the Git repositories (for your GitLab instance).
-Increasing the number of Sidekiq workers does *not* reduce the time spent cloning repositories.
+Increasing the number of Sidekiq workers does not reduce the time spent cloning repositories.
 
 ### Enable GitHub OAuth using a GitHub Enterprise Cloud OAuth App
 
@@ -398,7 +398,7 @@ The following items of a project are imported:
   - Pull Request description. [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/18052) in GitLab 15.5.
 
   All attachment imports are disabled by default behind
-  `github_importer_attachments_import` [feature flag](../../../administration/feature_flags.md). From GitLab 15.5, can
+  `github_importer_attachments_import` [feature flag](../../../administration/feature_flags/_index.md). From GitLab 15.5, can
   be imported [as an additional item](#select-additional-items-to-import). The feature flag was removed.
 - Pull request review comments.
 - Regular issue and pull request comments.
@@ -410,7 +410,7 @@ The following items of a project are imported:
   GitLab 14.5.
 - Pull request review comments suggestions. [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/340624) in GitLab 14.7.
 - Issue events and pull requests events. [Introduced](https://gitlab.com/groups/gitlab-org/-/epics/7673) in GitLab 15.4
-  with `github_importer_issue_events_import` [feature flag](../../../administration/feature_flags.md) disabled by default.
+  with `github_importer_issue_events_import` [feature flag](../../../administration/feature_flags/_index.md) disabled by default.
   From GitLab 15.5, can be imported [as an additional item](#select-additional-items-to-import). The feature flag was
   removed.
 

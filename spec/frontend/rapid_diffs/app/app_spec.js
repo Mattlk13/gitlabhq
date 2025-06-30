@@ -11,8 +11,9 @@ import { StreamingError } from '~/rapid_diffs/streaming_error';
 import { useDiffsView } from '~/rapid_diffs/stores/diffs_view';
 import { fixWebComponentsStreamingOnSafari } from '~/rapid_diffs/app/safari_fix';
 import { DIFF_FILE_MOUNTED } from '~/rapid_diffs/dom_events';
-import { disableContentVisibilityOnOlderChrome } from '~/rapid_diffs/app/chrome_fix';
 import { useMockIntersectionObserver } from 'helpers/mock_dom_observer';
+import { disableBrokenContentVisibility } from '~/rapid_diffs/app/content_visibility_fix';
+import { useApp } from '~/rapid_diffs/stores/app';
 
 jest.mock('~/lib/graphql');
 jest.mock('~/awards_handler');
@@ -21,7 +22,7 @@ jest.mock('~/rapid_diffs/app/view_settings');
 jest.mock('~/rapid_diffs/app/init_hidden_files_warning');
 jest.mock('~/rapid_diffs/app/init_file_browser');
 jest.mock('~/rapid_diffs/app/safari_fix');
-jest.mock('~/rapid_diffs/app/chrome_fix');
+jest.mock('~/rapid_diffs/app/content_visibility_fix');
 
 describe('Rapid Diffs App', () => {
   const { trigger } = useMockIntersectionObserver();
@@ -34,6 +35,7 @@ describe('Rapid Diffs App', () => {
     diffsStatsEndpoint: '/stats',
     diffFilesEndpoint: '/diff-files-metadata',
     shouldSortMetadataFiles: true,
+    lazy: false,
   };
   const getHiddenFilesWarningTarget = () => document.querySelector('[data-hidden-files-warning]');
   const getDiffFile = () => document.querySelector('diff-file');
@@ -90,18 +92,12 @@ describe('Rapid Diffs App', () => {
     expect(window.customElements.define).toHaveBeenCalledWith('streaming-error', StreamingError);
     expect(initHiddenFilesWarning).toHaveBeenCalledWith(getHiddenFilesWarningTarget());
     expect(fixWebComponentsStreamingOnSafari).toHaveBeenCalled();
-    expect(disableContentVisibilityOnOlderChrome).toHaveBeenCalled();
+    expect(disableBrokenContentVisibility).toHaveBeenCalled();
     expect(initFileBrowser).toHaveBeenCalledWith({
       toggleTarget: document.querySelector('[data-file-browser-toggle]'),
       browserTarget: document.querySelector('[data-file-browser]'),
       appData: app.appData,
     });
-  });
-
-  it('streams remaining diffs', () => {
-    createApp();
-    app.init();
-    app.streamRemainingDiffs();
     expect(useDiffsList().streamRemainingDiffs).toHaveBeenCalledWith(
       '/stream',
       document.querySelector('[data-stream-remaining-diffs]'),
@@ -114,7 +110,6 @@ describe('Rapid Diffs App', () => {
     window.gl.rapidDiffsPreload = preload;
     createApp();
     app.init();
-    app.streamRemainingDiffs();
     expect(useDiffsList().streamRemainingDiffs).toHaveBeenCalledWith(
       '/stream',
       document.querySelector('[data-stream-remaining-diffs]'),
@@ -122,17 +117,10 @@ describe('Rapid Diffs App', () => {
     );
   });
 
-  it('reloads diff files', () => {
-    createApp();
+  it('inits lazy app', () => {
+    // eslint-disable-next-line vue/one-component-per-file
+    createApp({ lazy: true });
     app.init();
-    app.reloadDiffs();
-    expect(useDiffsList().reloadDiffs).toHaveBeenCalledWith('/reload', undefined);
-  });
-
-  it('loads initial diff files', () => {
-    createApp();
-    app.init();
-    app.reloadDiffs(true);
     expect(useDiffsList().reloadDiffs).toHaveBeenCalledWith('/reload', true);
   });
 
@@ -144,9 +132,23 @@ describe('Rapid Diffs App', () => {
   });
 
   it('skips sorting', () => {
+    // eslint-disable-next-line vue/one-component-per-file
     createApp({ shouldSortMetadataFiles: false });
     app.init();
     expect(app.appData.shouldSortMetadataFiles).toBe(false);
+  });
+
+  it('hides the app', () => {
+    createApp();
+    app.hide();
+    expect(useApp().appVisible).toBe(false);
+  });
+
+  it('shows the app', () => {
+    createApp();
+    app.hide();
+    app.show();
+    expect(useApp().appVisible).toBe(true);
   });
 
   it('delegates clicks', () => {

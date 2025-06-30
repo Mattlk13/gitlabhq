@@ -8,7 +8,7 @@ import axios from '~/lib/utils/axios_utils';
 import { VISIBILITY_TYPE_ICON, GROUP_VISIBILITY_TYPE } from '~/visibility_level/constants';
 import { ACCESS_LEVEL_LABELS, ACCESS_LEVEL_NO_ACCESS_INTEGER } from '~/access_level/constants';
 import { __ } from '~/locale';
-import { numberToMetricPrefix } from '~/lib/utils/number_utils';
+import { numberToMetricPrefix, numberToHumanSize, isNumeric } from '~/lib/utils/number_utils';
 import { ACTION_DELETE, ACTION_LEAVE } from '~/vue_shared/components/list_actions/constants';
 import {
   TIMESTAMP_TYPES,
@@ -110,6 +110,25 @@ export default {
     groupMembersCount() {
       return numberToMetricPrefix(this.group.groupMembersCount);
     },
+    showDescendantGroupsCount() {
+      return isNumeric(this.group.descendantGroupsCount);
+    },
+    showProjectsCount() {
+      return isNumeric(this.group.projectsCount);
+    },
+    showGroupMembersCount() {
+      return isNumeric(this.group.groupMembersCount);
+    },
+    storageSize() {
+      if (!this.hasStorageSize) {
+        return null;
+      }
+
+      return numberToHumanSize(this.group.rootStorageStatistics?.storageSize || 0);
+    },
+    hasStorageSize() {
+      return Object.hasOwn(this.group, 'rootStorageStatistics');
+    },
     hasActionDelete() {
       return this.group.availableActions?.includes(ACTION_DELETE);
     },
@@ -121,6 +140,9 @@ export default {
     },
     hasFooterAction() {
       return this.hasActionDelete || this.hasActionLeave;
+    },
+    dataTestid() {
+      return `groups-list-item-${this.group.id}`;
     },
   },
   methods: {
@@ -162,6 +184,7 @@ export default {
     :icon-name="groupIconName"
     :list-item-class="listItemClass"
     :timestamp-type="timestampType"
+    :data-testid="dataTestid"
   >
     <template #children-toggle>
       <slot name="children-toggle"></slot>
@@ -180,19 +203,23 @@ export default {
 
     <template #stats>
       <group-list-item-inactive-badge :group="group" />
+      <gl-badge v-if="hasStorageSize" data-testid="storage-size">{{ storageSize }}</gl-badge>
       <list-item-stat
+        v-if="showDescendantGroupsCount"
         :tooltip-text="$options.i18n.subgroups"
         icon-name="subgroup"
         :stat="descendantGroupsCount"
         data-testid="subgroups-count"
       />
       <list-item-stat
+        v-if="showProjectsCount"
         :tooltip-text="$options.i18n.projects"
         icon-name="project"
         :stat="projectsCount"
         data-testid="projects-count"
       />
       <list-item-stat
+        v-if="showGroupMembersCount"
         :tooltip-text="$options.i18n.directMembers"
         icon-name="users"
         :stat="groupMembersCount"

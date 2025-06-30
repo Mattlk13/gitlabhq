@@ -1,7 +1,7 @@
 import MockAdapter from 'axios-mock-adapter';
 import { setActivePinia, createPinia } from 'pinia';
 import { useAccessTokens } from '~/vue_shared/access_tokens/stores/access_tokens';
-import { update2WeekFromNow } from '~/vue_shared/access_tokens/utils';
+import { update15DaysFromNow } from '~/vue_shared/access_tokens/utils';
 import { createAlert } from '~/alert';
 import { smoothScrollTop } from '~/behaviors/smooth_scroll';
 import axios from '~/lib/utils/axios_utils';
@@ -21,7 +21,7 @@ jest.mock('~/alert', () => ({
 
 jest.mock('~/vue_shared/access_tokens/utils', () => ({
   ...jest.requireActual('~/vue_shared/access_tokens/utils'),
-  update2WeekFromNow: jest.fn(),
+  update15DaysFromNow: jest.fn(),
 }));
 
 jest.mock('~/behaviors/smooth_scroll');
@@ -61,10 +61,13 @@ describe('useAccessTokens store', () => {
     const id = 235;
     const page = 1;
     const sorting = DEFAULT_SORT;
-    const urlCreate = '/api/v4/groups/1/service_accounts/:id/personal_access_tokens';
-    const urlRevoke = '/api/v4/groups/2/service_accounts/:id/personal_access_tokens';
-    const urlRotate = '/api/v4/groups/3/service_accounts/:id/personal_access_tokens';
-    const urlShow = '/api/v4/personal_access_tokens?user_id=:id';
+    const urlCreate =
+      'http://localhost/api/v4/groups/1/service_accounts/:id/personal_access_tokens';
+    const urlRevoke =
+      'http://localhost/api/v4/groups/2/service_accounts/:id/personal_access_tokens';
+    const urlRotate =
+      'http://localhost/api/v4/groups/3/service_accounts/:id/personal_access_tokens';
+    const urlShow = 'http://localhost/api/v4/personal_access_tokens?user_id=:id';
 
     const headers = {
       'X-Page': 1,
@@ -106,7 +109,7 @@ describe('useAccessTokens store', () => {
         expect(mockAxios.history.post[0]).toEqual(
           expect.objectContaining({
             data: '{"name":"dummy-name","description":"dummy-description","expires_at":"2020-01-01","scopes":["dummy-scope"]}',
-            url: '/api/v4/groups/1/service_accounts/235/personal_access_tokens',
+            url: 'http://localhost/api/v4/groups/1/service_accounts/235/personal_access_tokens',
           }),
         );
       });
@@ -184,7 +187,7 @@ describe('useAccessTokens store', () => {
       const tooltipTitle = 'Filter for active tokens';
       beforeEach(() => {
         store.setup({ filters, id, page, sorting, urlShow });
-        update2WeekFromNow.mockReturnValueOnce([{ title, tooltipTitle, filters }]);
+        update15DaysFromNow.mockReturnValueOnce([{ title, tooltipTitle, filters }]);
       });
 
       it('uses correct params in the fetch', async () => {
@@ -193,7 +196,7 @@ describe('useAccessTokens store', () => {
         expect(mockAxios.history.get).toHaveLength(1);
         expect(mockAxios.history.get[0]).toEqual(
           expect.objectContaining({
-            url: '/api/v4/personal_access_tokens?user_id=235',
+            url: 'http://localhost/api/v4/personal_access_tokens?user_id=235',
             params: {
               page: 1,
               sort: 'expires_asc',
@@ -284,7 +287,7 @@ describe('useAccessTokens store', () => {
         expect(mockAxios.history.get).toHaveLength(1);
         expect(mockAxios.history.get[0]).toEqual(
           expect.objectContaining({
-            url: '/api/v4/personal_access_tokens?user_id=235',
+            url: 'http://localhost/api/v4/personal_access_tokens?user_id=235',
             params: {
               page: 1,
               sort: 'expires_asc',
@@ -327,7 +330,7 @@ describe('useAccessTokens store', () => {
         expect(mockAxios.history.delete).toHaveLength(1);
         expect(mockAxios.history.delete[0]).toEqual(
           expect.objectContaining({
-            url: '/api/v4/groups/2/service_accounts/235/personal_access_tokens/1',
+            url: 'http://localhost/api/v4/groups/2/service_accounts/235/personal_access_tokens/1',
           }),
         );
       });
@@ -448,7 +451,7 @@ describe('useAccessTokens store', () => {
         expect(mockAxios.history.post[0]).toEqual(
           expect.objectContaining({
             data: '{"expires_at":"2025-01-01"}',
-            url: '/api/v4/groups/3/service_accounts/235/personal_access_tokens/1/rotate',
+            url: 'http://localhost/api/v4/groups/3/service_accounts/235/personal_access_tokens/1/rotate',
           }),
         );
       });
@@ -560,11 +563,22 @@ describe('useAccessTokens store', () => {
 
     describe('setup', () => {
       it('sets up the store', () => {
-        store.setup({ filters, id, page, sorting, urlCreate, urlRevoke, urlRotate, urlShow });
+        store.setup({
+          filters,
+          id,
+          page,
+          showCreateForm: true,
+          sorting,
+          urlCreate,
+          urlRevoke,
+          urlRotate,
+          urlShow,
+        });
 
         expect(store.filters).toEqual(filters);
         expect(store.id).toBe(id);
         expect(store.page).toBe(page);
+        expect(store.showCreateForm).toBe(true);
         expect(store.sorting).toEqual(sorting);
         expect(store.urlCreate).toBe(urlCreate);
         expect(store.urlRevoke).toBe(urlRevoke);
@@ -575,6 +589,14 @@ describe('useAccessTokens store', () => {
   });
 
   describe('getters', () => {
+    describe('params', () => {
+      it('returns correct value', () => {
+        store.page = 2;
+
+        expect(store.params).toEqual({ page: 2 });
+      });
+    });
+
     describe('sort', () => {
       it('returns correct value', () => {
         expect(store.sort).toBe('expires_asc');
@@ -582,6 +604,18 @@ describe('useAccessTokens store', () => {
         store.sorting = { value: 'name', isAsc: false };
 
         expect(store.sort).toBe('name_desc');
+      });
+    });
+
+    describe('urlParmas', () => {
+      it('return correct value', () => {
+        store.page = 2;
+        store.sorting = { value: 'name', isAsc: false };
+
+        expect(store.urlParams).toEqual({
+          page: 2,
+          sort: 'name_desc',
+        });
       });
     });
   });

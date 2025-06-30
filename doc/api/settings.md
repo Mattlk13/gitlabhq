@@ -162,6 +162,7 @@ Example response:
   "security_txt_content": null,
   "bulk_import_concurrent_pipeline_batch_limit": 25,
   "concurrent_relation_batch_export_limit": 25,
+  "relation_export_batch_size": 50,
   "concurrent_github_import_jobs_limit": 1000,
   "concurrent_bitbucket_import_jobs_limit": 100,
   "concurrent_bitbucket_server_import_jobs_limit": 100,
@@ -362,6 +363,7 @@ Example response:
   "security_txt_content": null,
   "bulk_import_concurrent_pipeline_batch_limit": 25,
   "concurrent_relation_batch_export_limit": 25,
+  "relation_export_batch_size": 50,
   "downstream_pipeline_trigger_limit_per_project_user_sha": 0,
   "concurrent_github_import_jobs_limit": 1000,
   "concurrent_bitbucket_import_jobs_limit": 100,
@@ -463,7 +465,7 @@ to configure other related settings. These requirements are
 | `automatic_purchased_storage_allocation` | boolean          | no                                   | Enabling this permits automatic allocation of purchased storage in a namespace. Relevant only to EE distributions. |
 | `bulk_import_enabled`                    | boolean          | no                                   | Enable migrating GitLab groups by direct transfer. [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/383268) in GitLab 15.8. Setting also [available](../administration/settings/import_and_export_settings.md#enable-migration-of-groups-and-projects-by-direct-transfer) in the **Admin** area. |
 | `bulk_import_max_download_file_size`     | integer          | no                                   | Maximum download file size when importing from source GitLab instances by direct transfer. [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/384976) in GitLab 16.3. |
-| `allow_bypass_placeholder_confirmation`  | boolean          | no                                   | Skip confirmation when reassigning placeholder users. [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/534330) in GitLab 18.0. |
+| `allow_bypass_placeholder_confirmation`  | boolean          | no                                   | Skip confirmation when administrators reassign placeholder users. [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/534330) in GitLab 18.0. |
 | `can_create_group`                       | boolean          | no                                   | Indicates whether users can create top-level groups. [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/367754) in GitLab 15.5. Defaults to `true`. |
 | `check_namespace_plan`                   | boolean          | no                                   | Enabling this makes only licensed EE features available to projects if the project namespace's plan includes the feature or if the project is public. Premium and Ultimate only. |
 | `ci_delete_pipelines_in_seconds_limit_human_readable` | string | no                                | Maximum value that is allowed for configuring pipeline retention. Defaults to `1 year`. |
@@ -500,6 +502,7 @@ to configure other related settings. These requirements are
 | `default_projects_limit`                 | integer          | no                                   | Project limit per user. Default is `100000`. |
 | `default_snippet_visibility`             | string           | no                                   | What visibility level new snippets receive. Can take `private`, `internal` and `public` as a parameter. Default is `private`. |
 | `default_syntax_highlighting_theme`      | integer          | no                                   | Default syntax highlighting theme for users who are new or not signed in. See [IDs of available themes](https://gitlab.com/gitlab-org/gitlab/blob/master/lib/gitlab/themes.rb#L16). |
+| `default_dark_syntax_highlighting_theme` | integer          | no                                   | Default dark mode syntax highlighting theme for users who are new or not signed in. See [IDs of available themes](https://gitlab.com/gitlab-org/gitlab/blob/master/lib/gitlab/themes.rb#L16). |
 | `default_project_deletion_protection`    | boolean          | no                                   | Enable default project deletion protection so only administrators can delete projects. Default is `false`. GitLab Self-Managed, Premium and Ultimate only. |
 | `delete_unconfirmed_users`               | boolean          | no                                   | Specifies whether users who have not confirmed their email should be deleted. Default is `false`. When set to `true`, unconfirmed users are deleted after `unconfirmed_users_delete_after_days` days. [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/352514) in GitLab 16.1. GitLab Self-Managed, Premium and Ultimate only. |
 | `deletion_adjourned_period`              | integer          | no                                   | Number of days to wait before deleting a project or group that is marked for deletion. Value must be between `1` and `90`. Defaults to `7`. |
@@ -545,6 +548,7 @@ to configure other related settings. These requirements are
 | `elasticsearch_url`                        | string         | no                                   | The URL to use for connecting to Elasticsearch. Use a comma-separated list to support cluster (for example, `http://localhost:9200, http://localhost:9201"`). Premium and Ultimate only. |
 | `elasticsearch_username`                   | string         | no                                   | The `username` of your Elasticsearch instance. Premium and Ultimate only. |
 | `elasticsearch_password`                   | string         | no                                   | The password of your Elasticsearch instance. Premium and Ultimate only. |
+| `elasticsearch_prefix`                     | string         | no                                   | Custom prefix for Elasticsearch index names. Defaults to `gitlab`. Must be 1-100 characters, contain only lowercase alphanumeric characters, hyphens, and underscores, and cannot start or end with a hyphen or underscore. Premium and Ultimate only. |
 | `elasticsearch_retry_on_failure`           | integer        | no                                   | Maximum number of possible retries for Elasticsearch search requests. Premium and Ultimate only. |
 | `email_additional_text`                    | string         | no                                   | Additional text added to the bottom of every email for legal/auditing/compliance reasons. Premium and Ultimate only. |
 | `email_author_in_body`                   | boolean          | no                                   | Some email servers do not support overriding the email sender name. Enable this option to include the name of the author of the issue, merge request or comment in the email body instead. |
@@ -614,12 +618,14 @@ to configure other related settings. These requirements are
 | `max_export_size`                        | integer          | no                                   | Maximum export size in MB. 0 for unlimited. Default = 0 (unlimited). |
 | `max_github_response_size_limit`         | integer          | no                                   | Maximum allowed GitHub API response size in MB. 0 for unlimited. |
 | `max_github_response_json_value_count`   | integer          | no                                   | Maximum allowed value count for GitHub API responses. 0 for unlimited. Count is an estimate based on the number of `:` `,` `{` and `[` occurrences in the response. |
+| `max_http_decompressed_size`             | integer          | no                                   | Maximum allowed size in MiB for Gzip-compressed HTTP responses after decompression. 0 for unlimited. |
+| `max_http_response_size_limit`           | integer          | no                                   | Maximum allowed size in MiB for HTTP responses. 0 for unlimited. |
 | `max_import_size`                        | integer          | no                                   | Maximum import size in MB. 0 for unlimited. Default = 0 (unlimited). |
 | `max_import_remote_file_size`            | integer          | no                                   | Maximum remote file size for imports from external object storages. [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/384976) in GitLab 16.3. |
 | `max_login_attempts`                     | integer          | no                                   | Maximum number of sign-in attempts before locking out the user. |
 | `max_pages_size`                         | integer          | no                                   | Maximum size of pages repositories in MB. |
-| `max_personal_access_token_lifetime`     | integer          | no                                   | Maximum allowable lifetime for access tokens in days. When left blank, default value of 365 is applied. When set, value must be 365 or less. When changed, existing access tokens with an expiration date beyond the maximum allowable lifetime are revoked. GitLab Self-Managed, Ultimate only. In GitLab 17.6 or later, the maximum lifetime limit can be [extended to 400 days](https://gitlab.com/gitlab-org/gitlab/-/issues/461901) by enabling a [feature flag](../administration/feature_flags.md) named `buffered_token_expiration_limit`.|
-| `max_ssh_key_lifetime`                   | integer          | no                                   | Maximum allowable lifetime for SSH keys in days. GitLab Self-Managed, Ultimate only. In GitLab 17.6 or later, the maximum lifetime limit can be [extended to 400 days](https://gitlab.com/gitlab-org/gitlab/-/issues/461901) by enabling a [feature flag](../administration/feature_flags.md) named `buffered_token_expiration_limit`.|
+| `max_personal_access_token_lifetime`     | integer          | no                                   | Maximum allowable lifetime for access tokens in days. When left blank, default value of 365 is applied. When set, value must be 365 or less. When changed, existing access tokens with an expiration date beyond the maximum allowable lifetime are revoked. GitLab Self-Managed, Ultimate only. In GitLab 17.6 or later, the maximum lifetime limit can be [extended to 400 days](https://gitlab.com/gitlab-org/gitlab/-/issues/461901) by enabling a [feature flag](../administration/feature_flags/_index.md) named `buffered_token_expiration_limit`.|
+| `max_ssh_key_lifetime`                   | integer          | no                                   | Maximum allowable lifetime for SSH keys in days. GitLab Self-Managed, Ultimate only. In GitLab 17.6 or later, the maximum lifetime limit can be [extended to 400 days](https://gitlab.com/gitlab-org/gitlab/-/issues/461901) by enabling a [feature flag](../administration/feature_flags/_index.md) named `buffered_token_expiration_limit`.|
 | `max_terraform_state_size_bytes`         | integer          | no                                   | Maximum size in bytes of the [Terraform state](../administration/terraform_state.md) files. Set this to 0 for unlimited file size. |
 | `metrics_method_call_threshold`          | integer          | no                                   | A method call is only tracked when it takes longer than the given amount of milliseconds. |
 | `max_number_of_repository_downloads`     | integer          | no                                   | Maximum number of unique repositories a user can download in the specified time period before they are banned. Default: 0, Maximum: 10,000 repositories. [Introduced](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/87980) in GitLab 15.1. GitLab Self-Managed, Ultimate only. |
@@ -688,6 +694,7 @@ to configure other related settings. These requirements are
 | `recaptcha_site_key`                     | string           | required by: `recaptcha_enabled`     | Site key for reCAPTCHA. |
 | `receptive_cluster_agents_enabled`       | boolean          | no                                   | Enable receptive mode for GitLab Agents for Kubernetes. |
 | `receive_max_input_size`                 | integer          | no                                   | Maximum push size (MB). |
+| `relation_export_batch_size`             | integer          | no                                   | The size of each batch when exporting batched relations. [Introduced](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/194607) in GitLab 18.2. |
 | `remember_me_enabled`                    | boolean          | no                                   | Enable [**Remember me** setting](../administration/settings/account_and_limit_settings.md#configure-the-remember-me-option). [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/369133) in GitLab 16.0. |
 | `repository_checks_enabled`              | boolean          | no                                   | GitLab periodically runs `git fsck` in all project and wiki repositories to look for silent disk corruption issues. |
 | `repository_size_limit`                  | integer          | no                                   | Size limit per repository (MB). Premium and Ultimate only. |
@@ -823,7 +830,7 @@ of Git pushes you specify.
 
 The `housekeeping_enabled` field enables or disables
 Git housekeeping. To function properly, this field requires `housekeeping_optimize_repository_period`
-to be set, or _all_ of these values to be set:
+to be set, or all of these values to be set:
 
 - `housekeeping_bitmaps_enabled`
 - `housekeeping_full_repack_period`

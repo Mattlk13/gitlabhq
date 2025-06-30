@@ -219,6 +219,7 @@ module Ci
     scope :created_before, ->(time) { where(arel_table[:created_at].lt(time)) }
     scope :updated_after, ->(time) { where(arel_table[:updated_at].gt(time)) }
     scope :for_project_ids, ->(project_ids) { where(project_id: project_ids) }
+    scope :with_token_present, -> { where.not(token_encrypted: nil) }
 
     add_authentication_token_field :token,
       encrypted: :required,
@@ -495,10 +496,6 @@ module Ci
       end
     end
 
-    def archived?
-      degenerated? || super
-    end
-
     def playable?
       action? && !archived? && (manual? || scheduled? || retryable?)
     end
@@ -745,7 +742,7 @@ module Ci
     end
 
     def ensure_trace_metadata!
-      Ci::BuildTraceMetadata.find_or_upsert_for!(id, partition_id)
+      Ci::BuildTraceMetadata.find_or_upsert_for!(id, partition_id, project_id)
     end
 
     def artifacts_expose_as
@@ -1096,7 +1093,7 @@ module Ci
 
     def debug_mode?
       # perform the check on both sides in case the runner version is old
-      metadata&.debug_trace_enabled? ||
+      debug_trace_enabled? ||
         Gitlab::Utils.to_boolean(variables['CI_DEBUG_SERVICES']&.value, default: false) ||
         Gitlab::Utils.to_boolean(variables['CI_DEBUG_TRACE']&.value, default: false)
     end
@@ -1197,7 +1194,7 @@ module Ci
     strong_memoize_attr :source
 
     def token
-      return encoded_jwt if user&.has_composite_identity? || use_jwt_for_ci_cd_job_token?
+      return encoded_jwt if user&.composite_identity_enforced? || use_jwt_for_ci_cd_job_token?
 
       super
     end

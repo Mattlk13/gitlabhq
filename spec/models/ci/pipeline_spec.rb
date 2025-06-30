@@ -1658,6 +1658,22 @@ RSpec.describe Ci::Pipeline, :mailer, factory_default: :keep, feature_category: 
             is_expected.to be_falsey
           end
         end
+
+        context 'when ref is ambiguous' do
+          let(:merge_request) do
+            create(:merge_request, source_branch: 'ambiguous', source_project: project, target_branch: 'master', target_project: project)
+          end
+
+          before do
+            repository = project.repository
+            repository.add_branch(user, 'ambiguous', 'feature')
+            repository.add_tag(user, 'ambiguous', 'master')
+          end
+
+          it 'returns false if source or target branch ref is ambiguous' do
+            is_expected.to be_falsey
+          end
+        end
       end
 
       context 'when protect_merge_request_pipelines setting is disabled' do
@@ -1667,19 +1683,6 @@ RSpec.describe Ci::Pipeline, :mailer, factory_default: :keep, feature_category: 
 
         it 'returns false even if both the source branch ref and target branch ref is protected' do
           expect(project).not_to receive(:protected_for?)
-
-          is_expected.to be_falsey
-        end
-      end
-
-      context 'when the protect_merge_request_pipelines feature flag is disabled' do
-        before do
-          stub_feature_flags(protect_merge_request_pipelines: false)
-          project.project_setting.update!(protect_merge_request_pipelines: true)
-        end
-
-        it 'checks if the branch ref is protected' do
-          expect(pipeline.project).to receive(:protected_for?).with("refs/heads/#{pipeline.ref}").and_return(false)
 
           is_expected.to be_falsey
         end
@@ -3123,6 +3126,35 @@ RSpec.describe Ci::Pipeline, :mailer, factory_default: :keep, feature_category: 
 
         it 'returns an empty relation whenno refs are specified' do
           expect(latest_successful_for_refs).to be_empty
+        end
+      end
+    end
+
+    describe '.latest_pipelines_for_ref_by_statuses' do
+      let_it_be(:ref1_success_old) { create(:ci_empty_pipeline, status: :success, ref: 'first_ref') }
+      let_it_be(:ref1_success) { create(:ci_empty_pipeline, status: :success, ref: 'first_ref') }
+      let_it_be(:ref1_failed) { create(:ci_empty_pipeline, status: :failed, ref: 'first_ref') }
+      let_it_be(:ref1_blocked) { create(:ci_empty_pipeline, status: :manual, ref: 'first_ref') }
+      let_it_be(:ref2_success) { create(:ci_empty_pipeline, status: :success, ref: 'second_ref') }
+
+      context 'when only a ref is passed in' do
+        subject(:latest_pipelines_for_ref_by_statuses) { described_class.latest_pipelines_for_ref_by_statuses(ref) }
+
+        let(:ref) { 'first_ref' }
+
+        it 'returns latest pipelines for all statuses by default' do
+          expect(latest_pipelines_for_ref_by_statuses).to match_array([ref1_success, ref1_failed, ref1_blocked])
+        end
+      end
+
+      context 'when a ref and status are passed in' do
+        subject(:latest_pipelines_for_ref_by_statuses) { described_class.latest_pipelines_for_ref_by_statuses(ref, statuses) }
+
+        let(:ref) { 'first_ref' }
+        let(:statuses) { %w[success failed] }
+
+        it 'returns latest pipelines for ref and statuses' do
+          expect(latest_pipelines_for_ref_by_statuses).to match_array([ref1_success, ref1_failed])
         end
       end
     end
@@ -6428,7 +6460,7 @@ RSpec.describe Ci::Pipeline, :mailer, factory_default: :keep, feature_category: 
   end
 
   describe '#archived?' do
-    subject { build_stubbed(:ci_pipeline, created_at: 1.day.ago, project: project) }
+    subject(:pipeline) { build_stubbed(:ci_pipeline, created_at: 1.day.ago, project: project) }
 
     context 'when archive_builds_in is set' do
       before do
@@ -6436,6 +6468,23 @@ RSpec.describe Ci::Pipeline, :mailer, factory_default: :keep, feature_category: 
       end
 
       it { is_expected.to be_archived }
+
+      it 'does not log by default' do
+        expect(::Gitlab::Ci::Pipeline::AccessLogger).not_to receive(:new)
+
+        expect(pipeline.archived?).to be_truthy
+      end
+
+      context 'when logging is requested' do
+        it 'calls access logger' do
+          expect(::Gitlab::Ci::Pipeline::AccessLogger)
+            .to receive(:new)
+            .with(pipeline: pipeline, archived: true)
+            .and_call_original
+
+          expect(pipeline.archived?(log: true)).to be_truthy
+        end
+      end
     end
 
     context 'when archive_builds_in is not set' do
@@ -6444,6 +6493,88 @@ RSpec.describe Ci::Pipeline, :mailer, factory_default: :keep, feature_category: 
       end
 
       it { is_expected.not_to be_archived }
+
+      context 'when logging is requested' do
+        it 'calls access logger' do
+          expect(::Gitlab::Ci::Pipeline::AccessLogger)
+            .to receive(:new)
+            .with(pipeline: pipeline, archived: false)
+            .and_call_original
+
+          expect(pipeline.archived?(log: true)).to be_falsey
+        end
+      end
+    end
+  end
+
+  describe '.not_archived' do
+    let_it_be(:old_pipeline) { create(:ci_pipeline, created_at: 3.months.ago, project: project) }
+    let_it_be(:fresh_pipeline) { create(:ci_pipeline, project: project) }
+
+    subject { described_class.not_archived }
+
+    context 'when archive_builds_in is set' do
+      before do
+        stub_application_setting(archive_builds_in_seconds: 1.week)
+      end
+
+      it { is_expected.to match_array([fresh_pipeline]) }
+    end
+
+    context 'when archive_builds_in is not set' do
+      before do
+        stub_application_setting(archive_builds_in_seconds: nil)
+      end
+
+      it { is_expected.to match_array([old_pipeline, fresh_pipeline]) }
+    end
+  end
+
+  describe '#queued_duration', :freeze_time do
+    it 'returns nil when pipeline has not started' do
+      # Build a pipeline created 1 hour ago with no start or finish time
+      pipeline = build(:ci_pipeline, created_at: 1.hour.ago, started_at: nil, finished_at: nil)
+      # We expect queued_duration to return nil because there is no start or finish info
+      expect(pipeline.queued_duration).to be_nil
+    end
+
+    it 'returns the correct duration when the pipeline has started but not finished' do
+      # Simulate a pipeline that was created 1 hour ago and started 30 minutes ago
+      created_time = 1.hour.ago
+      start_time = 30.minutes.ago
+      pipeline = build(:ci_pipeline, created_at: created_time, started_at: start_time)
+      expected_duration = (start_time - created_time).to_i
+      # Expect the queued_duration to be within 1 second of the actual time between creation and start
+      expect(pipeline.queued_duration).to eq(expected_duration)
+    end
+
+    it 'returns duration when pipeline has finished but not started' do
+      # Simulate a pipeline that was created 2 hours ago and finished 30 minutes ago without starting
+      created_time = 2.hours.ago
+      finish_time = 30.minutes.ago
+      pipeline = build(:ci_pipeline, created_at: created_time, started_at: nil, finished_at: finish_time)
+      expected_duration = (finish_time - created_time).to_i
+      # Expect queued_duration to be the time from creation to finish( since it never started within 1 second)
+      expect(pipeline.queued_duration).to eq(expected_duration)
+    end
+
+    it 'returns the correct duration based on start time when pipeline has started and finished' do
+      # Simulate a pipeline that was created 2 hours ago, started 1 hour ago, and finished 30 minutes ago
+      created_time = 2.hours.ago
+      start_time = 1.hour.ago
+      finish_time = 30.minutes.ago
+      pipeline = build(:ci_pipeline, created_at: created_time, started_at: start_time, finished_at: finish_time)
+      expected_duration = (start_time - created_time).to_i
+      # Expect queued_duration to be the time between creation and start, ignoring finish time
+      expect(pipeline.queued_duration).to eq(expected_duration)
+    end
+
+    it 'returns nil queued duration when created and finished at the same time' do
+      # Simulate a pipeline that was created and finished instantly
+      now = Time.current
+      pipeline = build(:ci_pipeline, created_at: now, finished_at: now, started_at: nil)
+      # Expect the queued duration to be nil
+      expect(pipeline.queued_duration).to be_nil
     end
   end
 end

@@ -1,16 +1,20 @@
 ---
 stage: AI-powered
-group: AI Model Validation
+group: AI Framework
 info: To determine the technical writer assigned to the Stage/Group associated with this page, see https://handbook.gitlab.com/handbook/product/ux/technical-writing/#assignments
 title: AI gateway
 ---
 
 The AI gateway is a standalone service that gives access to AI-native GitLab Duo features.
 
-GitLab operates an instance of AI gateway that is used by GitLab Self-Managed, GitLab Dedicated, and GitLab.com through the Cloud Connector.
+GitLab operates an instance of the AI gateway that is used by GitLab.com and GitLab
+Dedicated through the [Cloud Connector](../../development/cloud_connector/_index.md).
 
-On GitLab Self-Managed, this GitLab instance of AI gateway applies regardless of whether you are using the
-cloud-based AI gateway hosted by GitLab, or using [GitLab Duo Self-Hosted](../../administration/gitlab_duo_self_hosted/_index.md) to self-host the AI gateway.
+On GitLab Self-Managed, you can use either of the following:
+
+- The GitLab-hosted AI gateway instance, based in the cloud.
+- The self-hosted AI gateway instance with
+  [GitLab Duo Self-Hosted](../../administration/gitlab_duo_self_hosted/_index.md).
 
 This page describes where the AI gateway is deployed, and answers questions about region selection, data routing, and data sovereignty.
 
@@ -28,7 +32,7 @@ The IDE communicates directly with the AI gateway by default, bypassing the GitL
 
 ### Automatic routing
 
-GitLab leverages Cloudflare and *Google Cloud Platform* (GCP) load balancers to route AI
+GitLab leverages Cloudflare and Google Cloud Platform (GCP) load balancers to route AI
 gateway requests to the nearest available deployment automatically. This routing
 mechanism prioritizes low latency and efficient processing of user requests.
 
@@ -64,13 +68,15 @@ As of the last update (2023-11-21), GitLab deploys the AI gateway in the followi
 - Europe (`europe-west2`, `europe-west3`, `europe-west9`)
 - Asia Pacific (`asia-northeast1`, `asia-northeast3`)
 
-Deployment regions may change frequently. For the most current information, always check the configuration file linked above.
+Deployment regions may change frequently. For the most current information, always check the
+previously linked configuration file.
 
 The exact location of the LLM models used by the AI gateway is determined by the third-party model providers. Currently, there is no guarantee that the models reside in the same geographical regions as the AI gateway deployments. This implies that data may flow back to the US or other regions where the model provider operates, even if the AI gateway processes the initial request in a different region.
 
 ### Data Flow and LLM model locations
 
-GitLab is working closely with LLM providers to understand their regional data handling practices fully. Currently, there might be instances where data is transmitted to regions outside the one closest to the user due to the factors mentioned above.
+GitLab is working closely with LLM providers to understand their regional data handling practices fully.
+Currently, there might be instances where data is transmitted to regions outside the one closest to the user due to the factors mentioned in the previous section.
 
 ### Future enhancements
 

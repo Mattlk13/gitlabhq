@@ -32,17 +32,6 @@
     - !reference [.default-utils-before_script, before_script]
     - source scripts/prepare_build.sh
 
-# Requirements for this after_script:
-#
-#   - Ruby
-#   - From the gitlab-org/gitlab project:
-#     - scripts/utils.sh
-#     - tooling/lib/tooling/glci/failure_analyzer.rb
-.failure_category_after_script:
-  after_script:
-    - source scripts/utils.sh
-    - execute_failure_analyzer
-
 .repo-from-artifacts:
   variables:
     GIT_STRATEGY: "${CI_FETCH_REPO_GIT_STRATEGY}"
@@ -458,6 +447,24 @@
   services:
     - !reference [.db-services-with-auto-explain, services]
     - !reference [.es8-services, services]
+
+.es9-services:
+  services:
+    - name: elasticsearch:9.0.1
+
+.es9-variables:
+  variables:
+    ES_SETTING_DISCOVERY_TYPE: "single-node"
+    ES_SETTING_XPACK_SECURITY_ENABLED: "false"
+    ES_SETTING_CLUSTER_ROUTING_ALLOCATION_DISK_THRESHOLD__ENABLED: "false"
+
+.use-pg16-es9-ee:
+  extends:
+    - .use-pg16
+    - .es9-variables
+  services:
+    - !reference [.db-services-with-auto-explain, services]
+    - !reference [.es9-services, services]
 
 .opensearch-latest-services:
   services:

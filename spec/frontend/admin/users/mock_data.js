@@ -42,12 +42,13 @@ export const paths = {
   unban: '/admin/users/id/unban',
 };
 
-export const createGroupCountResponse = (groupCounts) => ({
+export const createMembershipCountResponse = (data) => ({
   data: {
     users: {
-      nodes: groupCounts.map(({ id, groupCount }) => ({
+      nodes: data.map(({ id, groupCount, projectCount }) => ({
         id: `gid://gitlab/User/${id}`,
         groupCount,
+        projectCount,
         __typename: 'UserCore',
       })),
       __typename: 'UserCoreConnection',
@@ -112,10 +113,16 @@ export const expectedAccessLevelToken = {
   token: GlFilteredSearchToken,
   operators: OPERATORS_IS,
   unique: true,
-  options: [
-    { value: 'admins', title: 'Administrator' },
-    { value: 'external', title: 'External' },
-  ],
+  options: IS_EE
+    ? [
+        { value: 'admins', title: 'Administrator' },
+        { value: 'auditors', title: 'Auditor' },
+        { value: 'external', title: 'External' },
+      ]
+    : [
+        { value: 'admins', title: 'Administrator' },
+        { value: 'external', title: 'External' },
+      ],
 };
 
 export const expectedTokens = [

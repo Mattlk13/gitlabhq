@@ -1,6 +1,6 @@
 ---
-stage: Foundations
-group: Import and Integrate
+stage: Plan
+group: Project Management
 info: To determine the technical writer assigned to the Stage/Group associated with this page, see https://handbook.gitlab.com/handbook/product/ux/technical-writing/#assignments
 title: GitLab for Jira Cloud app
 ---
@@ -134,7 +134,7 @@ After you link to a GitLab group:
 
 {{< history >}}
 
-- [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/460663) in GitLab 17.2 [with a flag](../../administration/feature_flags.md) named `enable_jira_connect_configuration`. Disabled by default.
+- [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/460663) in GitLab 17.2 [with a flag](../../administration/feature_flags/_index.md) named `enable_jira_connect_configuration`. Disabled by default.
 - [Generally available](https://gitlab.com/gitlab-org/gitlab/-/issues/467117) in GitLab 17.4. Feature flag `enable_jira_connect_configuration` removed.
 
 {{< /history >}}

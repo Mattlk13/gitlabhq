@@ -507,7 +507,7 @@ Prerequisites:
 - You must have the Owner role for the group that the enterprise user belongs to.
 - Group SSO must be enabled.
 
-You can disable password authentication for all [enterprise users](../../enterprise_user/_index.md) in a group. This also applies to enterprise users who are administrators of the group. Configuring this setting stops enterprise users from changing, resetting, or authenticating with their password. Instead, these users can authenticate with:
+You can disable password authentication for all [enterprise users](../../enterprise_user/_index.md) of the group. This also applies to enterprise users who are administrators of the group. Configuring this setting stops enterprise users from changing, resetting, or authenticating with their password. Instead, these users can authenticate with:
 
 - The group SAML IdP for the GitLab web UI.
 - A personal access token for the GitLab API and Git with HTTP Basic Authentication unless the group has [disabled personal access tokens for enterprise users](../../profile/personal_access_tokens.md#disable-personal-access-tokens-for-enterprise-users).
@@ -566,7 +566,7 @@ For example, to unlink the `MyOrg` account:
 
 {{< history >}}
 
-- [Improved](https://gitlab.com/gitlab-org/gitlab/-/issues/215155) in GitLab 15.5 [with a flag](../../../administration/feature_flags.md) named `transparent_sso_enforcement` to include transparent enforcement even when SSO enforcement is not enabled. Disabled on GitLab.com.
+- [Improved](https://gitlab.com/gitlab-org/gitlab/-/issues/215155) in GitLab 15.5 [with a flag](../../../administration/feature_flags/_index.md) named `transparent_sso_enforcement` to include transparent enforcement even when SSO enforcement is not enabled. Disabled on GitLab.com.
 - [Improved](https://gitlab.com/gitlab-org/gitlab/-/issues/375788) in GitLab 15.8 by enabling transparent SSO by default on GitLab.com.
 - [Generally available](https://gitlab.com/gitlab-org/gitlab/-/issues/389562) in GitLab 15.10. Feature flag `transparent_sso_enforcement` removed.
 
@@ -622,9 +622,10 @@ When the **Enforce SSO-only authentication for web activity for this group** opt
     hidden if your SSO session has expired.
     [Issue 414475](https://gitlab.com/gitlab-org/gitlab/-/issues/414475) proposes to change this
     behavior so that issues are visible.
-  - SSO is not enforced when viewing lists of merge requests where you are the
-    assignee or your review is requested. You can see merge requests even if
+  - SSO is not enforced when viewing merge requests where you are the
+    assignee or reviewer. You can see merge requests even if
     your SSO session has expired.
+  - SSO is not enforced when viewing snippets for private projects where you have at least the Guest role.
 
 SSO enforcement for web activity has the following effects when enabled:
 

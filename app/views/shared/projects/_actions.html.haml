@@ -1,4 +1,4 @@
-- if project.delayed_deletion_ready? && project.self_deletion_scheduled?
+- if project.self_deletion_scheduled?
   = render Pajamas::ButtonComponent.new(category: :tertiary,
     href: project_restore_path(project),
     method: :post,

@@ -113,7 +113,7 @@ Before starting the flow, generate the `STATE`, the `CODE_VERIFIER` and the `COD
   - The SHA256 hash must be in binary format before encoding.
   - In Ruby, you can set that up with `Base64.urlsafe_encode64(Digest::SHA256.digest(CODE_VERIFIER), padding: false)`.
   - For reference, a `CODE_VERIFIER` string of `ks02i3jdikdo2k0dkfodf3m39rjfjsdk0wk349rj3jrhf` when hashed
-    and encoded using the Ruby snippet above produces a `CODE_CHALLENGE` string
+    and encoded using the previous Ruby snippet produces a `CODE_CHALLENGE` string
     of `2i0WFA-0AerkjQm4X4oDEhqA17QIAKNjXpagHBXmO_U`.
 
 1. Request authorization code. To do that, you should redirect the user to the
@@ -276,7 +276,7 @@ You can now make requests to the API with the access token returned.
 
 {{< history >}}
 
-- [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/332682) in GitLab 17.2 [with a flag](../administration/feature_flags.md) named `oauth2_device_grant_flow`.
+- [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/332682) in GitLab 17.2 [with a flag](../administration/feature_flags/_index.md) named `oauth2_device_grant_flow`.
 - [Enabled](https://gitlab.com/gitlab-org/gitlab/-/issues/468479) by default in 17.3.
 - [Generally available](https://gitlab.com/gitlab-org/gitlab/-/issues/505557) in GitLab 17.9. Feature flag `oauth2_device_grant_flow` removed.
 
@@ -580,5 +580,7 @@ registries, as they:
 - Do not allow users to authenticate to:
   - The GitLab [container registry](../user/packages/container_registry/authenticate_with_container_registry.md).
   - Packages listed in the GitLab [Package registry](../user/packages/package_registry/_index.md).
+  - [Virtual registries](../user/packages/virtual_registry/_index.md).
 - Allow users to get, list, and delete registries through
   the [container registry API](container_registry.md).
+- Allow users to get, list, and delete registry objects through the [Maven virtual registry API](maven_virtual_registries.md).

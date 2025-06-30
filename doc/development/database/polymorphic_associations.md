@@ -1,11 +1,11 @@
 ---
 stage: Data Access
 group: Database Frameworks
-info: Any user with at least the Maintainer role can merge updates to this content. For details, see https://docs.gitlab.com/ee/development/development_processes.html#development-guidelines-review.
+info: Any user with at least the Maintainer role can merge updates to this content. For details, see https://docs.gitlab.com/development/development_processes/#development-guidelines-review.
 title: Polymorphic Associations
 ---
 
-**Summary:** always use separate tables instead of polymorphic associations.
+**Summary**: always use separate tables instead of polymorphic associations.
 
 Rails makes it possible to define so called "polymorphic associations". This
 usually works by adding two columns to a table: a target type column, and a

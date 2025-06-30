@@ -15,7 +15,7 @@ title: AI impact analytics
 
 {{< history >}}
 
-- [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/443696) in GitLab 16.11 [with a flag](../../administration/feature_flags.md) named `ai_impact_analytics_dashboard`. Disabled by default.
+- [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/443696) in GitLab 16.11 [with a flag](../../administration/feature_flags/_index.md) named `ai_impact_analytics_dashboard`. Disabled by default.
 - [Generally available](https://gitlab.com/gitlab-org/gitlab/-/issues/451873) in GitLab 17.2. Feature flag `ai_impact_analytics_dashboard` removed.
 - Changed to require GitLab Duo add-on in GitLab 17.6.
 
@@ -54,26 +54,37 @@ It is calculated as the number of accepted code suggestions divided by the total
 - **Duo Chat: Unique users**: Percentage of users that engage with GitLab Duo Chat every month.
 It is calculated as the number of monthly unique GitLab Duo Chat users divided by the total GitLab Duo assigned users.
 
+{{< alert type="note" >}}
+
+For tracking Code Suggestions events, GitLab collects data only from code editor extensions.
+[Epic 14203](https://gitlab.com/groups/gitlab-org/-/epics/14203) proposes support for the Web IDE as well.
+
+{{< /alert >}}
+
 ## Metric trends
 
 The **Metric trends** table displays metrics for the last six months, with monthly values, percentage changes in the past six months, and trend sparklines.
 
 ### Lifecycle metrics
 
-- [**Cycle time**](../group/value_stream_analytics/_index.md#lifecycle-metrics)
 - [**Lead time**](../group/value_stream_analytics/_index.md#lifecycle-metrics)
+- [**Median time to merge**](merge_request_analytics.md)
 - [**Deployment frequency**](dora_metrics.md#deployment-frequency)
-- [**Change failure rate**](dora_metrics.md#change-failure-rate)
+- [**Merge request throughput**](merge_request_analytics.md#view-the-number-of-merge-requests-in-a-date-range)
 - [**Critical vulnerabilities over time**](../application_security/vulnerability_report/_index.md)
+- [**Contributor count**](../profile/contributions_calendar.md#user-contribution-events)
 
 ### AI usage metrics
 
 **Code Suggestions usage**: Monthly user engagement with AI Code Suggestions.
 
-The month-over-month comparison of the AI Usage unique users rate gives a more accurate indication of this metric,
+On GitLab.com, data updates every fives minutes.
+GitLab counts Code Suggestions usage only if the user has pushed code to the project in the current month.
+
+The month-over-month comparison of the AI Usage unique users rate gives a more accurate indication Code Suggestion usage,
 because it eliminates factors such as developer experience level and project type or complexity.
 
-The baseline for the AI Usage trend is the total number of code contributors, not just users with GitLab Duo seats.
+The baseline for the AI Usage trend is the total number of code contributors, not only users with GitLab Duo seats.
 This baseline gives a more accurate representation of AI usage by team members.
 
 To analyze the performance of teams that use AI versus teams that don't, you can create a custom
@@ -92,7 +103,7 @@ For more information, see [epic 12978](https://gitlab.com/groups/gitlab-org/-/ep
 Prerequisites:
 
 - [Code Suggestions](../project/repository/code_suggestions/_index.md) must be enabled.
-- [ClickHouse for contribution analytics](../group/contribution_analytics/_index.md#contribution-analytics-with-clickhouse) must be configured.
+- For GitLab Self-Managed, [ClickHouse for contribution analytics](../group/contribution_analytics/_index.md#contribution-analytics-with-clickhouse) must be configured.
 
 1. On the left sidebar, select **Search or go to** and find your project or group.
 1. Select **Analyze > Analytics Dashboards**.

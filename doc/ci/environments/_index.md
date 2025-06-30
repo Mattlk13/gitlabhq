@@ -54,7 +54,7 @@ There are a few ways to view a list of environments for a given project:
 
 {{< history >}}
 
-- [Changed](https://gitlab.com/gitlab-org/gitlab/-/issues/337417) to persist arbitrary URLs in GitLab 15.2 [with a flag](../../administration/feature_flags.md) named `soft_validation_on_external_url`. Disabled by default.
+- [Changed](https://gitlab.com/gitlab-org/gitlab/-/issues/337417) to persist arbitrary URLs in GitLab 15.2 [with a flag](../../administration/feature_flags/_index.md) named `soft_validation_on_external_url`. Disabled by default.
 - [Generally available](https://gitlab.com/gitlab-org/gitlab/-/issues/337417) in GitLab 15.3. [Feature flag `soft_validation_on_external_url`](https://gitlab.com/gitlab-org/gitlab/-/issues/367206) removed.
 
 {{< /history >}}
@@ -405,6 +405,8 @@ deploy_review:
 Stopping an environment means its deployments are not accessible on the target server. You must stop
 an environment before it can be deleted.
 
+When using the `on_stop` action to stop an environment, the job runs if it's not [archived](../../administration/settings/continuous_integration.md#archive-pipelines).
+
 ### Stop an environment by using the UI
 
 {{< alert type="note" >}}
@@ -598,7 +600,7 @@ manually.
 
 {{< history >}}
 
-- [Introduced](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/108616) in GitLab 15.8 [with a flag](../../administration/feature_flags.md) named `stop_stale_environments`. Disabled by default.
+- [Introduced](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/108616) in GitLab 15.8 [with a flag](../../administration/feature_flags/_index.md) named `stop_stale_environments`. Disabled by default.
 - [Generally available](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/112098) in GitLab 15.10. Feature flag `stop_stale_environments` removed.
 
 {{< /history >}}
@@ -631,7 +633,7 @@ Protected environments are ignored and not stopped.
 
 You can define a stop job for the environment with an [`on_stop` action](../yaml/_index.md#environmenton_stop) in the environment's deploy job.
 
-The stop jobs of finished deployments in the latest finished pipeline are run when an environment is stopped. A deployment or pipeline is _finished_ if it has the successful, canceled, or failed status.
+The stop jobs of finished deployments in the latest finished pipeline are run when an environment is stopped. A deployment or pipeline is finished if it has the successful, canceled, or failed status.
 
 Prerequisites:
 

@@ -12,6 +12,10 @@ module Gitlab
         tracker.enabled?
       end
 
+      def frontend_connect_directly_to_snowplow_collector?
+        Gitlab::CurrentSettings.snowplow_enabled? && !Gitlab::CurrentSettings.snowplow_collector_hostname.blank?
+      end
+
       def micro_verification_enabled?
         Gitlab::Utils.to_boolean(ENV['VERIFY_TRACKING'], default: false)
       end
@@ -24,7 +28,6 @@ module Gitlab
         contexts = [
           Tracking::StandardContext.new(
             namespace: namespace,
-            plan_name: namespace&.actual_plan_name,
             project_id: project_id,
             user: user,
             **extra).to_context, *context

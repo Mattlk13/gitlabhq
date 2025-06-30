@@ -1,7 +1,7 @@
 ---
 stage: none
 group: unassigned
-info: Any user with at least the Maintainer role can merge updates to this content. For details, see https://docs.gitlab.com/ee/development/development_processes.html#development-guidelines-review.
+info: Any user with at least the Maintainer role can merge updates to this content. For details, see https://docs.gitlab.com/development/development_processes/#development-guidelines-review.
 title: Using the `TokenAuthenticatable` concern
 ---
 
@@ -50,6 +50,12 @@ end
 {{< alert type="note" >}}
 
 By default, the `SHA256` digest of the tokens are stored in the database, if no storage strategy is chosen.
+
+{{< /alert >}}
+
+{{< alert type="note" >}}
+
+The `token_field_encrypted` column should always be indexed, because it is used to perform uniqueness checks and lookups on the token.
 
 {{< /alert >}}
 

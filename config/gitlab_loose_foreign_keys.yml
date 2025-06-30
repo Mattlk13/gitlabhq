@@ -35,6 +35,10 @@ approval_merge_request_rules:
   - table: approval_policy_rules
     column: approval_policy_rule_id
     on_delete: async_nullify
+chat_names:
+  - table: users
+    column: user_id
+    on_delete: async_delete
 ci_build_needs:
   - table: projects
     column: project_id
@@ -183,6 +187,9 @@ ci_runners:
   - table: users
     column: creator_id
     on_delete: async_nullify
+  - table: organizations
+    column: organization_id
+    on_delete: async_delete
 ci_running_builds:
   - table: projects
     column: project_id
@@ -323,7 +330,7 @@ dependency_list_exports:
     column: organization_id
     on_delete: async_delete
 deployment_approvals:
-  - table: ci_builds
+  - table: p_ci_builds
     column: ci_build_id
     on_delete: async_delete
 deployment_clusters:
@@ -439,6 +446,19 @@ organization_users:
   - table: users
     column: user_id
     on_delete: async_delete
+p_ai_active_context_code_enabled_namespaces:
+  - table: ai_active_context_connections
+    column: connection_id
+    on_delete: async_delete
+p_ai_active_context_code_repositories:
+  - table: projects
+    column: project_id
+    on_delete: update_column_to
+    target_column: state
+    target_value: 240
+  - table: p_ai_active_context_code_enabled_namespaces
+    column: enabled_namespace_id
+    on_delete: async_nullify
 p_ci_build_names:
   - table: projects
     column: project_id
@@ -497,7 +517,8 @@ p_ci_pipelines:
     on_delete: async_delete
   - table: ci_triggers
     column: trigger_id
-    on_delete: async_delete
+    on_delete: async_nullify
+    delete_limit: 50
 p_ci_runner_machine_builds:
   - table: ci_runner_machines
     column: runner_machine_id
@@ -637,6 +658,10 @@ security_scans:
 security_trainings:
   - table: projects
     column: project_id
+    on_delete: async_delete
+sent_notifications_7abbf02cb6:
+  - table: namespaces
+    column: namespace_id
     on_delete: async_delete
 snippets:
   - table: organizations

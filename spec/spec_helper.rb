@@ -224,6 +224,7 @@ RSpec.configure do |config|
   config.include_context 'when rendered has no HTML escapes', type: :view
   config.include_context 'with STI disabled', type: :model
 
+  include StubCurrentOrganization
   include StubFeatureFlags
   include StubSnowplow
   include StubMember
@@ -336,9 +337,13 @@ RSpec.configure do |config|
       # we need the `cleanup_data_source_work_item_data` disabled by default to prevent deletion of some data
       stub_feature_flags(cleanup_data_source_work_item_data: false)
 
-      # Since we are very early in the Vue migration, there isn't much value in testing when the feature flag is enabled
-      # Please see https://gitlab.com/gitlab-org/gitlab/-/issues/523493 for tracking revisiting this.
-      stub_feature_flags(your_work_groups_vue: false)
+      # Since we are very early in development of this feature, it might cause unexpected behaviors when the flag is enabled
+      # Please see https://gitlab.com/groups/gitlab-org/-/epics/17781 for tracking the progress.
+      stub_feature_flags(repository_file_tree_browser: false)
+
+      # Since we are very early in development of this feature, it might cause unexpected behaviors when the flag is enabled
+      # Please see https://gitlab.com/groups/gitlab-org/-/epics/17482 for tracking the progress.
+      stub_feature_flags(project_commits_refactor: false)
 
       # New issue page can cause tests to fail if they link to issue or issue list page
       # Default false while we make it compatible
@@ -347,6 +352,10 @@ RSpec.configure do |config|
       # New approval rules cause tests to fail
       # Default false while we make them compatible
       stub_feature_flags(v2_approval_rules: false)
+
+      # New personal homepage is still a WIP and not functional.
+      stub_feature_flags(personal_homepage: false)
+
     else
       unstub_all_feature_flags
     end
@@ -539,6 +548,14 @@ RSpec.configure do |config|
     # a lot of times in our test suite and ids mighht not match any more.
     # See https://gitlab.com/gitlab-org/gitlab/-/issues/509629
     Users::Internal.clear_memoization(:support_bot_id)
+  end
+
+  # Clear cached state in Cloud Connector; different tests can otherwise leak state
+  # into each other, causing tests to fail.
+  config.before do
+    ::Gitlab::CloudConnector::DataModel::Base.descendants.each do |clazz|
+      clazz.instance_variable_set(:@data_loader, nil)
+    end
   end
 end
 

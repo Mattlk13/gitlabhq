@@ -1108,28 +1108,10 @@ describe('CE IssuesListApp component', () => {
   });
 
   describe('when providing token for labels', () => {
-    it('passes function to fetchLatestLabels property if frontend caching is enabled', () => {
-      wrapper = mountComponent({
-        provide: {
-          glFeatures: {
-            frontendCaching: true,
-          },
-        },
-      });
+    it('passes function to fetchLatestLabels property', () => {
+      wrapper = mountComponent();
 
       expect(typeof findLabelsToken().fetchLatestLabels).toBe('function');
-    });
-
-    it('passes null to fetchLatestLabels property if frontend caching is disabled', () => {
-      wrapper = mountComponent({
-        provide: {
-          glFeatures: {
-            frontendCaching: false,
-          },
-        },
-      });
-
-      expect(findLabelsToken().fetchLatestLabels).toBe(null);
     });
   });
 
@@ -1280,7 +1262,7 @@ describe('CE IssuesListApp component', () => {
 
           await waitForPromises();
 
-          expect(findIssuableList().props('issuables')[0].title).toBe('Updated title');
+          expect(findIssuableList().props('issuables')[0].title).toBe('Updated _title_');
           expect(findIssuableList().props('issuables')[0].confidential).toBe(true);
         });
 

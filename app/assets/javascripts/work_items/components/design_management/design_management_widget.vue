@@ -226,11 +226,7 @@ export default {
         : s__('DesignManagement|Select all');
     },
     issueAsWorkItem() {
-      return Boolean(
-        !this.isGroup &&
-          (this.glFeatures.workItemViewForIssues ||
-            (this.glFeatures.workItemsViewPreference && gon.current_user_use_work_items_view)),
-      );
+      return Boolean(!this.isGroup && this.glFeatures.workItemViewForIssues);
     },
     canUseRouter() {
       return (
@@ -242,9 +238,17 @@ export default {
         }) && !this.isBoard
       );
     },
+    isDesignDetailActive() {
+      return this.$route.path.includes('/designs/') || this.$route.name === 'design';
+    },
+    enablePasteOnNoDesign() {
+      return (
+        !this.hasDesigns && this.canPasteDesign && this.canAddDesign && !this.isDesignDetailActive
+      );
+    },
   },
   watch: {
-    canPasteDesign: {
+    enablePasteOnNoDesign: {
       immediate: true,
       handler(newVal) {
         if (newVal) {
@@ -444,7 +448,9 @@ export default {
       });
     },
     toggleOnPasteListener() {
-      document.addEventListener('paste', this.onDesignPaste);
+      if (this.canAddDesign && !this.isDesignDetailActive) {
+        document.addEventListener('paste', this.onDesignPaste);
+      }
     },
     toggleOffPasteListener() {
       document.removeEventListener('paste', this.onDesignPaste);
@@ -475,8 +481,8 @@ export default {
     class="work-item-design-widget-container gl-rounded-base focus:gl-focus"
     :class="{ 'gl-mt-5': hasDesignsAndVersions }"
     :tabindex="0"
-    @focusin="toggleOnPasteListener"
-    @focusout="toggleOffPasteListener"
+    @mouseenter="toggleOnPasteListener"
+    @mouseleave="toggleOffPasteListener"
   >
     <slot v-if="!hasDesignsAndVersions" name="empty-state"></slot>
     <crud-component

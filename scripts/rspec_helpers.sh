@@ -62,6 +62,7 @@ function retrieve_failed_tests() {
   local directory_for_output_reports="${1}"
   local failed_tests_format="${2}"
   local pipeline_index="${3}"
+  local output_mode="${4:-categorized}"
   local pipeline_report_path="tmp/test_results/${pipeline_index}/test_reports.json"
 
   echo 'Attempting to build pipeline test report...'
@@ -70,7 +71,11 @@ function retrieve_failed_tests() {
 
   echo 'Generating failed tests lists...'
 
-  scripts/failed_tests.rb --previous-tests-report-path "${pipeline_report_path}" --format "${failed_tests_format}" --output-directory "${directory_for_output_reports}"
+  scripts/failed_tests.rb \
+    --previous-tests-report-path "${pipeline_report_path}" \
+    --format "${failed_tests_format}" \
+    --output-directory "${directory_for_output_reports}" \
+    $([[ "${output_mode}" == "single_output" ]] && echo "--single-output" || echo '')
 }
 
 function rspec_args() {

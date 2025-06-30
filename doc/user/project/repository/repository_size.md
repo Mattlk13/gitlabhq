@@ -121,7 +121,7 @@ GitLab sends an email notification with the recalculated repository size after t
 
 {{< history >}}
 
-- [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/450701) in GitLab 17.1 [with a flag](../../../administration/feature_flags.md) named `rewrite_history_ui`. Disabled by default.
+- [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/450701) in GitLab 17.1 [with a flag](../../../administration/feature_flags/_index.md) named `rewrite_history_ui`. Disabled by default.
 - [Enabled on GitLab.com](https://gitlab.com/gitlab-org/gitlab/-/issues/462999) in GitLab 17.2.
 - [Enabled on GitLab Self-Managed and GitLab Dedicated](https://gitlab.com/gitlab-org/gitlab/-/issues/462999) in GitLab 17.3.
 - [Generally available](https://gitlab.com/gitlab-org/gitlab/-/issues/472018) in GitLab 17.9. Feature flag `rewrite_history_ui` removed.
@@ -180,6 +180,16 @@ To remove blobs from your repository:
 1. In the same **Settings > General > Advanced** section, select **Prune unreachable objects**.
    This operation takes approximately 5-10 minutes to complete.
 
+{{< alert type="note" >}}
+
+If the project containing the sensitive information has been forked, the housekeeping task might
+succeed without completing this process. Housekeeping must maintain the integrity of the
+[special object pool repository](../../../administration/housekeeping.md#object-pool-repositories),
+which contains the forked data.
+For help, contact GitLab Support.
+
+{{< /alert >}}
+
 #### Get a list of object IDs
 
 To remove blobs, you need a list of objects to remove.
@@ -230,7 +240,7 @@ exported `.tar.gz` or local repository:
 
    ```ruby
    p.repository.expire_all_method_caches
-   UpdateProjectStatisticsWorker.perform_async(p.id, ["commit_count","repository_size","storage_size","lfs_objects_size"])
+   UpdateProjectStatisticsWorker.perform_async(p.id, ["commit_count","repository_size","storage_size","lfs_objects_size","container_registry_size"])
    ```
 
 1. To check the total artifact storage space:

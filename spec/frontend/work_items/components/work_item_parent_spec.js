@@ -71,6 +71,7 @@ describe('WorkItemParent component', () => {
     workItemType = 'Objective',
     canUpdate = true,
     parent = null,
+    allowedParentTypesForNewWorkItem = [],
     searchQueryHandler = availableWorkItemsSuccessHandler,
     mutationHandler = successUpdateWorkItemMutationHandler,
     hasParent = true,
@@ -84,16 +85,15 @@ describe('WorkItemParent component', () => {
         [workItemsByReferencesQuery, workItemReferencesSuccessHandler],
         [getAllowedWorkItemParentTypes, allowedParentTypesHandler],
       ]),
-      provide: {
-        fullPath: mockFullPath,
-      },
       propsData: {
         canUpdate,
+        fullPath: mockFullPath,
         parent,
         workItemId,
         workItemType,
         hasParent,
         isGroup,
+        allowedParentTypesForNewWorkItem,
       },
       stubs: {
         IssuePopover: true,
@@ -135,12 +135,28 @@ describe('WorkItemParent component', () => {
     });
 
     it('fetches the  work items on edit click', async () => {
-      createComponent();
+      createComponent({
+        allowedParentTypesForNewWorkItem: [
+          { __typename: 'WorkItemType', id: 'gid://gitlab/WorkItems::Type/1', name: 'Issue' },
+          { __typename: 'WorkItemType', id: 'gid://gitlab/WorkItems::Type/2', name: 'Incident' },
+          { __typename: 'WorkItemType', id: 'gid://gitlab/WorkItems::Type/9', name: 'Ticket' },
+        ],
+      });
 
       showDropdown();
       await nextTick();
 
-      expect(availableWorkItemsSuccessHandler).toHaveBeenCalled();
+      expect(availableWorkItemsSuccessHandler).toHaveBeenCalledWith({
+        fullPath: 'full-path',
+        iid: null,
+        in: undefined,
+        includeAncestors: true,
+        isNumber: false,
+        searchByIid: false,
+        searchByText: true,
+        searchTerm: '',
+        types: ['ISSUE', 'INCIDENT', 'TICKET'],
+      });
     });
   });
 
@@ -340,7 +356,7 @@ describe('WorkItemParent component', () => {
         refs,
       });
       expect(findSidebarDropdownWidget().props('listItems')).toStrictEqual([
-        { text: 'Objective linked items 104', value: 'gid://gitlab/WorkItem/705' },
+        { text: 'Objective _linked_ items 104', value: 'gid://gitlab/WorkItem/705' },
       ]);
     });
   });

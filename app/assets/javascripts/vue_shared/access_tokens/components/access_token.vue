@@ -10,16 +10,13 @@ export default {
     ...mapState(useAccessTokens, ['token']),
     formInputGroupProps() {
       return {
-        'data-testid': this.$options.inputId,
-        id: this.$options.inputId,
-        name: this.$options.inputId,
+        'data-testid': 'created-access-token-field',
       };
     },
   },
   methods: {
     ...mapActions(useAccessTokens, ['setToken']),
   },
-  inputId: 'access-token-field',
 };
 </script>
 

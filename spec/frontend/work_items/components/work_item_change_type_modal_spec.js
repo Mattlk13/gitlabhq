@@ -2,7 +2,6 @@ import { GlModal, GlFormSelect } from '@gitlab/ui';
 import Vue, { nextTick } from 'vue';
 import VueApollo from 'vue-apollo';
 
-import namespaceWorkItemTypesQueryResponse from 'test_fixtures/graphql/work_items/project_namespace_work_item_types.query.graphql.json';
 import createMockApollo from 'helpers/mock_apollo_helper';
 import { mountExtended } from 'helpers/vue_test_utils_helper';
 import waitForPromises from 'helpers/wait_for_promises';
@@ -20,6 +19,7 @@ import {
 
 import {
   convertWorkItemMutationResponse,
+  namespaceWorkItemTypesQueryResponse,
   workItemChangeTypeWidgets,
   workItemQueryResponse,
   workItemWithEpicParentQueryResponse,
@@ -73,7 +73,6 @@ describe('WorkItemChangeTypeModal component', () => {
   const createComponent = ({
     hasParent = false,
     hasChildren = false,
-    workItemEpicMilestones = false,
     widgets = [],
     workItemType = WORK_ITEM_TYPE_NAME_TASK,
     convertWorkItemMutationHandler = convertWorkItemMutationSuccessHandler,
@@ -99,9 +98,6 @@ describe('WorkItemChangeTypeModal component', () => {
         allowedConversionTypesEE,
       },
       provide: {
-        glFeatures: {
-          workItemEpicMilestones,
-        },
         hasSubepicsFeature,
       },
       stubs: {
@@ -232,7 +228,6 @@ describe('WorkItemChangeTypeModal component', () => {
       createComponent({
         workItemType: WORK_ITEM_TYPE_NAME_ISSUE,
         widgets: [workItemChangeTypeWidgets.MILESTONE],
-        workItemEpicMilestones: true,
         allowedConversionTypesEE,
       });
 
