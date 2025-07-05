@@ -13,7 +13,7 @@ title: Upgrade paths
 
 {{< /details >}}
 
-Upgrading across multiple GitLab versions in one go is *only possible by accepting downtime*.
+Upgrading across multiple GitLab versions in one go is only possible by accepting downtime.
 If you don't want any downtime, read how to [upgrade with zero downtime](zero_downtime.md).
 
 Upgrade paths include required upgrade stops, which are versions of GitLab that you must upgrade to before upgrading to
@@ -51,6 +51,7 @@ To determine your upgrade path:
      - [`17.11.z`](versions/gitlab_17_changes.md#17110). The latest GitLab 17.11 release.
 
 1. Consult the version-specific upgrade instructions:
+   - [GitLab 18 changes](versions/gitlab_18_changes.md)
    - [GitLab 17 changes](versions/gitlab_17_changes.md)
    - [GitLab 16 changes](versions/gitlab_16_changes.md)
    - [GitLab 15 changes](versions/gitlab_15_changes.md)

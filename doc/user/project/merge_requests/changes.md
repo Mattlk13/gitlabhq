@@ -87,7 +87,7 @@ GitLab collapses files with many changes to improve performance, and displays th
 
 {{< history >}}
 
-- [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/387246) in GitLab 16.9 [with a flag](../../../administration/feature_flags.md) named `pinned_file`. Disabled by default.
+- [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/387246) in GitLab 16.9 [with a flag](../../../administration/feature_flags/_index.md) named `pinned_file`. Disabled by default.
 - [Generally available](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/162503) in GitLab 17.4. Feature flag `pinned_file` removed.
 
 {{< /history >}}
@@ -115,7 +115,7 @@ first in the list of changed files. To copy a merge request link that shows your
 
 {{< history >}}
 
-- [Introduced](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/140180) in GitLab 16.8 [with a flag](../../../administration/feature_flags.md) named `collapse_generated_diff_files`. Disabled by default.
+- [Introduced](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/140180) in GitLab 16.8 [with a flag](../../../administration/feature_flags/_index.md) named `collapse_generated_diff_files`. Disabled by default.
 - [Enabled on GitLab.com and GitLab Self-Managed](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/145100) in GitLab 16.10.
 - `generated_file` [generally available](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/148478) in GitLab 16.11. Feature flag `collapse_generated_diff_files` removed.
 
@@ -257,7 +257,6 @@ To change how a merge request shows changed lines:
 
 {{< history >}}
 
-- Introduced in GitLab 15.11 as an [experiment](../../../policy/development_stages_support.md#experiment) on GitLab.com.
 - [Generally available](https://gitlab.com/gitlab-org/gitlab/-/issues/429915) in GitLab 16.8.
 - Changed to require GitLab Duo add-on in GitLab 17.6 and later.
 
@@ -351,13 +350,6 @@ Files marked as viewed are not shown to you again unless either:
 
 ## Show merge request conflicts in diff
 
-{{< history >}}
-
-- [Enabled on GitLab.com and GitLab Self-Managed](https://gitlab.com/gitlab-org/gitlab/-/issues/276918) in GitLab 15.7.
-- [Generally available](https://gitlab.com/gitlab-org/gitlab/-/issues/276918) in GitLab 15.8. Feature flag `display_merge_conflicts_in_diff` removed.
-
-{{< /history >}}
-
 To avoid displaying changes already on target branch, we compare the merge request's
 source branch with the `HEAD` of the target branch.
 
@@ -384,7 +376,7 @@ You can show scanner findings in the diff. For details, see:
 
 {{< history >}}
 
-- [Introduced](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/123515) in GitLab 16.1 [with a flag](../../../administration/feature_flags.md) named `comment_on_files`. Enabled by default.
+- [Introduced](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/123515) in GitLab 16.1 [with a flag](../../../administration/feature_flags/_index.md) named `comment_on_files`. Enabled by default.
 - [Feature flag removed](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/125130) in GitLab 16.2.
 
 {{< /history >}}

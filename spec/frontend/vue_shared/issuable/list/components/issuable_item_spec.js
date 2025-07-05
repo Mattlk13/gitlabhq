@@ -373,10 +373,10 @@ describe('IssuableItem', () => {
 
       expect(confidentialEl.exists()).toBe(true);
       expect(confidentialEl.props('name')).toBe('eye-slash');
-      expect(confidentialEl.attributes()).toMatchObject({
-        title: 'Confidential',
-        arialabel: 'Confidential',
-      });
+
+      const confidentialContainer = wrapper.findByTestId('confidential-icon-container');
+
+      expect(confidentialContainer.attributes('title')).toBe('Confidential');
     });
 
     it('renders spam icon when issuable is hidden', () => {
@@ -385,10 +385,13 @@ describe('IssuableItem', () => {
       const hiddenIcon = wrapper.findComponent(GlIcon);
 
       expect(hiddenIcon.props('name')).toBe('spam');
-      expect(hiddenIcon.attributes()).toMatchObject({
-        title: 'This issue is hidden because its author has been banned.',
-        arialabel: 'Hidden',
-      });
+
+      const hiddenContainer = wrapper.findByTestId('hidden-icon-container');
+
+      expect(hiddenContainer.attributes('title')).toBe(
+        'This issue is hidden because its author has been banned.',
+      );
+      expect(hiddenContainer.attributes('aria-label')).toBe('Hidden');
     });
 
     it('renders task status', () => {
@@ -722,7 +725,8 @@ describe('IssuableItem', () => {
       window.open = jest.fn();
     });
     it('emits an event on row click', async () => {
-      const { id, iid, webUrl, type: workItemType } = mockIssuable;
+      const { id, iid, webUrl, type: workItemType, namespace } = mockIssuable;
+      const { fullPath } = namespace;
 
       wrapper = createComponent({
         preventRedirect: true,
@@ -731,7 +735,9 @@ describe('IssuableItem', () => {
 
       await findIssuableItemWrapper().trigger('click');
 
-      expect(wrapper.emitted('select-issuable')).toEqual([[{ id, iid, webUrl, workItemType }]]);
+      expect(wrapper.emitted('select-issuable')).toEqual([
+        [{ id, iid, webUrl, workItemType, fullPath }],
+      ]);
     });
 
     it('includes fullPath in emitted event for work items', async () => {

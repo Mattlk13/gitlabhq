@@ -42,7 +42,7 @@ RSpec.describe 'getting a work item list for a project', feature_category: :team
     Users::Internal.support_bot_id
   end
 
-  shared_examples 'work items resolver without N + 1 queries' do
+  shared_examples 'work items resolver without N + 1 queries' do |threshold: 0|
     it 'avoids N+1 queries', :use_sql_query_cache do
       post_graphql(query, current_user: current_user) # warm-up
 
@@ -63,7 +63,10 @@ RSpec.describe 'getting a work item list for a project', feature_category: :team
         author: reporter
       )
 
-      expect { post_graphql(query, current_user: current_user) }.not_to exceed_all_query_limit(control)
+      expect do
+        post_graphql(query, current_user: current_user)
+      end.not_to exceed_all_query_limit(control).with_threshold(threshold)
+
       expect_graphql_errors_to_be_empty
     end
   end
@@ -79,7 +82,8 @@ RSpec.describe 'getting a work item list for a project', feature_category: :team
 
   describe 'N + 1 queries' do
     context 'when querying root fields' do
-      it_behaves_like 'work items resolver without N + 1 queries'
+      # Issue to fix N+1 - https://gitlab.com/gitlab-org/gitlab/-/issues/548924
+      it_behaves_like 'work items resolver without N + 1 queries', threshold: 3
     end
 
     # We need a separate example since all_graphql_fields_for will not fetch fields from types
@@ -502,35 +506,23 @@ RSpec.describe 'getting a work item list for a project', feature_category: :team
       create(:work_item_link, source: item2, target: related_items[0], link_type: 'relates_to')
     end
 
-    shared_examples 'query with limited N+1 queries' do |threshold: 0|
-      it :use_sql_query_cache do
-        post_graphql(query, current_user: current_user) # warm-up
+    it 'avoids N+1 queries', :use_sql_query_cache do
+      post_graphql(query, current_user: current_user) # warm-up
 
-        control = ActiveRecord::QueryRecorder.new(skip_cached: false) do
-          post_graphql(query, current_user: current_user)
-        end
-
-        item3 = create(:work_item, project: project, discussion_locked: true, title: 'item1', labels: [label1])
-
-        [item1, item2, item3].each do |item|
-          create(:work_item_link, source: item, target: related_items[1], link_type: 'relates_to')
-          create(:work_item_link, source: item, target: related_items[2], link_type: 'relates_to')
-        end
-
-        expect_graphql_errors_to_be_empty
-        expect { post_graphql(query, current_user: current_user) }
-          .not_to exceed_all_query_limit(control).with_threshold(threshold)
-      end
-    end
-
-    it_behaves_like 'query with limited N+1 queries'
-
-    context 'when batch_load_linked_items feature flag is disabled' do
-      before do
-        stub_feature_flags(batch_load_linked_items: false)
+      control = ActiveRecord::QueryRecorder.new(skip_cached: false) do
+        post_graphql(query, current_user: current_user)
       end
 
-      it_behaves_like 'query with limited N+1 queries', threshold: 33
+      item3 = create(:work_item, project: project, discussion_locked: true, title: 'item1', labels: [label1])
+
+      [item1, item2, item3].each do |item|
+        create(:work_item_link, source: item, target: related_items[1], link_type: 'relates_to')
+        create(:work_item_link, source: item, target: related_items[2], link_type: 'relates_to')
+      end
+
+      expect_graphql_errors_to_be_empty
+      expect { post_graphql(query, current_user: current_user) }
+        .not_to exceed_all_query_limit(control)
     end
   end
 
@@ -1087,6 +1079,39 @@ RSpec.describe 'getting a work item list for a project', feature_category: :team
           expect(item_ids).to contain_exactly(task.to_global_id.to_s)
         end
       end
+    end
+  end
+
+  context 'when skipping authorization' do
+    shared_examples  'request with skipped abilities' do |abilities = []|
+      it 'authorizes objects as expected' do
+        expect_any_instance_of(Gitlab::Graphql::Authorize::ObjectAuthorization) do |authorization|
+          expect(authorization).to receive(:ok).with(
+            project.work_items.first,
+            current_user,
+            scope_validator: nil,
+            skip_abilities: abilities
+          )
+        end
+
+        post_graphql(query, current_user: current_user)
+      end
+    end
+
+    context 'when authorize_issue_types_in_finder feature flag is enabled' do
+      before do
+        stub_feature_flags(authorize_issue_types_in_finder: true)
+      end
+
+      it_behaves_like 'request with skipped abilities', [:read_work_item]
+    end
+
+    context 'when authorize_issue_types_in_finder feature flag is disabled' do
+      before do
+        stub_feature_flags(authorize_issue_types_in_finder: false)
+      end
+
+      it_behaves_like 'request with skipped abilities', []
     end
   end
 

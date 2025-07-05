@@ -116,7 +116,7 @@ GitLab can display the results of one or more reports in:
 
 - The merge request [security widget](../../user/application_security/api_fuzzing/configuration/enabling_the_analyzer.md#view-details-of-an-api-fuzzing-vulnerability).
 - The [Project Vulnerability report](../../user/application_security/vulnerability_report/_index.md).
-- The pipeline [**Security** tab](../../user/application_security/vulnerability_report/pipeline.md#view-vulnerabilities-in-a-pipeline).
+- The pipeline [**Security** tab](../../user/application_security/detect/security_scanning_results.md).
 - The [security dashboard](../../user/application_security/api_fuzzing/configuration/enabling_the_analyzer.md#security-dashboard).
 
 ## `artifacts:reports:browser_performance`
@@ -201,7 +201,7 @@ The collected Container Scanning report uploads to GitLab as an artifact.
 GitLab can display the results of one or more reports in:
 
 - The merge request [container scanning widget](../../user/application_security/container_scanning/_index.md).
-- The pipeline [**Security** tab](../../user/application_security/vulnerability_report/pipeline.md#view-vulnerabilities-in-a-pipeline).
+- The pipeline [**Security** tab](../../user/application_security/detect/security_scanning_results.md).
 - The [security dashboard](../../user/application_security/security_dashboard/_index.md).
 - The [Project Vulnerability report](../../user/application_security/vulnerability_report/_index.md).
 
@@ -218,7 +218,7 @@ The collected coverage fuzzing report uploads to GitLab as an artifact.
 GitLab can display the results of one or more reports in:
 
 - The merge request [coverage fuzzing widget](../../user/application_security/coverage_fuzzing/_index.md#interacting-with-the-vulnerabilities).
-- The pipeline [**Security** tab](../../user/application_security/vulnerability_report/pipeline.md#view-vulnerabilities-in-a-pipeline).
+- The pipeline [**Security** tab](../../user/application_security/detect/security_scanning_results.md).
 - The [Project Vulnerability report](../../user/application_security/vulnerability_report/_index.md).
 - The [security dashboard](../../user/application_security/security_dashboard/_index.md).
 
@@ -247,7 +247,7 @@ as a list of filenames, a filename pattern, or both:
 - A combination of both (`cyclonedx: [gl-sbom-*.json, my-cyclonedx.json]`).
 - Directories are not supported(`cyclonedx: test-results`, `cyclonedx: test-results/**`).
 
-Below is an example of a job exposing CycloneDX artifacts:
+The following example shows a job that exposes CycloneDX artifacts:
 
 ```yaml
 artifacts:
@@ -271,7 +271,7 @@ report uploads to GitLab as an artifact.
 GitLab can display the results of one or more reports in:
 
 - The merge request security widget.
-- The pipeline [**Security** tab](../../user/application_security/vulnerability_report/pipeline.md#view-vulnerabilities-in-a-pipeline).
+- The pipeline [**Security** tab](../../user/application_security/detect/security_scanning_results.md).
 - The [Project Vulnerability report](../../user/application_security/vulnerability_report/_index.md).
 - The [security dashboard](../../user/application_security/security_dashboard/_index.md).
 
@@ -289,7 +289,7 @@ The collected Dependency Scanning report uploads to GitLab as an artifact.
 GitLab can display the results of one or more reports in:
 
 - The merge request [dependency scanning widget](../../user/application_security/dependency_scanning/_index.md).
-- The pipeline [**Security** tab](../../user/application_security/vulnerability_report/pipeline.md#view-vulnerabilities-in-a-pipeline).
+- The pipeline [**Security** tab](../../user/application_security/detect/security_scanning_results.md).
 - The [security dashboard](../../user/application_security/security_dashboard/_index.md).
 - The [Project Vulnerability report](../../user/application_security/vulnerability_report/_index.md).
 - The [dependency list](../../user/application_security/dependency_list/_index.md).
@@ -299,7 +299,7 @@ GitLab can display the results of one or more reports in:
 The `dotenv` report collects a set of environment variables as artifacts.
 
 The collected variables are registered as runtime-created variables of the job,
-which you can [use in subsequent job scripts](../variables/_index.md#pass-an-environment-variable-to-another-job)
+which you can [use in subsequent job scripts](../variables/job_scripts.md#pass-an-environment-variable-to-another-job)
 or to [set dynamic environment URLs after a job finishes](../environments/_index.md#set-a-dynamic-environment-url).
 
 If duplicate environment variables are present in a `dotenv` report, the last one specified is used.
@@ -332,7 +332,7 @@ The collected Unit test reports upload to GitLab as an artifact. Although JUnit 
 are many third-party ports for other languages such as JavaScript, Python, and Ruby.
 
 See [Unit test reports](../testing/unit_test_reports.md) for more details and examples.
-Below is an example of collecting a JUnit report format XML file from Ruby's RSpec test tool:
+The following example shows how to collect a JUnit XML report from Ruby RSpec tests:
 
 ```yaml
 rspec:
@@ -347,8 +347,8 @@ rspec:
 
 GitLab can display the results of one or more reports in:
 
-- The merge request [code quality widget](../testing/unit_test_reports.md#unit-test-reporting-workflow).
-- The [full report](../testing/unit_test_reports.md#view-unit-test-reports-on-gitlab).
+- The merge request [**Test summary** panel](../testing/unit_test_reports.md#view-test-results-in-merge-requests).
+- The [pipeline **Tests** tab](../testing/unit_test_reports.md#view-test-results-in-pipelines).
 
 Some JUnit tools export to multiple XML files. You can specify multiple test report paths in a single job to
 concatenate them into a single file. Use either:
@@ -447,7 +447,7 @@ The collected Secret Detection report is uploaded to GitLab.
 GitLab can display the results of one or more reports in:
 
 - The merge request [secret scanning widget](../../user/application_security/secret_detection/pipeline/_index.md).
-- The [pipeline security tab](../../user/application_security/detect/security_scan_results.md).
+- The [pipeline security tab](../../user/application_security/detect/security_scanning_results.md).
 - The [security dashboard](../../user/application_security/security_dashboard/_index.md).
 
 ## `artifacts:reports:terraform`

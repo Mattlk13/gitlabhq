@@ -38,7 +38,7 @@ the path to the file is incorrect, or the file was not created. You can check th
 log for other errors or warnings that specify the filename and why it wasn't
 generated.
 
-For more detailed job logs, you can [enable CI/CD debug logging](../variables/_index.md#enable-debug-logging)
+For more detailed job logs, you can [enable CI/CD debug logging](../variables/variables_troubleshooting.md#enable-debug-logging)
 and try the job again. This logging might provide more information about why the file
 wasn't created.
 
@@ -184,6 +184,6 @@ On GitLab SaaS:
 
 On GitLab Self-Managed:
 
-- [Enable the feature flag](../../administration/feature_flags.md) named `ci_unlock_pipelines_extra_low`.
+- [Enable the feature flag](../../administration/feature_flags/_index.md) named `ci_unlock_pipelines_extra_low`.
 
 For more information see the comment in [merge request 140318](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/140318#note_1718600424).

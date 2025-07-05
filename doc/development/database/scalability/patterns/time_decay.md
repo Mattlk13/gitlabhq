@@ -42,11 +42,11 @@ creation.
 
 We are interested in datasets that show the following characteristics:
 
-- **Size of the dataset:** they are considerably large.
-- **Access methods:** we can filter the vast majority of queries accessing the dataset
+- **Size of the dataset**: they are considerably large.
+- **Access methods**: we can filter the vast majority of queries accessing the dataset
   by a time related dimension or a categorical dimension with time decay effects.
-- **Immutability:** the time-decay status does not change.
-- **Retention:** whether we want to keep the old data or not, or whether old
+- **Immutability**: the time-decay status does not change.
+- **Retention**: whether we want to keep the old data or not, or whether old
   data should remain accessible by users through the application.
 
 ### Size of the dataset
@@ -291,7 +291,7 @@ The process required follows:
 
    We are not adding them at the beginning as they are adding overhead to each insert and they
    would slow down the initial backfilling of the table (in this case for more than half a billion
-   records, which can add up significantly). So we create a lightweight, *vanilla* version of the
+   records, which can add up significantly). So we create a lightweight, vanilla version of the
    table, copy all the data and then add any remaining indexes and foreign keys.
 
 1. Swap the base table with partitioned copy: this is when the partitioned table

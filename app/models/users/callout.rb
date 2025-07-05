@@ -97,7 +97,7 @@ module Users
       openssl_callout: 94,
       # 95 removed in https://gitlab.com/gitlab-org/gitlab/-/merge_requests/170868
       new_mr_dashboard_banner: 96,
-      planner_role_callout: 97,
+      # 97 removed in https://gitlab.com/gitlab-org/gitlab/-/merge_requests/196130
       # EE-only
       pipl_compliance_alert: 98,
       new_merge_request_dashboard_welcome: 99,
@@ -110,7 +110,8 @@ module Users
       enable_duo_banner_admin_duo_settings_page: 106, # EE-only
       enable_duo_banner_admin_dashboard: 107, # EE-only
       explore_duo_core_banner: 108, # EE-only
-      merge_request_dashboard_display_preferences_popover: 109
+      merge_request_dashboard_display_preferences_popover: 109,
+      vulnerability_archival: 110 # EE-only
     }
 
     validates :feature_name,

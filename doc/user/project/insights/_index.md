@@ -114,6 +114,13 @@ use it for the project's group.
 
 ## Configure group insights
 
+{{< alert type="note" >}}
+
+Creating a custom Insights configuration file will override the default configuration.
+If you want to retain the original configuration, you should copy the content of the [default configuration file](https://gitlab.com/gitlab-org/gitlab/-/blob/master/ee/fixtures/insights/default.yml) as a base.
+
+{{< /alert >}}
+
 GitLab reads insights from the
 [default configuration file](https://gitlab.com/gitlab-org/gitlab/-/blob/master/ee/fixtures/insights/default.yml).
 
@@ -305,7 +312,7 @@ Use `query.params.filter_labels` to filter by labels applied to the queried issu
 By default, no label filter is applied. All defined labels must
 be applied to the issuable for it to be selected.
 
-**Example:**:
+**Example**:
 
 ```yaml
 monthlyBugsCreated:

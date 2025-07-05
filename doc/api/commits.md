@@ -36,12 +36,6 @@ For more information, see [issue 389582](https://gitlab.com/gitlab-org/gitlab/-/
 
 ## List repository commits
 
-{{< history >}}
-
-- Commits by author [introduced](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/114417) in GitLab 15.10.
-
-{{< /history >}}
-
 Get a list of repository commits in a project.
 
 ```plaintext
@@ -615,13 +609,13 @@ To post a comment in a particular line of a particular file, you must specify
 the full commit SHA, the `path`, the `line`, and `line_type` should be `new`.
 
 The comment is added at the end of the last commit if at least one of the
-cases below is valid:
+following cases is valid:
 
 - the `sha` is instead a branch or a tag and the `line` or `path` are invalid
 - the `line` number is invalid (does not exist)
 - the `path` is invalid (does not exist)
 
-In any of the above cases, the response of `line`, `line_type` and `path` is
+In any of the previous cases, the response of `line`, `line_type` and `path` is
 set to `null`.
 
 For other approaches to commenting on a merge request, see
@@ -876,20 +870,27 @@ Example response:
 
 ## List merge requests associated with a commit
 
+{{< history >}}
+
+- `state` attribute [introduced](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/191169) in GitLab 18.2.
+
+{{< /history >}}
+
 Returns information about the merge request that originally introduced a specific commit.
 
 ```plaintext
 GET /projects/:id/repository/commits/:sha/merge_requests
 ```
 
-| Attribute | Type | Required | Description |
-| --------- | ---- | -------- | ----------- |
-| `id`      | integer/string | yes | The ID or [URL-encoded path of the project](rest/_index.md#namespaced-paths) |
-| `sha`     | string  | yes   | The commit SHA |
+| Attribute | Type           | Required | Description |
+|-----------|----------------|----------|-------------|
+| `id`      | integer/string | Yes      | The ID or [URL-encoded path of the project](rest/_index.md#namespaced-paths) |
+| `sha`     | string         | Yes      | The commit SHA |
+| `state`   | string         | No       | Returns merge requests with the specified state: `opened`, `closed`, `locked`, or `merged`. Omit this parameter to get all merge requests regardless of state. |
 
 ```shell
 curl --header "PRIVATE-TOKEN: <your_access_token>" \
-  --url "https://gitlab.example.com/api/v4/projects/5/repository/commits/af5b13261899fb2c0db30abdd0af8b07cb44fdc5/merge_requests"
+  --url "https://gitlab.example.com/api/v4/projects/5/repository/commits/af5b13261899fb2c0db30abdd0af8b07cb44fdc5/merge_requests?state=opened"
 ```
 
 Example response:

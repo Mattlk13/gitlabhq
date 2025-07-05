@@ -1,8 +1,9 @@
 ---
 stage: none
-group: unassigned
-info: To determine the technical writer assigned to the Stage/Group associated with this page, see https://handbook.gitlab.com/handbook/product/ux/technical-writing/#assignments
+group: Embody
+info: This page is owned by https://handbook.gitlab.com/handbook/ceo/office-of-the-ceo/embody-team/
 description: Monitor application performance and troubleshoot performance issues.
+ignore_in_report: true
 title: Observability
 ---
 
@@ -34,9 +35,30 @@ Use GitLab Observability (O11y) to:
 - View distributed traces, logs, and metrics in a single platform.
 - Identify and troubleshoot performance bottlenecks in your applications.
 
-Support for improvements is proposed in [issue 8](https://gitlab.com/experimental-observability/gitlab_o11y/-/issues/8).
+{{< alert type="disclaimer" />}}
+
+By adding observability to GitLab itself users can gain [these (planned) features](https://gitlab.com/gitlab-org/embody-team/experimental-observability/gitlab_o11y/-/issues/8).
+
+<i class="fa-youtube-play" aria-hidden="true"></i>
+For an overview, see [GitLab Experimental Observability (O11y) Introduction](https://www.youtube.com/watch?v=XI9ZruyNEgs).
+<!-- Video published on 2025-06-18 -->
+
+Join the conversation about interesting ways to use GitLab O11y in the GitLab O11y [Discord channel](https://discord.com/channels/778180511088640070/1379585187909861546).
+
+## Why GitLab Observability
+
+- **Cost-effective open source model**: Only pay for compute resources rather than per-seat licensing, making observability accessible for teams of any size. Contribute features and fixes directly, helping ensure the platform evolves to meet your specific needs.
+- **Simplified access management**: New engineers automatically gain access to production observability data when they receive code repository access, helping eliminate lengthy provisioning processes. This unified access model helps ensure team members can immediately contribute to troubleshooting and monitoring efforts without administrative delays.
+- **Enhanced development workflow**: Developers can correlate code changes directly with application performance metrics, helping to more easily identify when deployments introduce issues. This tight integration between code commits and runtime behavior accelerates debugging and reduces mean time to resolution.
+- **Shift-left observability**: Teams can catch performance issues and anomalies earlier in the development cycle, by integrating observability data into their development process. This proactive approach reduces the cost and impact of fixing problems. The open source nature can make it easier and more cost-effective to orchestrate comprehensive staging environments that mirror production observability.
+- **Streamlined incident response**: When issues occur, teams can more quickly have context about recent deployments, code changes, and the developers involved, helping with faster triage and resolution. The integration provides a single pane of glass for both code and operational data.
+- **Data next to decisions**: Real-time performance metrics and user behavior data become accessible in the development environment, helping teams make informed decisions about feature prioritization, technical debt, and optimization efforts.
+- **Compliance and audit trails**: The integration creates comprehensive audit trails that link code changes to system behavior, which can be valuable for compliance requirements and post-incident analysis.
+- **Reduced tool switching**: Your development teams can access monitoring data, alerts, and performance insights without leaving their familiar GitLab environment, helping to improve productivity and reduce cognitive overhead.
 
 ## Set up a GitLab Observability instance
+
+Observability data is collected in a separate application outside of your GitLab.com instance. Problems with your GitLab instance do not impact collecting or viewing your observability data and vice-versa.
 
 Prerequisites:
 
@@ -119,7 +141,7 @@ docker info | grep "Docker Root Dir"
 
 ```shell
 cd /mnt/data
-git clone -b main https://gitlab.com/experimental-observability/gitlab_o11y.git
+git clone -b main https://gitlab.com/gitlab-org/embody-team/experimental-observability/gitlab_o11y.git
 cd gitlab_o11y/deploy/docker
 docker-compose up -d
 ```
@@ -129,6 +151,26 @@ If you encounter timeout errors, use:
 ```shell
 COMPOSE_HTTP_TIMEOUT=300 docker-compose up -d
 ```
+
+### Optional: Use an external ClickHouse database
+
+If you'd prefer, you can use your own ClickHouse database.
+
+Prerequisites:
+
+- Ensure your external ClickHouse instance is accessible and properly configured with
+  any required authentication credentials.
+
+Before you run `docker-compose up -d`, complete the following steps:
+
+1. Open `docker-compose.yml` file.
+1. Open `docker-compose.yml` and comment out:
+   - The `clickhouse` and `zookeeper` services.
+   - The `x-clickhouse-defaults` and `x-clickhouse-depend` sections.
+1. Replace all occurrences of `clickhouse:9000` with your relevant ClickHouse endpoint and TCP port (for example, `my-clickhouse.example.com:9000`) in the following files. If your ClickHouse instance requires authentication, you may also need to update connection strings to include credentials:
+   - `docker-compose.yml`
+   - `otel-collector-config.yaml`
+   - `prometheus-config.yml`
 
 ### Configure network access for GitLab Observability
 
@@ -141,6 +183,9 @@ To properly receive telemetry data, you need to open specific ports in your GitL
    - Type: Custom TCP, Port: 8080, Source: Your IP or 0.0.0.0/0 (for UI access)
    - Type: Custom TCP, Port: 4317, Source: Your IP or 0.0.0.0/0 (for OTLP gRPC)
    - Type: Custom TCP, Port: 4318, Source: Your IP or 0.0.0.0/0 (for OTLP HTTP)
+   - Type: Custom TCP, Port: 9411, Source: Your IP or 0.0.0.0/0 (for Zipkin - optional)
+   - Type: Custom TCP, Port: 14268, Source: Your IP or 0.0.0.0/0 (for Jaeger HTTP - optional)
+   - Type: Custom TCP, Port: 14250, Source: Your IP or 0.0.0.0/0 (for Jaeger gRPC - optional)
 1. Select **Save rules**.
 
 ### Access GitLab Observability
@@ -185,9 +230,31 @@ docker run --detach \
   --publish 443:443 --publish 80:80 --publish 22:22 \
   --name gitlab \
   --restart always \
-  --env O11Y_URL="http://[your-o11y-instance-ip]:8080" \
   gitlab/gitlab-ce:latest
 ```
+
+The `O11Y_URL` environment variable must be configured in the GitLab configuration file:
+
+1. Access the container:
+
+   ```shell
+   docker exec -it gitlab /bin/bash
+   ```
+
+1. Edit `/etc/gitlab/gitlab.rb`:
+
+   ```ruby
+   gitlab_rails['env'] = {
+     'O11Y_URL' => 'http://[your-o11y-instance-ip]:8080'
+   }
+   ```
+
+1. Reconfigure GitLab:
+
+   ```shell
+   gitlab-ctl reconfigure
+   gitlab-ctl restart
+   ```
 
 {{< /tab >}}
 
@@ -200,23 +267,23 @@ The Observability feature is behind a feature flag. To enable it:
 1. Access the Rails console:
 
    {{< tabs >}}
- 
+
    {{< tab title="Linux package (Omnibus)" >}}
- 
+
    ```shell
    sudo gitlab-rails console
    ```
- 
+
    {{< /tab >}}
- 
+
    {{< tab title="Docker" >}}
- 
+
    ```shell
    docker exec -it gitlab gitlab-rails console
    ```
- 
+
    {{< /tab >}}
- 
+
    {{< /tabs >}}
 
 1. Enable the feature flag for your group:
@@ -390,7 +457,9 @@ If your telemetry data isn't appearing in GitLab O11y:
 1. Check container logs for any errors:
 
    ```shell
-   docker logs signoz-otel-collector
+   docker logs otel-collector-standard
+   docker logs o11y-otel-collector
+   docker logs o11y
    ```
 
 1. Try using the HTTP endpoint (4318) instead of gRPC (4317).

@@ -680,7 +680,7 @@ def project_params
 end
 
 # Always returns an array of symbols, created however best fits the use case.
-# It _should_ be sorted alphabetically.
+# It should be sorted alphabetically.
 def project_params_attributes
   %i[
     description
@@ -781,7 +781,7 @@ partials. One example would be
 `ee/app/views/projects/settings/_archive.html.haml`:
 
 ```ruby
-- return if @project.marked_for_deletion?
+- return if @project.self_deletion_scheduled?
 = render_ce 'projects/settings/archive'
 ```
 

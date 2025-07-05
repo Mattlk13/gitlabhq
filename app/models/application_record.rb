@@ -12,6 +12,7 @@ class ApplicationRecord < ActiveRecord::Base
   include HasCheckConstraints
   include IgnorableColumns
   include PopulatesShardingKey
+  include EachBatch
 
   self.abstract_class = true
 
@@ -100,6 +101,10 @@ class ApplicationRecord < ActiveRecord::Base
     end
   end
 
+  def self.current_transaction
+    connection.current_transaction
+  end
+
   def create_or_load_association(association_name)
     association(association_name).create unless association(association_name).loaded?
   rescue ActiveRecord::RecordNotUnique, PG::UniqueViolation
@@ -146,7 +151,7 @@ class ApplicationRecord < ActiveRecord::Base
   end
 
   def readable_by?(user)
-    Ability.allowed?(user, "read_#{to_ability_name}".to_sym, self)
+    Ability.allowed?(user, :"read_#{to_ability_name}", self)
   end
 
   def to_ability_name

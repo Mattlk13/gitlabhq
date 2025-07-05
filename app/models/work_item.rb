@@ -2,12 +2,13 @@
 
 class WorkItem < Issue
   include Gitlab::Utils::StrongMemoize
+  include Gitlab::InternalEventsTracking
   include Import::HasImportSource
 
   COMMON_QUICK_ACTIONS_COMMANDS = [
     :title, :reopen, :close, :cc, :tableflip, :shrug, :type, :promote_to, :checkin_reminder,
     :subscribe, :unsubscribe, :confidential, :award, :react, :move, :clone, :copy_metadata,
-    :duplicate, :promote_to_incident, :board_move, :convert_to_ticket
+    :duplicate, :promote_to_incident, :board_move, :convert_to_ticket, :zoom, :remove_zoom
   ].freeze
 
   self.table_name = 'issues'
@@ -34,16 +35,18 @@ class WorkItem < Issue
     )
   }
 
-  scope :within_timeframe, ->(start_date, due_date) do
+  scope :within_timeframe, ->(start_date, due_date, with_namespace_cte: false) do
     date_filtered_issue_ids = ::WorkItems::DatesSource
                                 .select('issue_id')
                                 .where('start_date IS NOT NULL OR due_date IS NOT NULL')
-                                # Require the namespace_ids CTE from by_parent to be present when filtering by timeframe
-                                # for performance reasons.
-                                # see: https://gitlab.com/gitlab-org/gitlab/-/merge_requests/181904
-                                .where('namespace_id IN (SELECT id FROM namespace_ids)')
                                 .where('start_date IS NULL OR start_date <= ?', due_date)
                                 .where('due_date IS NULL OR due_date >= ?', start_date)
+
+    # The namespace_ids CTE from by_parent by timeframe helps with performance when querying across multiple namespaces.
+    # see: https://gitlab.com/gitlab-org/gitlab/-/merge_requests/181904
+    if with_namespace_cte
+      date_filtered_issue_ids = date_filtered_issue_ids.where('namespace_id IN (SELECT id FROM namespace_ids)')
+    end
 
     joins("INNER JOIN (#{date_filtered_issue_ids.to_sql}) AS filtered_dates ON issues.id = filtered_dates.issue_id")
   end
@@ -378,7 +381,14 @@ class WorkItem < Issue
   def record_create_action
     super
 
-    Gitlab::UsageDataCounters::WorkItemActivityUniqueCounter.track_work_item_created_action(author: author)
+    track_internal_event(
+      'users_creating_work_items',
+      user: author,
+      project: project,
+      additional_properties: {
+        label: work_item_type.base_type
+      }
+    )
   end
 
   def hierarchy(options = {})

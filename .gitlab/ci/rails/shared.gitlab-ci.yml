@@ -16,7 +16,6 @@ include:
   extends:
     - .default-retry
     - .default-before_script
-    - .failure_category_after_script
     - .ruby-cache
 
 .base-script:
@@ -118,7 +117,6 @@ include:
   after_script:
     # We need this at the very top, because the section_start/section_end logic is defined there.
     - source scripts/utils.sh
-    - !reference [.failure_category_after_script, after_script]
     - log_disk_usage  # https://gitlab.com/gitlab-org/gitlab/-/issues/478880
     - bundle exec gem list gitlab_quality-test_tooling
     - |
@@ -299,6 +297,10 @@ include:
     - .use-pg15-es7-ee
 
 .rspec-ee-base-pg16:
+  needs:
+    - !reference [.rspec-base, needs]
+    - job: "db:setup-ee pg16"
+      optional: true
   extends:
     - .rspec-base
     - .use-pg16-es7-ee
@@ -308,6 +310,11 @@ include:
     - .rspec-base
     - .use-pg16-es8-ee
     - .rails:rules:run-search-tests
+
+.rspec-ee-base-pg16-es9:
+  extends:
+    - .rspec-base
+    - .use-pg16-es9-ee
 
 .rspec-ee-base-pg16-opensearch-latest:
   extends:

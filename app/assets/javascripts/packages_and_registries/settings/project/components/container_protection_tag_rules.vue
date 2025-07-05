@@ -13,12 +13,13 @@ import {
   GlSkeletonLoader,
 } from '@gitlab/ui';
 import CrudComponent from '~/vue_shared/components/crud_component.vue';
-import ContainerProtectionTagRuleForm from '~/packages_and_registries/settings/project/components/container_protection_tag_rule_form.vue';
+import ContainerProtectionTagRuleForm from 'ee_else_ce/packages_and_registries/settings/project/components/container_protection_tag_rule_form.vue';
 import getContainerProtectionTagRulesQuery from '~/packages_and_registries/settings/project/graphql/queries/get_container_protection_tag_rules.query.graphql';
 import deleteContainerProtectionTagRuleMutation from '~/packages_and_registries/settings/project/graphql/mutations/delete_container_protection_tag_rule.mutation.graphql';
 import { __, s__ } from '~/locale';
 import { getAccessLevelLabel } from '~/packages_and_registries/settings/project/utils';
-import glFeatureFlagsMixin from '~/vue_shared/mixins/gl_feature_flags_mixin';
+import { DRAWER_Z_INDEX } from '~/lib/utils/constants';
+import { getContentWrapperHeight } from '~/lib/utils/dom_utils';
 
 import * as Sentry from '~/sentry/sentry_browser_wrapper';
 
@@ -44,7 +45,6 @@ export default {
     GlModal: GlModalDirective,
     GlTooltip: GlTooltipDirective,
   },
-  mixins: [glFeatureFlagsMixin()],
   inject: ['projectPath'],
   apollo: {
     protectionRulesQueryPayload: {
@@ -86,24 +86,20 @@ export default {
       return this.tagProtectionRulesCount > 0;
     },
     description() {
-      return this.isFeatureFlagEnabled
-        ? s__(
-            'ContainerRegistry|Set up rules to protect container image tags from unauthorized changes or make them permanently immutable. Protection rules are checked first, followed by immutable rules. You can add up to 5 protection rules per project.',
-          )
-        : s__(
-            'ContainerRegistry|When a container image tag is protected, only certain user roles can create, update, and delete the protected tag, which helps to prevent unauthorized changes. You can add up to 5 protection rules per project.',
-          );
+      return s__(
+        'ContainerRegistry|When a container image tag is protected, only certain user roles can create, update, and delete the protected tag, which helps to prevent unauthorized changes. You can add up to 5 protection rules per project.',
+      );
     },
     drawerTitle() {
       return this.protectionRuleMutationItem
         ? s__('ContainerRegistry|Edit protection rule')
         : s__('ContainerRegistry|Add protection rule');
     },
+    getDrawerHeaderHeight() {
+      return getContentWrapperHeight();
+    },
     isLoadingProtectionRules() {
       return this.$apollo.queries.protectionRulesQueryPayload.loading;
-    },
-    isFeatureFlagEnabled() {
-      return this.glFeatures.containerRegistryImmutableTags;
     },
     protectionRulesQueryResult() {
       return this.protectionRulesQueryPayload.nodes;
@@ -180,9 +176,6 @@ export default {
       this.closeDrawer();
       this.refetchProtectionRules();
     },
-    getBadgeText({ immutable }) {
-      return immutable ? s__('ContainerRegistry|immutable') : s__('ContainerRegistry|protected');
-    },
     isEditable({ immutable }) {
       return !immutable;
     },
@@ -252,6 +245,7 @@ export default {
   modalActionCancel: {
     text: __('Cancel'),
   },
+  DRAWER_Z_INDEX,
 };
 </script>
 
@@ -264,6 +258,10 @@ export default {
     data-testid="project-container-protection-tag-rules-settings"
     @showForm="openNewFormDrawer"
   >
+    <template #description>
+      <slot name="description"></slot>
+    </template>
+
     <template v-if="containsTableItems" #count>
       <gl-badge>
         <gl-sprintf :message="s__('ContainerRegistry|%{count} of %{max}')">
@@ -320,11 +318,7 @@ export default {
             <span data-testid="tag-name-pattern" class="gl-break-all">
               {{ item.tagNamePattern }}
             </span>
-            <span v-if="isFeatureFlagEnabled">
-              <gl-badge data-testid="tag-rule-type-badge">
-                {{ getBadgeText(item) }}
-              </gl-badge>
-            </span>
+            <slot name="tag-badge" :item="item"></slot>
           </span>
         </template>
 
@@ -368,7 +362,12 @@ export default {
         {{ s__('ContainerRegistry|No container image tags are protected.') }}
       </p>
 
-      <gl-drawer :z-index="1039" :open="showDrawer" @close="closeDrawer">
+      <gl-drawer
+        :z-index="$options.DRAWER_Z_INDEX"
+        :header-height="getDrawerHeaderHeight"
+        :open="showDrawer"
+        @close="closeDrawer"
+      >
         <template #title>
           <h2 class="gl-my-0 gl-text-size-h2 gl-leading-24">
             {{ drawerTitle }}

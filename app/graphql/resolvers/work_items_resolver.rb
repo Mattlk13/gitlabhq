@@ -22,6 +22,11 @@ module Resolvers
     def resolve_with_lookahead(**args)
       return WorkItem.none if resource_parent.nil?
 
+      # Adding skip_type_authorization in the resolver while it is conditionally enabled.
+      # It can be moved to the field definition once the feature flag is removed
+      # Issue: https://gitlab.com/gitlab-org/gitlab/-/issues/548096
+      context.scoped_set!(:skip_type_authorization, [:read_work_item]) if skip_field_authorization?
+
       finder = choose_finder(args)
 
       items = Gitlab::Graphql::Loaders::IssuableLoader
@@ -71,8 +76,13 @@ module Resolvers
       # At this point we need the `id` of the project to query for work items, so
       # make sure it's loaded and not `nil` before continuing.
       strong_memoize(:resource_parent) do
-        object.respond_to?(:sync) ? object.sync : object
+        obj = object.is_a?(::Namespaces::ProjectNamespace) ? object.project : object
+        obj.respond_to?(:sync) ? obj.sync : obj
       end
+    end
+
+    def skip_field_authorization?
+      Feature.enabled?(:authorize_issue_types_in_finder, resource_parent.root_ancestor, type: :gitlab_com_derisk)
     end
   end
 end

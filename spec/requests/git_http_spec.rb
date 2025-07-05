@@ -166,6 +166,7 @@ RSpec.describe 'Git HTTP requests', feature_category: :source_code_management do
 
         it "redirects to the .git suffix version" do
           expect(response).to redirect_to("/#{repository_path}.git/info/refs")
+          expect(response.body).to match(/You.are.being.+redirected/)
         end
       end
 
@@ -178,6 +179,7 @@ RSpec.describe 'Git HTTP requests', feature_category: :source_code_management do
 
         it "redirects to the .git suffix version" do
           expect(response).to redirect_to("/#{repository_path}.git/info/refs?service=#{params[:service]}")
+          expect(response.body).to match(/You.are.being.+redirected/)
         end
       end
 
@@ -190,6 +192,7 @@ RSpec.describe 'Git HTTP requests', feature_category: :source_code_management do
 
         it "redirects to the .git suffix version" do
           expect(response).to redirect_to("/#{repository_path}.git/info/refs?service=#{params[:service]}")
+          expect(response.body).to match(/You.are.being.+redirected/)
         end
       end
 
@@ -202,6 +205,7 @@ RSpec.describe 'Git HTTP requests', feature_category: :source_code_management do
 
         it "redirects to the sign-in page" do
           expect(response).to redirect_to(new_user_session_path)
+          expect(response.body).to match(/You.are.being.+redirected/)
         end
       end
     end
@@ -661,6 +665,23 @@ RSpec.describe 'Git HTTP requests', feature_category: :source_code_management do
 
                 context "when oauth token has ai_workflows scope" do
                   let(:scopes) { 'ai_workflows' }
+
+                  it_behaves_like 'pulls are allowed'
+                  it_behaves_like 'pushes are allowed'
+                end
+
+                context "when oauth token owner has composite identity" do
+                  let_it_be(:service_account) { create(:user, :service_account, composite_identity_enforced: true) }
+                  let(:scopes) { ::Gitlab::Auth::AI_WORKFLOW_SCOPES + ["user:#{user.id}"] }
+                  let!(:token) do
+                    OauthAccessToken.create!(
+                      application_id: application.id,
+                      expires_in: 1.hour,
+                      resource_owner_id: service_account.id,
+                      organization: organization,
+                      scopes: scopes
+                    ).plaintext_token
+                  end
 
                   it_behaves_like 'pulls are allowed'
                   it_behaves_like 'pushes are allowed'

@@ -23,6 +23,7 @@ RSpec.describe ActiveContext::Preprocessors::Embeddings do
   let(:mock_collection) { double(name: collection_name, partition_for: partition, include_ref_fields: true) }
   let(:mock_object) { double(id: object_id) }
   let(:mock_relation) { double(find_by: mock_object) }
+  let(:mock_embedding_version) { { field: :embedding, model: nil, class: Test::Embeddings, batch_size: 10 } }
 
   let(:partition) { 2 }
   let(:collection_id) { 1 }
@@ -36,8 +37,8 @@ RSpec.describe ActiveContext::Preprocessors::Embeddings do
     allow(ActiveContext).to receive(:adapter).and_return(mock_adapter)
     allow(ActiveContext::CollectionCache).to receive(:fetch).and_return(mock_collection)
     allow(reference_class).to receive(:model_klass).and_return(mock_relation)
-    allow(reference).to receive(:embedding_versions).and_return([{ field: :embedding, model: nil }])
-    allow(ActiveContext::Embeddings).to receive(:generate_embeddings) do |contents, **_kwargs|
+    allow(reference).to receive(:embedding_versions).and_return([mock_embedding_version])
+    allow(Test::Embeddings).to receive(:generate_embeddings) do |contents, **_kwargs|
       raise vertex_blank_error if contents.any?(&:nil?) # this is what vertex returns when the content is empty
 
       Array.new(contents.size, vectors)
@@ -61,8 +62,14 @@ RSpec.describe ActiveContext::Preprocessors::Embeddings do
         end
 
         it 'generates and sets embeddings for each document' do
-          expect(ActiveContext::Embeddings).to receive(:generate_embeddings)
-            .once.with(['Some content'], model: nil, unit_primitive: unit_primitive).and_return([vectors])
+          expect(Test::Embeddings).to receive(:generate_embeddings)
+            .once
+            .with(
+              ['Some content'],
+              model: nil,
+              unit_primitive: unit_primitive,
+              batch_size: 10
+            ).and_return([vectors])
 
           expect(preprocessed_reference.documents).to match_array([{ embedding: vectors }])
         end
@@ -86,8 +93,14 @@ RSpec.describe ActiveContext::Preprocessors::Embeddings do
             end
 
             it 'generates and sets embeddings for each document' do
-              expect(ActiveContext::Embeddings).to receive(:generate_embeddings)
-                .once.with(['Other content'], model: nil, unit_primitive: unit_primitive).and_return([vectors])
+              expect(Test::Embeddings).to receive(:generate_embeddings)
+                .once
+                .with(
+                  ['Other content'],
+                  model: nil,
+                  unit_primitive: unit_primitive,
+                  batch_size: 10
+                ).and_return([vectors])
 
               expect(preprocessed_reference.documents).to match_array([{ embedding: vectors }])
             end
@@ -109,8 +122,14 @@ RSpec.describe ActiveContext::Preprocessors::Embeddings do
             end
 
             it 'generates and sets embeddings for each document' do
-              expect(ActiveContext::Embeddings).to receive(:generate_embeddings)
-                .once.with(['Some content'], model: nil, unit_primitive: unit_primitive).and_return([vectors])
+              expect(Test::Embeddings).to receive(:generate_embeddings)
+                .once
+                .with(
+                  ['Some content'],
+                  model: nil,
+                  unit_primitive: unit_primitive,
+                  batch_size: 10
+                ).and_return([vectors])
 
               expect(preprocessed_reference.documents).to match_array([{ embedding: vectors }])
             end
@@ -174,8 +193,14 @@ RSpec.describe ActiveContext::Preprocessors::Embeddings do
             end
 
             it 'generates and sets embeddings for each document' do
-              expect(ActiveContext::Embeddings).to receive(:generate_embeddings)
-                .once.with(['Some other content'], model: nil, unit_primitive: unit_primitive).and_return([vectors])
+              expect(Test::Embeddings).to receive(:generate_embeddings)
+                .once
+                .with(
+                  ['Some other content'],
+                  model: nil,
+                  unit_primitive: unit_primitive,
+                  batch_size: 10
+                ).and_return([vectors])
 
               expect(preprocessed_reference.documents).to match_array([{ embedding: vectors }])
             end
@@ -197,8 +222,14 @@ RSpec.describe ActiveContext::Preprocessors::Embeddings do
             end
 
             it 'generates and sets embeddings for each document' do
-              expect(ActiveContext::Embeddings).to receive(:generate_embeddings)
-                .once.with(['Some content'], model: nil, unit_primitive: unit_primitive).and_return([vectors])
+              expect(Test::Embeddings).to receive(:generate_embeddings)
+                .once
+                .with(
+                  ['Some content'],
+                  model: nil,
+                  unit_primitive: unit_primitive,
+                  batch_size: 10
+                ).and_return([vectors])
 
               expect(preprocessed_reference.documents).to match_array([{ embedding: vectors }])
             end
@@ -250,7 +281,7 @@ RSpec.describe ActiveContext::Preprocessors::Embeddings do
       end
 
       it 'does not generate embeddings' do
-        expect(ActiveContext::Embeddings).not_to receive(:generate_embeddings)
+        expect(Test::Embeddings).not_to receive(:generate_embeddings)
 
         expect(preprocessed_reference.documents).to be_empty
       end
@@ -273,7 +304,7 @@ RSpec.describe ActiveContext::Preprocessors::Embeddings do
         end
 
         it 'does not generate embeddings' do
-          expect(ActiveContext::Embeddings).not_to receive(:generate_embeddings)
+          expect(Test::Embeddings).not_to receive(:generate_embeddings)
 
           expect(preprocessed_reference.documents).to be_empty
         end
@@ -291,8 +322,14 @@ RSpec.describe ActiveContext::Preprocessors::Embeddings do
             end
 
             it 'generates and sets embeddings for each document' do
-              expect(ActiveContext::Embeddings).to receive(:generate_embeddings)
-                .once.with(['Other content'], model: nil, unit_primitive: unit_primitive).and_return([vectors])
+              expect(Test::Embeddings).to receive(:generate_embeddings)
+                .once
+                .with(
+                  ['Other content'],
+                  model: nil,
+                  unit_primitive: unit_primitive,
+                  batch_size: 10
+                ).and_return([vectors])
 
               expect(preprocessed_reference.documents).to match_array([{ embedding: vectors }])
             end
@@ -335,8 +372,13 @@ RSpec.describe ActiveContext::Preprocessors::Embeddings do
             end
 
             it 'generates and sets embeddings for each document' do
-              expect(ActiveContext::Embeddings).to receive(:generate_embeddings)
-                .once.with(['Some other content'], model: nil, unit_primitive: unit_primitive).and_return([vectors])
+              expect(Test::Embeddings).to receive(:generate_embeddings)
+                .once.with(
+                  ['Some other content'],
+                  model: nil,
+                  unit_primitive: unit_primitive,
+                  batch_size: 10
+                ).and_return([vectors])
 
               expect(preprocessed_reference.documents).to match_array([{ embedding: vectors }])
             end
@@ -355,6 +397,31 @@ RSpec.describe ActiveContext::Preprocessors::Embeddings do
               expect(preprocessed_result[:failed]).to eq([reference])
             end
           end
+        end
+      end
+    end
+
+    describe 'embedding versions' do
+      context 'when embedding version class is not defined' do
+        let(:mock_embedding_version) { { field: :embedding, model: nil } }
+
+        it 'raises an EmbeddingsVersionError' do
+          expect { preprocessed_reference }.to raise_error(
+            described_class::EmbeddingsVersionError,
+            "No `class` specified for model version `embedding`."
+          )
+        end
+      end
+
+      context 'when embedding version class does not inherit from ActiveContext::Embeddings' do
+        let(:mock_embeddings_class) { Class.new(Object) }
+        let(:mock_embedding_version) { { field: :embedding, model: nil, class: mock_embeddings_class } }
+
+        it 'raises an EmbeddingsVersionError' do
+          expect { preprocessed_reference }.to raise_error(
+            described_class::EmbeddingsVersionError,
+            "Specified class for model version `embedding` must inherit from `#{ActiveContext::Embeddings}`."
+          )
         end
       end
     end

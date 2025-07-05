@@ -619,7 +619,7 @@ processing them, such as before being enqueued.
 
 This log file follows the same structure as
 [`sidekiq.log`](#sidekiqlog), so it is structured as JSON if
-you've configured this for Sidekiq as mentioned above.
+you've configured this for Sidekiq as mentioned previously.
 
 ## `gitlab-shell.log`
 
@@ -863,7 +863,8 @@ This file is located at:
 - `/home/git/gitlab/log/mail_room_json.log` on self-compiled installations.
 
 This structured log file records internal activity in the `mail_room` gem.
-Its name and path are configurable, so the name and path may not match the above.
+Its name and path are configurable, so the name and path may not match this one
+documented previously.
 
 ## `web_hooks.log`
 
@@ -1106,7 +1107,7 @@ The `llm.log` file logs information related to
 
 {{< history >}}
 
-- [Introduced](https://gitlab.com/groups/gitlab-org/-/epics/13401) in GitLab 17.2 [with a flag](../feature_flags.md) named `expanded_ai_logging`. Disabled by default.
+- [Introduced](https://gitlab.com/groups/gitlab-org/-/epics/13401) in GitLab 17.2 [with a flag](../feature_flags/_index.md) named `expanded_ai_logging`. Disabled by default.
 
 {{< /history >}}
 
@@ -1122,7 +1123,6 @@ LLM prompt input and response output can be logged by enabling the `expanded_ai_
 This flag is disabled by default and can only be enabled:
 
 - For GitLab.com, when you provide consent through a GitLab [Support Ticket](https://about.gitlab.com/support/portal/).
-- For GitLab Self-Managed, when you enable this feature flag.
 
 By default, the log does not contain LLM prompt input and response output to support [data retention policies](../../user/gitlab_duo/data_usage.md#data-retention) of AI feature data.
 
@@ -1233,7 +1233,14 @@ For example:
 
 ## Product Usage Data log
 
-Note: We recommend against using the raw logs for analysing feature usage, as the data quality has not yet been certified for accuracy. Certified in-product adoption reports will be available once the data is ready for analysis.
+{{< alert type="note" >}}
+
+We recommend against using the raw logs for analysing feature usage, as the data quality has not yet been certified for accuracy. 
+
+The list of events can change in each version based on new features or changes to existing features. Certified in-product adoption reports will be available after the data is ready for analysis.
+
+{{< /alert >}}
+
 This file is located at:
 
 - `/var/log/gitlab/gitlab-rails/product_usage_data.log` on Linux package installations.

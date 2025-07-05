@@ -65,9 +65,7 @@ RSpec.describe Groups::DependencyProxyForContainersController, feature_category:
       let_it_be(:token) { create(:personal_access_token, user: user, scopes: [Gitlab::Auth::READ_API_SCOPE]) }
       let_it_be(:jwt) { build_jwt(token) }
 
-      context 'not under the group' do
-        it { is_expected.to have_gitlab_http_status(:not_found) }
-      end
+      it { is_expected.to have_gitlab_http_status(:not_found) }
 
       context 'with sufficient scopes, but not active' do
         %i[expired revoked].each do |status|
@@ -82,20 +80,6 @@ RSpec.describe Groups::DependencyProxyForContainersController, feature_category:
           end
         end
       end
-
-      context 'with insufficient scopes' do
-        it { is_expected.to have_gitlab_http_status(:not_found) }
-
-        # TODO: Cleanup code related to packages_dependency_proxy_containers_scope_check
-        # https://gitlab.com/gitlab-org/gitlab/-/issues/520321
-        context 'packages_dependency_proxy_containers_scope_check disabled' do
-          before do
-            stub_feature_flags(packages_dependency_proxy_containers_scope_check: false)
-          end
-
-          it { is_expected.to have_gitlab_http_status(:not_found) }
-        end
-      end
     end
 
     context 'with deploy token from a different group,' do
@@ -105,22 +89,19 @@ RSpec.describe Groups::DependencyProxyForContainersController, feature_category:
     end
 
     context 'with revoked deploy token' do
-      let_it_be(:user) { create(:deploy_token, :revoked, :group, :dependency_proxy_scopes) }
-      let_it_be(:group_deploy_token) { create(:group_deploy_token, deploy_token: user, group: group) }
+      let_it_be(:user) { create(:deploy_token, :revoked, :group, :dependency_proxy_scopes, groups: [group]) }
 
       it { is_expected.to have_gitlab_http_status(:unauthorized) }
     end
 
     context 'with expired deploy token' do
-      let_it_be(:user) { create(:deploy_token, :expired, :group, :dependency_proxy_scopes) }
-      let_it_be(:group_deploy_token) { create(:group_deploy_token, deploy_token: user, group: group) }
+      let_it_be(:user) { create(:deploy_token, :expired, :group, :dependency_proxy_scopes, groups: [group]) }
 
       it { is_expected.to have_gitlab_http_status(:unauthorized) }
     end
 
     context 'with deploy token with insufficient scopes' do
-      let_it_be(:user) { create(:deploy_token, :group) }
-      let_it_be(:group_deploy_token) { create(:group_deploy_token, deploy_token: user, group: group) }
+      let_it_be(:user) { create(:deploy_token, :group, groups: [group]) }
 
       it { is_expected.to have_gitlab_http_status(:not_found) }
     end
@@ -214,8 +195,7 @@ RSpec.describe Groups::DependencyProxyForContainersController, feature_category:
     end
 
     context 'with a deploy token' do
-      let_it_be(:user) { create(:deploy_token, :dependency_proxy_scopes, :group) }
-      let_it_be(:group_deploy_token) { create(:group_deploy_token, deploy_token: user, group: group) }
+      let_it_be(:user) { create(:deploy_token, :dependency_proxy_scopes, :group, groups: [group]) }
 
       it_behaves_like 'sends Workhorse instructions'
     end
@@ -431,18 +411,14 @@ RSpec.describe Groups::DependencyProxyForContainersController, feature_category:
       end
 
       context 'a valid deploy token' do
-        let_it_be(:user) { create(:deploy_token, :dependency_proxy_scopes, :group) }
-        let_it_be(:group_deploy_token) { create(:group_deploy_token, deploy_token: user, group: group) }
+        let_it_be(:user) { create(:deploy_token, :dependency_proxy_scopes, :group, groups: [group]) }
 
         it_behaves_like 'a successful manifest pull'
 
         context 'pulling from a subgroup' do
           let_it_be_with_reload(:parent_group) { create(:group) }
           let_it_be_with_reload(:group) { create(:group, parent: parent_group) }
-
-          before do
-            group_deploy_token.update_column(:group_id, parent_group.id)
-          end
+          let_it_be(:user) { create(:deploy_token, :dependency_proxy_scopes, :group, groups: [parent_group]) }
 
           it_behaves_like 'a successful manifest pull'
         end
@@ -552,18 +528,14 @@ RSpec.describe Groups::DependencyProxyForContainersController, feature_category:
       end
 
       context 'a valid deploy token' do
-        let_it_be(:user) { create(:deploy_token, :group, :dependency_proxy_scopes) }
-        let_it_be(:group_deploy_token) { create(:group_deploy_token, deploy_token: user, group: group) }
+        let_it_be(:user) { create(:deploy_token, :group, :dependency_proxy_scopes, groups: [group]) }
 
         it_behaves_like 'a successful blob pull'
 
         context 'pulling from a subgroup' do
           let_it_be_with_reload(:parent_group) { create(:group) }
           let_it_be_with_reload(:group) { create(:group, parent: parent_group) }
-
-          before do
-            group_deploy_token.update_column(:group_id, parent_group.id)
-          end
+          let_it_be(:user) { create(:deploy_token, :group, :dependency_proxy_scopes, groups: [parent_group]) }
 
           it_behaves_like 'a successful blob pull'
         end
@@ -692,7 +664,8 @@ RSpec.describe Groups::DependencyProxyForContainersController, feature_category:
         let_it_be_with_reload(:manifest) { create(:dependency_proxy_manifest, file_name: file_name, digest: old_digest, group: group) }
 
         it 'updates the existing manifest' do
-          expect { subject }.to change { group.dependency_proxy_manifests.count }.by(0)
+          expect { subject }
+            .to not_change { group.dependency_proxy_manifests.count }
             .and change { manifest.reload.digest }.from(old_digest).to(digest)
         end
 

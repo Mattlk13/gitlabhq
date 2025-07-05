@@ -206,7 +206,7 @@ not be replicated.
 {{< /alert >}}
 
 These instructions help set up a single PostgreSQL database, which creates a single point of failure. To avoid this, you can configure your own clustered
-PostgreSQL. Support for PostgreSQL replication and failover using the Linux package is proposed in [epic 7814](https://gitlab.com/groups/gitlab-org/-/epics/7814).
+PostgreSQL.
 Clustered database support for other databases (for example, Praefect and Geo databases) is proposed in
 [issue 7292](https://gitlab.com/gitlab-org/omnibus-gitlab/-/issues/7292).
 
@@ -274,6 +274,15 @@ instructions only work on the Linux package-provided PostgreSQL:
 
    Replace `<PRAEFECT_SQL_PASSWORD_HASH>` with the hash of the password you generated in the
    preparation step. It is prefixed with `md5` literal.
+
+1. Create a new user `pgbouncer` to be used by PgBouncer:
+
+   ```sql
+   CREATE ROLE pgbouncer WITH LOGIN;
+   ALTER USER pgbouncer WITH password 'md5<PGBOUNCER_SQL_PASSWORD_HASH>';
+   ```
+
+   Replace `PGBOUNCER_SQL_PASSWORD_HASH` with the strong password hash you generated in the preparation step.
 
 1. The PgBouncer that is shipped with the Linux package is configured to use [`auth_query`](https://www.pgbouncer.org/config.html#generic-settings)
    and uses `pg_shadow_lookup` function. You need to create this function in `praefect_production`
@@ -361,7 +370,7 @@ Praefect makes a low number of connections. If you choose to use PgBouncer, you 
 both the GitLab application database and the Praefect database.
 
 To configure PgBouncer in front of the PostgreSQL instance, you must point Praefect to PgBouncer by setting database
-parameters on Praefect configuration:
+parameters on the Praefect configuration:
 
 ```ruby
 praefect['configuration'] = {
@@ -392,15 +401,17 @@ To configure the additional connection, you must either:
   but with different pool mode (`pool_mode = session`).
 - Connect Praefect directly to PostgreSQL and bypass PgBouncer.
 
-#### Configure a new PgBouncer database with `pool_mode = session`
+##### Configure a new PgBouncer database with `pool_mode = session`
 
 You should use PgBouncer with `session` pool mode. You can use the
 [bundled PgBouncer](../postgresql/pgbouncer.md) or use an external PgBouncer and
 [configure it manually](https://www.pgbouncer.org/config.html).
 
-The following example uses the bundled PgBouncer and sets up two separate connection pools on PostgreSQL host,
+The following example uses the bundled PgBouncer and sets up two separate connection pools on the PostgreSQL host,
 one in `session` pool mode and the other in `transaction` pool mode. For this example to work,
-you need to prepare PostgreSQL server as documented in [the setup instructions](#manual-database-setup):
+you need to prepare PostgreSQL server as documented in [the setup instructions](#manual-database-setup). 
+
+Then, configure the separate connection pools on the PgBouncer host:
 
 ```ruby
 pgbouncer['databases'] = {
@@ -462,7 +473,8 @@ praefect['configuration'] = {
          # ...
          dbname: 'praefect_production_direct',
          # There is no need to repeat the following. Parameters of direct
-         # database connection will fall back to the values above.
+         # database connection will fall back to the values specified in the
+         # database block.
          #
          # host: PGBOUNCER_HOST,
          # port: 6432,
@@ -484,7 +496,7 @@ configuration option is set. For more details, consult the PgBouncer documentati
 
 {{< /alert >}}
 
-#### Configure Praefect to connect directly to PostgreSQL
+##### Configure Praefect to connect directly to PostgreSQL
 
 As an alternative to configuring PgBouncer with `session` pool mode, Praefect can be configured to use different
 connection parameters for direct access to PostgreSQL. This connection supports the `LISTEN` feature.
@@ -1044,7 +1056,7 @@ Prerequisites:
    ```
 
 1. Save the file and [reconfigure GitLab](../restart_gitlab.md#reconfigure-a-linux-package-installation).
-1. Repeat the above steps on each Praefect server to use with
+1. Repeat the previous steps on each Praefect server to use with
    service discovery.
 1. On the Praefect clients (except Gitaly servers), edit `gitlab_rails['repositories_storages']` in
    `/etc/gitlab/gitlab.rb` as follows. Replace `CONSUL_SERVER` with the IP or
@@ -1061,7 +1073,7 @@ Prerequisites:
 
 1. Use `dig` from the Praefect clients to confirm that each IP address has been registered to
    `praefect.service.consul` with `dig A praefect.service.consul @CONSUL_SERVER -p 8600`.
-   Replace `CONSUL_SERVER` with the value configured above and all Praefect node IP addresses
+   Replace `CONSUL_SERVER` with the value configured previously and all Praefect node IP addresses
    should be present in the output.
 1. Save the file and [reconfigure GitLab](../restart_gitlab.md#reconfigure-a-linux-package-installation).
 
@@ -1222,7 +1234,7 @@ For more information on Gitaly server configuration, see our
 
 {{< alert type="note" >}}
 
-The steps above must be completed for each Gitaly node!
+The previous steps must be completed for each Gitaly node!
 
 {{< /alert >}}
 

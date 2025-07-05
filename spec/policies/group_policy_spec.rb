@@ -95,6 +95,10 @@ RSpec.describe GroupPolicy, feature_category: :system_access do
 
   shared_examples 'deploy token does not get confused with user' do
     before do
+      # We force the id of the deploy token and the user to be the same,
+      # which requires deleting the joining record as we cannot update
+      # the id while foreign keys reference it.
+      deploy_token.project_deploy_tokens.delete_all(:delete_all)
       deploy_token.update!(id: user_id)
     end
 
@@ -1469,14 +1473,10 @@ RSpec.describe GroupPolicy, feature_category: :system_access do
 
   context 'package registry' do
     context 'deploy token user' do
-      let!(:group_deploy_token) do
-        create(:group_deploy_token, group: group, deploy_token: deploy_token)
-      end
-
       subject { described_class.new(deploy_token, group) }
 
       context 'with read_package_registry scope' do
-        let(:deploy_token) { create(:deploy_token, :group, read_package_registry: true) }
+        let(:deploy_token) { create(:deploy_token, :group, read_package_registry: true, groups: [group]) }
 
         it { is_expected.to be_allowed(:read_package) }
         it { is_expected.to be_allowed(:read_group) }
@@ -1484,7 +1484,7 @@ RSpec.describe GroupPolicy, feature_category: :system_access do
       end
 
       context 'with write_package_registry scope' do
-        let(:deploy_token) { create(:deploy_token, :group, write_package_registry: true) }
+        let(:deploy_token) { create(:deploy_token, :group, write_package_registry: true, groups: [group]) }
 
         it { is_expected.to be_allowed(:create_package) }
         it { is_expected.to be_allowed(:read_package) }
@@ -2082,6 +2082,50 @@ RSpec.describe GroupPolicy, feature_category: :system_access do
       let(:current_user) { owner }
 
       it { is_expected.to be_allowed(:admin_package) }
+    end
+  end
+
+  describe 'set_new_issue_metadata and set_new_work_item_metadata abilities' do
+    %w[guest planner reporter developer maintainer owner].each do |role|
+      context "when user is #{role}" do
+        let(:current_user) { send(role) }
+
+        it 'allows setting metadata for new issues and work items' do
+          expect_allowed :set_new_issue_metadata, :set_new_work_item_metadata
+        end
+      end
+    end
+
+    context 'when user is not a group member' do
+      let(:current_user) { non_group_member }
+
+      it 'disallows setting metadata for new issues and work items' do
+        expect_disallowed :set_new_issue_metadata, :set_new_work_item_metadata
+      end
+    end
+
+    context 'when user is admin' do
+      let(:current_user) { admin }
+
+      context 'when admin mode enabled', :enable_admin_mode do
+        it 'allows setting metadata for new issues and work items' do
+          expect_allowed :set_new_issue_metadata, :set_new_work_item_metadata
+        end
+      end
+
+      context 'when admin mode disabled' do
+        it 'disallows setting metadata for new issues and work items' do
+          expect_disallowed :set_new_issue_metadata, :set_new_work_item_metadata
+        end
+      end
+    end
+
+    context 'when current user is nil' do
+      let(:current_user) { nil }
+
+      it 'disallows setting metadata for new issues and work items' do
+        expect_disallowed :set_new_issue_metadata, :set_new_work_item_metadata
+      end
     end
   end
 end

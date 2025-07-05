@@ -312,19 +312,13 @@ class ContainerRepository < ApplicationRecord
   def protected_from_delete_by_tag_rules?(user)
     return true unless user
 
-    # Check for immutable tag protection rules
-    if Feature.enabled?(:container_registry_immutable_tags, project) && project.has_container_registry_immutable_tag_rules? && has_tags?
-      return true
-    end
-
     # Admins are not restricted by mutable tag protection rules
     return false if user.can_admin_all_resources?
 
     # Check for mutable tag protection rules
     return false unless project.has_container_registry_protected_tag_rules?(
       action: 'delete',
-      access_level: project.team.max_member_access(user.id),
-      include_immutable: false
+      access_level: project.team.max_member_access(user.id)
     )
 
     return false unless has_tags?

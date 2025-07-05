@@ -2,7 +2,7 @@
 stage: Verify
 group: Pipeline Authoring
 info: To determine the technical writer assigned to the Stage/Group associated with this page, see https://handbook.gitlab.com/handbook/product/ux/technical-writing/#assignments
-title: Trigger pipelines by using the API
+title: Trigger pipelines with the API
 ---
 
 {{< details >}}
@@ -213,7 +213,7 @@ A revoked trigger token cannot be added back.
 To [configure when to run jobs](../jobs/job_control.md) in triggered pipelines, you can:
 
 - Use [`rules`](../yaml/_index.md#rules) with the `$CI_PIPELINE_SOURCE` [predefined CI/CD variable](../variables/predefined_variables.md).
-- Use [`only`/`except`](../yaml/_index.md#onlyrefs--exceptrefs) keywords, though `rules`
+- Use [`only`/`except`](../yaml/deprecated_keywords.md#onlyrefs--exceptrefs) keywords, though `rules`
   is the preferred keyword.
 
 | `$CI_PIPELINE_SOURCE` value | `only`/`except` keywords | Trigger method      |

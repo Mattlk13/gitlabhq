@@ -7,19 +7,6 @@ module QA
         include Page::Component::Note
         include Page::Component::Issuable::Sidebar
 
-        view 'app/assets/javascripts/batch_comments/components/preview_dropdown.vue' do
-          element 'review-preview-dropdown'
-        end
-
-        view 'app/assets/javascripts/batch_comments/components/review_bar.vue' do
-          element 'review-bar-content'
-        end
-
-        view 'app/assets/javascripts/batch_comments/components/submit_dropdown.vue' do
-          element 'submit-review-dropdown'
-          element 'submit-review-button'
-        end
-
         view 'app/assets/javascripts/batch_comments/components/review_drawer.vue' do
           element 'submit-review-button'
         end
@@ -199,7 +186,7 @@ module QA
           # After clicking the button, wait for the review bar to disappear
           # before moving on to the next part of the test
           wait_until(reload: false) do
-            has_no_element?('review-bar-content')
+            has_no_element?('draft-note')
           end
         end
 

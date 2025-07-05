@@ -43,10 +43,10 @@ export default {
   },
   computed: {
     isMarkedForDeletion() {
-      return Boolean(this.group.markedForDeletionOn);
+      return Boolean(this.group.markedForDeletion);
     },
     groupWillBeImmediatelyDeleted() {
-      return !this.group.isAdjournedDeletionEnabled || this.isMarkedForDeletion;
+      return this.isMarkedForDeletion;
     },
     deleteModalOverride() {
       return this.groupWillBeImmediatelyDeleted

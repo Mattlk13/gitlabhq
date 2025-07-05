@@ -67,7 +67,6 @@ FactoryBot.define do
       import_last_error { nil }
       forward_deployment_enabled { nil }
       forward_deployment_rollback_allowed { nil }
-      restrict_user_defined_variables { nil }
       ci_outbound_job_token_scope_enabled { nil }
       ci_inbound_job_token_scope_enabled { nil }
       runners_token { nil }
@@ -232,6 +231,15 @@ FactoryBot.define do
 
     trait :archived do
       archived { true }
+    end
+
+    trait :aimed_for_deletion do
+      marked_for_deletion_at { Date.yesterday }
+      deleting_user { creator }
+
+      after(:create) do |project|
+        create(:namespace_deletion_schedule, namespace: project.project_namespace)
+      end
     end
 
     trait :not_aimed_for_deletion do

@@ -941,12 +941,12 @@ These changes affect you if your pipelines use the [`auto-build-image`](https://
 
 Starting in GitLab 18.0, the internal process that releases CI/CD components to the Catalog will be changed.
 If you use the [recommended CI/CD component release process](https://docs.gitlab.com/ci/components/#publish-a-new-release), which makes use of the `release` keyword and the `registry.gitlab.com/gitlab-org/release-cli:latest` container image, you do not need to make any changes.
-The `latest` version of this container image (`v0.22.0`) contains [GLab](https://gitlab.com/gitlab-org/cli/) `v1.53.0`, which will be used for all releases to the CI/CD Catalog in GitLab 18.0 and later.
+The `latest` version of this container image (`v0.24.0`) contains [GLab](https://gitlab.com/gitlab-org/cli/) `v1.58.0`, which will be used for all releases to the CI/CD Catalog in GitLab 18.0 and later.
 In other cases:
 
-- If you need to pin the container image to a specific version, use `v0.22.0` or later (`registry.gitlab.com/gitlab-org/release-cli:v0.22.0`),
+- If you need to pin the container image to a specific version, use `v0.24.0` or later (`registry.gitlab.com/gitlab-org/release-cli:v0.24.0`),
   to ensure GLab is available for the release process.
-- If you've manually installed the Release CLI tool on your runners, you must install GLab `v1.53.0` or later on those runners.
+- If you've manually installed the Release CLI tool on your runners, you must install GLab `v1.58.0` or later on those runners.
 
 </div>
 
@@ -1089,6 +1089,31 @@ This is one small step towards moving away from CI/CD templates in preference of
 </div>
 </div>
 
+<div class="milestone-wrapper" data-milestone="18.9">
+
+## GitLab 18.9
+
+<div class="deprecation breaking-change" data-milestone="18.9">
+
+### Linux packages for Ubuntu 20.04
+
+<div class="deprecation-notes">
+
+- Announced in GitLab <span class="milestone">17.9</span>
+- Removal in GitLab <span class="milestone">18.9</span> ([breaking change](https://docs.gitlab.com/update/terminology/#breaking-change))
+- To discuss this change or learn more, see the [deprecation issue](https://gitlab.com/gitlab-org/omnibus-gitlab/-/issues/8915).
+
+</div>
+
+Ubuntu standard support for Ubuntu 20.04 [ends in May 2025](https://wiki.ubuntu.com/Releases).
+
+Therefore, from GitLab 18.9, we will no longer provide packages for the Ubuntu 20.04 distribution for Linux package installs.
+GitLab 18.8 will be the last GitLab version with Linux packages for Ubuntu 20.04.
+You should upgrade to Ubuntu 22.04 for continued support.
+
+</div>
+</div>
+
 <div class="milestone-wrapper" data-milestone="18.6">
 
 ## GitLab 18.6
@@ -1140,26 +1165,6 @@ In GitLab 18.6, we'll replace the compliance standards adherence dashboard with 
 <div class="milestone-wrapper" data-milestone="18.3">
 
 ## GitLab 18.3
-
-<div class="deprecation breaking-change" data-milestone="18.3">
-
-### Linux packages for Ubuntu 20.04
-
-<div class="deprecation-notes">
-
-- Announced in GitLab <span class="milestone">17.9</span>
-- Removal in GitLab <span class="milestone">18.3</span> ([breaking change](https://docs.gitlab.com/update/terminology/#breaking-change))
-- To discuss this change or learn more, see the [deprecation issue](https://gitlab.com/gitlab-org/omnibus-gitlab/-/issues/8915).
-
-</div>
-
-Ubuntu standard support for Ubuntu 20.04 [ends in May 2025](https://wiki.ubuntu.com/Releases).
-
-Therefore, from GitLab 18.3, we will no longer provide packages for the Ubuntu 20.04 distribution for Linux package installs.
-GitLab 18.2 will be the last GitLab version with Linux packages for Ubuntu 20.04.
-You should upgrade to Ubuntu 22.04 for continued support.
-
-</div>
 
 <div class="deprecation breaking-change" data-milestone="18.3">
 

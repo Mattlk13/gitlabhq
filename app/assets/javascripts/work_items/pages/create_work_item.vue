@@ -8,9 +8,12 @@ import {
   ROUTES,
   RELATED_ITEM_ID_URL_QUERY_PARAM,
   BASE_ALLOWED_CREATE_TYPES,
-  WORK_ITEM_TYPE_NAME_ISSUE,
+  WORK_ITEM_TYPE_NAME_EPIC,
   WORK_ITEM_TYPE_NAME_INCIDENT,
+  WORK_ITEM_TYPE_NAME_ISSUE,
   WORK_ITEM_TYPE_NAME_TASK,
+  WORK_ITEM_TYPE_ROUTE_WORK_ITEM,
+  WORK_ITEM_TYPE_ROUTE_ISSUE,
 } from '../constants';
 import workItemRelatedItemQuery from '../graphql/work_item_related_item.query.graphql';
 import { convertTypeEnumToName } from '../utils';
@@ -23,6 +26,10 @@ export default {
   },
   inject: ['isGroup'],
   props: {
+    rootPageFullPath: {
+      type: String,
+      required: true,
+    },
     workItemTypeEnum: {
       type: String,
       required: false,
@@ -70,6 +77,9 @@ export default {
     },
   },
   computed: {
+    isEpic() {
+      return this.workItemType === WORK_ITEM_TYPE_NAME_EPIC;
+    },
     isIncident() {
       return this.workItemType === WORK_ITEM_TYPE_NAME_INCIDENT;
     },
@@ -86,13 +96,16 @@ export default {
 
       return [];
     },
+    isNewGroupWorkItem() {
+      return !this.isEpic && this.isGroup;
+    },
   },
   methods: {
     updateWorkItemType(type) {
       this.workItemType = type;
     },
     workItemCreated({ workItem, numberOfDiscussionsResolved }) {
-      if (this.$router && !this.isIncident) {
+      if (this.$router && !this.isIncident && !this.isNewGroupWorkItem) {
         const routerPushObject = {
           name: ROUTES.workItem,
           params: { iid: workItem.iid },
@@ -111,14 +124,15 @@ export default {
       const isWorkItemRoute = this.$route.params?.type === 'work_items';
       const isGroupWorkItemRoute = isWorkItemRoute && this.$router.history.base.includes('groups');
 
-      /*
-        If the route is epics, issues or work items on the group level
-        (because work items on the project level is not yet available)
-        we redirect to the list page when the user clicks on cancel,
-        otherwise we go back to the previous page.
-      */
-
-      if (Boolean(listPath) && (!isWorkItemRoute || isGroupWorkItemRoute)) {
+      /**
+       * If the route is epics, issues or work items on the group level
+       * (because work items on the project level is not yet available)
+       * we redirect to the list page when the user clicks on cancel,
+       * otherwise we go back to the previous page.
+       */
+      if (Boolean(listPath) && isWorkItemRoute && isGroupWorkItemRoute) {
+        visitUrl(listPath.replaceAll(WORK_ITEM_TYPE_ROUTE_WORK_ITEM, WORK_ITEM_TYPE_ROUTE_ISSUE));
+      } else if (Boolean(listPath) && (!isWorkItemRoute || isGroupWorkItemRoute)) {
         visitUrl(listPath);
       } else {
         this.$router.go(-1);
@@ -150,11 +164,13 @@ export default {
 <template>
   <div>
     <create-work-item
+      :full-path="rootPageFullPath"
       :preselected-work-item-type="workItemType"
       :is-group="isGroup"
       :related-item="relatedItem"
       :should-discard-draft="shouldDiscardDraft"
-      :always-show-work-item-type-select="!isGroup"
+      :always-show-work-item-type-select="!isEpic"
+      :show-project-selector="isNewGroupWorkItem"
       :allowed-work-item-types="allowedWorkItemTypes"
       @updateType="updateWorkItemType($event)"
       @confirmCancel="handleConfirmCancellation"

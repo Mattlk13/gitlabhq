@@ -30,7 +30,9 @@ class ForkNamespaceEntity < Grape::Entity
     markdown_description(namespace)
   end
 
-  expose :marked_for_deletion?, as: :marked_for_deletion
+  # Deprecated in favor of :self_deletion_scheduled
+  expose :self_deletion_scheduled?, as: :marked_for_deletion
+  expose :self_deletion_scheduled?, as: :self_deletion_scheduled
 
   private
 
@@ -41,6 +43,6 @@ class ForkNamespaceEntity < Grape::Entity
   end
 
   def markdown_description(namespace)
-    markdown_field(namespace, :description)
+    markdown_field(namespace.namespace_details, :description)
   end
 end

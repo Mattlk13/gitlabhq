@@ -68,7 +68,7 @@ Now, after the pipeline runs, the quality tool's results are [processed and disp
 
 {{< alert type="warning" >}}
 
-This feature was [deprecated](../../update/deprecations.md#codeclimate-based-code-quality-scanning-will-be-removed) in GitLab 17.3 and is planned for removal in 18.0.
+This feature was [deprecated](../../update/deprecations.md#codeclimate-based-code-quality-scanning-will-be-removed) in GitLab 17.3 and is planned for removal in 19.0.
 [Integrate the results from a supported tool directly](#import-code-quality-results-from-a-cicd-job) instead.
 
 {{< /alert >}}
@@ -163,11 +163,11 @@ that were found on the branch it was run on.
 
 {{< history >}}
 
-- [Introduced](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/72724) in GitLab 14.5 [with a flag](../../administration/feature_flags.md) named `project_quality_summary_page`. This feature is in [beta](../../policy/development_stages_support.md). Disabled by default.
+- [Introduced](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/72724) in GitLab 14.5 [with a flag](../../administration/feature_flags/_index.md) named `project_quality_summary_page`. This feature is in [beta](../../policy/development_stages_support.md). Disabled by default.
 
 {{< /history >}}
 
-The project quality view displays an overview of the code quality findings. The view can be found under **Analyze > CI/CD analytics**, and requires [`project_quality_summary_page`](../../user/feature_flags.md) feature flag to be enabled for this particular project.
+The project quality view displays an overview of the code quality findings. The view can be found under **Analyze > CI/CD analytics**, and requires [`project_quality_summary_page`](../../administration/feature_flags/_index.md) feature flag to be enabled for this particular project.
 
 ![Total number of issues, called violations, followed by the number of issues of each severity](img/code_quality_summary_v15_9.png)
 
@@ -310,7 +310,12 @@ You can also use or adapt the [documented Ruff GitLab CI/CD integration](https:/
 If you already have a [`golangci-lint`](https://golangci-lint.run/) job in your CI/CD pipelines, you should add a report to send its output to Code Quality.
 To integrate its output:
 
-1. Add the arguments `--out-format code-climate:gl-code-quality-report.json,line-number` to the command you use to run golangci-lint.
+1. Add the arguments to the command you use to run `golangci-lint`.
+
+   For v1 add  `--out-format code-climate:gl-code-quality-report.json,line-number`.
+
+   For v2 add  `--output.code-climate.path=gl-code-quality-report.json`.
+
 1. Declare a [`codequality` report artifact](../yaml/artifacts_reports.md#artifactsreportscodequality) that points to the location of the report file.
 
 You can also use or adapt the [golangci-lint CI/CD component](https://gitlab.com/explore/catalog/components/code-quality-oss/codequality-os-scanners-integration) to run the scan and integrate its output with Code Quality.

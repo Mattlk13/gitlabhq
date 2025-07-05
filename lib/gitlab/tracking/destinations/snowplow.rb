@@ -5,16 +5,17 @@ require 'snowplow-tracker'
 module Gitlab
   module Tracking
     module Destinations
-      class Snowplow < Base
-        extend ::Gitlab::Utils::Override
-
+      class Snowplow
         SNOWPLOW_NAMESPACE = 'gl'
-        PRODUCT_USAGE_EVENT_COLLECT_ENDPOINT = 'events.gitlab.net'
-        PRODUCT_USAGE_EVENT_COLLECT_ENDPOINT_STG = 'events-stg.gitlab.net'
         DEDICATED_APP_ID = 'gitlab_dedicated'
         SELF_MANAGED_APP_ID = 'gitlab_sm'
 
-        def initialize
+        delegate :hostname, :uri, :protocol, to: :@destination_configuration
+
+        attr_reader :destination_configuration
+
+        def initialize(destination_configuration = DestinationConfiguration.snowplow_configuration)
+          @destination_configuration = destination_configuration
           @event_eligibility_checker = Gitlab::Tracking::EventEligibilityChecker.new
 
           return if batching_disabled?
@@ -22,7 +23,6 @@ module Gitlab
           Kernel.at_exit { tracker.flush(async: false) }
         end
 
-        override :event
         def event(category, action, label: nil, property: nil, value: nil, context: nil)
           return unless @event_eligibility_checker.eligible?(action)
 
@@ -45,25 +45,10 @@ module Gitlab
         end
 
         def frontend_client_options(group)
-          if Gitlab::CurrentSettings.snowplow_enabled? || ::Feature.disabled?(:collect_product_usage_events, :instance)
+          if Gitlab::CurrentSettings.snowplow_enabled?
             snowplow_options(group)
           else
             product_usage_events_options
-          end
-        end
-
-        def enabled?
-          Gitlab::CurrentSettings.snowplow_enabled? ||
-            ::Feature.enabled?(:collect_product_usage_events, :instance)
-        end
-
-        def hostname
-          if Gitlab::CurrentSettings.snowplow_enabled?
-            Gitlab::CurrentSettings.snowplow_collector_hostname
-          elsif Feature.enabled?(:use_staging_endpoint_for_product_usage_events, :instance)
-            PRODUCT_USAGE_EVENT_COLLECT_ENDPOINT_STG
-          else
-            PRODUCT_USAGE_EVENT_COLLECT_ENDPOINT
           end
         end
 
@@ -114,10 +99,6 @@ module Gitlab
           Gitlab::Utils.to_boolean(ENV['GITLAB_DISABLE_PRODUCT_USAGE_EVENT_LOGGING'], default: false)
         end
 
-        def protocol
-          'https'
-        end
-
         def cookie_domain
           Gitlab::CurrentSettings.snowplow_cookie_domain
         end
@@ -139,6 +120,9 @@ module Gitlab
         end
 
         def emitter_class
+          # Use test emitter in test environment to prevent HTTP requests
+          return SnowplowTestEmitter if Rails.env.test?
+
           # snowplow_enabled? is true for gitlab.com and customers that configured their own Snowplow collector
           # In both bases we do not want to log the events being sent as the instance is controlled by the same company
           # controlling the Snowplow collector.

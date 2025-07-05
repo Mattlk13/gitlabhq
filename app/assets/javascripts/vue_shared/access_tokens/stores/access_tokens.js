@@ -1,6 +1,5 @@
 import { defineStore } from 'pinia';
 import { createAlert } from '~/alert';
-import Api from '~/api';
 import { smoothScrollTop } from '~/behaviors/smooth_scroll';
 import axios from '~/lib/utils/axios_utils';
 import {
@@ -11,11 +10,12 @@ import {
 import { joinPaths } from '~/lib/utils/url_utility';
 import { s__ } from '~/locale';
 import { SORT_OPTIONS, DEFAULT_SORT } from '~/access_tokens/constants';
-import { serializeParams, update2WeekFromNow, updateUrlWithQueryParams } from '../utils';
+import { serializeParams, update15DaysFromNow } from '../utils';
 
 /**
  * @typedef {{type: string, value: {data: string, operator: string}}} Filter
  * @typedef {Array<string|Filter>} Filters
+ * @typedef {{isAsc: boolean, value: string}} Sorting
  */
 
 /**
@@ -71,7 +71,7 @@ export const useAccessTokens = defineStore('accessTokens', {
       this.alert = null;
       this.busy = true;
       try {
-        const url = Api.buildUrl(this.urlCreate.replace(':id', this.id));
+        const url = this.urlCreate.replace(':id', this.id);
         const { data } = await axios.post(url, {
           name,
           description,
@@ -97,11 +97,11 @@ export const useAccessTokens = defineStore('accessTokens', {
     },
     async fetchStatistics() {
       try {
-        const updatedFilters = update2WeekFromNow();
+        const updatedFilters = update15DaysFromNow();
         this.statistics = await Promise.all(
           updatedFilters.map(async (stat) => {
             const params = serializeParams(stat.filters);
-            const url = Api.buildUrl(this.urlShow.replace(':id', this.id));
+            const url = this.urlShow.replace(':id', this.id);
             const { total } = await fetchTokens({
               url,
               params,
@@ -130,8 +130,7 @@ export const useAccessTokens = defineStore('accessTokens', {
       }
       this.busy = true;
       try {
-        const url = Api.buildUrl(this.urlShow.replace(':id', this.id));
-        updateUrlWithQueryParams({ params: this.params, sort: this.sort });
+        const url = this.urlShow.replace(':id', this.id);
         const { data, perPage, total } = await fetchTokens({
           url,
           params: this.params,
@@ -158,7 +157,7 @@ export const useAccessTokens = defineStore('accessTokens', {
       this.busy = true;
       this.showCreateForm = false;
       try {
-        const url = Api.buildUrl(this.urlRevoke.replace(':id', this.id));
+        const url = this.urlRevoke.replace(':id', this.id);
         await axios.delete(joinPaths(url, `${tokenId}`));
         this.alert = createAlert({
           message: s__('AccessTokens|The token was revoked successfully.'),
@@ -190,7 +189,7 @@ export const useAccessTokens = defineStore('accessTokens', {
       this.busy = true;
       this.showCreateForm = false;
       try {
-        const url = Api.buildUrl(this.urlRotate.replace(':id', this.id));
+        const url = this.urlRotate.replace(':id', this.id);
         const { data } = await axios.post(joinPaths(url, `${tokenId}`, 'rotate'), {
           expires_at: expiresAt,
         });
@@ -236,7 +235,7 @@ export const useAccessTokens = defineStore('accessTokens', {
       this.token = token;
     },
     /**
-     * @param {{isAsc: boolean, value: string}} sorting
+     * @param {Sorting} sorting
      */
     setSorting(sorting) {
       this.sorting = sorting;
@@ -245,16 +244,31 @@ export const useAccessTokens = defineStore('accessTokens', {
      * @param {Object} options
      *    @param {Filters} options.filters
      *    @param {number} options.id
+     *    @param {number} options.page
+     *    @param {boolean} options.showCreateForm
+     *    @param {Sorting} options.sorting
      *    @param {string} options.urlCreate
      *    @param {string} options.urlRevoke
      *    @param {string} options.urlRotate
      *    @param {string} options.urlShow
      */
-    setup({ filters, id, page, sorting, urlCreate, urlRevoke, urlRotate, urlShow }) {
+    setup({
+      filters,
+      id,
+      page,
+      showCreateForm,
+      sorting,
+      urlCreate,
+      urlRevoke,
+      urlRotate,
+      urlShow,
+    }) {
       this.filters = filters;
       this.id = id;
       this.page = page;
+      this.showCreateForm = showCreateForm;
       this.sorting = sorting;
+      this.token = null;
       this.urlCreate = urlCreate;
       this.urlRevoke = urlRevoke;
       this.urlRotate = urlRotate;
@@ -270,6 +284,12 @@ export const useAccessTokens = defineStore('accessTokens', {
       const sortOption = SORT_OPTIONS.find((option) => option.value === value);
 
       return isAsc ? sortOption.sort.asc : sortOption.sort.desc;
+    },
+    urlParams() {
+      return {
+        ...this.params,
+        sort: this.sort,
+      };
     },
   },
 });

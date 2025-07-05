@@ -23,6 +23,7 @@ RSpec.describe Ci::RunnerManager, feature_category: :fleet_visibility, type: :mo
     it { is_expected.to validate_length_of(:system_xid).is_at_most(64) }
     it { is_expected.to validate_presence_of(:runner_type).on(:create) }
     it { is_expected.to validate_presence_of(:sharding_key_id).on(:create) }
+    it { is_expected.to validate_presence_of(:organization_id).on([:create, :update]) }
     it { is_expected.to validate_length_of(:version).is_at_most(2048) }
     it { is_expected.to validate_length_of(:revision).is_at_most(255) }
     it { is_expected.to validate_length_of(:platform).is_at_most(255) }
@@ -43,6 +44,18 @@ RSpec.describe Ci::RunnerManager, feature_category: :fleet_visibility, type: :mo
           expect(runner_manager).to be_invalid
           expect(runner_manager.errors.full_messages).to contain_exactly(
             'Runner manager cannot have sharding_key_id assigned')
+        end
+      end
+
+      context 'when organization_id is present' do
+        let(:runner_manager) do
+          build(:ci_runner_machine, runner: build(:ci_runner, organization_id: non_existing_record_id))
+        end
+
+        it 'is invalid' do
+          expect(runner_manager).to be_invalid
+          expect(runner_manager.errors.full_messages).to contain_exactly(
+            'Runner manager cannot have organization_id assigned')
         end
       end
     end
@@ -741,6 +754,46 @@ RSpec.describe Ci::RunnerManager, feature_category: :fleet_visibility, type: :mo
       let(:runner_manager) { build_stubbed(:ci_runner_machine, :cancel_gracefully_feature) }
 
       it { is_expected.to be true }
+    end
+  end
+
+  describe '#ensure_organization_id' do
+    context 'with group runner' do
+      let(:runner) { build(:ci_runner, :group, groups: [group]) }
+      let(:runner_machine) { build(:ci_runner_machine, runner: runner) }
+
+      context 'when organization_id is not present' do
+        before do
+          runner_machine.save!
+
+          # Simulate a pre-existing record with a NULL organization_id value
+          runner_machine.update_columns(organization_id: nil)
+        end
+
+        it 'populates organization_id from runner on save', :aggregate_failures do
+          expect { runner_machine.save! }
+            .to change { runner_machine.organization_id }.from(nil).to(runner.organization_id)
+        end
+      end
+    end
+
+    context 'with project runner' do
+      let(:runner) { build(:ci_runner, :project, projects: [project]) }
+      let(:runner_machine) { build(:ci_runner_machine, runner: runner) }
+
+      context 'when organization_id is not present' do
+        before do
+          runner_machine.save!
+
+          # Simulate a pre-existing record with a NULL organization_id value
+          runner_machine.update_columns(organization_id: nil)
+        end
+
+        it 'populates organization_id from runner on save', :aggregate_failures do
+          expect { runner_machine.save! }
+            .to change { runner_machine.organization_id }.from(nil).to(runner.organization_id)
+        end
+      end
     end
   end
 end

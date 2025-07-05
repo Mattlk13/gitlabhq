@@ -18,14 +18,15 @@ $none-code-mark: #d3e3f4;
   --diff-deletion-color: #{$gl-color-neutral-50};
 }
 
-.code.none {
+.code.none,
+.code.code-syntax-highlight-theme {
   --code-light-theme: 1;
   --diff-expansion-background-color: #{$gl-color-neutral-100};
 
   --code-background: #{$gl-color-neutral-0};
 
-  --code-line-nubmer-background-color: #{$gl-color-neutral-10};
-  --code-line-nubmer-color: #{$gl-color-alpha-dark-24};
+  --code-line-number-background-color: #{$gl-color-neutral-10};
+  --code-line-number-color: #{$gl-color-alpha-dark-24};
 
   --code-old-diff-line-number-background-color: #{$gl-color-neutral-50};
   --code-old-diff-sign-color: #{$gl-color-neutral-800};

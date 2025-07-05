@@ -164,7 +164,7 @@ To resolve the vulnerability:
    - A blue icon is shown next to vulnerabilities that support Vulnerability Resolution.
 1. In the upper-right corner, select **Resolve with AI**. If this project is a public project be aware that creating an MR will publicly expose the vulnerability and offered resolution. To create the MR privately, [create a private fork](../../project/merge_requests/confidential.md), and repeat this process.
 1. Add an additional commit to the MR. This forces a new pipeline to run.
-1. After the pipeline is complete, on the [pipeline security tab](../vulnerability_report/pipeline.md#view-vulnerabilities-in-a-pipeline), confirm that the vulnerability no longer appears.
+1. After the pipeline is complete, on the [pipeline security tab](../detect/security_scanning_results.md), confirm that the vulnerability no longer appears.
 1. On the vulnerability report, [manually update the vulnerability](../vulnerability_report/_index.md#change-status-of-vulnerabilities).
 
 A merge request containing the AI remediation suggestions is opened. Review the suggested changes,
@@ -300,8 +300,8 @@ Vulnerability Resolution in a merge request sometimes cannot generate a suggeste
   - These errors may be caused by temporary problems with the AI provider or with GitLab Duo.
   - A new request may succeed, so you can try to resolve the vulnerability again.
   - If you continue to see these errors, contact GitLab for assistance.
-- **Resolution target could not be found in the merge request, unable to create suggestion**:
-  - This error may occur when the target branch has not run a full security scan pipeline. See the [merge request documentation](../detect/security_scan_results.md#merge-request).
+- **Resolution target could not be found in the merge request, unable to create suggestion:**
+  - This error may occur when the target branch has not run a full security scan pipeline. See the [merge request documentation](../detect/security_scanning_results.md).
 
 ## Vulnerability code flow
 
@@ -375,7 +375,7 @@ You can find a link to the commit that resolved the vulnerability at the top or 
 
 {{< history >}}
 
-- [Introduced](https://gitlab.com/groups/gitlab-org/-/epics/4942) in GitLab 15.11 [with a flag](../../../administration/feature_flags.md) named `dismissal_reason`.
+- [Introduced](https://gitlab.com/groups/gitlab-org/-/epics/4942) in GitLab 15.11 [with a flag](../../../administration/feature_flags/_index.md) named `dismissal_reason`.
 - [Enabled on GitLab Self-Managed and GitLab Dedicated](https://gitlab.com/gitlab-org/gitlab/-/issues/393005) in GitLab 16.0.
 - [Generally available](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/124397) in GitLab 16.2. Feature flag `dismissal_reason` removed.
 
@@ -552,7 +552,7 @@ To manually apply the patch that GitLab generated for a vulnerability:
 
 {{< alert type="note" >}}
 
-Security training is not accessible in an environment that is offline, meaning computers that are isolated from the public internet as a security measure. Specifically, the GitLab server needs the ability to query the API endpoints for any training provider you choose to enable. Some third-party training vendors may require you to sign up for a _free_ account. Sign up for an account by going to
+Security training is not accessible in an environment that is offline, meaning computers that are isolated from the public internet as a security measure. Specifically, the GitLab server needs the ability to query the API endpoints for any training provider you choose to enable. Some third-party training vendors may require you to sign up for a free account. Sign up for an account by going to
 any of [Secure Code Warrior](https://www.securecodewarrior.com/), [Kontra](https://application.security/), or [SecureFlag](https://www.secureflag.com/index.html).
 GitLab does not send any user information to these third-party vendors; we do send the CWE or OWASP identifier and the language name of the file extension.
 
@@ -589,7 +589,7 @@ To view the security training for a vulnerability:
 
 {{< history >}}
 
-- View dependency paths option [introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/519965) in GitLab 17.11 [with a flag](../../../administration/feature_flags.md) named `dependency_paths`. Disabled by default.
+- View dependency paths option [introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/519965) in GitLab 17.11 [with a flag](../../../administration/feature_flags/_index.md) named `dependency_paths`. Disabled by default.
 
 {{< /history >}}
 
@@ -607,6 +607,6 @@ When managing vulnerabilities found in dependencies in the vulnerability details
 
 If the vulnerability occurs in one or more transitive dependencies, knowing only the direct dependency may not be enough. Transitive dependencies are indirect dependencies that have a direct dependent as an ancestor.
 
-If any transitive dependencies exist, you can view the paths to all dependencies, including the transitive dependencies that contain the vulnerability. 
+If any transitive dependencies exist, you can view the paths to all dependencies, including the transitive dependencies that contain the vulnerability.
 
 - On the vulnerability details page, under **Location**, select **View dependency paths**. If **View dependency paths** doesn't appear, then there are no transitive dependencies.

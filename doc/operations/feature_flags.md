@@ -19,7 +19,7 @@ You can toggle a feature on and off to subsets of users, helping you achieve Con
 Feature flags help reduce risk, allowing you to do controlled testing, and separate feature
 delivery from customer launch.
 
-A [complete list of feature flags](../user/feature_flags.md) in GitLab is also available.
+A [complete list of feature flags](../administration/feature_flags/list.md) in GitLab is also available.
 
 <i class="fa fa-youtube-play youtube" aria-hidden="true"></i>
 For an example of feature flags in action, see [Eliminating risk with feature flags](https://www.youtube.com/watch?v=U9WqoK9froI).
@@ -261,7 +261,7 @@ To get the access credentials that your application needs to communicate with Gi
 1. Select **Configure** to view the following:
    - **API URL**: URL where the client (application) connects to get a list of feature flags.
    - **Instance ID**: Unique token that authorizes the retrieval of the feature flags.
-   - **Application name**: The name of the *environment* the application runs in
+   - **Application name**: The name of the environment the application runs in
      (not the name of the application itself).
 
      For example, if the application runs for a production server, the **Application name**

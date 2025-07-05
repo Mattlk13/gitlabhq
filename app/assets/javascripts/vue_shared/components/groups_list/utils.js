@@ -7,14 +7,18 @@ import {
   ACTION_RESTORE,
 } from '~/vue_shared/components/list_actions/constants';
 
-export const availableGraphQLGroupActions = ({ userPermissions, markedForDeletionOn }) => {
+export const availableGraphQLGroupActions = ({
+  userPermissions,
+  markedForDeletion,
+  isSelfDeletionInProgress,
+}) => {
   const baseActions = [];
 
   if (userPermissions.viewEditPage) {
     baseActions.push(ACTION_EDIT);
   }
 
-  if (userPermissions.removeGroup && markedForDeletionOn) {
+  if (userPermissions.removeGroup && markedForDeletion && !isSelfDeletionInProgress) {
     baseActions.push(ACTION_RESTORE);
   }
 
@@ -22,7 +26,7 @@ export const availableGraphQLGroupActions = ({ userPermissions, markedForDeletio
     baseActions.push(ACTION_LEAVE);
   }
 
-  if (userPermissions.removeGroup) {
+  if (userPermissions.removeGroup && !isSelfDeletionInProgress) {
     baseActions.push(ACTION_DELETE);
   }
 
@@ -30,8 +34,8 @@ export const availableGraphQLGroupActions = ({ userPermissions, markedForDeletio
 };
 
 export const renderDeleteSuccessToast = (item) => {
-  // If delayed deletion is disabled or the project/group is already marked for deletion
-  if (!item.isAdjournedDeletionEnabled || item.markedForDeletionOn) {
+  // If the project/group is already marked for deletion
+  if (item.markedForDeletion) {
     toast(
       sprintf(__("Group '%{group_name}' is being deleted."), {
         group_name: item.fullName,
@@ -51,7 +55,7 @@ export const renderDeleteSuccessToast = (item) => {
 
 export const renderLeaveSuccessToast = (group) => {
   toast(
-    sprintf(__("Left the '%{group_name}' group successfully."), {
+    sprintf(__('You left the "%{group_name}" group.'), {
       group_name: group.fullName,
     }),
   );
@@ -66,8 +70,8 @@ export const renderRestoreSuccessToast = (group) => {
 };
 
 export const deleteParams = (item) => {
-  // If delayed deletion is disabled or the project/group is not yet marked for deletion
-  if (!item.isAdjournedDeletionEnabled || !item.markedForDeletionOn) {
+  // If the project/group is not yet marked for deletion
+  if (!item.markedForDeletion) {
     return {};
   }
 
