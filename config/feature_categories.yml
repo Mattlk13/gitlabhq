@@ -60,6 +60,7 @@
 - duo_chat
 - duo_setting
 - duo_workflow
+- durability_metrics
 - dynamic_application_security_testing
 - editor_extensions
 - environment_management
@@ -67,7 +68,6 @@
 - feature_flags
 - fleet_visibility
 - fulfillment_infradev
-- fulfillment_internal_admin_tooling
 - fuzz_testing
 - geo_replication
 - git
@@ -133,7 +133,6 @@
 - sidekiq
 - software_composition_analysis
 - source_code_management
-- sscs
 - static_application_security_testing
 - subscription_management
 - switchboard
@@ -148,4 +147,5 @@
 - web_ide
 - webhooks
 - wiki
+- workflow_catalog
 - workspaces

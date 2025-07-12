@@ -1,5 +1,3 @@
-- return unless Gitlab::Tracking.enabled?
-
 - namespace = @group || @project&.namespace || @namespace
 = webpack_bundle_tag 'tracker'
 - if Gitlab.com?
@@ -11,7 +9,6 @@
     gl = window.gl || {};
     gl.snowplowStandardContext = #{Gitlab::Tracking::StandardContext.new(
       namespace: namespace,
-      plan_name: namespace&.actual_plan_name,
       project_id: @project&.id,
       user: current_user
     ).to_context.to_json.to_json}

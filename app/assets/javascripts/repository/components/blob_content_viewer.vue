@@ -1,6 +1,7 @@
 <script>
 import { GlLoadingIcon, GlButton } from '@gitlab/ui';
 import { uniqueId } from 'lodash';
+import { computed } from 'vue';
 import { logError } from '~/lib/logger';
 import { captureException } from '~/sentry/sentry_browser_wrapper';
 import BlobContent from '~/blob/components/blob_content.vue';
@@ -29,8 +30,6 @@ import {
   EMPTY_FILE,
   EVENT_FILE_SIZE_LIMIT_EXCEEDED,
 } from '../constants';
-import BlobButtonGroup from './blob_button_group.vue';
-import ForkSuggestion from './fork_suggestion.vue';
 import { loadViewer } from './blob_viewers';
 
 const trackingMixin = InternalEvents.mixin();
@@ -38,11 +37,9 @@ const trackingMixin = InternalEvents.mixin();
 export default {
   components: {
     BlobHeader,
-    BlobButtonGroup,
     BlobContent,
     GlLoadingIcon,
     GlButton,
-    ForkSuggestion,
     CodeIntelligence,
     AiGenie: () => import('ee_component/ai/components/ai_genie.vue'),
   },
@@ -102,7 +99,7 @@ export default {
         if (this.isTooLarge) {
           this.trackEvent(EVENT_FILE_SIZE_LIMIT_EXCEEDED, {
             label: this.blobInfo.language,
-            property: this.blobInfo.size,
+            property: String(this.blobInfo.size),
           });
         }
 
@@ -122,7 +119,7 @@ export default {
     },
   },
   provide() {
-    return { blobHash: uniqueId() };
+    return { blobHash: uniqueId(), currentRef: computed(() => this.currentRef) };
   },
   props: {
     path: {
@@ -317,7 +314,9 @@ export default {
 
           await this.$nextTick();
           handleLocationHash(); // Ensures that we scroll to the hash when async content is loaded
-          eventHub.$emit('showBlobInteractionZones', this.blobInfo.path);
+          if (type === SIMPLE_BLOB_VIEWER) {
+            eventHub.$emit('showBlobInteractionZones', this.blobInfo.path);
+          }
         })
         .catch(() => this.displayError())
         .finally(() => {
@@ -403,35 +402,12 @@ export default {
         :project-path="projectPath"
         :project-id="projectId"
         :is-using-lfs="isUsingLfs"
+        :current-ref="currentRef"
         @viewer-changed="handleViewerChanged"
         @copy="onCopy"
         @edit="editBlob"
         @error="displayError"
         @blame="handleToggleBlame"
-      >
-        <template #actions>
-          <blob-button-group
-            v-if="isLoggedIn && !blobInfo.archived && !glFeatures.blobOverflowMenu"
-            :path="path"
-            :name="blobInfo.name"
-            :replace-path="blobInfo.replacePath"
-            :delete-path="blobInfo.webPath"
-            :can-push-code="userPermissions.pushCode"
-            :can-push-to-branch="blobInfo.canCurrentUserPushToBranch"
-            :empty-repo="isEmptyRepository"
-            :project-path="projectPath"
-            :is-locked="Boolean(pathLockedByUser)"
-            :can-lock="canLock"
-            :show-fork-suggestion="showSingleFileEditorForkSuggestion"
-            :is-using-lfs="isUsingLfs"
-            @fork="setForkTarget('view')"
-          />
-        </template>
-      </blob-header>
-      <fork-suggestion
-        v-if="forkTarget && showForkSuggestion"
-        :fork-path="forkPath"
-        @cancel="setForkTarget(null)"
       />
       <blob-content
         v-if="!blobViewer"

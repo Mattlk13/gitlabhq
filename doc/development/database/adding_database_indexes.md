@@ -74,13 +74,67 @@ In short:
 1. Run the query using `EXPLAIN ANALYZE` and study the output to find the most
    ideal query.
 
+## Partial Indexes
+
+Partial indexes are indexes with a `WHERE` clause that limits them to a subset of matching rows.
+They can offer several advantages over full indexes, including:
+
+- Reduced index size and memory usage
+- Less write and vacuum overhead
+- Improved query performance for selective conditions
+
+Partial indexes work best for queries that always filter on known conditions and target a specific subset of data.
+Common use cases include:
+
+- Nullable columns: `WHERE column IS NOT NULL`
+- Boolean flags: `WHERE feature_enabled = true`
+- Soft deletes: `WHERE deleted_at IS NULL`
+- Status filters: `WHERE status IN ('queued', 'running')`
+
+Before creating any new partial index, first examine existing indexes for potential reuse or modification.
+Since each index incurs maintenance overhead, prioritize adapting current indexes over adding new ones.
+
+### Example
+
+Consider the following application code which introduces a new count query:
+
+```ruby
+def namespace_count
+  NamespaceSetting.where(duo_features_enabled: duo_settings_value).count
+end
+
+def duo_settings_value
+  params['duo_settings_value'] == 'default_on'
+end
+```
+
+where `namespace_settings` is a table with 1 million records,
+and `duo_features_enabled` is a nullable Boolean column.
+
+Let's assume that we recently introduced this column and it was not backfilled.
+This means we know that the majority of the records in the `namespace_settings` table have a `NULL`
+value for `duo_features_enabled`. We can also see that `duo_settings_value` will only either yield
+`true` or `false`.
+
+Indexing all rows would be inefficient as we mostly have `NULL` values. Instead,
+we can introduce a partial index that targets only the data of interest:
+
+```sql
+CREATE INDEX index_namespace_settings_on_duo_features_enabled_not_null
+ON namespace_settings (duo_features_enabled) 
+WHERE duo_features_enabled IS NOT NULL;
+```
+
+Now we have an index that is just a small fraction of the full index size and the
+query planner can effectively skip over hundreds of thousands of irrelevant records.
+
 ## Data Size
 
 A database may not use an index even when a regular sequence scan
 (iterating over all rows) is faster, especially for small tables.
 
 Consider adding an index if a table is expected to grow, and your query has to filter a lot of rows.
-You may _not_ want to add an index if the table size is small (<`1,000` records),
+You may not want to add an index if the table size is small (<`1,000` records),
 or if existing indexes already filter out enough rows.
 
 ## Maintenance Overhead
@@ -328,12 +382,12 @@ Be aware that certain factors can give the false impression that an index is unu
           parent_idx.relname = '<PARENT_INDEX_NAME>';
         ```
 
-1. For GitLab.com, you can view index usage data in [Grafana](https://dashboards.gitlab.net/goto/shHCmIxHg?orgId=1).
+1. For GitLab.com, you can view index usage data in [Grafana](https://dashboards.gitlab.net/goto/TsYVxcBHR?orgId=1).
    - Query the metric `pg_stat_user_indexes_idx_scan` filtered by the relevant index(s) for at least the last 6 months.
-     The query below shows index usage across all database instances combined.
+     The query below shows index usage rate across all database instances combined.
 
      ```sql
-     sum by (indexrelname) (pg_stat_user_indexes_idx_scan{env="gprd", relname=~"<TABLE_NAME_REGEX>", indexrelname=~"<INDEX_NAME_REGEX>"})
+     sum by (indexrelname) (rate(pg_stat_user_indexes_idx_scan{env="gprd", relname=~"<TABLE_NAME_REGEX>", indexrelname=~"<INDEX_NAME_REGEX>"}[30d]))
      ```
 
    - For partitioned tables, we must check that **all child indexes are unused** prior to dropping the parent.
@@ -349,7 +403,7 @@ account for the occasional usage.
 
 #### Investigating related queries
 
-The following are ways to find all queries that _may_ utilize the index. It's important to understand the context in
+The following are ways to find all queries that may utilize the index. It's important to understand the context in
 which the queries are or may be executed so that we can determine if the index either:
 
 - Has no queries on GitLab.com nor on self-managed that depend on it.
@@ -649,6 +703,13 @@ def down
   unprepare_partitioned_async_index :p_ci_builds, :some_column, name: PARTITIONED_INDEX_NAME
 end
 ```
+
+{{< alert type="note" >}}
+
+Async indexes are only supported for GitLab.com environments,
+so `prepare_async_index` and `prepare_partitioned_async_index` are no-ops for other environments.
+
+{{< /alert >}}
 
 {{< alert type="note" >}}
 

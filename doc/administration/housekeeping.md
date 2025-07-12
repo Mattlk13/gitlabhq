@@ -56,7 +56,7 @@ be slow.
 
 {{< history >}}
 
-- [Introduced](https://gitlab.com/gitlab-org/gitaly/-/issues/2634) in GitLab 14.9 for the [manual trigger](#manual-trigger) and the push-based trigger [with a flag](feature_flags.md) named `optimized_housekeeping`. Enabled by default.
+- [Introduced](https://gitlab.com/gitlab-org/gitaly/-/issues/2634) in GitLab 14.9 for the [manual trigger](#manual-trigger) and the push-based trigger [with a flag](feature_flags/_index.md) named `optimized_housekeeping`. Enabled by default.
 - [Enabled on GitLab.com](https://gitlab.com/gitlab-org/gitlab/-/issues/353607) in GitLab 14.10.
 - [Generally available](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/107661) in GitLab 15.8. Feature flag `optimized_housekeeping` removed.
 
@@ -268,7 +268,7 @@ your [Gitaly log](logs/_index.md#gitaly-logs):
 ```
 
 The `actual_duration` (in nanoseconds) indicates how long the scheduled maintenance
-took to execute. In the example above, the scheduled housekeeping completed
+took to execute. In the previous example, the scheduled housekeeping completed
 in just over 5 minutes.
 
 ## Object pool repositories

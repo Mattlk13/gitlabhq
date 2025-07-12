@@ -42,9 +42,9 @@ GitLab Dedicated provides the following security features to protect your data a
 
 #### Authentication and authorization
 
-You can configure [SAML single sign-on (SSO)](../../integration/saml.md) using any number of SAML providers for authentication. Your instance acts as the service provider, and you provide the necessary configuration for GitLab to communicate with your Identity Providers (IdPs). SAML request signing, group sync, and SAML groups are supported.
+GitLab Dedicated supports [SAML](../../administration/dedicated/configure_instance/saml.md) and [OpenID Connect (OIDC)](../../administration/dedicated/configure_instance/openid_connect.md) providers for single sign-on (SSO).
 
-For more information, see how to configure [SAML](../../administration/dedicated/configure_instance/saml.md) for your instance.
+You can configure single sign-on (SSO) using the supported providers for authentication. Your instance acts as the service provider, and you provide the necessary configuration for GitLab to communicate with your Identity Providers (IdPs).
 
 #### Secure networking
 
@@ -211,17 +211,18 @@ This section lists the features that are not available for GitLab Dedicated.
 
 The following GitLab application features are not available:
 
-- LDAP, smart card, or Kerberos authentication
+- LDAP (Git clone with username / password), smart card, or Kerberos authentication
 - Multiple login providers
 - FortiAuthenticator or FortiToken 2FA
 - Reply by email
 - Service Desk
 - Some GitLab Duo AI capabilities
   - View the [list of supported AI features](../../user/ai_features.md)
-  - For more information, see the [Supporting AI Features on GitLab Dedicated](https://about.gitlab.com/direction/platforms/dedicated/#supporting-ai-features-on-gitlab-dedicated)
+  - For more information, see [supporting AI Features on GitLab Dedicated](https://about.gitlab.com/direction/gitlab_dedicated/#supporting-ai-features-on-gitlab-dedicated)
 - Features other than [available features](#available-features) that must be configured outside of the GitLab user interface
 - Any functionality or feature behind a feature flag that is turned `off` by default
 - [Sigstore for keyless signing and verification](../../ci/yaml/signing_examples.md)
+- OAuth providers outside of standard SAML
 
 The following features are not supported:
 
@@ -246,7 +247,7 @@ The following operational features are not available:
 
 ### Feature flags
 
-GitLab uses [feature flags](../../user/feature_flags.md) to support the development and rollout of new or experimental features.
+GitLab uses [feature flags](../../administration/feature_flags/_index.md) to support the development and rollout of new or experimental features.
 In GitLab Dedicated:
 
 - Features behind feature flags that are **enabled by default** are available.
@@ -257,6 +258,29 @@ Features behind flags that are disabled by default are not ready for production 
 When a feature becomes generally available and the flag is enabled or removed, the feature becomes available in
 GitLab Dedicated in the same GitLab version. GitLab Dedicated follows its own
 [release schedule](maintenance.md) for version deployments.
+
+## Service level availability
+
+GitLab Dedicated maintains a monthly service level objective of 99.5% availability.
+
+Service level availability measures the percentage of time that GitLab Dedicated is available for use during a calendar month. GitLab calculates availability based on the following core services:
+
+| Service area | Included features |
+|--|--|
+| Web interface | GitLab issues, merge requests, CI job logs, GitLab API, Git operations over HTTPS |
+| Container Registry | Registry HTTPS requests |
+| Git operations | Git push, pull, and clone operations over SSH |
+
+### Service level exclusions
+
+The following are not included in service level availability calculations:
+
+- Service interruptions caused by customer misconfigurations
+- Issues with customer or cloud provider infrastructure outside of GitLab control
+- Scheduled maintenance windows
+- Emergency maintenance for critical security or data issues
+- Service disruptions caused by natural disasters, widespread internet outages,
+  datacenter failures, or other events outside of GitLab control.
 
 ## Migrate to GitLab Dedicated
 

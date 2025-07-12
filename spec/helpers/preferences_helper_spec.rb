@@ -49,6 +49,16 @@ RSpec.describe PreferencesHelper, feature_category: :shared do
         { text: "Assigned merge requests", value: 'merge_requests' }
       ]
     end
+
+    context 'with `personal_homepage` feature flag enabled' do
+      before do
+        stub_feature_flags(personal_homepage: true)
+      end
+
+      it 'has an additional option' do
+        expect(helper.dashboard_choices).to include({ text: "Personal homepage", value: 'homepage' })
+      end
+    end
   end
 
   describe '#first_day_of_week_choices' do
@@ -119,6 +129,30 @@ RSpec.describe PreferencesHelper, feature_category: :shared do
     end
   end
 
+  describe '#user_application_light_mode?' do
+    context 'with a user' do
+      it "returns true if user's selected light mode" do
+        stub_user(color_mode_id: 1)
+
+        expect(helper.user_application_light_mode?).to eq true
+      end
+
+      it "returns false if user's selected dark mode" do
+        stub_user(color_mode_id: 2)
+
+        expect(helper.user_application_light_mode?).to eq false
+      end
+    end
+
+    context 'without a user' do
+      it 'returns false' do
+        stub_user
+
+        expect(helper.user_application_light_mode?).to eq true
+      end
+    end
+  end
+
   describe '#user_application_dark_mode?' do
     context 'with a user' do
       it "returns true if user's selected dark mode" do
@@ -147,14 +181,17 @@ RSpec.describe PreferencesHelper, feature_category: :shared do
     context 'with a user' do
       it "returns user's scheme's css_class" do
         allow(helper).to receive(:current_user)
-          .and_return(double(color_scheme_id: 3))
+          .and_return(double(color_scheme_id: 3, color_mode_id: 1))
 
         expect(helper.user_color_scheme).to eq 'solarized-light'
       end
 
       it 'returns the default when id is invalid' do
         allow(helper).to receive(:current_user)
-          .and_return(double(color_scheme_id: Gitlab::ColorSchemes.count + 5))
+          .and_return(double(color_scheme_id: Gitlab::ColorSchemes.count + 5, color_mode_id: 1))
+
+        expect(helper.user_color_scheme)
+          .to eq Gitlab::ColorSchemes.default.css_class
       end
     end
 
@@ -269,11 +306,6 @@ RSpec.describe PreferencesHelper, feature_category: :shared do
       context 'when Web IDE Extension Marketplace feature is enabled' do
         before do
           allow(::WebIde::ExtensionMarketplace).to receive(:feature_enabled_from_application_settings?)
-            .with(user: user)
-            .and_return(true)
-
-          allow(::WebIde::ExtensionMarketplace).to receive(:feature_enabled?)
-            .with(user: user)
             .and_return(true)
         end
 

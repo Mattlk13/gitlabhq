@@ -15,23 +15,27 @@ title: GitLab Duo with Amazon Q
 
 {{< history >}}
 
-- Introduced as [beta](../../policy/development_stages_support.md#beta) in GitLab 17.7 [with a flag](../../administration/feature_flags.md) named `amazon_q_integration`. Disabled by default.
+- Introduced as [beta](../../policy/development_stages_support.md#beta) in GitLab 17.7 [with a flag](../../administration/feature_flags/_index.md) named `amazon_q_integration`. Disabled by default.
 - Feature flag `amazon_q_integration` removed in GitLab 17.8.
-- Generally available in GitLab 17.11.
+- Generally available with additional GitLab Duo feature support in GitLab 17.11.
 
 {{< /history >}}
 
 {{< alert type="note" >}}
 
-If you have a GitLab Duo Pro or Duo Enterprise add-on, this feature is not available.
+GitLab Duo with Amazon Q cannot be combined with other GitLab Duo add-ons.
 
 {{< /alert >}}
 
 At Re:Invent 2024, Amazon announced the GitLab Duo with Amazon Q integration.
 With this integration, you can automate tasks and increase productivity.
 
-- <i class="fa fa-youtube-play youtube" aria-hidden="true"></i> [GitLab Duo with Amazon Q - From idea to merge request](https://youtu.be/jxxzNst3jpo?si=QHO8JnPgMoFIllbL) <!-- Video published on 2025-04-17 -->
-- For a click-through demo, see [the GitLab Duo with Amazon Q Product Tour](https://gitlab.navattic.com/duo-with-q).
+GitLab Duo with Amazon Q:
+
+- Can perform a variety of tasks in issues and merge requests.
+- [Includes many other GitLab Duo features](../gitlab_duo/feature_summary.md).
+
+For a click-through demo, see [the GitLab Duo with Amazon Q Product Tour](https://gitlab.navattic.com/duo-with-q).
 <!-- Demo published on 2025-04-23 -->
 
 To get a subscription to GitLab Duo with Amazon Q, contact your Account Executive.
@@ -149,24 +153,11 @@ To create test coverage for selected lines:
 - If the merge request includes a test file, it is updated with the suggested tests.
 - If the merge request does not include a test file, Amazon Q populates a comment with the suggested tests.
 
-## Additional supported features
-
-In addition, these features are available on GitLab Duo with Amazon Q.
-
-| Feature                                                                                                                                | GitLab version |
-|----------------------------------------------------------------------------------------------------------------------------------------|----------------|
-| [GitLab Duo Chat](../gitlab_duo_chat/_index.md)                                                                                | GitLab 17.11 and later |
-| [Code Suggestions](../project/repository/code_suggestions/_index.md)                                                           | GitLab 17.11 and later |
-| [Code Explanation](../project/repository/code_explain.md)                                                                      | GitLab 17.11 and later |
-| [Test Generation](../gitlab_duo_chat/examples.md#write-tests-in-the-ide)                                                       | GitLab 17.11 and later |
-| [Refactor Code](../gitlab_duo_chat/examples.md#refactor-code-in-the-ide)                                                       | GitLab 17.11 and later |
-| [Fix Code](../gitlab_duo_chat/examples.md#fix-code-in-the-ide)                                                                 | GitLab 17.11 and later |
-| [Root Cause Analysis](../gitlab_duo_chat/examples.md#troubleshoot-failed-cicd-jobs-with-root-cause-analysis)                   | GitLab 17.11 and later |
-| [Discussion Summary](../discussions/_index.md#summarize-issue-discussions-with-duo-chat)                                       | GitLab 17.11 and later |
-| [Vulnerability Explanation](../application_security/vulnerabilities/_index.md#explaining-a-vulnerability)                      | GitLab 17.11 and later |
-| [Vulnerability Resolution](../application_security/vulnerabilities/_index.md#vulnerability-resolution)                         | GitLab 17.11 and later |
-
 ## Related topics
 
 - [Set up GitLab Duo with Amazon Q](setup.md)
+- [View the full list of GitLab Duo with Amazon Q features](../gitlab_duo/feature_summary.md).
 - [GitLab Duo authentication and authorization](../gitlab_duo/security.md)
+- <i class="fa fa-youtube-play youtube" aria-hidden="true"></i> [GitLab Duo with Amazon Q - From idea to merge request](https://youtu.be/jxxzNst3jpo?si=QHO8JnPgMoFIllbL) <!-- Video published on 2025-04-17 -->
+- <i class="fa fa-youtube-play youtube" aria-hidden="true"></i> [GitLab Duo with Amazon Q - Code review optimization](https://youtu.be/4gFIgyFc02Q?si=S-jO2M2jcXnukuN_) <!-- Video published on 2025-05-20 -->
+- <i class="fa fa-youtube-play youtube" aria-hidden="true"></i> [GitLab Duo with Amazon Q - Make code changes based on feedback](https://youtu.be/31E9X9BrK5s?si=v232hBDmlGpv6fqC) <!-- Video published on 2025-05-30 -->

@@ -3,6 +3,7 @@ stages:
   - preflight
   - prepare
   - build-images
+  - release-environments
   - fixtures
   - lint
   - test-frontend
@@ -14,7 +15,6 @@ stages:
   - pre-merge
   - pages
   - notify
-  - release-environments
   - benchmark
   - ai-gateway
 
@@ -139,15 +139,6 @@ workflow:
       variables:
         <<: *next-ruby-variables
         PIPELINE_NAME: 'Scheduled Ruby $RUBY_VERSION $CI_COMMIT_BRANCH branch'
-    # To create mappings with crystalball oneshot coverage strategy, simplecov needs to be disabled
-    # Collect these mappings in nightly schedule only for now
-    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && $CI_PIPELINE_SOURCE == "schedule" && $SCHEDULE_TYPE == "nightly"'
-      variables:
-        <<: [*default-ruby-variables, *default-branch-pipeline-failure-variables]
-        CRYSTALBALL: "true"
-        CRYSTALBALL_COVERAGE_STRATEGY: "true"
-        SIMPLECOV: 0
-        PIPELINE_NAME: 'Scheduled Ruby $RUBY_VERSION $CI_COMMIT_BRANCH branch'
     - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && $CI_PIPELINE_SOURCE == "schedule"'
       variables:
         <<: [*default-ruby-variables, *default-branch-pipeline-failure-variables]
@@ -204,6 +195,15 @@ workflow:
       variables:
         <<: *default-ruby-variables
         PIPELINE_NAME: 'Ruby $RUBY_VERSION $CI_COMMIT_BRANCH branch'
+    - if: '$CI_PIPELINE_SOURCE == "schedule" && $SCHEDULE_TYPE == "weekly"'
+      variables:
+        <<: *default-ruby-variables
+        PIPELINE_NAME: 'Weekly scheduled Ruby $RUBY_VERSION $CI_COMMIT_BRANCH branch'
+        FAST_QUARANTINE: "false"
+        CREATE_RAILS_FLAKY_TEST_ISSUES: "false"
+        CREATE_RAILS_SLOW_TEST_ISSUES: "false"
+        CREATE_RAILS_TEST_FAILURE_ISSUES: "false"
+        GLCI_PUSH_RAILS_TEST_FAILURE_ISSUES_TO_GCS: "false"
 
 variables:
   PG_VERSION: "14"
@@ -235,6 +235,7 @@ variables:
 
   FLAKY_RSPEC_SUITE_REPORT_PATH: rspec/flaky/report-suite.json
   FRONTEND_FIXTURES_MAPPING_PATH: crystalball/frontend_fixtures_mapping.json
+  JEST_MATCHING_TEST_FILES_PATH: jest/matching_test_files.txt
   GITLAB_WORKHORSE_FOLDER: "gitlab-workhorse"
   JOB_METRICS_FILE_PATH: "${CI_PROJECT_DIR}/tmp/job-metrics.json"
   KNAPSACK_RSPEC_SUITE_REPORT_PATH: knapsack/report-master.json
@@ -246,7 +247,7 @@ variables:
   RSPEC_MATCHING_JS_FILES_PATH: rspec/js_matching_files.txt
   RSPEC_MATCHING_TESTS_EE_PATH: rspec/matching_tests-ee.txt
   RSPEC_MATCHING_TESTS_FOSS_PATH: rspec/matching_tests-foss.txt
-  RSPEC_MATCHING_TESTS_PATH: rspec/matching_tests.txt
+  RSPEC_MATCHING_TEST_FILES_PATH: rspec/matching_test_files.txt
   RSPEC_PACKED_TESTS_MAPPING_PATH: crystalball/packed-mapping.json
   RSPEC_PACKED_TESTS_MAPPING_ALT_PATH: crystalball/packed-mapping-alt.json
   RSPEC_PREDICTIVE_PIPELINE_TEMPLATE_YML: .gitlab/ci/rails/rspec-predictive.gitlab-ci.yml.erb

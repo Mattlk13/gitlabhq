@@ -19,6 +19,28 @@ class NamespaceSetting < ApplicationRecord
 
   scope :for_namespaces, ->(namespaces) { where(namespace: namespaces) }
 
+  scope :with_ancestors_inherited_settings, -> {
+    # Get all columns except 'archived' since we're overriding it
+    other_columns = column_names.reject { |col| col == 'archived' }.map { |col| "#{table_name}.#{col}" }.join(', ')
+
+    select(<<-SQL)
+    #{other_columns},
+    CASE WHEN EXISTS (
+      SELECT 1 FROM #{table_name} ns2
+      JOIN namespaces n ON n.id = ns2.namespace_id
+      WHERE ns2.archived = true
+      AND n.id = ANY(
+        SELECT unnest(namespaces.traversal_ids)
+        FROM namespaces
+        WHERE namespaces.id = #{table_name}.namespace_id
+      )
+    ) THEN true
+    ELSE #{table_name}.archived
+    END AS archived
+    SQL
+      .joins(:namespace)
+  }
+
   belongs_to :namespace, inverse_of: :namespace_settings
 
   enum :jobs_to_be_done, { basics: 0, move_repository: 1, code_storage: 2, exploring: 3, ci: 4, other: 5 }, suffix: true
@@ -36,6 +58,8 @@ class NamespaceSetting < ApplicationRecord
   before_validation :set_pipeline_variables_default_role, on: :create
 
   before_validation :normalize_default_branch_name
+
+  after_update :invalidate_namespace_descendants_cache, if: -> { saved_change_to_archived? }
 
   chronic_duration_attr :runner_token_expiration_interval_human_readable, :runner_token_expiration_interval
   chronic_duration_attr :subgroup_runner_token_expiration_interval_human_readable, :subgroup_runner_token_expiration_interval
@@ -129,13 +153,7 @@ class NamespaceSetting < ApplicationRecord
   private
 
   def set_pipeline_variables_default_role
-    # After FF  `change_namespace_default_role_for_pipeline_variables` rollout - we have to remove both FF and pipeline_variables_default_role = NO_ONE_ALLOWED_ROLE
-    # As any self-managed and Dedicated instance should opt-in by changing their namespace settings explicitly.
-    # NO_ONE_ALLOWED will be set as the default value for namespace_settings through a database migration.
-
-    # WARNING: Removing this FF could cause breaking changes for self-hosted and dedicated instances.
-
-    return if Feature.disabled?(:change_namespace_default_role_for_pipeline_variables, namespace)
+    return if Gitlab::CurrentSettings.pipeline_variables_default_allowed
 
     self.pipeline_variables_default_role = ProjectCiCdSetting::NO_ONE_ALLOWED_ROLE
   end
@@ -154,6 +172,12 @@ class NamespaceSetting < ApplicationRecord
 
   def subgroup?
     !!namespace&.subgroup?
+  end
+
+  def invalidate_namespace_descendants_cache
+    return if namespace.is_a?(Namespaces::UserNamespace)
+
+    Namespaces::Descendants.expire_recursive_for(namespace)
   end
 end
 

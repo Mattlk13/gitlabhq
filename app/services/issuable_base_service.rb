@@ -235,9 +235,8 @@ class IssuableBaseService < ::BaseContainerService
       set_crm_contacts(issuable, add_crm_contact_emails)
       execute_triggers
       execute_hooks(issuable)
+      invalidate_cache_counts(issuable, users: issuable.assignees) unless issuable.allows_reviewers?
 
-      users_to_invalidate = issuable.allows_reviewers? ? issuable.assignees | issuable.reviewers : issuable.assignees
-      invalidate_cache_counts(issuable, users: users_to_invalidate)
       issuable.update_project_counter_caches
     end
 
@@ -490,7 +489,7 @@ class IssuableBaseService < ::BaseContainerService
     when 'add'
       todo_service.mark_todo(issuable, current_user)
     when 'done'
-      todo = TodosFinder.new(current_user).find_by(target: issuable)
+      todo = TodosFinder.new(users: current_user).find_by(target: issuable)
       todo_service.resolve_todo(todo, current_user) if todo
     end
   end

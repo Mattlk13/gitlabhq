@@ -1658,6 +1658,22 @@ RSpec.describe Ci::Pipeline, :mailer, factory_default: :keep, feature_category: 
             is_expected.to be_falsey
           end
         end
+
+        context 'when ref is ambiguous' do
+          let(:merge_request) do
+            create(:merge_request, source_branch: 'ambiguous', source_project: project, target_branch: 'master', target_project: project)
+          end
+
+          before do
+            repository = project.repository
+            repository.add_branch(user, 'ambiguous', 'feature')
+            repository.add_tag(user, 'ambiguous', 'master')
+          end
+
+          it 'returns false if source or target branch ref is ambiguous' do
+            is_expected.to be_falsey
+          end
+        end
       end
 
       context 'when protect_merge_request_pipelines setting is disabled' do
@@ -1667,19 +1683,6 @@ RSpec.describe Ci::Pipeline, :mailer, factory_default: :keep, feature_category: 
 
         it 'returns false even if both the source branch ref and target branch ref is protected' do
           expect(project).not_to receive(:protected_for?)
-
-          is_expected.to be_falsey
-        end
-      end
-
-      context 'when the protect_merge_request_pipelines feature flag is disabled' do
-        before do
-          stub_feature_flags(protect_merge_request_pipelines: false)
-          project.project_setting.update!(protect_merge_request_pipelines: true)
-        end
-
-        it 'checks if the branch ref is protected' do
-          expect(pipeline.project).to receive(:protected_for?).with("refs/heads/#{pipeline.ref}").and_return(false)
 
           is_expected.to be_falsey
         end
@@ -2679,6 +2682,38 @@ RSpec.describe Ci::Pipeline, :mailer, factory_default: :keep, feature_category: 
     end
   end
 
+  describe '#has_exposed_artifacts?' do
+    let(:pipeline) { create(:ci_pipeline, :success) }
+    let(:options) { nil }
+
+    subject { pipeline.has_exposed_artifacts? }
+
+    before do
+      create(:ci_build, pipeline: pipeline)
+      create(:ci_build, options: options, pipeline: pipeline)
+    end
+
+    it { is_expected.to eq(false) }
+
+    context 'with unexposed artifacts' do
+      let(:options) { { artifacts: { paths: ['test'] } } }
+
+      it { is_expected.to eq(false) }
+    end
+
+    context 'with exposed artifacts' do
+      let(:options) { { artifacts: { expose_as: 'test', paths: ['test'] } } }
+
+      it { is_expected.to eq(true) }
+
+      context 'when the pipeline is not complete' do
+        let(:pipeline) { create(:ci_pipeline, :running) }
+
+        it { is_expected.to eq(false) }
+      end
+    end
+  end
+
   describe '#manual_actions' do
     subject { pipeline.manual_actions }
 
@@ -3126,6 +3161,35 @@ RSpec.describe Ci::Pipeline, :mailer, factory_default: :keep, feature_category: 
         end
       end
     end
+
+    describe '.latest_pipelines_for_ref_by_statuses' do
+      let_it_be(:ref1_success_old) { create(:ci_empty_pipeline, status: :success, ref: 'first_ref') }
+      let_it_be(:ref1_success) { create(:ci_empty_pipeline, status: :success, ref: 'first_ref') }
+      let_it_be(:ref1_failed) { create(:ci_empty_pipeline, status: :failed, ref: 'first_ref') }
+      let_it_be(:ref1_blocked) { create(:ci_empty_pipeline, status: :manual, ref: 'first_ref') }
+      let_it_be(:ref2_success) { create(:ci_empty_pipeline, status: :success, ref: 'second_ref') }
+
+      context 'when only a ref is passed in' do
+        subject(:latest_pipelines_for_ref_by_statuses) { described_class.latest_pipelines_for_ref_by_statuses(ref) }
+
+        let(:ref) { 'first_ref' }
+
+        it 'returns latest pipelines for all statuses by default' do
+          expect(latest_pipelines_for_ref_by_statuses).to match_array([ref1_success, ref1_failed, ref1_blocked])
+        end
+      end
+
+      context 'when a ref and status are passed in' do
+        subject(:latest_pipelines_for_ref_by_statuses) { described_class.latest_pipelines_for_ref_by_statuses(ref, statuses) }
+
+        let(:ref) { 'first_ref' }
+        let(:statuses) { %w[success failed] }
+
+        it 'returns latest pipelines for ref and statuses' do
+          expect(latest_pipelines_for_ref_by_statuses).to match_array([ref1_success, ref1_failed])
+        end
+      end
+    end
   end
 
   describe '.newest_first' do
@@ -3537,6 +3601,27 @@ RSpec.describe Ci::Pipeline, :mailer, factory_default: :keep, feature_category: 
       end
     end
 
+    context 'when there is a manual action present in the pipeline' do
+      before do
+        create(:ci_build, :manual, pipeline: pipeline)
+        create(:ci_build, :running, pipeline: pipeline)
+      end
+
+      it 'is cancelable' do
+        expect(pipeline).to be_cancelable
+      end
+    end
+
+    context 'when there is only a manual action present in the pipeline' do
+      before do
+        create(:ci_build, :manual, pipeline: pipeline)
+      end
+
+      it 'is cancelable' do
+        expect(pipeline).to be_cancelable
+      end
+    end
+
     %i[success failed canceled].each do |status|
       context "when there is a build #{status}" do
         before do
@@ -3556,16 +3641,6 @@ RSpec.describe Ci::Pipeline, :mailer, factory_default: :keep, feature_category: 
         it 'is not cancelable' do
           expect(pipeline.cancelable?).to be_falsey
         end
-      end
-    end
-
-    context 'when there is a manual action present in the pipeline' do
-      before do
-        create(:ci_build, :manual, pipeline: pipeline)
-      end
-
-      it 'is not cancelable' do
-        expect(pipeline).not_to be_cancelable
       end
     end
   end
@@ -4663,6 +4738,51 @@ RSpec.describe Ci::Pipeline, :mailer, factory_default: :keep, feature_category: 
     end
   end
 
+  describe '#downloadable_artifacts_in_self_and_project_descendants' do
+    let_it_be(:pipeline) { create(:ci_pipeline, :unlocked, project: project) }
+    let_it_be(:child_pipeline) { create(:ci_pipeline, :unlocked, child_of: pipeline) }
+    let_it_be(:grandchild_pipeline) { create(:ci_pipeline, :unlocked, child_of: child_pipeline) }
+
+    let_it_be(:parent_build) { create(:ci_build, :test_reports, pipeline: pipeline) }
+    let_it_be(:parent_build_not_downloadable) { create(:ci_build, :trace_artifact, pipeline: pipeline) }
+    let_it_be(:child_build) { create(:ci_build, :coverage_reports, pipeline: child_pipeline) }
+    let_it_be(:child_build_not_downloadable) { create(:ci_build, :trace_artifact, pipeline: child_pipeline) }
+    let_it_be(:grandchild_build) { create(:ci_build, :codequality_reports, pipeline: grandchild_pipeline) }
+
+    let_it_be(:unrelated_pipeline) { create(:ci_pipeline, project: create(:project)) }
+    let_it_be(:unrelated_build) { create(:ci_build, :test_reports, pipeline: unrelated_pipeline) }
+
+    let(:parent_artifact) { parent_build.job_artifacts.first }
+    let(:child_artifact) { child_build.job_artifacts.first }
+    let(:grandchild_artifact) { grandchild_build.job_artifacts.first }
+
+    subject { pipeline.downloadable_artifacts_in_self_and_project_descendants }
+
+    it 'returns downloadable parent artifact as well as downstream artifacts' do
+      expect(subject).to contain_exactly(parent_artifact, child_artifact, grandchild_artifact)
+    end
+
+    context 'when there are expired artifacts' do
+      before do
+        grandchild_artifact.update!(expire_at: 1.week.ago)
+      end
+
+      it 'does not return expired artifacts' do
+        expect(subject).to contain_exactly(parent_artifact, child_artifact)
+      end
+
+      context 'when the expired artifact belongs to a locked pipeline' do
+        before do
+          grandchild_pipeline.update!(locked: described_class.lockeds[:artifacts_locked])
+        end
+
+        it 'returns expired artifact' do
+          expect(subject).to contain_exactly(parent_artifact, child_artifact, grandchild_artifact)
+        end
+      end
+    end
+  end
+
   describe '#has_reports?' do
     subject { pipeline.has_reports?(Ci::JobArtifact.of_report_type(:test)) }
 
@@ -5718,143 +5838,19 @@ RSpec.describe Ci::Pipeline, :mailer, factory_default: :keep, feature_category: 
   end
 
   describe '#reset_source_bridge!' do
-    subject(:reset_bridge) { pipeline.reset_source_bridge!(current_user) }
+    subject(:reset_source_bridge) { pipeline.reset_source_bridge!(current_user) }
 
-    context 'with downstream pipeline' do
-      let_it_be(:owner) { project.first_owner }
+    let_it_be(:owner) { project.first_owner }
 
-      let!(:first_upstream_pipeline) { create(:ci_pipeline, user: owner) }
-      let_it_be_with_reload(:pipeline) { create(:ci_pipeline, :created, project: project, user: owner) }
+    let_it_be_with_reload(:pipeline) { create(:ci_pipeline, :created, project: project, user: owner) }
+    let!(:upstream_pipeline) { create(:ci_pipeline, user: owner) }
 
-      let!(:bridge) do
-        create_bridge(
-          upstream: first_upstream_pipeline,
-          downstream: pipeline,
-          depends: true
-        )
-      end
-
-      context 'when the user has permissions for the processable' do
-        let(:current_user) { owner }
-
-        context 'when the downstream has strategy: depend' do
-          it 'enqueues the source bridge and marks it as pending' do
-            expect { reset_bridge }
-              .to change { bridge.reload.status }
-              .to('pending')
-          end
-
-          context 'with subsequent jobs' do
-            let!(:after_bridge_job) { add_bridge_dependant_job }
-            let!(:bridge_dependant_dag_job) { add_bridge_dependant_dag_job }
-
-            it 'changes subsequent job statuses to created' do
-              expect { reset_bridge }
-                .to change { after_bridge_job.reload.status }
-                .from('skipped').to('created')
-                .and change { bridge_dependant_dag_job.reload.status }
-                .from('skipped').to('created')
-            end
-
-            context 'when the user is not the build user' do
-              let(:current_user) { create(:user) }
-
-              before do
-                project.add_maintainer(current_user)
-              end
-
-              it 'changes subsequent jobs user' do
-                expect { reset_bridge }
-                  .to change { after_bridge_job.reload.user }
-                  .from(owner).to(current_user)
-                  .and change { bridge_dependant_dag_job.reload.user }
-                  .from(owner).to(current_user)
-              end
-            end
-          end
-
-          context 'when the upstream pipeline pipeline has a dependent upstream pipeline' do
-            let(:upstream_of_upstream) { create(:ci_pipeline, project: create(:project)) }
-            let!(:upstream_bridge) do
-              create_bridge(
-                upstream: upstream_of_upstream,
-                downstream: first_upstream_pipeline,
-                depends: true
-              )
-            end
-
-            it 'marks all source bridges as pending' do
-              expect { reset_bridge }
-                .to change { bridge.reload.status }
-                .from('skipped').to('pending')
-                .and change { upstream_bridge.reload.status }
-                .from('skipped').to('pending')
-            end
-          end
-
-          context 'without strategy: depend' do
-            let!(:upstream_pipeline) { create(:ci_pipeline) }
-            let!(:bridge) do
-              create_bridge(
-                upstream: first_upstream_pipeline,
-                downstream: pipeline,
-                depends: false
-              )
-            end
-
-            it 'does not touch source bridge' do
-              expect { reset_bridge }.to not_change { bridge.status }
-            end
-
-            context 'when the upstream pipeline has a dependent upstream pipeline' do
-              let!(:upstream_bridge) do
-                create_bridge(
-                  upstream: create(:ci_pipeline, project: create(:project)),
-                  downstream: first_upstream_pipeline,
-                  depends: true
-                )
-              end
-
-              it 'does not touch any source bridge' do
-                expect { reset_bridge }.to not_change { bridge.status }
-                  .and not_change { upstream_bridge.status }
-              end
-            end
-          end
-
-          context 'when the source bridge has a resource group' do
-            before do
-              bridge.update!(resource_group: create(:ci_resource_group, project: bridge.project))
-            end
-
-            it 'enqueues the source bridge and marks it as waiting_for_resource' do
-              expect { reset_bridge }
-                .to change { bridge.reload.status }
-                .to('waiting_for_resource')
-            end
-          end
-        end
-
-        context 'when the current user is not the bridge user' do
-          let(:current_user) { create(:user) }
-
-          before do
-            project.add_maintainer(current_user)
-          end
-
-          it 'changes bridge user to current user' do
-            expect { reset_bridge }
-              .to change { bridge.reload.user }
-              .from(owner).to(current_user)
-          end
-        end
-      end
-
+    shared_examples 'does not change bridge status if there are no permissions' do
       context 'when the user does not have permissions for the processable' do
         let(:current_user) { create(:user) }
 
         it 'does not change bridge status' do
-          expect { reset_bridge }.to not_change { bridge.status }
+          expect { reset_source_bridge }.to not_change { bridge.status }
         end
 
         context 'with subsequent jobs' do
@@ -5862,7 +5858,7 @@ RSpec.describe Ci::Pipeline, :mailer, factory_default: :keep, feature_category: 
           let!(:bridge_dependant_dag_job) { add_bridge_dependant_dag_job }
 
           it 'does not change job statuses' do
-            expect { reset_bridge }.to not_change { after_bridge_job.reload.status }
+            expect { reset_source_bridge }.to not_change { after_bridge_job.reload.status }
               .and not_change { bridge_dependant_dag_job.reload.status }
           end
         end
@@ -5871,8 +5867,158 @@ RSpec.describe Ci::Pipeline, :mailer, factory_default: :keep, feature_category: 
           let(:current_user) { create(:user) }
 
           it 'does not change bridge user' do
-            expect { reset_bridge }
+            expect { reset_source_bridge }
               .to not_change { bridge.reload.user }
+          end
+        end
+      end
+    end
+
+    shared_examples 'enqueues the source bridge and changes the status' do
+      it 'enqueues the source bridge and marks it as pending' do
+        expect { reset_source_bridge }
+          .to change { bridge.reload.status }
+          .to('pending')
+      end
+
+      context 'with subsequent jobs' do
+        let!(:after_bridge_job) { add_bridge_dependant_job }
+        let!(:bridge_dependant_dag_job) { add_bridge_dependant_dag_job }
+
+        it 'changes subsequent job statuses to `created`' do
+          expect { reset_source_bridge }
+            .to change { after_bridge_job.reload.status }
+            .from('skipped').to('created')
+            .and change { bridge_dependant_dag_job.reload.status }
+            .from('skipped').to('created')
+        end
+
+        context 'when the user is not the build user' do
+          let(:current_user) { create(:user) }
+
+          before do
+            project.add_maintainer(current_user)
+          end
+
+          it 'updates the user for subsequent jobsr' do
+            expect { reset_source_bridge }
+              .to change { after_bridge_job.reload.user }
+              .from(owner).to(current_user)
+              .and change { bridge_dependant_dag_job.reload.user }
+              .from(owner).to(current_user)
+          end
+        end
+      end
+
+      context 'when the source bridge has a resource group' do
+        before do
+          bridge.update!(resource_group: create(:ci_resource_group, project: bridge.project))
+        end
+
+        it 'enqueues the source bridge and marks it as waiting_for_resource' do
+          expect { reset_source_bridge }
+            .to change { bridge.reload.status }
+            .to('waiting_for_resource')
+        end
+      end
+    end
+
+    context 'when the downstream has strategy: depend' do
+      let!(:bridge) { create(:ci_bridge, :strategy_depend, pipeline: upstream_pipeline, status: 'created', user: current_user) }
+      let_it_be(:current_user) { owner }
+
+      before do
+        create(:ci_sources_pipeline, pipeline: pipeline, source_job: bridge)
+      end
+
+      it_behaves_like 'enqueues the source bridge and changes the status'
+      it_behaves_like 'does not change bridge status if there are no permissions'
+
+      context 'when the upstream pipeline has an upstream bridge that is dependant on status' do
+        let(:upstream_of_upstream) { create(:ci_pipeline, project: create(:project)) }
+        let!(:upstream_bridge) { create(:ci_bridge, :strategy_depend, pipeline: upstream_of_upstream, user: owner) }
+
+        before do
+          create(:ci_sources_pipeline, pipeline: upstream_pipeline, source_job: upstream_bridge)
+        end
+
+        it 'marks all source bridges as pending' do
+          expect { reset_source_bridge }
+            .to change { bridge.reload.status }
+            .from('created').to('pending')
+            .and change { upstream_bridge.reload.status }
+            .from('created').to('pending')
+        end
+      end
+    end
+
+    context 'when the downstream has strategy: mirror' do
+      let!(:bridge) { create(:ci_bridge, :strategy_mirror, pipeline: upstream_pipeline, status: 'created', user: current_user) }
+      let_it_be(:current_user) { owner }
+
+      before do
+        create(:ci_sources_pipeline, pipeline: pipeline, source_job: bridge)
+      end
+
+      it_behaves_like 'enqueues the source bridge and changes the status'
+      it_behaves_like 'does not change bridge status if there are no permissions'
+
+      context 'when the upstream pipeline has an upstream bridge that mirrors the status' do
+        let(:upstream_of_upstream) { create(:ci_pipeline, project: create(:project)) }
+        let!(:upstream_bridge) { create(:ci_bridge, :strategy_depend, pipeline: upstream_of_upstream, user: owner) }
+
+        before do
+          create(:ci_sources_pipeline, pipeline: upstream_pipeline, source_job: upstream_bridge)
+        end
+
+        it 'marks all source bridges as pending' do
+          expect { reset_source_bridge }
+            .to change { bridge.reload.status }
+            .from('created').to('pending')
+            .and change { upstream_bridge.reload.status }
+            .from('created').to('pending')
+        end
+      end
+    end
+
+    context 'without a strategy' do
+      let!(:bridge)  { create(:ci_bridge, pipeline: create(:ci_pipeline), user: owner) }
+      let_it_be(:current_user) { owner }
+
+      before do
+        create(:ci_sources_pipeline, pipeline: pipeline, source_job: bridge)
+      end
+
+      it 'does not change the stuatus of the source bridge' do
+        expect { reset_source_bridge }.to not_change { bridge.status }
+      end
+
+      context 'when there is an upstream pipeline that has an upstream bridge with a strategy' do
+        context 'when the strategy is `depend`' do
+          let!(:upstream_pipeline) { create(:ci_pipeline, project: create(:project)) }
+          let!(:upstream_bridge) { create(:ci_bridge, :strategy_depend, pipeline: upstream_pipeline, user: owner) }
+
+          before do
+            create(:ci_sources_pipeline, pipeline: upstream_pipeline, source_job: bridge)
+          end
+
+          it 'does not change the status of any source bridge' do
+            expect { reset_source_bridge }.to not_change { bridge.status }
+              .and not_change { upstream_bridge.status }
+          end
+        end
+
+        context 'when the strategy is `mirror`' do
+          let!(:upstream_pipeline) { create(:ci_pipeline, project: create(:project)) }
+          let!(:upstream_bridge) { create(:ci_bridge, :strategy_mirror, pipeline: upstream_pipeline, user: owner) }
+
+          before do
+            create(:ci_sources_pipeline, pipeline: upstream_pipeline, source_job: bridge)
+          end
+
+          it 'does not change the status of any source bridge' do
+            expect { reset_source_bridge }.to not_change { bridge.status }
+              .and not_change { upstream_bridge.status }
           end
         end
       end
@@ -5881,22 +6027,13 @@ RSpec.describe Ci::Pipeline, :mailer, factory_default: :keep, feature_category: 
     private
 
     def add_bridge_dependant_job
-      create(:ci_build, :skipped, pipeline: first_upstream_pipeline, stage_idx: bridge.stage_idx + 1, user: owner)
+      create(:ci_build, :skipped, pipeline: upstream_pipeline, stage_idx: bridge.stage_idx + 1, user: owner)
     end
 
     def add_bridge_dependant_dag_job
-      create(:ci_build, :skipped, name: 'dependant-build-1', pipeline: first_upstream_pipeline, user: owner).tap do |build|
+      create(:ci_build, :skipped, name: 'dependant-build-1', pipeline: upstream_pipeline, user: owner).tap do |build|
         create(:ci_build_need, build: build, name: bridge.name)
       end
-    end
-
-    def create_bridge(upstream:, downstream:, depends: false)
-      options = depends ? { trigger: { strategy: 'depend' } } : {}
-
-      bridge = create(:ci_bridge, pipeline: upstream, status: 'skipped', options: options, user: owner)
-      create(:ci_sources_pipeline, pipeline: downstream, source_job: bridge)
-
-      bridge
     end
   end
 
@@ -6428,7 +6565,7 @@ RSpec.describe Ci::Pipeline, :mailer, factory_default: :keep, feature_category: 
   end
 
   describe '#archived?' do
-    subject { build_stubbed(:ci_pipeline, created_at: 1.day.ago, project: project) }
+    subject(:pipeline) { build_stubbed(:ci_pipeline, created_at: 1.day.ago, project: project) }
 
     context 'when archive_builds_in is set' do
       before do
@@ -6436,6 +6573,23 @@ RSpec.describe Ci::Pipeline, :mailer, factory_default: :keep, feature_category: 
       end
 
       it { is_expected.to be_archived }
+
+      it 'does not log by default' do
+        expect(::Gitlab::Ci::Pipeline::AccessLogger).not_to receive(:new)
+
+        expect(pipeline.archived?).to be_truthy
+      end
+
+      context 'when logging is requested' do
+        it 'calls access logger' do
+          expect(::Gitlab::Ci::Pipeline::AccessLogger)
+            .to receive(:new)
+            .with(pipeline: pipeline, archived: true)
+            .and_call_original
+
+          expect(pipeline.archived?(log: true)).to be_truthy
+        end
+      end
     end
 
     context 'when archive_builds_in is not set' do
@@ -6444,6 +6598,96 @@ RSpec.describe Ci::Pipeline, :mailer, factory_default: :keep, feature_category: 
       end
 
       it { is_expected.not_to be_archived }
+
+      context 'when logging is requested' do
+        it 'calls access logger' do
+          expect(::Gitlab::Ci::Pipeline::AccessLogger)
+            .to receive(:new)
+            .with(pipeline: pipeline, archived: false)
+            .and_call_original
+
+          expect(pipeline.archived?(log: true)).to be_falsey
+        end
+      end
+    end
+  end
+
+  describe '.not_archived' do
+    let_it_be(:old_pipeline) { create(:ci_pipeline, created_at: 3.months.ago, project: project) }
+    let_it_be(:fresh_pipeline) { create(:ci_pipeline, project: project) }
+
+    subject { described_class.not_archived }
+
+    context 'when archive_builds_in is set' do
+      before do
+        stub_application_setting(archive_builds_in_seconds: 1.week)
+      end
+
+      it { is_expected.to match_array([fresh_pipeline]) }
+    end
+
+    context 'when archive_builds_in is not set' do
+      before do
+        stub_application_setting(archive_builds_in_seconds: nil)
+      end
+
+      it { is_expected.to match_array([old_pipeline, fresh_pipeline]) }
+    end
+  end
+
+  describe '#queued_duration', :freeze_time do
+    it 'returns nil when pipeline has not started' do
+      # Build a pipeline created 1 hour ago with no start or finish time
+      pipeline = build(:ci_pipeline, created_at: 1.hour.ago, started_at: nil, finished_at: nil)
+      # We expect queued_duration to return nil because there is no start or finish info
+      expect(pipeline.queued_duration).to be_nil
+    end
+
+    it 'returns the correct duration when the pipeline has started but not finished' do
+      # Simulate a pipeline that was created 1 hour ago and started 30 minutes ago
+      created_time = 1.hour.ago
+      start_time = 30.minutes.ago
+      pipeline = build(:ci_pipeline, created_at: created_time, started_at: start_time)
+      expected_duration = (start_time - created_time).to_i
+      # Expect the queued_duration to be within 1 second of the actual time between creation and start
+      expect(pipeline.queued_duration).to eq(expected_duration)
+    end
+
+    it 'returns duration when pipeline has finished but not started' do
+      # Simulate a pipeline that was created 2 hours ago and finished 30 minutes ago without starting
+      created_time = 2.hours.ago
+      finish_time = 30.minutes.ago
+      pipeline = build(:ci_pipeline, created_at: created_time, started_at: nil, finished_at: finish_time)
+      expected_duration = (finish_time - created_time).to_i
+      # Expect queued_duration to be the time from creation to finish( since it never started within 1 second)
+      expect(pipeline.queued_duration).to eq(expected_duration)
+    end
+
+    it 'returns the correct duration based on start time when pipeline has started and finished' do
+      # Simulate a pipeline that was created 2 hours ago, started 1 hour ago, and finished 30 minutes ago
+      created_time = 2.hours.ago
+      start_time = 1.hour.ago
+      finish_time = 30.minutes.ago
+      pipeline = build(:ci_pipeline, created_at: created_time, started_at: start_time, finished_at: finish_time)
+      expected_duration = (start_time - created_time).to_i
+      # Expect queued_duration to be the time between creation and start, ignoring finish time
+      expect(pipeline.queued_duration).to eq(expected_duration)
+    end
+
+    it 'returns nil queued duration when created and finished at the same time' do
+      # Simulate a pipeline that was created and finished instantly
+      now = Time.current
+      pipeline = build(:ci_pipeline, created_at: now, finished_at: now, started_at: nil)
+      # Expect the queued duration to be nil
+      expect(pipeline.queued_duration).to be_nil
+    end
+  end
+
+  describe "association dependent" do
+    it_behaves_like "cleanup by a loose foreign key", on_delete: :async_nullify do
+      let!(:lfk_column) { :trigger_id }
+      let!(:parent) { create(:ci_trigger) }
+      let!(:model) { create(:ci_pipeline, trigger: parent) }
     end
   end
 end

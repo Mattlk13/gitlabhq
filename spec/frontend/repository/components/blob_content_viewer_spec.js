@@ -11,9 +11,7 @@ import waitForPromises from 'helpers/wait_for_promises';
 import { createAlert } from '~/alert';
 import BlobContent from '~/blob/components/blob_content.vue';
 import BlobHeader from 'ee_else_ce/blob/components/blob_header.vue';
-import BlobButtonGroup from '~/repository/components/blob_button_group.vue';
 import BlobContentViewer from '~/repository/components/blob_content_viewer.vue';
-import ForkSuggestion from '~/repository/components/fork_suggestion.vue';
 import { loadViewer } from '~/repository/components/blob_viewers';
 import DownloadViewer from '~/repository/components/blob_viewers/download_viewer.vue';
 import EmptyViewer from '~/repository/components/blob_viewers/empty_viewer.vue';
@@ -24,6 +22,7 @@ import blobInfoQuery from 'shared_queries/repository/blob_info.query.graphql';
 import projectInfoQuery from 'ee_else_ce/repository/queries/project_info.query.graphql';
 import highlightMixin from '~/repository/mixins/highlight_mixin';
 import getRefMixin from '~/repository/mixins/get_ref';
+import { InternalEvents } from '~/tracking';
 import glFeatureFlagMixin from '~/vue_shared/mixins/gl_feature_flags_mixin';
 import CodeIntelligence from '~/code_navigation/components/app.vue';
 import * as urlUtility from '~/lib/utils/url_utility';
@@ -33,6 +32,7 @@ import { HTTP_STATUS_INTERNAL_SERVER_ERROR, HTTP_STATUS_OK } from '~/lib/utils/h
 import LineHighlighter from '~/blob/line_highlighter';
 import { LEGACY_FILE_TYPES } from '~/repository/constants';
 import { SIMPLE_BLOB_VIEWER, RICH_BLOB_VIEWER } from '~/blob/components/constants';
+import eventHub from '~/notes/event_hub';
 import {
   simpleViewerMock,
   richViewerMock,
@@ -43,7 +43,7 @@ import {
   projectMock,
   getProjectMockWithOverrides,
 } from 'ee_else_ce_jest/repository/mock_data';
-import { mockTracking } from 'helpers/tracking_helper';
+import { useMockInternalEventsTracking } from 'helpers/tracking_internal_events_helper';
 
 jest.mock('~/repository/components/blob_viewers');
 jest.mock('~/lib/utils/url_utility');
@@ -54,9 +54,10 @@ jest.mock('~/alert');
 let wrapper;
 let blobInfoMockResolver;
 let projectInfoMockResolver;
-let trackingSpy;
 
 Vue.use(Vuex);
+
+const { bindInternalEventDocument } = useMockInternalEventsTracking();
 
 const mockAxios = new MockAdapter(axios);
 
@@ -124,7 +125,7 @@ const createComponent = async (mockData = {}, mountFn = shallowMount, mockRoute 
       store: createMockStore(),
       apolloProvider: fakeApollo,
       propsData: propsMock,
-      mixins: [getRefMixin, highlightMixin, glFeatureFlagMixin()],
+      mixins: [getRefMixin, highlightMixin, glFeatureFlagMixin(), InternalEvents.mixin()],
       mocks: {
         $route: mockRoute,
         $router: mockRouter,
@@ -137,7 +138,6 @@ const createComponent = async (mockData = {}, mountFn = shallowMount, mockRoute 
       },
     }),
   );
-  trackingSpy = mockTracking(undefined, wrapper.element, jest.spyOn);
 
   await waitForPromises();
 };
@@ -150,8 +150,6 @@ describe('Blob content viewer component', () => {
   const findLoadingIcon = () => wrapper.findComponent(GlLoadingIcon);
   const findBlobHeader = () => wrapper.findComponent(BlobHeader);
   const findBlobContent = () => wrapper.findComponent(BlobContent);
-  const findBlobButtonGroup = () => wrapper.findComponent(BlobButtonGroup);
-  const findForkSuggestion = () => wrapper.findComponent(ForkSuggestion);
   const findCodeIntelligence = () => wrapper.findComponent(CodeIntelligence);
   const findSourceViewer = () => wrapper.findComponent(SourceViewer);
 
@@ -178,9 +176,7 @@ describe('Blob content viewer component', () => {
       expect(findBlobHeader().props('hasRenderError')).toEqual(false);
       expect(findBlobHeader().props('hideViewerSwitcher')).toEqual(false);
       expect(findBlobHeader().props('blob')).toEqual(simpleViewerMock);
-      expect(findBlobHeader().props('showForkSuggestion')).toEqual(false);
       expect(findBlobHeader().props('showBlameToggle')).toEqual(true);
-      expect(findBlobHeader().props('projectPath')).toEqual(propsMock.projectPath);
       expect(findBlobHeader().props('projectId')).toEqual(projectMock.id);
       expect(mockRouterPush).not.toHaveBeenCalled();
     });
@@ -282,6 +278,28 @@ describe('Blob content viewer component', () => {
           expect(mockAxios.history.get[0].url).toBe(`/${type}?format=json&viewer=simple`);
         },
       );
+
+      describe('code navigation', () => {
+        const setup = async (viewer, viewerType) => {
+          jest.spyOn(eventHub, '$emit').mockImplementation();
+          mockAxios
+            .onGet(`/some_file.js?format=json&viewer=${viewerType}`)
+            .replyOnce(HTTP_STATUS_OK, 'test');
+          await createComponent({ blob: viewer });
+        };
+
+        it('emits showBlobInteractionZones for text files', async () => {
+          await setup(simpleViewerMock, 'simple');
+
+          expect(eventHub.$emit).toHaveBeenCalledWith('showBlobInteractionZones', 'some_file.js');
+        });
+
+        it('does not emit showBlobInteractionZones non-text files', async () => {
+          await setup(richViewerMock, 'rich');
+
+          expect(eventHub.$emit).not.toHaveBeenCalled();
+        });
+      });
 
       it('loads the LineHighlighter', async () => {
         mockAxios.onGet(legacyViewerUrl).replyOnce(HTTP_STATUS_OK, 'test');
@@ -442,10 +460,15 @@ describe('Blob content viewer component', () => {
         });
 
         if (tooLarge) {
-          expect(trackingSpy).toHaveBeenCalledWith(undefined, 'view_source', {
-            label: 'repository_file_size_limit_exceeded',
-            property: { label: language, property: size },
-          });
+          const { trackEventSpy } = bindInternalEventDocument(wrapper.element);
+          expect(trackEventSpy).toHaveBeenCalledWith(
+            'repository_file_size_limit_exceeded',
+            {
+              label: language,
+              property: String(size),
+            },
+            undefined,
+          );
         }
 
         await waitForPromises();
@@ -503,40 +526,6 @@ describe('Blob content viewer component', () => {
         expect(findBlobHeader().props('isBinary')).toBe(true);
       });
     });
-
-    describe('BlobButtonGroup', () => {
-      const { name, path, replacePath, webPath } = simpleViewerMock;
-      const {
-        userPermissions: { pushCode, downloadCode },
-        repository: { empty },
-      } = projectMock;
-
-      it('renders component', async () => {
-        window.gon.current_user_id = 'gid://gitlab/User/1';
-        window.gon.current_username = 'root';
-
-        await createComponent({ pushCode, downloadCode, empty }, mount);
-
-        expect(findBlobButtonGroup().props()).toMatchObject({
-          name,
-          path,
-          replacePath,
-          deletePath: webPath,
-          canPushCode: pushCode,
-          canLock: true,
-          isLocked: false,
-          emptyRepo: empty,
-        });
-      });
-
-      it('does not render if not logged in', async () => {
-        isLoggedIn.mockReturnValueOnce(false);
-
-        await createComponent();
-
-        expect(findBlobButtonGroup().exists()).toBe(false);
-      });
-    });
   });
 
   describe('blob info query', () => {
@@ -581,76 +570,6 @@ describe('Blob content viewer component', () => {
       findBlobHeader().vm.$emit('edit', 'ide');
       expect(urlUtility.visitUrl).toHaveBeenCalledWith(simpleViewerMock.ideEditPath);
     });
-
-    it.each`
-      loggedIn | canModifyBlob | isUsingLfs | createMergeRequestIn | forkProject | showSingleFileEditorForkSuggestion
-      ${true}  | ${true}       | ${false}   | ${true}              | ${true}     | ${false}
-      ${true}  | ${false}      | ${false}   | ${true}              | ${true}     | ${true}
-      ${false} | ${false}      | ${false}   | ${true}              | ${true}     | ${false}
-      ${true}  | ${false}      | ${false}   | ${false}             | ${true}     | ${false}
-      ${true}  | ${false}      | ${false}   | ${true}              | ${false}    | ${false}
-      ${true}  | ${false}      | ${true}    | ${true}              | ${true}     | ${false}
-    `(
-      'shows/hides a fork suggestion according to a set of conditions',
-      async ({
-        loggedIn,
-        canModifyBlob,
-        isUsingLfs,
-        createMergeRequestIn,
-        forkProject,
-        showSingleFileEditorForkSuggestion,
-      }) => {
-        isLoggedIn.mockReturnValueOnce(loggedIn);
-        await createComponent(
-          {
-            blob: { ...simpleViewerMock, canModifyBlob, storedExternally: isUsingLfs },
-            createMergeRequestIn,
-            forkProject,
-          },
-          mount,
-        );
-
-        findBlobHeader().vm.$emit('edit', 'simple');
-        await nextTick();
-
-        expect(findForkSuggestion().exists()).toBe(showSingleFileEditorForkSuggestion);
-      },
-    );
-
-    it.each`
-      loggedIn | canModifyBlobWithWebIde | isUsingLfs | createMergeRequestIn | forkProject | showWebIdeForkSuggestion
-      ${true}  | ${true}                 | ${false}   | ${true}              | ${true}     | ${false}
-      ${true}  | ${false}                | ${false}   | ${true}              | ${true}     | ${true}
-      ${false} | ${false}                | ${false}   | ${true}              | ${true}     | ${false}
-      ${true}  | ${false}                | ${false}   | ${false}             | ${true}     | ${false}
-      ${true}  | ${false}                | ${false}   | ${true}              | ${false}    | ${false}
-      ${true}  | ${false}                | ${true}    | ${true}              | ${true}     | ${false}
-    `(
-      'shows/hides a fork suggestion for WebIDE according to a set of conditions',
-      async ({
-        loggedIn,
-        canModifyBlobWithWebIde,
-        isUsingLfs,
-        createMergeRequestIn,
-        forkProject,
-        showWebIdeForkSuggestion,
-      }) => {
-        isLoggedIn.mockReturnValueOnce(loggedIn);
-        await createComponent(
-          {
-            blob: { ...simpleViewerMock, canModifyBlobWithWebIde, storedExternally: isUsingLfs },
-            createMergeRequestIn,
-            forkProject,
-          },
-          mount,
-        );
-
-        findBlobHeader().vm.$emit('edit', 'ide');
-        await nextTick();
-
-        expect(findForkSuggestion().exists()).toBe(showWebIdeForkSuggestion);
-      },
-    );
   });
 
   describe('active viewer based on plain attribute', () => {

@@ -58,6 +58,9 @@ export const typePolicies = {
   TreeEntry: {
     keyFields: ['webPath'],
   },
+  Blob: {
+    keyFields: ['webPath'],
+  },
   Subscription: {
     fields: {
       aiCompletionResponse: {
@@ -174,6 +177,10 @@ function createApolloClient(resolvers = {}, config = {}) {
 
   if (gon.version) {
     httpHeaders['x-gitlab-version'] = gon.version;
+  }
+
+  if (gon.current_organization?.id) {
+    httpHeaders['X-GitLab-Organization-ID'] = gon.current_organization.id;
   }
 
   const httpOptions = {

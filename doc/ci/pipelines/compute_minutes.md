@@ -21,7 +21,7 @@ title: Compute minutes
 
 The usage of instance runners by projects running CI/CD jobs is measured in compute minutes.
 
-For some installation types, your [namespace](../../user/namespace/_index.md) has an [compute quota](instance_runner_compute_minutes.md#compute-quota-enforcement),
+For some installation types, your [namespace](../../user/namespace/_index.md) has a [compute quota](instance_runner_compute_minutes.md#compute-quota-enforcement),
 which limits the available compute minutes you can use.
 
 A compute quota can be applied to all [admin-managed instance runners](instance_runner_compute_minutes.md):
@@ -48,14 +48,6 @@ For GitLab.com:
 - The base monthly compute quota is determined by your subscription tier.
 - You can [purchase additional compute minutes](../../subscriptions/gitlab_com/compute_minutes.md) if you need more.
 
-### GitLab-hosted runners on GitLab Dedicated
-
-GitLab-hosted runners on GitLab Dedicated [are tracked separately](dedicated_hosted_runner_compute_minutes.md):
-
-- You can view the estimated usage for your instance in the [GitLab-hosted runner usage dashboard](dedicated_hosted_runner_compute_minutes.md#view-compute-usage).
-- Usage billing is based on build duration logs collected from GitLab-hosted runners.
-- Quota enforcement and notifications are not available.
-
 ## Compute minute usage
 
 ### Compute usage calculation
@@ -66,10 +58,9 @@ Your compute minute usage for each job is calculated using this formula:
 Job duration / 60 * Cost factor
 ```
 
-- **Job duration**: The time, in seconds, that a job took to run on an instance runner,
-  not including time spent in the `created` or `pending` statuses.
-- **Cost factor**: A number based on the [runner type](#cost-factors-for-gitlab-hosted-runners) and
-  [project type](#cost-factors-for-gitlabcom).
+- **Job duration**: The time, in seconds, that a job took to run, not including time spent in the `created` or `pending` statuses.
+- **Cost factor**: A number based on the [runner type](#cost-factors) and
+  [project type](#cost-factors).
 
 The value is converted into compute minutes and added to the count of used units
 in the job's top-level namespace.
@@ -96,12 +87,12 @@ Usage is tracked on a monthly basis. On the first day of the month the usage is 
 
 The rate at which compute minutes are consumed varies based on the runner type and project settings.
 
-#### Cost factors for GitLab-hosted runners
+#### Cost factors of hosted runners for GitLab.com
 
 GitLab-hosted runners have different cost factors depending on the runner type
 (Linux, Windows, macOS) and the virtual machine configuration:
 
-| GitLab-hosted runner type  | Machine size           | Cost factor             |
+| Runner type                | Machine size           | Cost factor             |
 |:---------------------------|:-----------------------|:------------------------|
 | Linux x86-64 (default)     | `small`                | `1`                     |
 | Linux x86-64               | `medium`               | `2`                     |
@@ -116,18 +107,16 @@ GitLab-hosted runners have different cost factors depending on the runner type
 | macOS M2 Pro               | `large`                | `12` (**Status**: Beta) |
 | Windows                    | `medium`               | `1` (**Status**: Beta)  |
 
-These cost factors apply to GitLab-hosted runners on GitLab.com and GitLab Dedicated.
+These cost factors apply to hosted runners for GitLab.com.
 
-Certain [discounts apply to GitLab.com](#cost-factors-for-gitlabcom) based on project type.
-
-#### Cost factors for GitLab.com
+Certain discounts apply based on the project type:
 
 | Project type | Cost factor | Compute minutes used |
 |--------------|-------------|---------------------|
-| Standard projects | [Based on runner type](#cost-factors-for-gitlab-hosted-runners) | 1 minute per (job duration / 60 × factor) |
+| Standard projects | [Based on runner type](#cost-factors-of-hosted-runners-for-gitlabcom) | 1 minute per (job duration / 60 × cost factor) |
 | Public projects in [GitLab for Open Source program](../../subscriptions/community_programs.md#gitlab-for-open-source) | `0.5` | 1 minute per 2 minutes of job time |
 | Public forks of [GitLab Open Source program projects](../../subscriptions/community_programs.md#gitlab-for-open-source) | `0.008` | 1 minute per 125 minutes of job time |
-| [Community contributions to GitLab projects](#community-contributions-to-gitlab-projects) | Dynamic discount | See below |
+| [Community contributions to GitLab projects](#community-contributions-to-gitlab-projects) | Dynamic discount | See the following section |
 
 #### Community contributions to GitLab projects
 

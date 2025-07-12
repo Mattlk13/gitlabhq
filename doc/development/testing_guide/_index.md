@@ -1,14 +1,14 @@
 ---
 stage: none
 group: unassigned
-info: Any user with at least the Maintainer role can merge updates to this content. For details, see https://docs.gitlab.com/ee/development/development_processes.html#development-guidelines-review.
+info: Any user with at least the Maintainer role can merge updates to this content. For details, see https://docs.gitlab.com/development/development_processes/#development-guidelines-review.
 title: Testing standards and style guidelines
 ---
 
 This document describes various guidelines and best practices for automated
 testing of the GitLab project.
 
-It is meant to be an _extension_ of the
+It is meant to be an extension of the
 [thoughtbot testing style guide](https://github.com/thoughtbot/guides/tree/master/testing-rspec). If
 this guide defines a rule that contradicts the thoughtbot guide, this guide
 takes precedence. Some guidelines may be repeated verbatim to stress their
@@ -36,6 +36,10 @@ changes should be tested.
 
 Everything you should know about [how to write good tests](best_practices.md): Test Design, RSpec, FactoryBot,
 system tests, parameterized tests etc.
+
+## Testing Strategy
+
+[Testing strategy document](testing_strategy.md) defines the blueprint for GitLab automated testing — where tests run, when they execute, and what they block across the development lifecycle. 
 
 ## Frontend testing standards and style guidelines
 
@@ -81,5 +85,9 @@ Everything you should know about [how to test migrations](testing_migrations_gui
 ## Test results tracking
 
 How we track our [test suite run results](test_results_tracking.md).
+
+## Testing AI features
+
+Practices to keep in mind when [testing AI-powered features](testing_ai_features.md).
 
 [Return to Development documentation](../_index.md)

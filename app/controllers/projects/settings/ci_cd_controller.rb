@@ -32,7 +32,7 @@ module Projects
         @variable_limit = ::Plan.default.actual_limits.project_ci_variables
 
         triggers = ::Ci::TriggerSerializer.new.represent(
-          @project.triggers, current_user: current_user, project: @project
+          @project.triggers.with_last_used, current_user: current_user, project: @project
         )
 
         @triggers_json = Gitlab::Json.dump(triggers)
@@ -183,7 +183,7 @@ module Projects
         @project_runners = @project.runners.ordered.page(params[:project_page]).per(NUMBER_OF_RUNNERS_PER_PAGE).with_tags
 
         @assignable_runners = current_user
-          .ci_owned_runners
+          .ci_available_runners
           .assignable_for(project)
           .ordered
           .page(params[:specific_page]).per(NUMBER_OF_RUNNERS_PER_PAGE)
@@ -206,7 +206,7 @@ module Projects
       end
 
       def define_triggers_variables
-        @triggers = @project.triggers
+        @triggers = @project.triggers.with_last_used
           .present(current_user: current_user)
 
         @trigger = ::Ci::Trigger.new

@@ -123,6 +123,16 @@ class NotificationService
     mailer.access_token_revoked_email(user, token_name, source).deliver_later
   end
 
+  # Notify the owner of the deploy token, when it is about to expire
+  def deploy_token_about_to_expire(user, token_name, project, params = {})
+    return unless user.can?(:receive_notifications)
+    return unless project.team.owner?(user) || project.team.maintainer?(user)
+
+    log_info("Notifying user about expiring deploy tokens", user)
+
+    mailer.deploy_token_about_to_expire_email(user, token_name, project, params).deliver_later
+  end
+
   # Notify the user when at least one of their ssh key has expired today
   def ssh_key_expired(user, fingerprints)
     return unless user.can?(:receive_notifications)
@@ -548,13 +558,18 @@ class NotificationService
     mailer.project_was_not_exported_email(current_user, project, errors).deliver_later
   end
 
+  def email_template_name(status)
+    "pipeline_#{status}_email"
+  end
+
   def pipeline_finished(pipeline, ref_status: nil, recipients: nil)
     # Must always check project configuration since recipients could be a list of emails
     # from the PipelinesEmailService integration.
     return if pipeline.project.emails_disabled?
 
+    # If changing the next line don't forget to do the same in EE section
     status = pipeline_notification_status(ref_status, pipeline)
-    email_template = "pipeline_#{status}_email"
+    email_template = email_template_name(status)
 
     return unless mailer.respond_to?(email_template)
 
@@ -568,6 +583,12 @@ class NotificationService
 
     recipients.each do |recipient|
       mailer.public_send(email_template, pipeline, recipient).deliver_later
+    end
+  end
+
+  def pipeline_schedule_owner_unavailable(schedule)
+    schedule.project.owners_and_maintainers.each do |recipient|
+      mailer.pipeline_schedule_owner_unavailable_email(schedule, recipient).deliver_later
     end
   end
 
@@ -864,7 +885,7 @@ class NotificationService
   private
 
   def send_new_note_notifications(note)
-    notify_method = "note_#{note.noteable_ability_name}_email".to_sym
+    notify_method = :"note_#{note.noteable_ability_name}_email"
 
     recipients = NotificationRecipients::BuildService.build_new_note_recipients(note)
     recipients.each do |recipient|

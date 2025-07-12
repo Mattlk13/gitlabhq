@@ -41,7 +41,7 @@ You might need the user ID if you want to interact with it using the [GitLab API
 To find the user ID:
 
 1. Go to the users' profile page.
-1. On the profile page, in the upper-right corner, select **Actions** (**{ellipsis_v}**).
+1. On the profile page, in the upper-right corner, select **Actions** ({{< icon name="ellipsis_v" >}}).
 1. Select **Copy user ID**.
 
 ## Access your user settings
@@ -240,7 +240,7 @@ to match your username.
 
 {{< /history >}}
 
-You can add links to certain other external accounts you might have, like Skype and X (formerly Twitter).
+You can add links to certain other external accounts you might have, like Discord and X (formerly Twitter).
 They can help other users connect with you on other platforms.
 
 To add links to other accounts:
@@ -252,7 +252,7 @@ To add links to other accounts:
    - LinkedIn profile name.
    - Bluesky [did:plc identifier](https://atproto.com/specs/did). To find your identifier, [resolve your user handle](https://bsky.social/xrpc/com.atproto.identity.resolveHandle?handle=USER_HANDLE).
    - Mastodon handle. In GitLab 17.4 and later, you can use your [GitLab profile](#access-your-user-profile) to verify your Mastodon account.
-   - Skype username.
+   - Discord username.
    - X (formerly Twitter) @username.
    - [ORCID](https://orcid.org/).
 
@@ -478,7 +478,7 @@ To disconnect a sign-in service used for signing in to GitLab:
 
 ## Session duration
 
-### Stay signed in for two weeks
+### Stay signed in for one week
 
 By default, you are signed out of GitLab after seven days (10080 minutes) of inactivity or until you close your browser
 window, whichever comes first.

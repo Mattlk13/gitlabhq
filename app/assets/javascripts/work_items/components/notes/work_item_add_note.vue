@@ -220,7 +220,7 @@ export default {
       };
     },
     resolveDiscussionTitle() {
-      return this.isDiscussionResolved ? __('Unresolve thread') : __('Resolve thread');
+      return this.isDiscussionResolved ? __('Reopen thread') : __('Resolve thread');
     },
     hasEmailParticipantsWidget() {
       return Boolean(findEmailParticipantsWidget(this.workItem));
@@ -409,6 +409,8 @@ export default {
             :parent-id="parentId"
             :hide-fullscreen-markdown-button="hideFullscreenMarkdownButton"
             :uploads-path="uploadsPath"
+            @focus="$emit('focus')"
+            @blur="$emit('blur')"
             @toggleResolveDiscussion="$emit('resolve')"
             @submitForm="updateWorkItem"
             @cancelEditing="cancelEditing"

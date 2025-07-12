@@ -17,11 +17,19 @@ describe('AccessTokens', () => {
 
   const pinia = createTestingPinia();
   const store = useAccessTokens();
+  const $router = {
+    push: jest.fn(),
+    replace: jest.fn(),
+  };
 
-  const accessTokenCreate = '/api/v4/groups/1/service_accounts/:id/personal_access_tokens/';
-  const accessTokenRevoke = '/api/v4/groups/2/service_accounts/:id/personal_access_tokens/';
-  const accessTokenRotate = '/api/v4/groups/3/service_accounts/:id/personal_access_tokens/';
-  const accessTokenShow = '/api/v4/groups/4/service_accounts/:id/personal_access_token';
+  const accessTokenCreate =
+    'http://localhost/api/v4/groups/1/service_accounts/:id/personal_access_tokens/';
+  const accessTokenRevoke =
+    'http://localhost/api/v4/groups/2/service_accounts/:id/personal_access_tokens/';
+  const accessTokenRotate =
+    'http://localhost/api/v4/groups/3/service_accounts/:id/personal_access_tokens/';
+  const accessTokenShow =
+    'http://localhost/api/v4/groups/4/service_accounts/:id/personal_access_token';
   const id = 235;
 
   const createComponent = (props = {}) => {
@@ -37,8 +45,15 @@ describe('AccessTokens', () => {
         id,
         ...props,
       },
+      mocks: {
+        $router,
+      },
     });
   };
+
+  beforeEach(() => {
+    store.showCreateForm = false;
+  });
 
   const findCreateTokenButton = () => wrapper.findByTestId('add-new-token-button');
   const findCreateTokenForm = () => wrapper.findComponent(AccessTokenForm);
@@ -51,17 +66,40 @@ describe('AccessTokens', () => {
     createComponent();
     waitForPromises();
 
+    expect($router.replace).toHaveBeenCalledWith({ query: { page: 1, sort: 'expires_asc' } });
     expect(store.setup).toHaveBeenCalledWith({
       filters: DEFAULT_FILTER,
       id: 235,
       page: 1,
+      showCreateForm: false,
       sorting: DEFAULT_SORT,
-      urlCreate: '/api/v4/groups/1/service_accounts/:id/personal_access_tokens/',
-      urlRevoke: '/api/v4/groups/2/service_accounts/:id/personal_access_tokens/',
-      urlRotate: '/api/v4/groups/3/service_accounts/:id/personal_access_tokens/',
-      urlShow: '/api/v4/groups/4/service_accounts/:id/personal_access_token',
+      urlCreate: 'http://localhost/api/v4/groups/1/service_accounts/:id/personal_access_tokens/',
+      urlRevoke: 'http://localhost/api/v4/groups/2/service_accounts/:id/personal_access_tokens/',
+      urlRotate: 'http://localhost/api/v4/groups/3/service_accounts/:id/personal_access_tokens/',
+      urlShow: 'http://localhost/api/v4/groups/4/service_accounts/:id/personal_access_token',
     });
     expect(store.fetchTokens).toHaveBeenCalledTimes(1);
+  });
+
+  describe('when token name, description or scopes are provided', () => {
+    it('shows the token creation form', async () => {
+      createComponent({
+        tokenName: 'My token',
+        tokenDescription: 'My description',
+        tokenScopes: ['api', 'sudo'],
+      });
+      waitForPromises();
+
+      expect(store.setup).toHaveBeenCalledWith(expect.objectContaining({ showCreateForm: true }));
+      store.showCreateForm = true;
+      await nextTick();
+
+      expect(findCreateTokenForm().props()).toMatchObject({
+        name: 'My token',
+        description: 'My description',
+        scopes: ['api', 'sudo'],
+      });
+    });
   });
 
   describe('user avatar', () => {
@@ -100,19 +138,32 @@ describe('AccessTokens', () => {
     });
   });
 
-  it('fetches tokens when the page is changed', () => {
-    createComponent();
-    expect(store.fetchTokens).toHaveBeenCalledTimes(1);
-    findPagination().vm.$emit('input', 2);
-
-    expect(store.fetchTokens).toHaveBeenCalledTimes(2);
-  });
-
   it('fetches tokens when filters are changed', () => {
     createComponent();
     expect(store.fetchTokens).toHaveBeenCalledTimes(1);
     findFilteredSearch().vm.$emit('submit', ['my token']);
 
+    expect($router.push).toHaveBeenCalledWith({ query: { page: 1, sort: 'expires_asc' } });
+    expect(store.fetchTokens).toHaveBeenCalledTimes(2);
+  });
+
+  it('sets the url params correctly and fetches tokens when window `popstate` event is triggered', () => {
+    createComponent();
+    expect(store.fetchTokens).toHaveBeenCalledTimes(1);
+    window.dispatchEvent(new Event('popstate'));
+
+    expect(store.setFilters).toHaveBeenCalledTimes(1);
+    expect(store.setPage).toHaveBeenCalledWith(1);
+    expect(store.setSorting).toHaveBeenCalledTimes(1);
+    expect(store.fetchTokens).toHaveBeenCalledTimes(2);
+  });
+
+  it('fetches tokens when the page is changed', () => {
+    createComponent();
+    expect(store.fetchTokens).toHaveBeenCalledTimes(1);
+    findPagination().vm.$emit('input', 2);
+
+    expect($router.push).toHaveBeenCalledWith({ query: { page: 1, sort: 'expires_asc' } });
     expect(store.fetchTokens).toHaveBeenCalledTimes(2);
   });
 
@@ -121,6 +172,7 @@ describe('AccessTokens', () => {
     expect(store.fetchTokens).toHaveBeenCalledTimes(1);
     findSorting().vm.$emit('sortByChange', 'name');
 
+    expect($router.push).toHaveBeenCalledWith({ query: { page: 1, sort: 'expires_asc' } });
     expect(store.setSorting).toHaveBeenCalledWith(expect.objectContaining({ value: 'name' }));
     expect(store.fetchTokens).toHaveBeenCalledTimes(2);
   });
@@ -131,6 +183,7 @@ describe('AccessTokens', () => {
     store.sorting = { value: 'name', isAsc: true };
     findSorting().vm.$emit('sortDirectionChange', false);
 
+    expect($router.push).toHaveBeenCalledWith({ query: { page: 1, sort: 'name_asc' } });
     expect(store.setSorting).toHaveBeenCalledWith(expect.objectContaining({ isAsc: false }));
     expect(store.fetchTokens).toHaveBeenCalledTimes(2);
   });

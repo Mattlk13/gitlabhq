@@ -8,16 +8,15 @@ class Projects::WorkItemsController < Projects::ApplicationController
 
   before_action :authorize_import_access!, only: [:import_csv, :authorize] # rubocop:disable Rails/LexicallyScopedActionFilter
   before_action do
-    push_frontend_feature_flag(:notifications_todos_buttons)
+    push_frontend_feature_flag(:notifications_todos_buttons, current_user)
     push_force_frontend_feature_flag(:work_items, !!project&.work_items_feature_flag_enabled?)
     push_force_frontend_feature_flag(:work_items_beta, !!project&.work_items_beta_feature_flag_enabled?)
     push_force_frontend_feature_flag(:work_items_alpha, !!project&.work_items_alpha_feature_flag_enabled?)
     push_force_frontend_feature_flag(:glql_integration, !!project&.glql_integration_feature_flag_enabled?)
     push_force_frontend_feature_flag(:glql_load_on_click, !!project&.glql_load_on_click_feature_flag_enabled?)
-    push_force_frontend_feature_flag(:continue_indented_text, !!project&.continue_indented_text_feature_flag_enabled?)
     push_frontend_feature_flag(:work_item_status_feature_flag, project&.root_ancestor)
-    push_frontend_feature_flag(:namespace_level_work_items, project&.group)
     push_frontend_feature_flag(:work_item_planning_view, project&.group)
+    push_force_frontend_feature_flag(:work_items_bulk_edit, project&.work_items_bulk_edit_feature_flag_enabled?)
   end
 
   feature_category :team_planning
@@ -44,8 +43,7 @@ class Projects::WorkItemsController < Projects::ApplicationController
   def show
     return if show_params[:iid] == 'new'
 
-    @work_item = ::WorkItems::WorkItemsFinder.new(current_user, project_id: project.id)
-      .execute.with_work_item_type.find_by_iid(show_params[:iid])
+    @work_item = issuable
   end
 
   private
@@ -86,6 +84,12 @@ class Projects::WorkItemsController < Projects::ApplicationController
 
   def file_extension_allowlist
     EXTENSION_ALLOWLIST
+  end
+
+  def issuable
+    @issuable ||= ::WorkItems::WorkItemsFinder.new(current_user, project_id: project.id)
+                    .execute.with_work_item_type
+                    .find_by_iid(show_params[:iid])
   end
 end
 

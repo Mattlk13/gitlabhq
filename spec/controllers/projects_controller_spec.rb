@@ -456,6 +456,40 @@ RSpec.describe ProjectsController, feature_category: :groups_and_projects do
 
         expect(response).to have_gitlab_http_status(:found)
         expect(response).to redirect_to(project_path(public_project, ref: 'master', path: '/.gitlab-ci.yml'))
+        expect(response.body).to match(/You.are.being.+redirected/)
+      end
+    end
+
+    context 'redirection from http://someproject?format=git' do
+      let_it_be_with_reload(:public_project) { create(:project, :public) }
+
+      context 'with git in project path' do
+        before do
+          public_project.update!(path: 'my.gitlab')
+
+          request.env['PATH_INFO'] = "/#{public_project.namespace.path}/#{public_project.path}"
+          request.env['QUERY_STRING'] = 'format=git'
+        end
+
+        it 'does not trigger a redirect' do
+          get :show,
+            params: { namespace_id: public_project.namespace.path, id: public_project.path },
+            format: :git
+
+          expect(response).to have_gitlab_http_status(:not_found)
+          expect(response).not_to redirect_to(project_path(public_project))
+        end
+      end
+
+      context 'with git not in project path' do
+        it 'does trigger a redirect' do
+          get :show,
+            params: { namespace_id: public_project.namespace.path, id: public_project.path },
+            format: :git
+
+          expect(response).to have_gitlab_http_status(:found)
+          expect(response).to redirect_to(project_path(public_project))
+        end
       end
     end
 
@@ -503,7 +537,7 @@ RSpec.describe ProjectsController, feature_category: :groups_and_projects do
       subject { get :show, params: { namespace_id: public_project.namespace.path, id: public_project.path } }
 
       let(:ancestor_notice_regex) do
-        /The parent group of this project is pending deletion, so this project will also be deleted on .*./
+        /This project will be deleted on .* because its parent group is scheduled for deletion\./
       end
 
       context 'when the parent group has not been scheduled for deletion' do
@@ -585,6 +619,37 @@ RSpec.describe ProjectsController, feature_category: :groups_and_projects do
 
           expect(response).to have_gitlab_http_status(:redirect)
         end
+      end
+    end
+
+    context 'when security features are enabled' do
+      let(:params) do
+        {
+          name: 'New Project',
+          path: 'new-project',
+          description: 'New project description',
+          namespace_id: user.namespace.id,
+          initialize_with_sast: '1',
+          initialize_with_secret_detection: '1'
+        }
+      end
+
+      it 'calls appropriate create service methods' do
+        expect_next_instance_of(Projects::CreateService) do |service|
+          expect(service.instance_variable_get(:@initialize_with_sast)).to eq(true)
+          expect(service.instance_variable_get(:@initialize_with_secret_detection)).to eq(true)
+        end
+
+        subject
+      end
+
+      it 'creates a project with security features enabled' do
+        expect { subject }.to change { Project.count }.by(1)
+
+        project = Project.last
+        expect(project.name).to eq('New Project')
+        expect(project.path).to eq('new-project')
+        expect(response).to have_gitlab_http_status(:redirect)
       end
     end
   end
@@ -848,7 +913,7 @@ RSpec.describe ProjectsController, feature_category: :groups_and_projects do
           create(:container_repository, project: project, name: :image)
         end
 
-        let(:message) { 'UpdateProject|Cannot rename project because it contains container registry tags!' }
+        let(:message) { 'UpdateProject|Cannot rename or delete project because it contains container registry tags. Delete all container registry tags first. https://docs.gitlab.com/user/packages/container_registry/#move-or-rename-container-registry-repositories' }
 
         shared_examples 'not allowing the rename of the project' do
           it 'does not allow to rename the project' do
@@ -974,7 +1039,8 @@ RSpec.describe ProjectsController, feature_category: :groups_and_projects do
           id: project.path,
           project: {
             project_setting_attributes: {
-              merge_request_title_regex: 'aaa'
+              merge_request_title_regex: 'aaa',
+              merge_request_title_regex_description: 'Test description'
             }
           }
         }
@@ -982,6 +1048,7 @@ RSpec.describe ProjectsController, feature_category: :groups_and_projects do
         project.reload
 
         expect(project.merge_request_title_regex).to eq('aaa')
+        expect(project.merge_request_title_regex_description).to eq('Test description')
       end
     end
 
@@ -1163,7 +1230,7 @@ RSpec.describe ProjectsController, feature_category: :groups_and_projects do
       specify :aggregate_failures do
         delete :destroy, params: { namespace_id: project.namespace, id: project }
 
-        expect(project.marked_for_deletion?).to be_falsey
+        expect(project.self_deletion_scheduled?).to be_falsey
         expect(response).to have_gitlab_http_status(:found)
         expect(response).to redirect_to(dashboard_projects_path)
       end
@@ -1173,7 +1240,7 @@ RSpec.describe ProjectsController, feature_category: :groups_and_projects do
       specify :aggregate_failures do
         delete :destroy, params: { namespace_id: project.namespace, id: project }
 
-        expect(project.reload.marked_for_deletion?).to be_truthy
+        expect(project.reload.self_deletion_scheduled?).to be_truthy
         expect(project.reload.hidden?).to be_falsey
         expect(response).to have_gitlab_http_status(:found)
         expect(response).to redirect_to(project_path(project))
@@ -1193,18 +1260,6 @@ RSpec.describe ProjectsController, feature_category: :groups_and_projects do
       expect(response).to have_gitlab_http_status(:ok)
       expect(response).to render_template(:edit)
       expect(flash[:alert]).to include(message)
-    end
-
-    context 'when instance setting is set to 0 days' do
-      it 'deletes project right away' do
-        stub_application_setting(deletion_adjourned_period: 0)
-
-        delete :destroy, params: { namespace_id: project.namespace, id: project }
-
-        expect(project.marked_for_deletion?).to be_falsey
-        expect(response).to have_gitlab_http_status(:found)
-        expect(response).to redirect_to(dashboard_projects_path)
-      end
     end
 
     context 'when project is already marked for deletion' do
@@ -1246,7 +1301,7 @@ RSpec.describe ProjectsController, feature_category: :groups_and_projects do
         specify :aggregate_failures do
           delete :destroy, params: { namespace_id: project.namespace, id: project }
 
-          expect(project.marked_for_deletion?).to be_falsey
+          expect(project.self_deletion_scheduled?).to be_falsey
           expect(response).to have_gitlab_http_status(:found)
           expect(response).to redirect_to(dashboard_projects_path)
         end
@@ -1256,7 +1311,7 @@ RSpec.describe ProjectsController, feature_category: :groups_and_projects do
         specify :aggregate_failures do
           delete :destroy, params: { namespace_id: project.namespace, id: project }
 
-          expect(project.reload.marked_for_deletion?).to be_truthy
+          expect(project.reload.self_deletion_scheduled?).to be_truthy
           expect(project.reload.hidden?).to be_falsey
           expect(response).to have_gitlab_http_status(:found)
           expect(response).to redirect_to(project_path(project))
@@ -1276,18 +1331,6 @@ RSpec.describe ProjectsController, feature_category: :groups_and_projects do
         expect(response).to have_gitlab_http_status(:ok)
         expect(response).to render_template(:edit)
         expect(flash[:alert]).to include(message)
-      end
-
-      context 'when instance setting is set to 0 days' do
-        it 'deletes project right away' do
-          stub_application_setting(deletion_adjourned_period: 0)
-
-          delete :destroy, params: { namespace_id: project.namespace, id: project }
-
-          expect(project.marked_for_deletion?).to be_falsey
-          expect(response).to have_gitlab_http_status(:found)
-          expect(response).to redirect_to(dashboard_projects_path)
-        end
       end
 
       context 'when project is already marked for deletion' do
@@ -1327,7 +1370,7 @@ RSpec.describe ProjectsController, feature_category: :groups_and_projects do
   end
 
   describe 'POST #restore', feature_category: :groups_and_projects do
-    let_it_be(:project) { create(:project, namespace: user.namespace) }
+    let_it_be(:project) { create(:project, :aimed_for_deletion, namespace: user.namespace) }
 
     before do
       sign_in(user)

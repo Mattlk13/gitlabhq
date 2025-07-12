@@ -3,6 +3,14 @@
     "ContainerProtectionAccessLevel",
     "ContainerProtectionTagRule"
   ],
+  "AiCatalogItem": [
+    "AiCatalogAgent",
+    "AiCatalogFlow"
+  ],
+  "AiCatalogItemVersion": [
+    "AiCatalogAgentVersion",
+    "AiCatalogFlowVersion"
+  ],
   "AlertManagementIntegration": [
     "AlertManagementHttpIntegration",
     "AlertManagementPrometheusIntegration"
@@ -59,6 +67,10 @@
     "Issue",
     "MergeRequest",
     "WorkItemWidgetCurrentUserTodos"
+  ],
+  "CustomRoleInterface": [
+    "AdminMemberRole",
+    "MemberRole"
   ],
   "DependencyInterface": [
     "Dependency",
@@ -133,11 +145,20 @@
     "AbuseReportLabel",
     "Label"
   ],
+  "MarkdownPaths": [
+    "GroupNamespaceMarkdownPaths",
+    "ProjectNamespaceMarkdownPaths",
+    "UserNamespaceMarkdownPaths"
+  ],
   "MemberInterface": [
     "GroupMember",
     "PendingGroupMember",
     "PendingProjectMember",
     "ProjectMember"
+  ],
+  "MemberRoleInterface": [
+    "MemberRole",
+    "StandardRole"
   ],
   "NamespaceUnion": [
     "CiDeletedNamespace",
@@ -157,6 +178,7 @@
     "EpicIssue",
     "Issue",
     "MergeRequest",
+    "ProjectComplianceViolation",
     "Snippet",
     "Vulnerability",
     "WikiPage"
@@ -273,6 +295,7 @@
     "MergeRequestReviewer",
     "Namespace",
     "Project",
+    "ProjectComplianceViolation",
     "UserCore",
     "Vulnerability",
     "WikiPage",
@@ -287,11 +310,6 @@
     "MergeRequestParticipant",
     "MergeRequestReviewer",
     "UserCore"
-  ],
-  "UserLevelPermissions": [
-    "GroupNamespaceUserLevelPermissions",
-    "ProjectNamespaceUserLevelPermissions",
-    "UserNamespaceUserLevelPermissions"
   ],
   "VulnerabilityDetail": [
     "VulnerabilityDetailBase",

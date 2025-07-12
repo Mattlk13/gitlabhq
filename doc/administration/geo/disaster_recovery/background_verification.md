@@ -2,6 +2,7 @@
 stage: Tenant Scale
 group: Geo
 info: To determine the technical writer assigned to the Stage/Group associated with this page, see https://handbook.gitlab.com/handbook/product/ux/technical-writing/#assignments
+gitlab_dedicated: no
 title: Automatic background verification
 ---
 
@@ -96,7 +97,7 @@ If the **primary** and **secondary** sites have a checksum verification mismatch
 
 1. On a **Gitaly node on the primary** site and a **Gitaly node on the secondary** site, go to the project's repository
    directory. If using Gitaly Cluster,
-   [check that it is in a healthy state](../../gitaly/troubleshooting_gitaly_cluster.md#check-cluster-health) before
+   [check that it is in a healthy state](../../gitaly/praefect/troubleshooting.md#check-cluster-health) before
    running these commands.
 
    The default path is `/var/opt/gitlab/git-data/repositories`. If repository storages

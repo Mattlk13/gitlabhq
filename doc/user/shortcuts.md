@@ -39,6 +39,7 @@ These shortcuts are available in most areas of GitLab:
 | <kbd>Shift</kbd> + <kbd>l</kbd>    | Go to your **Milestones** page. |
 | <kbd>Shift</kbd> + <kbd>s</kbd>    | Go to your **Snippets** page. |
 | <kbd>s</kbd> / <kbd>/</kbd>        | Put cursor in the search bar. |
+| <kbd>f</kbd>                       | Focus filter bar |
 | <kbd>Shift</kbd> + <kbd>i</kbd>    | Go to your **Issues** page. |
 | <kbd>Shift</kbd> + <kbd>m</kbd>    | Go to your [**Merge requests**](project/merge_requests/_index.md) page. |
 | <kbd>Shift</kbd> + <kbd>r</kbd>    | Go to your **Review requests** page. |
@@ -119,8 +120,8 @@ These shortcuts are available when viewing [merge requests](project/merge_reques
 | <kbd>]</kbd> or <kbd>j</kbd>      |                                   | Move to next file. |
 | <kbd>&#91;</kbd> or <kbd>k</kbd>  |                                   | Move to previous file. |
 | <kbd>Command</kbd> + <kbd>p</kbd> | <kbd>Control</kbd> + <kbd>p</kbd> | Search for, and then jump to a file for review. |
-| <kbd>n</kbd>                      |                                   | Move to next unresolved discussion. |
-| <kbd>p</kbd>                      |                                   | Move to previous unresolved discussion. |
+| <kbd>n</kbd>                      |                                   | Move to next open thread. |
+| <kbd>p</kbd>                      |                                   | Move to previous open thread. |
 | <kbd>b</kbd>                      |                                   | Copy source branch name. |
 | <kbd>c</kbd> + <kbd>r</kbd>       |                                   | Copy merge request reference. |
 | <kbd>r</kbd>                      |                                   | Start writing a comment. Pre-selected text is quoted in the comment. |

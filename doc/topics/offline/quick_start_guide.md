@@ -225,7 +225,7 @@ for offline environments.
 
 ### Configure NTP
 
-In GitLab 15.4 and 15.5, Gitaly Cluster assumes `pool.ntp.org` is accessible. If `pool.ntp.org` is not accessible, [customize the time server setting](../../administration/gitaly/praefect.md#customize-time-server-setting) on the Gitaly
+Gitaly Cluster assumes `pool.ntp.org` is accessible. If `pool.ntp.org` is not accessible, [customize the time server setting](../../administration/gitaly/praefect/_index.md#customize-time-server-setting) on the Gitaly
 and Praefect servers so they can use an accessible NTP server.
 
 On offline instances, the [GitLab Geo check Rake task](../../administration/geo/replication/troubleshooting/common.md#can-geo-detect-the-current-site-correctly)
@@ -397,7 +397,7 @@ If license or advisory data is missing from the dependency list or MR pages, one
 
 `package_metadata` synchronization is triggered by using cron jobs ([advisory sync](https://gitlab.com/gitlab-org/gitlab/-/blob/16-3-stable-ee/config/initializers/1_settings.rb#L864-866) and [license sync](https://gitlab.com/gitlab-org/gitlab/-/blob/16-3-stable-ee/config/initializers/1_settings.rb#L855-857)) and imports only the package registry types enabled in [admin settings](../../administration/settings/security_and_compliance.md#choose-package-registry-metadata-to-sync).
 
-The file structure in `vendor/package_metadata` must coincide with the package registry type enabled above. For example, to sync `maven` license or advisory data, the package metadata directory under the Rails directory must have the following structure:
+The file structure in `vendor/package_metadata` must coincide with the package registry type enabled previously. For example, to sync `maven` license or advisory data, the package metadata directory under the Rails directory must have the following structure:
 
 - For licenses:`$GITLAB_RAILS_ROOT_DIR/vendor/package_metadata/licenses/v2/maven/**/*.ndjson`.
 - For advisories:`$GITLAB_RAILS_ROOT_DIR/vendor/package_metadata/advisories/v2/maven/**/*.ndjson`.

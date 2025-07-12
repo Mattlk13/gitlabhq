@@ -1,8 +1,6 @@
 # frozen_string_literal: true
 
 class UserPreference < ApplicationRecord
-  include SafelyChangeColumnDefault
-
   # We could use enums, but Rails 4 doesn't support multiple
   # enum options with same name for multiple fields, also it creates
   # extra methods that aren't really needed here.
@@ -12,11 +10,13 @@ class UserPreference < ApplicationRecord
   belongs_to :user
   belongs_to :home_organization, class_name: "Organizations::Organization", optional: true
 
-  columns_changing_default :organization_groups_projects_display
-
   scope :with_user, -> { joins(:user) }
   scope :gitpod_enabled, -> { where(gitpod_enabled: true) }
 
+  validates :dark_color_scheme_id, allow_nil: true, inclusion: {
+    in: Gitlab::ColorSchemes.valid_ids,
+    message: ->(*) { format(_("%{placeholder} is not a valid color scheme"), { placeholder: '%{value}' }) }
+  }
   validates :issue_notes_filter, :merge_request_notes_filter, inclusion: { in: NOTES_FILTERS.values }, presence: true
   validates :tab_width, numericality: {
     only_integer: true,
@@ -36,8 +36,11 @@ class UserPreference < ApplicationRecord
   validates :time_display_format, inclusion: { in: TIME_DISPLAY_FORMATS.values }, presence: true
   validates :extensions_marketplace_opt_in_url, length: { maximum: 512 }
 
+  validates :work_items_display_settings, json_schema: { filename: 'user_preference_work_items_display_settings' }
+
   validate :user_belongs_to_home_organization, if: :home_organization_changed?
 
+  attribute :dark_color_scheme_id, default: -> { Gitlab::CurrentSettings.default_dark_syntax_highlighting_theme }
   attribute :tab_width, default: -> { Gitlab::TabWidth::DEFAULT }
   attribute :time_display_relative, default: true
   attribute :time_display_format, default: 0

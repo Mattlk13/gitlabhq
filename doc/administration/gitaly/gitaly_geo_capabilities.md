@@ -14,7 +14,7 @@ The following tables are intended to guide you to choose the right combination o
 
 | Capability | Availability | Recoverability | Data Resiliency | Performance | Risks/Trade-offs|
 |------------|--------------|----------------|-----------------|-------------|-----------------|
-| Gitaly Cluster | Very high - tolerant of node failures | RTO for a single node of 10 s with no manual intervention | Data is stored on multiple nodes | Good - While writes may take slightly longer due to voting, read distribution improves read speeds | Trade-off - Slight decrease in write speed for redundant, strongly-consistent storage solution. Risks - [Does not support snapshot backups](_index.md#snapshot-backup-and-recovery), GitLab backup task can be slow for large data sets |
+| Gitaly Cluster | Very high - tolerant of node failures | RTO for a single node of 10 s with no manual intervention | Data is stored on multiple nodes | Good - While writes may take slightly longer due to voting, read distribution improves read speeds | Trade-off - Slight decrease in write speed for redundant, strongly-consistent storage solution. Risks - [Does not support snapshot backups](praefect/_index.md#snapshot-backup-and-recovery), GitLab backup task can be slow for large data sets |
 | Gitaly Shards | Single storage location is a single point of failure | Would need to restore only shards which failed | Single point of failure | Good - can allocate repositories to shards to spread load | Trade-off - Need to manually configure repositories into different shards to balance loads / storage space. Risks - Single point of failure relies on recovery process when single-node failure occurs |
 
 ## Geo capabilities
@@ -27,7 +27,8 @@ If your availability needs to span multiple zones or multiple locations, read ab
 
 ## Scenarios for failure modes and available mitigation paths
 
-The following table outlines failure modes and mitigation paths for the product offerings detailed in the tables above. Note - Gitaly Cluster install assumes an odd number replication factor of 3 or greater
+The following table outlines failure modes and mitigation paths for the product offerings detailed in the previous tables.
+Gitaly Cluster install assumes an odd number replication factor of 3 or greater.
 
 | Gitaly Mode | Loss of Single Gitaly Node | Application / Data Corruption | Regional Outage (Loss of Instance) | Notes |
 | ----------- | -------------------------- | ----------------------------- | ---------------------------------- | ----- |

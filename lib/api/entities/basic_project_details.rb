@@ -54,6 +54,7 @@ module API
         projects_relation.preload(:project_feature, :route)
                          .preload(:import_state, :topics)
                          .preload(:auto_devops)
+                         .preload(project_namespace: [:namespace_settings_with_ancestors_inherited_settings])
                          .preload(namespace: [:route, :owner])
       end
       # rubocop: enable CodeReuse/ActiveRecord

@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 
 const { spawnSync } = require('node:child_process');
-const { readFileSync } = require('node:fs');
 const defaultChalk = require('chalk');
 const { program } = require('commander');
+const { getChangedFiles } = require('./find_jest_predictive_tests');
 
 const IS_CI = Boolean(process.env.CI);
 
@@ -71,35 +71,31 @@ function parseArgumentsAndEnvironment() {
     process.exit(1);
   }
 
-  const changedFiles = [];
+  let changedFiles = [];
   if (options.predictive) {
-    const { RSPEC_MATCHING_JS_FILES_PATH, RSPEC_CHANGED_FILES_PATH } = process.env;
+    changedFiles = getChangedFiles();
 
-    for (const [name, path] of Object.entries({
-      RSPEC_CHANGED_FILES_PATH,
-      RSPEC_MATCHING_JS_FILES_PATH,
-    })) {
-      try {
-        const contents = readFileSync(path, { encoding: 'UTF-8' });
-        changedFiles.push(...contents.split(/\s+/).filter(Boolean));
-      } catch (error) {
-        console.warn(
-          `Failed to read from path ${path} given by environment variable ${name}`,
-          error,
-        );
-      }
-    }
-
-    if (!changedFiles) {
+    if (!changedFiles || !changedFiles.length) {
       console.warn('No changed files detected; will not run Jest.');
       process.exit(0);
     }
   }
 
+  const coverageBranchExclusions = [
+    /^as-if-foss\//,
+    /^\d+-\d+-stable(-ee)?$/, // exclude stable branches like 17-10-stable-ee, 18-0-stable-ee, etc.
+  ];
+
+  // Enable coverage if:
+  // - explicitly requested via --coverage
+  // - not running in a merge request (CI_MERGE_REQUEST_IID is unset)
+  // - the current branch is not excluded by coverageBranchExclusions
+  // - not running under Vue 3 (Vue 3 tests are not currently covered)
+  // - not running in predictive mode (predictive mode does not support coverage)
   const coverage =
     options.coverage ||
     (!process.env.CI_MERGE_REQUEST_IID &&
-      !/^as-if-foss\//.test(process.env.CI_COMMIT_BRANCH) &&
+      !coverageBranchExclusions.some((rule) => rule.test(process.env.CI_COMMIT_BRANCH)) &&
       !options.vue3 &&
       !options.predictive);
 

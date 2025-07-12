@@ -90,6 +90,7 @@ module WorkItems
 
     scope :order_by_name_asc, -> { order(arel_table[:name].lower.asc) }
     scope :by_type, ->(base_type) { where(base_type: base_type) }
+    scope :with_widget_definition_preload, -> { preload(:enabled_widget_definitions) }
 
     def self.default_by_type(type)
       found_type = find_by(base_type: type)
@@ -155,6 +156,13 @@ module WorkItems
     def supported_conversion_types(resource_parent, user)
       type_names = supported_conversion_base_types(resource_parent, user) - [base_type]
       WorkItems::Type.by_type(type_names).order_by_name_asc
+    end
+
+    def unavailable_widgets_on_conversion(target_type, resource_parent)
+      source_widgets = widgets(resource_parent)
+      target_widgets = target_type.widgets(resource_parent)
+      target_widget_types = target_widgets.map(&:widget_type).to_set
+      source_widgets.reject { |widget| target_widget_types.include?(widget.widget_type) }
     end
 
     def allowed_child_types(cache: false, authorize: false, resource_parent: nil)

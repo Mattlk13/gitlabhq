@@ -142,13 +142,14 @@ module API
         present_carrierwave_file!(
           package_file.file,
           supports_direct_download: supports_direct_download,
-          content_disposition: content_disposition
+          content_disposition: content_disposition,
+          extra_send_url_params: ::Packages::SsrfProtection.params_for(package_file.package)
         )
       end
 
       def protect_package!(package_name, package_type)
         service_response =
-          ::Packages::Protection::CheckRuleExistenceService.new(
+          ::Packages::Protection::CheckRuleExistenceService.for_push(
             project: user_project,
             current_user: current_user,
             params: { package_name: package_name, package_type: package_type }

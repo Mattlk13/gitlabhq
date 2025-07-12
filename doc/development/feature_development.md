@@ -1,7 +1,7 @@
 ---
 stage: none
 group: unassigned
-info: Any user with at least the Maintainer role can merge updates to this content. For details, see https://docs.gitlab.com/ee/development/development_processes.html#development-guidelines-review.
+info: Any user with at least the Maintainer role can merge updates to this content. For details, see https://docs.gitlab.com/development/development_processes/#development-guidelines-review.
 title: Feature development
 ---
 
@@ -108,6 +108,7 @@ Consult these topics for information on contributing to specific GitLab features
 - [Test Import Project](import_project.md)
 - [Group migration](bulk_import.md)
 - [Export to CSV](export_csv.md)
+- [User contribution mapping](user_contribution_mapping.md)
 
 ### Integrations
 

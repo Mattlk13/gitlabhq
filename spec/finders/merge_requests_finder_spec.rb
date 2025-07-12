@@ -57,6 +57,16 @@ RSpec.describe MergeRequestsFinder, feature_category: :code_review_workflow do
           end
         end
 
+        context 'using a group handle' do
+          let_it_be(:issuable_parent) { create(:project) }
+          let_it_be(:issuable_attributes) { { source_project: issuable_parent, target_project: issuable_parent } }
+          let_it_be(:issuable_factory) { :merge_request }
+          let_it_be(:factory_params) { [:simple, :unique_branches] }
+          let_it_be(:search_params) { { project_id: issuable_parent.id } }
+
+          it_behaves_like 'filterable by group handle'
+        end
+
         context 'filters by author or assignee' do
           let_it_be(:merge_request6) do
             create(
@@ -844,48 +854,6 @@ RSpec.describe MergeRequestsFinder, feature_category: :code_review_workflow do
         end
       end
 
-      context 'filtering by approved' do
-        before do
-          create(:approval, merge_request: merge_request3, user: user2)
-        end
-
-        context 'when flag `mr_approved_filter` is disabled' do
-          before do
-            stub_feature_flags(mr_approved_filter: false)
-          end
-
-          it 'for approved' do
-            merge_requests = described_class.new(user, { approved: true }).execute
-
-            expect(merge_requests).to contain_exactly(merge_request1, merge_request2, merge_request3, merge_request4, merge_request5)
-          end
-
-          it 'for not approved' do
-            merge_requests = described_class.new(user, { approved: false }).execute
-
-            expect(merge_requests).to contain_exactly(merge_request1, merge_request2, merge_request3, merge_request4, merge_request5)
-          end
-        end
-
-        context 'when flag `mr_approved_filter` is enabled' do
-          before do
-            stub_feature_flags(mr_approved_filter: true)
-          end
-
-          it 'for approved' do
-            merge_requests = described_class.new(user, { approved: true }).execute
-
-            expect(merge_requests).to contain_exactly(merge_request3)
-          end
-
-          it 'for not approved' do
-            merge_requests = described_class.new(user, { approved: false }).execute
-
-            expect(merge_requests).to contain_exactly(merge_request1, merge_request2, merge_request4, merge_request5)
-          end
-        end
-      end
-
       context 'filtering by approved by username' do
         let(:params) { { approved_by_usernames: user2.username } }
 
@@ -1206,7 +1174,8 @@ RSpec.describe MergeRequestsFinder, feature_category: :code_review_workflow do
     context 'external authorization' do
       it_behaves_like 'a finder with external authorization service' do
         let!(:subject) { create(:merge_request, source_project: project) }
-        let(:project_params) { { project_id: project.id } }
+        let(:execute) { described_class.new(user).execute }
+        let(:project_execute) { described_class.new(user, project_id: project.id).execute }
       end
     end
   end

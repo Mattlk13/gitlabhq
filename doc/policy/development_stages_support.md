@@ -75,7 +75,7 @@ Generally available features:
 - Are ready for production use at any scale.
 - Are [fully supported](https://about.gitlab.com/support/statement-of-support/) and documented.
 - Have a complete user experience aligned with GitLab design standards.
-- Must be available on all GitLab platforms (GitLab.com, GitLab Self-Managed, GitLab Dedicated).
+- Must be available on all GitLab platforms (GitLab.com, GitLab Self-Managed, GitLab Dedicated, GitLab Dedicated for Government).
 
 ## Development guidelines
 
@@ -174,4 +174,4 @@ to apply to their experimental and beta features:
   a different direction would provide more value or a better user experience. If open questions must be answered
   to decide if the feature is worth putting in the product, list and answer those.
 
-For the exit criteria of **AI features**, in addition to the above, see the UX maturity requirements.
+For the exit criteria of **AI features**, in addition to the list documented previously, see the UX maturity requirements.

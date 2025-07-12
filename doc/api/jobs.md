@@ -12,13 +12,9 @@ title: Jobs API
 
 {{< /details >}}
 
+Use this API to interact with [CI/CD jobs](../ci/jobs/_index.md).
+
 ## List project jobs
-
-{{< history >}}
-
-- Support for keyset pagination [introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/362172) in GitLab 15.9.
-
-{{< /history >}}
 
 Get a list of jobs in a project. Jobs are sorted in descending order of their IDs.
 
@@ -137,7 +133,6 @@ Example of response:
       "bio": null,
       "location": null,
       "public_email": "",
-      "skype": "",
       "linkedin": "",
       "twitter": "",
       "website_url": "",
@@ -200,7 +195,6 @@ Example of response:
       "bio": null,
       "location": null,
       "public_email": "",
-      "skype": "",
       "linkedin": "",
       "twitter": "",
       "website_url": "",
@@ -337,7 +331,6 @@ Example of response:
       "bio": null,
       "location": null,
       "public_email": "",
-      "skype": "",
       "linkedin": "",
       "twitter": "",
       "website_url": "",
@@ -409,7 +402,6 @@ Example of response:
       "bio": null,
       "location": null,
       "public_email": "",
-      "skype": "",
       "linkedin": "",
       "twitter": "",
       "website_url": "",
@@ -494,7 +486,6 @@ Example of response:
       "bio": null,
       "location": null,
       "public_email": "",
-      "skype": "",
       "linkedin": "",
       "twitter": "",
       "website_url": "",
@@ -592,7 +583,6 @@ Example of response:
     "bio": null,
     "location": null,
     "public_email": "",
-    "skype": "",
     "linkedin": "",
     "twitter": "",
     "website_url": "",
@@ -601,7 +591,7 @@ Example of response:
 }
 ```
 
-## Get GitLab agent by `CI_JOB_TOKEN`
+## Get GitLab agent for Kubernetes by `CI_JOB_TOKEN`
 
 Retrieve the job that generated the `CI_JOB_TOKEN`, along with a list of allowed
 [agents](../user/clusters/agent/_index.md).
@@ -752,7 +742,6 @@ Example of response:
     "bio": null,
     "location": null,
     "public_email": "",
-    "skype": "",
     "linkedin": "",
     "twitter": "",
     "website_url": "",

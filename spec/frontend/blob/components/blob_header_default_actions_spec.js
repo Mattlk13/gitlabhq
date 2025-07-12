@@ -19,9 +19,6 @@ describe('Blob Header Default Actions', () => {
     wrapper = shallowMountExtended(BlobHeaderActions, {
       provide: {
         blobHash,
-        glFeatures: {
-          blobOverflowMenu: false,
-        },
         ...provided,
       },
       propsData: {
@@ -47,7 +44,7 @@ describe('Blob Header Default Actions', () => {
     });
 
     it('exactly 3 buttons with predefined actions', () => {
-      expect(buttons.length).toBe(3);
+      expect(buttons).toHaveLength(3);
       [BTN_COPY_CONTENTS_TITLE, BTN_RAW_TITLE, BTN_DOWNLOAD_TITLE].forEach((title, i) => {
         expect(buttons.at(i).attributes('title')).toBe(title);
       });
@@ -136,9 +133,9 @@ describe('Blob Header Default Actions', () => {
     });
   });
 
-  describe('when blob_overflow_menu is enabled', () => {
+  describe('default actions layout', () => {
     it('hides default actions for mobile layout', () => {
-      createComponent({}, { glFeatures: { blobOverflowMenu: true } });
+      createComponent();
 
       expect(wrapper.findComponent(GlButtonGroup).attributes('class')).toBe(
         'gl-hidden sm:gl-inline-flex',

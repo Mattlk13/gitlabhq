@@ -25,6 +25,7 @@ const createComponent = ({
   isActive = false,
   preventRedirect = false,
   fullPath = 'gitlab-org/issuable-project-path',
+  hiddenMetadataKeys = [],
 } = {}) =>
   shallowMount(IssuableItem, {
     propsData: {
@@ -37,6 +38,7 @@ const createComponent = ({
       isActive,
       preventRedirect,
       fullPath,
+      hiddenMetadataKeys,
     },
     slots,
     stubs: {
@@ -373,10 +375,10 @@ describe('IssuableItem', () => {
 
       expect(confidentialEl.exists()).toBe(true);
       expect(confidentialEl.props('name')).toBe('eye-slash');
-      expect(confidentialEl.attributes()).toMatchObject({
-        title: 'Confidential',
-        arialabel: 'Confidential',
-      });
+
+      const confidentialContainer = wrapper.findByTestId('confidential-icon-container');
+
+      expect(confidentialContainer.attributes('title')).toBe('Confidential');
     });
 
     it('renders spam icon when issuable is hidden', () => {
@@ -385,10 +387,13 @@ describe('IssuableItem', () => {
       const hiddenIcon = wrapper.findComponent(GlIcon);
 
       expect(hiddenIcon.props('name')).toBe('spam');
-      expect(hiddenIcon.attributes()).toMatchObject({
-        title: 'This issue is hidden because its author has been banned.',
-        arialabel: 'Hidden',
-      });
+
+      const hiddenContainer = wrapper.findByTestId('hidden-icon-container');
+
+      expect(hiddenContainer.attributes('title')).toBe(
+        'This issue is hidden because its author has been banned.',
+      );
+      expect(hiddenContainer.attributes('aria-label')).toBe('Hidden');
     });
 
     it('renders task status', () => {
@@ -715,6 +720,82 @@ describe('IssuableItem', () => {
         `listItem-${'gitlab-org/test-project-path'}/${getIdFromGraphQLId(mockIssuable.id)}`,
       );
     });
+
+    describe('when passed hiddenMetadataKeys', () => {
+      describe('labels visibility with hiddenMetadataKeys', () => {
+        it('shows labels when not in hiddenMetadataKeys', () => {
+          wrapper = createComponent({
+            hiddenMetadataKeys: [],
+          });
+
+          const labelsEl = wrapper.findAllComponents(GlLabel);
+          expect(labelsEl).toHaveLength(mockLabels.length);
+        });
+
+        it('hides labels when "labels" is in hiddenMetadataKeys', () => {
+          wrapper = createComponent({
+            hiddenMetadataKeys: ['labels'],
+          });
+
+          const labelsEl = wrapper.findAllComponents(GlLabel);
+          expect(labelsEl).toHaveLength(0);
+        });
+      });
+
+      describe('assignees visibility with hiddenMetadataKeys', () => {
+        it('shows assignees when not in hiddenMetadataKeys', () => {
+          wrapper = createComponent({
+            hiddenMetadataKeys: [],
+          });
+
+          const assigneesEl = wrapper.findComponent(IssuableAssignees);
+          expect(assigneesEl.exists()).toBe(true);
+        });
+
+        it('hides assignees when "assignee" is in hiddenMetadataKeys', () => {
+          wrapper = createComponent({
+            hiddenMetadataKeys: ['assignee'],
+          });
+
+          const assigneesEl = wrapper.findComponent(IssuableAssignees);
+          expect(assigneesEl.exists()).toBe(false);
+        });
+      });
+
+      describe('blocking relationships visibility with hiddenMetadataKeys', () => {
+        it('shows relationship icons when not in hiddenMetadataKeys and conditions are met', async () => {
+          const issuableWithLinkedItems = {
+            ...mockIssuable,
+            widgets: [mockLinkedItems],
+            isOpen: true,
+            hasBlockingRelationships: true,
+          };
+          wrapper = createComponent({
+            issuable: issuableWithLinkedItems,
+            hiddenMetadataKeys: [],
+          });
+          await waitForPromises();
+
+          expect(findRelationshipIcons().exists()).toBe(true);
+        });
+
+        it('hides relationship icons when "blocked" is in hiddenMetadataKeys', async () => {
+          const issuableWithLinkedItems = {
+            ...mockIssuable,
+            widgets: [mockLinkedItems],
+            isOpen: true,
+            hasBlockingRelationships: true,
+          };
+          wrapper = createComponent({
+            issuable: issuableWithLinkedItems,
+            hiddenMetadataKeys: ['blocked'],
+          });
+          await waitForPromises();
+
+          expect(findRelationshipIcons().exists()).toBe(false);
+        });
+      });
+    });
   });
 
   describe('when preventing redirect on clicking the link', () => {
@@ -722,7 +803,8 @@ describe('IssuableItem', () => {
       window.open = jest.fn();
     });
     it('emits an event on row click', async () => {
-      const { id, iid, webUrl, type: workItemType } = mockIssuable;
+      const { id, iid, webUrl, type: workItemType, namespace } = mockIssuable;
+      const { fullPath } = namespace;
 
       wrapper = createComponent({
         preventRedirect: true,
@@ -731,7 +813,9 @@ describe('IssuableItem', () => {
 
       await findIssuableItemWrapper().trigger('click');
 
-      expect(wrapper.emitted('select-issuable')).toEqual([[{ id, iid, webUrl, workItemType }]]);
+      expect(wrapper.emitted('select-issuable')).toEqual([
+        [{ id, iid, webUrl, workItemType, fullPath }],
+      ]);
     });
 
     it('includes fullPath in emitted event for work items', async () => {

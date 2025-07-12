@@ -227,15 +227,15 @@ export default {
       required: false,
       default: '',
     },
-    addPadding: {
-      type: Boolean,
-      required: false,
-      default: false,
-    },
     detailLoading: {
       type: Boolean,
       required: false,
       default: false,
+    },
+    hiddenMetadataKeys: {
+      type: Array,
+      required: false,
+      default: () => [],
     },
   },
   data() {
@@ -329,21 +329,19 @@ export default {
 
 <template>
   <div class="issuable-list-container">
-    <issuable-tabs
-      :add-padding="addPadding"
-      :tabs="tabs"
-      :tab-counts="tabCounts"
-      :current-tab="currentTab"
-      :truncate-counts="truncateCounts"
-      @click="$emit('click-tab', $event)"
-    >
-      <template #nav-actions>
-        <slot name="nav-actions"></slot>
-      </template>
-      <template #title>
-        <slot name="title"></slot>
-      </template>
-    </issuable-tabs>
+    <slot name="list-header">
+      <issuable-tabs
+        :tabs="tabs"
+        :tab-counts="tabCounts"
+        :current-tab="currentTab"
+        :truncate-counts="truncateCounts"
+        @click="$emit('click-tab', $event)"
+      >
+        <template #nav-actions>
+          <slot name="nav-actions"></slot>
+        </template>
+      </issuable-tabs>
+    </slot>
     <filtered-search-bar
       :namespace="namespace"
       :recent-searches-storage-key="recentSearchesStorageKey"
@@ -362,7 +360,11 @@ export default {
       @checked-input="handleAllIssuablesCheckedInput"
       @onFilter="$emit('filter', $event)"
       @onSort="$emit('sort', $event)"
-    />
+    >
+      <template #user-preference>
+        <slot name="user-preference"></slot>
+      </template>
+    </filtered-search-bar>
     <gl-alert
       v-if="error"
       variant="danger"
@@ -412,6 +414,7 @@ export default {
           :prevent-redirect="preventRedirect"
           :is-active="isIssuableActive(issuable)"
           :detail-loading="detailLoading"
+          :hidden-metadata-keys="hiddenMetadataKeys"
           @checked-input="handleIssuableCheckedInput(issuable, $event)"
           @select-issuable="$emit('select-issuable', $event)"
         >
@@ -463,7 +466,10 @@ export default {
       <slot v-else-if="!error" name="empty-state"></slot>
     </template>
 
-    <div class="gl-relative gl-mt-6 gl-flex gl-justify-between md:!gl-justify-center">
+    <div
+      data-testid="list-footer"
+      class="gl-relative gl-mt-6 gl-flex gl-justify-between md:!gl-justify-center"
+    >
       <gl-keyset-pagination
         v-if="showPaginationControls && useKeysetPagination"
         :has-next-page="hasNextPage"

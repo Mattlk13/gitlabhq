@@ -16,7 +16,7 @@ title: Enable logging for self-hosted models
 
 {{< history >}}
 
-- [Introduced](https://gitlab.com/groups/gitlab-org/-/epics/12972) in GitLab 17.1 [with a flag](../feature_flags.md) named `ai_custom_model`. Disabled by default.
+- [Introduced](https://gitlab.com/groups/gitlab-org/-/epics/12972) in GitLab 17.1 [with a flag](../feature_flags/_index.md) named `ai_custom_model`. Disabled by default.
 - [Enabled on GitLab Self-Managed](https://gitlab.com/groups/gitlab-org/-/epics/15176) in GitLab 17.6.
 - Changed to require GitLab Duo add-on in GitLab 17.6 and later.
 - Feature flag `ai_custom_model` removed in GitLab 17.8.
@@ -295,7 +295,7 @@ In this configuration, both GitLab and the AI gateway are hosted by the customer
 In this scenario, the customer hosts GitLab but relies on the GitLab-managed AI gateway for AI processing.
 
 - **Logging Behavior**: Prompts and inputs sent to the AI gateway are **not logged** in the cloud-connected AI gateway to prevent exposure of sensitive information such as personally identifiable information (PII).
-- **Expanded Logging**: Even if the `:expanded_ai_logging` feature flag is enabled, no detailed logs are generated in the GitLab-managed AI gateway to avoid unintended leaks of sensitive information.
+- **Expanded Logging**: Even if [AI logs are enabled](#enable-logging), no detailed logs are generated in the GitLab-managed AI gateway to avoid unintended leaks of sensitive information.
   - Logging remains **minimal** in this setup, and the expanded logging features are disabled by default.
 - **Privacy**: This configuration is designed to ensure that sensitive data is not logged in a cloud environment.
 

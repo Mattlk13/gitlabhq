@@ -24,11 +24,11 @@ reasons are:
 - Job logs are larger than expected, and have accumulated over time.
 - The file system might run out of inodes because
   [empty directories are left behind by artifact housekeeping](https://gitlab.com/gitlab-org/gitlab/-/issues/17465).
-  [The Rake task for _orphaned_ artifact files](../raketasks/cleanup.md#remove-orphan-artifact-files)
+  [The Rake task for orphaned artifact files](../raketasks/cleanup.md#remove-orphan-artifact-files)
   removes these.
 - Artifact files might be left on disk and not deleted by housekeeping. Run the
-  [Rake task for _orphaned_ artifact files](../raketasks/cleanup.md#remove-orphan-artifact-files)
-  to remove these. This script should always find work to do because it also removes empty directories (see above).
+  [Rake task for orphaned artifact files](../raketasks/cleanup.md#remove-orphan-artifact-files)
+  to remove these. This script should always find work to do because it also removes empty directories (see the previous reason).
 - [Artifact housekeeping was changed significantly](#housekeeping-disabled-in-gitlab-150-to-152), and you might need to enable a feature flag to use the updated system.
 - The [keep latest artifacts from most recent success jobs](../../ci/jobs/job_artifacts.md#keep-artifacts-from-most-recent-successful-jobs)
   feature is enabled.
@@ -44,7 +44,7 @@ and can be deleted.
 
 #### Housekeeping disabled in GitLab 15.0 to 15.2
 
-Artifact housekeeping was significantly improved in GitLab 15.0, introduced behind [feature flags](../feature_flags.md) disabled by default. The flags were enabled by default [in GitLab 15.3](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/92931).
+Artifact housekeeping was significantly improved in GitLab 15.0, introduced behind [feature flags](../feature_flags/_index.md) disabled by default. The flags were enabled by default [in GitLab 15.3](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/92931).
 
 If artifacts housekeeping does not seem to be working in GitLab 15.0 to GitLab 15.2, you should check if the feature flags are enabled.
 
@@ -149,7 +149,7 @@ for more details.
 #### Clean up `unknown` artifacts
 
 The Sidekiq worker that processes all `unknown` artifacts is enabled by default in
-GitLab 15.3 and later. It analyzes the artifacts returned by the above database query and
+GitLab 15.3 and later. It analyzes the artifacts returned by the previous database query and
 determines which should be `locked` or `unlocked`. Artifacts are then deleted
 by that worker if needed.
 
@@ -172,16 +172,11 @@ The worker can be enabled on GitLab Self-Managed:
 The worker processes 10,000 `unknown` artifacts every seven minutes, or roughly two million
 in 24 hours.
 
-There is a related `ci_job_artifacts_backlog_large_loop_limit` feature flag
-which causes the worker to process `unknown` artifacts
-[in batches that are five times larger](https://gitlab.com/gitlab-org/gitlab/-/issues/356319).
-This flag is not recommended for use.
-
 #### `@final` artifacts not deleted from object store
 
 In GitLab 16.1 and later, artifacts are uploaded directly to their final storage location in the `@final` directory, rather than using a temporary location first.
 
-An issue in GitLab 16.1 and 16.2 causes [artifacts to not be deleted from object storage](https://gitlab.com/gitlab-org/gitlab/-/issues/419920) when they expire. 
+An issue in GitLab 16.1 and 16.2 causes [artifacts to not be deleted from object storage](https://gitlab.com/gitlab-org/gitlab/-/issues/419920) when they expire.
 The cleanup process for expired artifacts does not remove artifacts from the `@final` directory. This issue is fixed in GitLab 16.3 and later.
 
 Administrators of GitLab instances that ran GitLab 16.1 or 16.2 for some time could see an increase
@@ -430,19 +425,6 @@ builds_with_artifacts.where("finished_at < ?", 1.year.ago).each_batch do |batch|
 end
 ```
 
-In [GitLab 15.3 and earlier](https://gitlab.com/gitlab-org/gitlab/-/issues/372537), use the following instead:
-
-```ruby
-project = Project.find_by_full_path('path/to/project')
-builds_with_artifacts =  project.builds.with_downloadable_artifacts
-builds_with_artifacts.where("finished_at < ?", 1.year.ago).each_batch do |batch|
-  batch.each do |build|
-    build.artifacts_expire_at = Time.current
-    build.erase_erasable_artifacts!
-  end
-end
-```
-
 #### Delete old artifacts instance wide
 
 This step also erases artifacts that users have [chosen to keep](../../ci/jobs/job_artifacts.md#with-an-expiry):
@@ -455,18 +437,6 @@ builds_with_artifacts.where("finished_at < ?", 1.year.ago).each_batch do |batch|
   end
 
   batch.update_all(artifacts_expire_at: Time.current)
-end
-```
-
-In [GitLab 15.3 and earlier](https://gitlab.com/gitlab-org/gitlab/-/issues/372537), use the following instead:
-
-```ruby
-builds_with_artifacts =  Ci::Build.with_downloadable_artifacts
-builds_with_artifacts.where("finished_at < ?", 1.year.ago).each_batch do |batch|
-  batch.each do |build|
-    build.artifacts_expire_at = Time.current
-    build.erase_erasable_artifacts!
-  end
 end
 ```
 
@@ -508,9 +478,6 @@ builds.where("finished_at < ?", 1.year.ago).each_batch do |batch|
   end
 end
 ```
-
-In [GitLab 15.3 and earlier](https://gitlab.com/gitlab-org/gitlab/-/issues/369132), replace
-`Ci::BuildEraseService.new(build, admin_user).execute` with `build.erase(erased_by: admin_user)`.
 
 `1.year.ago` is a Rails [`ActiveSupport::Duration`](https://api.rubyonrails.org/classes/ActiveSupport/Duration.html) method.
 Start with a long duration to reduce the risk of accidentally deleting artifacts that are still in use.
@@ -561,8 +528,8 @@ Ci::DeletedObject.where("pick_up_at < ?", Time.current)
 
 # Delete the artifacts from disk
 while Ci::DeletedObject.where("pick_up_at < ?", Time.current).count > 0
-  Ci::DeleteObjectsService.new.execute 
-  sleep(10) 
+  Ci::DeleteObjectsService.new.execute
+  sleep(10)
 end
 
 # Get the count of artifacts marked for deletion (should now be zero)
@@ -643,7 +610,7 @@ WARNING: Uploading artifacts as "archive" to coordinator... POST https://gitlab.
 FATAL: invalid argument
 ```
 
-If a job artifact fails to upload with the above error when using consolidated object storage, make sure you are [using separate buckets](../object_storage.md#use-separate-buckets) for each data type.
+If a job artifact fails to upload due to the previous error when using consolidated object storage, make sure you are [using separate buckets](../object_storage.md#use-separate-buckets) for each data type.
 
 ## Job artifacts fail to upload with `FATAL: invalid argument` when using Windows mount
 

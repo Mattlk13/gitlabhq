@@ -251,7 +251,7 @@ The following are some queries for monitoring Gitaly:
   The only non-zero number should have `enforced="true",status="ok"`. If you have other non-zero
   numbers, something is wrong in your configuration.
 
-  The `status="ok"` number reflects your current request rate. In the example above, Gitaly is
+  The `status="ok"` number reflects your current request rate. In the previous example, Gitaly is
   handling about 4000 requests per second.
 
 - Use the following Prometheus query to observe the [Git protocol versions](../git_protocol.md)
@@ -273,7 +273,7 @@ available from which metrics can be scraped:
 
 The following metrics are available from the `/metrics` endpoint:
 
-- `gitaly_praefect_read_distribution`, a counter to track [distribution of reads](_index.md#distributed-reads).
+- `gitaly_praefect_read_distribution`, a counter to track [distribution of reads](praefect/_index.md#distributed-reads).
   It has two labels:
 
   - `virtual_storage`.
@@ -288,7 +288,7 @@ The following metrics are available from the `/metrics` endpoint:
 - `gitaly_praefect_connections_total`, the total number of connections to Praefect.
 - `gitaly_praefect_method_types`, a count of accessor and mutator RPCs per node.
 
-To monitor [strong consistency](_index.md#strong-consistency), you can use the following Prometheus metrics:
+To monitor [strong consistency](praefect/_index.md#strong-consistency), you can use the following Prometheus metrics:
 
 - `gitaly_praefect_transactions_total`, the number of transactions created and voted on.
 - `gitaly_praefect_subtransactions_per_transaction_total`, the number of times nodes cast a vote for
@@ -301,7 +301,7 @@ To monitor [strong consistency](_index.md#strong-consistency), you can use the f
 - `gitaly_hook_transaction_voting_delay_seconds`, the client-side delay introduced by waiting for
   the transaction to be committed.
 
-To monitor [repository verification](praefect.md#repository-verification), use the following Prometheus metrics:
+To monitor [repository verification](praefect/_index.md#repository-verification), use the following Prometheus metrics:
 
 - `gitaly_praefect_verification_jobs_dequeued_total`, the number of verification jobs picked up by the
   worker.

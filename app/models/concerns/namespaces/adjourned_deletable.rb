@@ -21,16 +21,6 @@ module Namespaces
     end
     private :all_scheduled_for_deletion_in_hierarchy_chain
 
-    def delayed_deletion_ready?
-      deletion_adjourned_period > 0
-    end
-    # TODO: Replace calls to #adjourned_deletion? with #delayed_deletion_ready?
-    # TODO: Replace calls to #delayed_deletion_configured? with #delayed_deletion_ready?
-    # TODO: Replace calls to #adjourned_deletion_configured? with #delayed_deletion_ready?
-    alias_method :adjourned_deletion?, :delayed_deletion_ready?
-    alias_method :delayed_deletion_configured?, :delayed_deletion_ready?
-    alias_method :adjourned_deletion_configured?, :delayed_deletion_ready?
-
     # Returns the date when the scheduled deletion was created.
     def self_deletion_scheduled_deletion_created_on
       marked_for_deletion_on if respond_to?(:marked_for_deletion_on)
@@ -40,12 +30,9 @@ module Namespaces
     def self_deletion_scheduled?
       self_deletion_scheduled_deletion_created_on.present?
     end
-    # TODO: Replace calls to #marked_for_deletion? with #self_deletion_scheduled?
-    alias_method :marked_for_deletion?, :self_deletion_scheduled?
 
     # Returns the first record that's scheduled for deletion in self's ancestors chain (including itself).
     def first_scheduled_for_deletion_in_hierarchy_chain
-      return unless delayed_deletion_ready?
       return self if self_deletion_scheduled?
 
       all_scheduled_for_deletion_in_hierarchy_chain.first

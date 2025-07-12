@@ -10,6 +10,7 @@ import {
   ACTION_RESTORE,
   ACTION_DELETE,
   ACTION_LEAVE,
+  ACTION_DELETE_IMMEDIATELY,
 } from '~/vue_shared/components/list_actions/constants';
 import toast from '~/vue_shared/plugins/global_toast';
 
@@ -20,43 +21,49 @@ const MOCK_GROUP = {
   fullPath: 'path/to/group',
 };
 
-const MOCK_GROUP_NO_DELAY_DELETION = {
-  ...MOCK_GROUP,
-  isAdjournedDeletionEnabled: false,
-  markedForDeletionOn: null,
-  permanentDeletionDate: null,
-};
-
 const MOCK_GROUP_WITH_DELAY_DELETION = {
   ...MOCK_GROUP,
-  isAdjournedDeletionEnabled: true,
-  markedForDeletionOn: null,
+  markedForDeletion: false,
   permanentDeletionDate: '2024-03-31',
 };
 
 const MOCK_GROUP_PENDING_DELETION = {
   ...MOCK_GROUP,
-  isAdjournedDeletionEnabled: true,
-  markedForDeletionOn: '2024-03-24',
+  markedForDeletion: true,
   permanentDeletionDate: '2024-03-31',
 };
 
 describe('availableGraphQLGroupActions', () => {
   describe.each`
-    userPermissions                                              | markedForDeletionOn | availableActions
-    ${{ viewEditPage: false, removeGroup: false }}               | ${null}             | ${[]}
-    ${{ viewEditPage: true, removeGroup: false }}                | ${null}             | ${[ACTION_EDIT]}
-    ${{ viewEditPage: false, removeGroup: true }}                | ${null}             | ${[ACTION_DELETE]}
-    ${{ viewEditPage: true, removeGroup: true }}                 | ${null}             | ${[ACTION_EDIT, ACTION_DELETE]}
-    ${{ viewEditPage: true, removeGroup: false }}                | ${'2024-12-31'}     | ${[ACTION_EDIT]}
-    ${{ viewEditPage: true, removeGroup: true }}                 | ${'2024-12-31'}     | ${[ACTION_EDIT, ACTION_RESTORE, ACTION_DELETE]}
-    ${{ viewEditPage: true, removeGroup: true, canLeave: true }} | ${'2024-12-31'}     | ${[ACTION_EDIT, ACTION_RESTORE, ACTION_LEAVE, ACTION_DELETE]}
+    userPermissions                                              | markedForDeletion | isSelfDeletionInProgress | isSelfDeletionScheduled | availableActions
+    ${{ viewEditPage: false, removeGroup: false }}               | ${false}          | ${false}                 | ${false}                | ${[]}
+    ${{ viewEditPage: true, removeGroup: false }}                | ${false}          | ${false}                 | ${false}                | ${[ACTION_EDIT]}
+    ${{ viewEditPage: false, removeGroup: true }}                | ${false}          | ${false}                 | ${false}                | ${[ACTION_DELETE]}
+    ${{ viewEditPage: true, removeGroup: true }}                 | ${false}          | ${false}                 | ${false}                | ${[ACTION_EDIT, ACTION_DELETE]}
+    ${{ viewEditPage: true, removeGroup: false }}                | ${true}           | ${false}                 | ${false}                | ${[ACTION_EDIT]}
+    ${{ viewEditPage: true, removeGroup: true }}                 | ${true}           | ${false}                 | ${false}                | ${[ACTION_EDIT]}
+    ${{ viewEditPage: true, removeGroup: true }}                 | ${true}           | ${false}                 | ${true}                 | ${[ACTION_EDIT, ACTION_RESTORE, ACTION_DELETE_IMMEDIATELY]}
+    ${{ viewEditPage: true, removeGroup: true, canLeave: true }} | ${true}           | ${false}                 | ${false}                | ${[ACTION_EDIT, ACTION_LEAVE]}
+    ${{ viewEditPage: true, removeGroup: true, canLeave: true }} | ${true}           | ${false}                 | ${true}                 | ${[ACTION_EDIT, ACTION_RESTORE, ACTION_LEAVE, ACTION_DELETE_IMMEDIATELY]}
+    ${{ viewEditPage: true, removeGroup: true }}                 | ${true}           | ${true}                  | ${false}                | ${[ACTION_EDIT]}
+    ${{ viewEditPage: true, removeGroup: true }}                 | ${true}           | ${true}                  | ${true}                 | ${[ACTION_EDIT]}
   `(
     'availableGraphQLGroupActions',
-    ({ userPermissions, markedForDeletionOn, availableActions }) => {
-      it(`when userPermissions = ${JSON.stringify(userPermissions)}, markedForDeletionOn is ${markedForDeletionOn}, then availableActions = [${availableActions}] and is sorted correctly`, () => {
+    ({
+      userPermissions,
+      markedForDeletion,
+      isSelfDeletionInProgress,
+      isSelfDeletionScheduled,
+      availableActions,
+    }) => {
+      it(`when userPermissions = ${JSON.stringify(userPermissions)}, markedForDeletion is ${markedForDeletion}, isSelfDeletionInProgress is ${isSelfDeletionInProgress}, and isSelfDeletionScheduled is ${isSelfDeletionScheduled} then availableActions = [${availableActions}] and is sorted correctly`, () => {
         expect(
-          availableGraphQLGroupActions({ userPermissions, markedForDeletionOn }),
+          availableGraphQLGroupActions({
+            userPermissions,
+            markedForDeletion,
+            isSelfDeletionInProgress,
+            isSelfDeletionScheduled,
+          }),
         ).toStrictEqual(availableActions);
       });
     },
@@ -64,14 +71,6 @@ describe('availableGraphQLGroupActions', () => {
 });
 
 describe('renderDeleteSuccessToast', () => {
-  it('when delayed deletion is disabled, renders the delete immediately message', () => {
-    renderDeleteSuccessToast(MOCK_GROUP_NO_DELAY_DELETION);
-
-    expect(toast).toHaveBeenCalledWith(
-      `Group '${MOCK_GROUP_NO_DELAY_DELETION.fullName}' is being deleted.`,
-    );
-  });
-
   it('when delayed deletion is enabled and group is not pending deletion, calls toast with pending deletion info', () => {
     renderDeleteSuccessToast(MOCK_GROUP_WITH_DELAY_DELETION);
 
@@ -93,7 +92,7 @@ describe('renderLeaveSuccessToast', () => {
   it('calls toast correctly', () => {
     renderLeaveSuccessToast(MOCK_GROUP);
 
-    expect(toast).toHaveBeenCalledWith(`Left the '${MOCK_GROUP.fullName}' group successfully.`);
+    expect(toast).toHaveBeenCalledWith(`You left the "${MOCK_GROUP.fullName}" group.`);
   });
 });
 
@@ -108,12 +107,6 @@ describe('renderRestoreSuccessToast', () => {
 });
 
 describe('deleteParams', () => {
-  it('when delayed deletion is disabled, returns an empty object', () => {
-    const res = deleteParams(MOCK_GROUP_NO_DELAY_DELETION);
-
-    expect(res).toStrictEqual({});
-  });
-
   it('when delayed deletion is enabled and group is not pending deletion, returns an empty object', () => {
     const res = deleteParams(MOCK_GROUP_WITH_DELAY_DELETION);
 

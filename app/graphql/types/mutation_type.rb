@@ -26,9 +26,15 @@ module Types
     mount_mutation Mutations::Security::CiConfiguration::ConfigureSast
     mount_mutation Mutations::Security::CiConfiguration::ConfigureSastIac
     mount_mutation Mutations::Security::CiConfiguration::ConfigureSecretDetection
-    mount_mutation Mutations::AlertManagement::PrometheusIntegration::Create
-    mount_mutation Mutations::AlertManagement::PrometheusIntegration::Update
-    mount_mutation Mutations::AlertManagement::PrometheusIntegration::ResetToken
+    mount_mutation Mutations::AlertManagement::PrometheusIntegration::Create, deprecated: {
+      reason: 'Use HttpIntegrationCreate', milestone: '18.2'
+    }
+    mount_mutation Mutations::AlertManagement::PrometheusIntegration::Update, deprecated: {
+      reason: 'Use HttpIntegrationUpdate', milestone: '18.2'
+    }
+    mount_mutation Mutations::AlertManagement::PrometheusIntegration::ResetToken, deprecated: {
+      reason: 'Use HttpIntegrationResetToken', milestone: '18.2'
+    }
     mount_mutation Mutations::AwardEmojis::Add
     mount_mutation Mutations::AwardEmojis::Remove
     mount_mutation Mutations::AwardEmojis::Toggle
@@ -188,6 +194,7 @@ module Types
     mount_mutation Mutations::Ci::JobTokenScope::UpdateJobTokenPolicies, experiment: { milestone: '17.6' }
     mount_mutation Mutations::Ci::JobTokenScope::AutopopulateAllowlist, experiment: { milestone: '17.9' }
     mount_mutation Mutations::Ci::JobTokenScope::ClearAllowlistAutopopulations, experiment: { milestone: '17.9' }
+    mount_mutation Mutations::Ci::Lint
     mount_mutation Mutations::Ci::NamespaceSettingsUpdate, experiment: { milestone: '17.9' }
     mount_mutation Mutations::Ci::Pipeline::Cancel
     mount_mutation Mutations::Ci::Pipeline::Create
@@ -202,6 +209,7 @@ module Types
     mount_mutation Mutations::Ci::PipelineTrigger::Delete, experiment: { milestone: '16.3' }
     mount_mutation Mutations::Ci::PipelineTrigger::Update, experiment: { milestone: '16.3' }
     mount_mutation Mutations::Ci::ProjectCiCdSettingsUpdate
+    mount_mutation Mutations::Ci::SafeDisablePipelineVariables
     mount_mutation Mutations::Ci::Runner::BulkDelete, experiment: { milestone: '15.3' }
     mount_mutation Mutations::Ci::Runner::BulkPause, experiment: { milestone: '17.11' }
     mount_mutation Mutations::Ci::Runner::Cache::Clear
@@ -215,6 +223,7 @@ module Types
       milestone: '17.7'
     }
     mount_mutation Mutations::Namespace::PackageSettings::Update
+    mount_mutation Mutations::Namespaces::RegenerateNewWorkItemEmailAddress, experiment: { milestone: '18.2' }
     mount_mutation Mutations::Groups::Update
     mount_mutation Mutations::UserCallouts::Create
     mount_mutation Mutations::UserPreferences::Update
@@ -233,12 +242,15 @@ module Types
     mount_mutation Mutations::WorkItems::Delete, experiment: { milestone: '15.1' }
     mount_mutation Mutations::WorkItems::Update, experiment: { milestone: '15.1' }
     mount_mutation Mutations::WorkItems::CSV::Export, experiment: { milestone: '15.10' }
+    mount_mutation Mutations::WorkItems::CSV::Import, experiment: { milestone: '18.2' }
     mount_mutation Mutations::WorkItems::Convert, experiment: { milestone: '15.11' }
     mount_mutation Mutations::WorkItems::LinkedItems::Add, experiment: { milestone: '16.3' }
     mount_mutation Mutations::WorkItems::LinkedItems::Remove, experiment: { milestone: '16.3' }
     mount_mutation Mutations::WorkItems::AddClosingMergeRequest, experiment: { milestone: '17.1' }
     mount_mutation Mutations::WorkItems::Hierarchy::Reorder, experiment: { milestone: '17.3' }
+    mount_mutation Mutations::WorkItems::Hierarchy::AddChildrenItems, experiment: { milestone: '18.2' }
     mount_mutation Mutations::WorkItems::BulkUpdate, experiment: { milestone: '17.4' }
+    mount_mutation Mutations::WorkItems::BulkMove, experiment: { milestone: '18.2' }
     mount_mutation Mutations::WorkItems::UserPreference::Update, experiment: { milestone: '17.10' }
     mount_mutation Mutations::Users::SavedReplies::Create
     mount_mutation Mutations::Users::SavedReplies::Update
@@ -258,6 +270,7 @@ module Types
     mount_mutation Mutations::BranchRules::Delete, experiment: { milestone: '16.9' }
     mount_mutation Mutations::Pages::Deployment::Delete, experiment: { milestone: '17.1' }
     mount_mutation Mutations::Pages::Deployment::Restore, experiment: { milestone: '17.1' }
+    mount_mutation Mutations::Wikis::WikiPageSubscribe, experiment: { milestone: '18.1' }
   end
 end
 

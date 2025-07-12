@@ -3,7 +3,8 @@
 require 'spec_helper'
 
 RSpec.describe Sidebars::Projects::SuperSidebarPanel, feature_category: :navigation do
-  let(:project) { build_stubbed(:project, :repository) }
+  let(:project_namespace) { build_stubbed(:project_namespace) }
+  let(:project) { build_stubbed(:project, :repository, project_namespace: project_namespace) }
 
   let(:user) { project.first_owner }
   let(:context) do
@@ -54,7 +55,7 @@ RSpec.describe Sidebars::Projects::SuperSidebarPanel, feature_category: :navigat
     end
 
     it "is exposed as a renderable menu" do
-      expect(subject.instance_variable_get(:@menus).map(&:class)).to eq(category_menu)
+      expect(subject.instance_variable_get(:@menus).map(&:class)).to include(*category_menu)
     end
   end
 

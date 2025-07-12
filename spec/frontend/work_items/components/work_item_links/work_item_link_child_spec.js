@@ -206,7 +206,7 @@ describe('WorkItemLinkChild', () => {
 
       findTreeChildren().vm.$emit('click', 'event');
 
-      expect(wrapper.emitted('click')).toEqual([['event']]);
+      expect(wrapper.emitted('toggleDrawer')).toEqual([['event']]);
     });
 
     it('emits event on removing child item', () => {
@@ -333,7 +333,7 @@ describe('WorkItemLinkChild', () => {
       expect(wrapper.emitted('drag')).toEqual([['Task']]);
 
       findTreeChildren().vm.$emit('drop');
-      expect(wrapper.emitted('drop').length).toBe(1);
+      expect(wrapper.emitted('drop')).toHaveLength(1);
     });
 
     it.each`

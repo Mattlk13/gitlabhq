@@ -87,9 +87,9 @@ to a problem or a feature request in an issue.
 
 Below the description, check the merge request widget to understand the
 current status of this work. This example shows a merge widget for a merge request
-that is missing approvals, is still in draft mode, and has unresolved discussion threads:
+that is missing approvals, is still in draft mode, and has open discussion threads:
 
-![Merge widget showing blocked status with three failed checks: missing approvals, draft mode, and unresolved discussions](img/widget_v17_0.png)
+![Merge widget showing blocked status with three failed checks: missing approvals, draft mode, and open threads](img/widget_v17_0.png)
 
 - Does it cross-link to an issue? Check the description and merge widget
   for links to other issues. Some merge requests are straightforward, but
@@ -116,7 +116,7 @@ more information, scan through the issue descriptions.
   might indicate this merge request lacks full information.
   - If the labels match your area of expertise, you're likely a good candidate
     to review this merge request.
-  - If the labels match areas of expertise you _don't_ have, you might need to
+  - If the labels match areas of expertise you don't have, you might need to
     reassign the merge request to a different reviewer.
   - Add any labels your workflow expects.
 
@@ -223,7 +223,7 @@ Different types of changes have different effects on your codebase. Consider, in
 ### Test the code
 
 Unfortunately, we can't give you much guidance here. Every project is different!
-Without knowing your application firsthand, we can't tell you _how_ to test the
+Without knowing your application firsthand, we can't tell you how to test the
 changes, but we can offer some questions to consider:
 
 - Does it work? It's a deceptively simple question, but it's important to keep
@@ -305,7 +305,7 @@ to recheck (and change) your words before you publish.
 
 Remember to be constructive and kind. The structure of
 [Conventional comments](https://conventionalcomments.org/) can help you write
-comments that are both thoughtful _and_ constructive.
+comments that are both thoughtful and constructive.
 
 First, write your comments you want to attach to specific lines or files:
 
@@ -339,7 +339,7 @@ You've added your file- and line-specific feedback, and now you're ready to summ
 your review. It's time to think broadly, one last time.
 
 1. Go back to the **Overview** page of the merge request.
-1. Scan your pending comments. They should be helpful, thoughtful, kind, and - most importantly - _actionable_.
+1. Scan your pending comments. They should be helpful, thoughtful, kind, and - most importantly - actionable.
    Have you given the author an obvious next step to fix any problems you found?
 1. Consider your tone. Are you teaching, debating, or discussing? Do your comments
    achieve your goal? If you were the author, would you know what to do next? Reinforce

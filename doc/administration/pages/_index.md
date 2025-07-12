@@ -609,7 +609,7 @@ adding a GitLab-controlled verification code to the DNS records for that domain.
 {{< alert type="warning" >}}
 
 Disabling domain verification is unsafe and can lead to various vulnerabilities.
-If you *do* disable it, either ensure that the Pages root domain itself does not point to the
+If you do disable it, either ensure that the Pages root domain itself does not point to the
 secondary IP or add the root domain as custom domain to a project; otherwise, any user can add this
 domain as a custom domain to their project.
 
@@ -1176,7 +1176,7 @@ It's possible to run GitLab Pages on multiple servers if you wish to distribute
 the load. You can do this through standard load balancing practices such as
 configuring your DNS server to return multiple IPs for your Pages server, or
 configuring a load balancer to work at the IP level. If you wish to
-set up GitLab Pages on multiple servers, perform the above procedure for each
+set up GitLab Pages on multiple servers, perform the previous procedure for each
 Pages server.
 
 ## Domain source configuration

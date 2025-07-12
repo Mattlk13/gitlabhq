@@ -14,13 +14,19 @@ title: Group-level protected environments API
 
 {{< history >}}
 
-- [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/215888) in GitLab 14.0. [Deployed behind the `group_level_protected_environments` flag](../administration/feature_flags.md), disabled by default.
+- [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/215888) in GitLab 14.0. [Deployed behind the `group_level_protected_environments` flag](../administration/feature_flags/_index.md), disabled by default.
 - [Feature flag `group_level_protected_environments`](https://gitlab.com/gitlab-org/gitlab/-/issues/331085) removed in GitLab 14.3.
 - [Generally available](https://gitlab.com/gitlab-org/gitlab/-/issues/331085) in GitLab 14.3.
 
 {{< /history >}}
 
-Read more about [group-level protected environments](../ci/environments/protected_environments.md#group-level-protected-environments).
+Use this API to interact with [group-level protected environments](../ci/environments/protected_environments.md#group-level-protected-environments).
+
+{{< alert type="note" >}}
+
+For protected environments, see [protected environments API](protected_environments.md)
+
+{{< /alert >}}
 
 ## Valid access levels
 

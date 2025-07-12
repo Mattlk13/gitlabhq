@@ -128,7 +128,7 @@ To add a GPG key to your user settings:
 1. Select **Edit profile**.
 1. Select **GPG keys** ({{< icon name="key" >}}).
 1. Select **Add new key**.
-1. In **Key**, paste your _public_ key.
+1. In **Key**, paste your public key.
 1. To add the key to your account, select **Add key**.
 
 GitLab shows the key's fingerprint, email address, and creation date.
@@ -267,6 +267,7 @@ If you must unverify both future and past commits,
   - [OpenPGP Best Practices](https://riseup.net/en/security/message-security/openpgp/best-practices)
   - [Creating a new GPG key with subkeys](https://www.void.gr/kargig/blog/2013/12/02/creating-a-new-gpg-key-with-subkeys/) (advanced)
   - [View GPG keys in your instance](../../../../administration/credentials_inventory.md#view-gpg-keys)
+  - [Beyond Identity integration](../../integrations/beyond_identity.md)
 
 ## Troubleshooting
 

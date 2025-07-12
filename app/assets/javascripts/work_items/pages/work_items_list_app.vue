@@ -12,9 +12,10 @@ import {
   getDefaultWorkItemTypes,
   getFilterTokens,
   getInitialPageParams,
+  getSortOptions,
   getTypeTokenOptions,
 } from 'ee_else_ce/issues/list/utils';
-import { TYPENAME_USER } from '~/graphql_shared/constants';
+import { TYPENAME_NAMESPACE, TYPENAME_USER } from '~/graphql_shared/constants';
 import { convertToGraphQLId, getIdFromGraphQLId } from '~/graphql_shared/utils';
 import {
   STATUS_ALL,
@@ -33,6 +34,7 @@ import {
   PARAM_PAGE_BEFORE,
   PARAM_SORT,
   PARAM_STATE,
+  urlSortParams,
 } from '~/issues/list/constants';
 import searchLabelsQuery from '~/issues/list/queries/search_labels.query.graphql';
 import setSortPreferenceMutation from '~/issues/list/queries/set_sort_preference.mutation.graphql';
@@ -45,6 +47,7 @@ import {
   OPERATOR_IS,
   OPERATORS_AFTER_BEFORE,
   OPERATORS_IS,
+  OPERATORS_IS_NOT,
   OPERATORS_IS_NOT_OR,
   TOKEN_TITLE_ASSIGNEE,
   TOKEN_TITLE_AUTHOR,
@@ -81,9 +84,14 @@ import DateToken from '~/vue_shared/components/filtered_search_bar/tokens/date_t
 import IssuableList from '~/vue_shared/issuable/list/components/issuable_list_root.vue';
 import { DEFAULT_PAGE_SIZE, issuableListTabs } from '~/vue_shared/issuable/list/constants';
 import glFeatureFlagMixin from '~/vue_shared/mixins/gl_feature_flags_mixin';
+import getWorkItemStateCountsQuery from 'ee_else_ce/work_items/graphql/list/get_work_item_state_counts.query.graphql';
+import getWorkItemsQuery from 'ee_else_ce/work_items/graphql/list/get_work_items_full.query.graphql';
+import getWorkItemsSlimQuery from 'ee_else_ce/work_items/graphql/list/get_work_items_slim.query.graphql';
 import CreateWorkItemModal from '../components/create_work_item_modal.vue';
 import WorkItemHealthStatus from '../components/work_item_health_status.vue';
 import WorkItemDrawer from '../components/work_item_drawer.vue';
+import WorkItemListHeading from '../components/work_item_list_heading.vue';
+import WorkItemUserPreferences from '../components/shared/work_item_user_preferences.vue';
 import {
   BASE_ALLOWED_CREATE_TYPES,
   DETAIL_VIEW_QUERY_PARAM_NAME,
@@ -94,10 +102,9 @@ import {
   WORK_ITEM_TYPE_NAME_ISSUE,
   WORK_ITEM_TYPE_NAME_KEY_RESULT,
   WORK_ITEM_TYPE_NAME_OBJECTIVE,
+  METADATA_KEYS,
 } from '../constants';
-import getWorkItemStateCountsQuery from '../graphql/list/get_work_item_state_counts.query.graphql';
-import getWorkItemsQuery from '../graphql/list/get_work_items.query.graphql';
-import { sortOptions, urlSortParams } from './list/constants';
+import getUserWorkItemsDisplaySettingsPreferences from '../graphql/get_user_preferences.query.graphql';
 
 const EmojiToken = () =>
   import('~/vue_shared/components/filtered_search_bar/tokens/emoji_token.vue');
@@ -117,7 +124,6 @@ const statusMap = {
 
 export default {
   issuableListTabs,
-  sortOptions,
   components: {
     GlLoadingIcon,
     GlButton,
@@ -131,18 +137,23 @@ export default {
     EmptyStateWithoutAnyIssues,
     CreateWorkItemModal,
     LocalBoard,
+    WorkItemListHeading,
+    WorkItemUserPreferences,
   },
   mixins: [glFeatureFlagMixin()],
   inject: [
     'autocompleteAwardEmojisPath',
     'canBulkUpdate',
     'canBulkEditEpics',
-    'fullPath',
+    'hasBlockedIssuesFeature',
     'hasEpicsFeature',
     'hasGroupBulkEditFeature',
+    'hasIssuableHealthStatusFeature',
     'hasIssueDateFilterFeature',
+    'hasIssueWeightsFeature',
     'hasOkrsFeature',
     'hasQualityManagementFeature',
+    'hasCustomFieldsFeature',
     'initialSort',
     'isGroup',
     'isSignedIn',
@@ -154,16 +165,6 @@ export default {
       type: Number,
       required: false,
       default: 0,
-    },
-    eeEpicListFullQuery: {
-      type: Object,
-      required: false,
-      default: null,
-    },
-    eeEpicListSlimQuery: {
-      type: Object,
-      required: false,
-      default: null,
     },
     withTabs: {
       type: Boolean,
@@ -179,6 +180,10 @@ export default {
       type: Array,
       required: false,
       default: () => [],
+    },
+    rootPageFullPath: {
+      type: String,
+      required: true,
     },
   },
   data() {
@@ -202,25 +207,51 @@ export default {
       hasStateToken: false,
       initialLoadWasFiltered: false,
       showLocalBoard: false,
+      namespaceId: null,
+      displaySettings: {},
     };
   },
   apollo: {
+    displaySettings: {
+      query: getUserWorkItemsDisplaySettingsPreferences,
+      variables() {
+        return {
+          namespace: this.rootPageFullPath,
+        };
+      },
+      update(data) {
+        const commonPreferences = data?.currentUser?.userPreferences?.workItemsDisplaySettings ?? {
+          shouldOpenItemsInSidePanel: true,
+        };
+        const namespacePreferences = data?.currentUser?.workItemPreferences?.displaySettings ?? {};
+        return {
+          commonPreferences,
+          namespacePreferences,
+        };
+      },
+      skip() {
+        return !this.isSignedIn;
+      },
+      error(error) {
+        this.error = __('An error occurred while getting work item user preference.');
+        Sentry.captureException(error);
+      },
+    },
     workItemsFull: {
       query() {
-        return this.isEpicsList && this.eeEpicListFullQuery
-          ? this.eeEpicListFullQuery
-          : getWorkItemsQuery;
+        return getWorkItemsQuery;
       },
       variables() {
         return this.queryVariables;
       },
       update(data) {
-        return data?.[this.namespace].workItems.nodes ?? [];
+        return data?.namespace.workItems.nodes ?? [];
       },
       skip() {
         return isEmpty(this.pageParams);
       },
       result({ data }) {
+        this.namespaceId = data?.namespace?.id;
         this.handleListDataResults(data);
       },
       error(error) {
@@ -232,16 +263,16 @@ export default {
     },
     workItemsSlim: {
       query() {
-        return this.eeEpicListSlimQuery;
+        return getWorkItemsSlimQuery;
       },
       variables() {
         return this.queryVariables;
       },
       update(data) {
-        return data?.[this.namespace].workItems.nodes ?? [];
+        return data?.namespace.workItems.nodes ?? [];
       },
       skip() {
-        return !this.isEpicsList || this.eeEpicListSlimQuery === null || isEmpty(this.pageParams);
+        return isEmpty(this.pageParams);
       },
       result({ data }) {
         this.handleListDataResults(data);
@@ -281,13 +312,15 @@ export default {
   },
   computed: {
     workItems() {
-      if (this.isEpicsList) {
-        if (this.workItemsFull.length > 0 && this.workItemsSlim.length > 0 && !this.detailLoading) {
-          return this.combineSlimAndFullLists(this.workItemsSlim, this.workItemsFull);
-        }
-        return this.workItemsSlim;
+      if (this.workItemsFull.length > 0 && this.workItemsSlim.length > 0 && !this.detailLoading) {
+        return this.combineSlimAndFullLists(this.workItemsSlim, this.workItemsFull);
       }
-      return this.workItemsFull;
+      return this.workItemsSlim;
+    },
+    shouldShowList() {
+      return (
+        this.hasAnyIssues || this.error || this.initialLoadWasFiltered || this.workItems.length > 0
+      );
     },
     detailLoading() {
       return this.$apollo.queries.workItemsFull.loading;
@@ -320,7 +353,9 @@ export default {
       return BASE_ALLOWED_CREATE_TYPES;
     },
     apiFilterParams() {
-      return convertToApiParams(this.filterTokens);
+      return convertToApiParams(this.filterTokens, {
+        hasCustomFieldsFeature: this.hasCustomFieldsFeature,
+      });
     },
     defaultWorkItemTypes() {
       return getDefaultWorkItemTypes({
@@ -330,10 +365,19 @@ export default {
       });
     },
     workItemDrawerEnabled() {
-      if (gon.current_user_use_work_items_view || this.glFeatures.workItemViewForIssues) {
-        return true;
+      const shouldOpenItemsInSidePanel =
+        this.displaySettings.commonPreferences?.shouldOpenItemsInSidePanel ?? true;
+      if (!shouldOpenItemsInSidePanel) return false;
+
+      if (this.glFeatures.workItemViewForIssues) {
+        return shouldOpenItemsInSidePanel;
       }
-      return this.isEpicsList ? this.glFeatures.epicsListDrawer : this.glFeatures.issuesListDrawer;
+
+      if (this.isEpicsList) {
+        return this.glFeatures?.epicsListDrawer && shouldOpenItemsInSidePanel;
+      }
+
+      return this.glFeatures?.issuesListDrawer && shouldOpenItemsInSidePanel;
     },
     isEpicsList() {
       return this.workItemType === WORK_ITEM_TYPE_NAME_EPIC;
@@ -342,10 +386,7 @@ export default {
       return Boolean(this.searchQuery);
     },
     isLoading() {
-      if (this.isEpicsList) {
-        return this.$apollo.queries.workItemsSlim.loading && !this.isRefetching;
-      }
-      return this.detailLoading && !this.isRefetching;
+      return this.$apollo.queries.workItemsSlim.loading && !this.isRefetching;
     },
     isOpenTab() {
       return this.state === STATUS_OPEN;
@@ -357,7 +398,7 @@ export default {
       const hasGroupFilter = Boolean(this.urlFilterParams.group_path);
       const singleWorkItemType = this.workItemType ? NAME_TO_ENUM_MAP[this.workItemType] : null;
       return {
-        fullPath: this.fullPath,
+        fullPath: this.rootPageFullPath,
         sort: this.sortKey,
         state: this.state,
         search: this.searchQuery,
@@ -392,9 +433,9 @@ export default {
           token: UserToken,
           dataType: 'user',
           operators: OPERATORS_IS_NOT_OR,
-          fullPath: this.fullPath,
+          fullPath: this.rootPageFullPath,
           isProject: !this.isGroup,
-          recentSuggestionsStorageKey: `${this.fullPath}-issues-recent-tokens-assignee`,
+          recentSuggestionsStorageKey: `${this.rootPageFullPath}-issues-recent-tokens-assignee`,
           preloadedUsers,
         },
         {
@@ -405,9 +446,9 @@ export default {
           dataType: 'user',
           defaultUsers: [],
           operators: OPERATORS_IS_NOT_OR,
-          fullPath: this.fullPath,
+          fullPath: this.rootPageFullPath,
           isProject: !this.isGroup,
-          recentSuggestionsStorageKey: `${this.fullPath}-issues-recent-tokens-author`,
+          recentSuggestionsStorageKey: `${this.rootPageFullPath}-issues-recent-tokens-author`,
           preloadedUsers,
         },
         {
@@ -417,17 +458,17 @@ export default {
           token: LabelToken,
           operators: OPERATORS_IS_NOT_OR,
           fetchLabels: this.fetchLabels,
-          fetchLatestLabels: this.glFeatures.frontendCaching ? this.fetchLatestLabels : null,
-          recentSuggestionsStorageKey: `${this.fullPath}-issues-recent-tokens-label`,
+          fetchLatestLabels: this.fetchLatestLabels,
+          recentSuggestionsStorageKey: `${this.rootPageFullPath}-issues-recent-tokens-label`,
         },
         {
           type: TOKEN_TYPE_MILESTONE,
           title: TOKEN_TITLE_MILESTONE,
           icon: 'milestone',
           token: MilestoneToken,
-          recentSuggestionsStorageKey: `${this.fullPath}-issues-recent-tokens-milestone`,
+          recentSuggestionsStorageKey: `${this.rootPageFullPath}-issues-recent-tokens-milestone`,
           shouldSkipSort: true,
-          fullPath: this.fullPath,
+          fullPath: this.rootPageFullPath,
           isProject: !this.isGroup,
         },
         {
@@ -452,7 +493,7 @@ export default {
           unique: true,
           token: GroupToken,
           operators: OPERATORS_IS,
-          fullPath: this.fullPath,
+          fullPath: this.rootPageFullPath,
         });
       }
 
@@ -461,8 +502,9 @@ export default {
           type: TOKEN_TYPE_TYPE,
           title: TOKEN_TITLE_TYPE,
           icon: 'issues',
+          unique: true,
           token: GlFilteredSearchToken,
-          operators: OPERATORS_IS,
+          operators: OPERATORS_IS_NOT,
           options: this.typeTokenOptions,
         });
       }
@@ -488,7 +530,7 @@ export default {
           token: EmojiToken,
           unique: true,
           fetchEmojis: this.fetchEmojis,
-          recentSuggestionsStorageKey: `${this.fullPath}-issues-recent-tokens-my_reaction`,
+          recentSuggestionsStorageKey: `${this.rootPageFullPath}-issues-recent-tokens-my_reaction`,
         });
 
         tokens.push({
@@ -581,6 +623,19 @@ export default {
     showPageSizeSelector() {
       return this.workItems.length > 0;
     },
+    sortOptions() {
+      return getSortOptions({
+        hasBlockedIssuesFeature: this.hasBlockedIssuesFeature,
+        hasIssuableHealthStatusFeature: this.hasIssuableHealthStatusFeature,
+        hasIssueWeightsFeature: this.hasIssueWeightsFeature,
+        hasManualSort: false,
+        hasStartDate: true,
+        hasPriority: !this.isEpicsList,
+        hasMilestoneDueDate: true,
+        hasLabelPriority: !this.isEpicsList,
+        hasWeight: !this.isEpicsList,
+      });
+    },
     tabCounts() {
       const { all, closed, opened } = this.workItemStateCounts;
       return {
@@ -597,7 +652,9 @@ export default {
       });
     },
     urlFilterParams() {
-      return convertToUrlParams(this.filterTokens);
+      return convertToUrlParams(this.filterTokens, {
+        hasCustomFieldsFeature: this.hasCustomFieldsFeature,
+      });
     },
     urlParams() {
       return {
@@ -626,8 +683,14 @@ export default {
     enableClientSideBoardsExperiment() {
       return this.glFeatures.workItemsClientSideBoards;
     },
+    isPlanningViewsEnabled() {
+      return this.glFeatures.workItemPlanningView;
+    },
     preselectedWorkItemType() {
       return this.isEpicsList ? WORK_ITEM_TYPE_NAME_EPIC : WORK_ITEM_TYPE_NAME_ISSUE;
+    },
+    hiddenMetadataKeys() {
+      return this.displaySettings?.namespacePreferences?.hiddenMetadataKeys || [];
     },
   },
   watch: {
@@ -636,6 +699,7 @@ export default {
       if (!this.hasAnyIssues) {
         this.isInitialLoadComplete = false;
       }
+      this.$apollo.queries.workItemStateCounts.refetch();
       this.$apollo.queries.workItemsFull.refetch();
       this.$apollo.queries.workItemsSlim.refetch();
     },
@@ -664,11 +728,11 @@ export default {
       const findSlimItem = (id) => slim.find((item) => item.id === id);
       return full.map((fullItem) => {
         const slimVersion = findSlimItem(fullItem.id);
-        const combinedWidgets = unionBy(fullItem.widgets, slimVersion.widgets, 'type');
+        const combinedWidgets = unionBy(fullItem.widgets, slimVersion?.widgets, 'type');
         return {
           ...fullItem,
           widgets: combinedWidgets.reduce((acc, widget) => {
-            const slimWidget = slimVersion.widgets.find((w) => w.type === widget.type);
+            const slimWidget = slimVersion?.widgets.find((w) => w.type === widget.type);
             if (slimWidget && Object.keys(slimWidget).length > Object.keys(widget).length) {
               acc.push(slimWidget);
             } else {
@@ -680,13 +744,13 @@ export default {
       });
     },
     handleListDataResults(listData) {
-      this.pageInfo = listData?.[this.namespace].workItems.pageInfo ?? {};
+      this.pageInfo = listData?.namespace.workItems.pageInfo ?? {};
 
-      if (listData?.[this.namespace]) {
+      if (listData?.namespace) {
         document.title = this.calculateDocumentTitle(listData);
       }
       if (!this.withTabs) {
-        this.hasAnyIssues = Boolean(listData?.[this.namespace].workItems.nodes);
+        this.hasAnyIssues = Boolean(listData?.namespace.workItems.nodes);
         this.isInitialLoadComplete = true;
       }
       this.checkDrawerParams();
@@ -705,8 +769,8 @@ export default {
       }
     },
     calculateDocumentTitle(data) {
-      const middleCrumb = this.isGroup ? data.group.name : data.project.name;
-      if (this.glFeatures.workItemPlanningView) {
+      const middleCrumb = data.namespace.name;
+      if (this.isPlanningViewsEnabled) {
         return `${s__('WorkItem|Work items')} · ${middleCrumb} · GitLab`;
       }
       if (this.isGroup && this.isEpicsList) {
@@ -729,7 +793,7 @@ export default {
       return this.$apollo
         .query({
           query: searchLabelsQuery,
-          variables: { fullPath: this.fullPath, search, isProject: !this.isGroup },
+          variables: { fullPath: this.rootPageFullPath, search, isProject: !this.isGroup },
           fetchPolicy,
         })
         .then(({ data }) => {
@@ -826,24 +890,28 @@ export default {
     },
     deleteItem() {
       this.activeItem = null;
-      this.refetchItems();
+      this.refetchItems({ refetchCounts: true });
     },
     handleStatusChange(workItem) {
       if (this.state === STATUS_ALL) {
         return;
       }
       if (statusMap[this.state] !== workItem.state) {
-        this.refetchItems();
+        this.refetchItems({ refetchCounts: true });
       }
     },
     async refetchItems({ refetchCounts = false } = {}) {
-      this.isRefetching = true;
-      this.$apollo.queries.workItemsFull.refetch();
-      this.$apollo.queries.workItemsSlim.refetch();
       if (refetchCounts) {
         this.$apollo.queries.workItemStateCounts.refetch();
       }
-      this.isRefetching = false;
+
+      // evict the namespace's workItems cache to force a full refetch
+      const { cache } = this.$apollo.provider.defaultClient;
+      cache.evict({
+        id: cache.identify({ __typename: TYPENAME_NAMESPACE, id: this.namespaceId }),
+        fieldName: 'workItems',
+      });
+      cache.gc();
     },
     updateData(sort) {
       const firstPageSize = getParameterByName(PARAM_FIRST_PAGE_SIZE);
@@ -852,6 +920,7 @@ export default {
 
       this.filterTokens = getFilterTokens(window.location.search, {
         includeStateToken: !this.withTabs,
+        hasCustomFieldsFeature: this.hasCustomFieldsFeature,
       });
       if (!this.hasStateToken && this.state === STATUS_ALL) {
         this.filterTokens = this.filterTokens.filter(
@@ -869,7 +938,7 @@ export default {
 
       // Trigger pageSize UI component update based on URL changes
       this.pageSize = this.pageParams.firstPageSize;
-      this.sortKey = deriveSortKey({ sort, sortMap: urlSortParams });
+      this.sortKey = deriveSortKey({ sort });
       this.state = state || STATUS_OPEN;
     },
     checkDrawerParams() {
@@ -922,13 +991,16 @@ export default {
       this.refetchItems({ refetchCounts: true });
     },
   },
+  constants: {
+    METADATA_KEYS,
+  },
 };
 </script>
 
 <template>
   <gl-loading-icon v-if="!isInitialLoadComplete && !error" class="gl-mt-5" size="lg" />
 
-  <div v-else-if="hasAnyIssues || error || initialLoadWasFiltered">
+  <div v-else-if="shouldShowList">
     <div v-if="showLocalBoard">
       <local-board :work-item-list-data="workItems" @back="showLocalBoard = false" />
     </div>
@@ -947,7 +1019,6 @@ export default {
       />
       <issuable-list
         :active-issuable="activeItem"
-        :add-padding="!withTabs"
         :current-tab="state"
         :default-page-size="pageSize"
         :error="error"
@@ -959,20 +1030,21 @@ export default {
         :issuables-loading="isLoading"
         :show-bulk-edit-sidebar="showBulkEditSidebar"
         namespace="work-items"
-        :full-path="fullPath"
+        :full-path="rootPageFullPath"
         recent-searches-storage-key="issues"
         :search-tokens="searchTokens"
         show-filtered-search-friendly-text
         :show-page-size-selector="showPageSizeSelector"
         :show-pagination-controls="showPaginationControls"
         show-work-item-type-icon
-        :sort-options="$options.sortOptions"
+        :sort-options="sortOptions"
         sync-filter-and-sort
         :tab-counts="tabCounts"
         :tabs="tabs"
         use-keyset-pagination
         :prevent-redirect="workItemDrawerEnabled"
         :detail-loading="detailLoading"
+        :hidden-metadata-keys="hiddenMetadataKeys"
         @click-tab="handleClickTab"
         @dismiss-alert="error = undefined"
         @filter="handleFilter"
@@ -982,7 +1054,13 @@ export default {
         @sort="handleSort"
         @select-issuable="handleToggle"
       >
-        <template #nav-actions>
+        <template #user-preference>
+          <work-item-user-preferences
+            :display-settings="displaySettings"
+            :full-path="rootPageFullPath"
+          />
+        </template>
+        <template v-if="!isPlanningViewsEnabled" #nav-actions>
           <div class="gl-flex gl-gap-3">
             <gl-button
               v-if="enableClientSideBoardsExperiment"
@@ -1003,6 +1081,7 @@ export default {
               v-if="showNewWorkItem"
               :allowed-work-item-types="allowedWorkItemTypes"
               :always-show-work-item-type-select="!isEpicsList"
+              :full-path="rootPageFullPath"
               :is-group="isGroup"
               :preselected-work-item-type="preselectedWorkItemType"
               @workItemCreated="refetchItems"
@@ -1010,10 +1089,42 @@ export default {
           </div>
         </template>
 
+        <template v-if="isPlanningViewsEnabled" #list-header>
+          <work-item-list-heading>
+            <div class="gl-flex gl-gap-3">
+              <gl-button
+                v-if="enableClientSideBoardsExperiment"
+                data-testid="show-local-board-button"
+                @click="showLocalBoard = true"
+              >
+                {{ __('Launch board') }}
+              </gl-button>
+              <gl-button
+                v-if="allowBulkEditing"
+                :disabled="showBulkEditSidebar"
+                data-testid="bulk-edit-start-button"
+                @click="showBulkEditSidebar = true"
+              >
+                {{ __('Bulk edit') }}
+              </gl-button>
+              <create-work-item-modal
+                v-if="showNewWorkItem"
+                :allowed-work-item-types="allowedWorkItemTypes"
+                :always-show-work-item-type-select="!isEpicsList"
+                :full-path="rootPageFullPath"
+                :is-group="isGroup"
+                :preselected-work-item-type="preselectedWorkItemType"
+                @workItemCreated="refetchItems"
+              />
+            </div>
+          </work-item-list-heading>
+        </template>
+
         <template #timeframe="{ issuable = {} }">
           <issue-card-time-info
             :issue="issuable"
             :is-work-item-list="true"
+            :hidden-metadata-keys="hiddenMetadataKeys"
             :detail-loading="detailLoading"
           />
         </template>
@@ -1053,7 +1164,7 @@ export default {
           <work-item-bulk-edit-sidebar
             v-if="showBulkEditSidebar"
             :checked-items="checkedIssuables"
-            :full-path="fullPath"
+            :full-path="rootPageFullPath"
             :is-epics-list="isEpicsList"
             :is-group="isGroup"
             @finish="bulkEditInProgress = false"
@@ -1063,7 +1174,10 @@ export default {
         </template>
 
         <template #health-status="{ issuable = {} }">
-          <work-item-health-status :issue="issuable" />
+          <work-item-health-status
+            v-if="!hiddenMetadataKeys.includes($options.constants.METADATA_KEYS.HEALTH)"
+            :issue="issuable"
+          />
         </template>
       </issuable-list>
     </template>
@@ -1074,6 +1188,7 @@ export default {
       <empty-state-without-any-issues>
         <template #new-issue-button>
           <create-work-item-modal
+            :full-path="rootPageFullPath"
             :is-group="isGroup"
             :preselected-work-item-type="preselectedWorkItemType"
             @workItemCreated="handleWorkItemCreated"

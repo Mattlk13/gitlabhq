@@ -202,7 +202,7 @@ export default {
       return !this.isNewDiscussion && this.isDiscussionResolvable && this.hasReplies;
     },
     resolveCheckboxLabel() {
-      return this.isDiscussionResolved ? __('Unresolve thread') : __('Resolve thread');
+      return this.isDiscussionResolved ? __('Reopen thread') : __('Resolve thread');
     },
     canMarkNoteAsInternal() {
       return this.workItem?.userPermissions?.markNoteAsInternal;
@@ -368,6 +368,8 @@ export default {
             supports-quick-actions
             :autofocus="autofocus"
             :restricted-tool-bar-items="restrictedToolBarItems"
+            @focus="$emit('focus')"
+            @blur="$emit('blur')"
             @input="setCommentText"
             @keydown.up="handleKeydownUpArrow"
             @keydown.meta.enter="submitForm()"

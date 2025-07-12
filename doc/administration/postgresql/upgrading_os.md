@@ -114,7 +114,7 @@ Disadvantages:
    To update the system catalog to record the current collation version:
 
    ```sql
-   ALTER COLLATION <collation_name> REFRESH VERSION;
+   ALTER DATABASE gitlabhq_production REFRESH COLLATION VERSION;
    ```
 
 1. In all nodes, start GitLab.
@@ -154,7 +154,7 @@ Disadvantages:
    To update the system catalog to record the current collation version:
 
    ```sql
-   ALTER COLLATION <collation_name> REFRESH VERSION;
+   ALTER DATABASE <database_name> REFRESH COLLATION VERSION;
    ```
 
 1. If the secondary sites receive traffic from users, then let the read-replica databases catch up
@@ -190,7 +190,7 @@ different types of indexes were handled, see the blog post about
    record the current collation version:
 
    ```sql
-   ALTER COLLATION <collation_name> REFRESH VERSION;
+   ALTER DATABASE <database_name> REFRESH COLLATION VERSION;
    ```
 
 1. In all nodes, start GitLab.
@@ -231,7 +231,7 @@ Disadvantages:
    record the current collation version:
 
    ```sql
-   ALTER COLLATION <collation_name> REFRESH VERSION;
+   ALTER DATABASE <database_name> REFRESH COLLATION VERSION;
    ```
 
 1. The existing PostgreSQL streaming replication should replicate the reindex changes to the
@@ -333,7 +333,7 @@ reads against a replica with different locale data.
 
 ## Additional Geo variations
 
-The above upgrade procedures are not set in stone. With Geo there are potentially more options,
+The upgrade procedures documented previously are not set in stone. With Geo there are potentially more options,
 because there exists redundant infrastructure. You could consider modifications to suit your use-case,
 but be sure to weigh it against the added complexity. Here are some examples:
 

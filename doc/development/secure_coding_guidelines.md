@@ -1,7 +1,7 @@
 ---
 stage: none
 group: unassigned
-info: Any user with at least the Maintainer role can merge updates to this content. For details, see https://docs.gitlab.com/ee/development/development_processes.html#development-guidelines-review.
+info: Any user with at least the Maintainer role can merge updates to this content. For details, see https://docs.gitlab.com/development/development_processes/#development-guidelines-review.
 title: Secure coding development guidelines
 ---
 
@@ -100,7 +100,7 @@ Some example of well implemented access controls and tests:
 1. [example2](https://dev.gitlab.org/gitlab/gitlabhq/-/merge_requests/2511/diffs#ed3aaab1510f43b032ce345909a887e5b167e196_142_155)
 1. [example3](https://dev.gitlab.org/gitlab/gitlabhq/-/merge_requests/3170/diffs?diff_id=17494)
 
-**NB:** any input from development team is welcome, for example, about RuboCop rules.
+**NB**: any input from development team is welcome, for example, about RuboCop rules.
 
 ## CI/CD development
 
@@ -1127,7 +1127,7 @@ tls.Config{
 }
 ```
 
-This example was taken [from the GitLab agent](https://gitlab.com/gitlab-org/cluster-integration/gitlab-agent/-/blob/871b52dc700f1a66f6644fbb1e78a6d463a6ff83/internal/tool/tlstool/tlstool.go#L72).
+This example was taken [from the GitLab agent for Kubernetes](https://gitlab.com/gitlab-org/cluster-integration/gitlab-agent/-/blob/871b52dc700f1a66f6644fbb1e78a6d463a6ff83/internal/tool/tlstool/tlstool.go#L72).
 
 For **Ruby**, you can use again [`HTTParty`](https://github.com/jnunemaker/httparty) and specify this time TLS 1.2 version alongside with the recommended ciphers:
 
@@ -1659,15 +1659,15 @@ These types of bugs are often seen in environments which allow multi-threading a
 
 ### Examples
 
-**Example 1:** you have a model which accepts a URL as input. When the model is created you verify that the URL host resolves to a public IP address, to prevent attackers making internal network calls. But DNS records can change ([DNS rebinding](#server-side-request-forgery-ssrf)]). An attacker updates the DNS record to `127.0.0.1`, and when your code resolves those URL host it results in sending a potentially malicious request to a server on the internal network. The property was valid at the "time of check", but invalid and malicious at "time of use".
+**Example 1**: you have a model which accepts a URL as input. When the model is created you verify that the URL host resolves to a public IP address, to prevent attackers making internal network calls. But DNS records can change ([DNS rebinding](#server-side-request-forgery-ssrf)]). An attacker updates the DNS record to `127.0.0.1`, and when your code resolves those URL host it results in sending a potentially malicious request to a server on the internal network. The property was valid at the "time of check", but invalid and malicious at "time of use".
 
 GitLab-specific example can be found in [this issue](https://gitlab.com/gitlab-org/gitlab/-/issues/214401) where, although `Gitlab::HTTP_V2::UrlBlocker.validate!` was called, the returned value was not used. This made it vulnerable to TOCTOU bug and SSRF protection bypass through [DNS rebinding](#server-side-request-forgery-ssrf). The fix was to [use the validated IP address](https://gitlab.com/gitlab-org/gitlab/-/commit/85c6a73598e72ab104ab29b72bf83661cd961646).
 
-**Example 2:** you have a feature which schedules jobs. When the user schedules the job, they have permission to do so. But imagine if, between the time they schedule the job and the time it is run, their permissions are restricted. Unless you re-check permissions at time of use, you could inadvertently allow unauthorized activity.
+**Example 2**: you have a feature which schedules jobs. When the user schedules the job, they have permission to do so. But imagine if, between the time they schedule the job and the time it is run, their permissions are restricted. Unless you re-check permissions at time of use, you could inadvertently allow unauthorized activity.
 
-**Example 3:** you need to fetch a remote file, and perform a `HEAD` request to get and validate the content length and content type. When you subsequently make a `GET` request, the file delivered is a different size or different file type. (This is stretching the definition of TOCTOU, but things _have_ changed between time of check and time of use).
+**Example 3**: you need to fetch a remote file, and perform a `HEAD` request to get and validate the content length and content type. When you subsequently make a `GET` request, the file delivered is a different size or different file type. (This is stretching the definition of TOCTOU, but things have changed between time of check and time of use).
 
-**Example 4:** you allow users to upvote a comment if they haven't already. The server is multi-threaded, and you aren't using transactions or an applicable database index. By repeatedly selecting upvote in quick succession a malicious user is able to add multiple upvotes: the requests arrive at the same time, the checks run in parallel and confirm that no upvote exists yet, and so each upvote is written to the database.
+**Example 4**: you allow users to upvote a comment if they haven't already. The server is multi-threaded, and you aren't using transactions or an applicable database index. By repeatedly selecting upvote in quick succession a malicious user is able to add multiple upvotes: the requests arrive at the same time, the checks run in parallel and confirm that no upvote exists yet, and so each upvote is written to the database.
 
 Here's some pseudocode showing an example of a potential TOCTOU bug:
 
@@ -1719,7 +1719,7 @@ This sensitive data must be handled carefully to avoid leaks which could lead to
 - Never commit credentials to repositories.
   - The [Gitleaks Git hook](https://gitlab.com/gitlab-com/gl-security/security-research/gitleaks-endpoint-installer) is recommended for preventing credentials from being committed.
 - Never log credentials under any circumstance. Issue [#353857](https://gitlab.com/gitlab-org/gitlab/-/issues/353857) is an example of credential leaks through log file.
-- When credentials are required in a CI/CD job, use [masked variables](../ci/variables/_index.md#mask-a-cicd-variable) to help prevent accidental exposure in the job logs. Be aware that when [debug logging](../ci/variables/_index.md#enable-debug-logging) is enabled, all masked CI/CD variables are visible in job logs. Also consider using [protected variables](../ci/variables/_index.md#protect-a-cicd-variable) when possible so that sensitive CI/CD variables are only available to pipelines running on protected branches or protected tags.
+- When credentials are required in a CI/CD job, use [masked variables](../ci/variables/_index.md#mask-a-cicd-variable) to help prevent accidental exposure in the job logs. Be aware that when [debug logging](../ci/variables/variables_troubleshooting.md#enable-debug-logging) is enabled, all masked CI/CD variables are visible in job logs. Also consider using [protected variables](../ci/variables/_index.md#protect-a-cicd-variable) when possible so that sensitive CI/CD variables are only available to pipelines running on protected branches or protected tags.
 - Proper scanners must be enabled depending on what data those credentials are protecting. See the [Application Security Inventory Policy](https://handbook.gitlab.com/handbook/security/product-security/application-security/inventory/#policies) and our [Data Classification Standards](https://handbook.gitlab.com/handbook/security/data-classification-standard/#standard).
 - To store and/or share credentials between teams, refer to [1Password for Teams](https://handbook.gitlab.com/handbook/security/password-guidelines/#1password-for-teams) and follow [the 1Password Guidelines](https://handbook.gitlab.com/handbook/security/password-guidelines/#1password-guidelines).
 - If you need to share a secret with a team member, use 1Password. Do not share a secret over email, Slack, or other service on the Internet.
@@ -1965,7 +1965,7 @@ Logging helps track events for debugging. Logging also allows the application to
 
 - Personal data, except for integer-based identifiers and UUIDs, or IP address, which can be logged when necessary.
 - Credentials like access tokens or passwords. If credentials must be captured for debugging purposes, log the internal ID of the credential (if available) instead. Never log credentials under any circumstances.
-  - When [debug logging](../ci/variables/_index.md#enable-debug-logging) is enabled, all masked CI/CD variables are visible in job logs. Consider using [protected variables](../ci/variables/_index.md#protect-a-cicd-variable) when possible so that sensitive CI/CD variables are only available to pipelines running on protected branches or protected tags.
+  - When [debug logging](../ci/variables/variables_troubleshooting.md#enable-debug-logging) is enabled, all masked CI/CD variables are visible in job logs. Consider using [protected variables](../ci/variables/_index.md#protect-a-cicd-variable) when possible so that sensitive CI/CD variables are only available to pipelines running on protected branches or protected tags.
 - Any data supplied by the user without proper validation.
 - Any information that might be considered sensitive (for example, credentials, passwords, tokens, keys, or secrets). Here is an [example](https://gitlab.com/gitlab-org/gitlab/-/issues/383142) of sensitive information being leaked through logs.
 
@@ -2000,7 +2000,7 @@ helper method to redirect the user to a warning page first. For example:
 ```ruby
 # Bad :(
 # This URL comes from User-Land and may not be safe...
-# We need the user to *see* where they are going.
+# We need the user to see where they are going.
 link_to foo_social_url(@user), title: "Foo Social" do
   sprite_icon('question-o')
 end

@@ -4,7 +4,7 @@ require 'spec_helper'
 
 RSpec.describe API::Users, :with_current_organization, :aggregate_failures, feature_category: :user_management do
   include WorkhorseHelpers
-  include KeysetPaginationHelpers
+  include PaginationHelpers
   include CryptoHelpers
 
   let_it_be(:admin) { create(:admin) }
@@ -1549,7 +1549,7 @@ RSpec.describe API::Users, :with_current_organization, :aggregate_failures, feat
               password: User.random_password,
               username: 'foo'
             }
-        end.to change { User.count }.by(0)
+        end.not_to change { User.count }
         expect(response).to have_gitlab_http_status(:conflict)
         expect(json_response['message']).to eq('Email has already been taken')
       end
@@ -1563,7 +1563,7 @@ RSpec.describe API::Users, :with_current_organization, :aggregate_failures, feat
               password: User.random_password,
               username: 'test'
             }
-        end.to change { User.count }.by(0)
+        end.not_to change { User.count }
         expect(response).to have_gitlab_http_status(:conflict)
         expect(json_response['message']).to eq('Username has already been taken')
       end
@@ -1577,7 +1577,7 @@ RSpec.describe API::Users, :with_current_organization, :aggregate_failures, feat
               password: User.random_password,
               username: 'TEST'
             }
-        end.to change { User.count }.by(0)
+        end.not_to change { User.count }
         expect(response).to have_gitlab_http_status(:conflict)
         expect(json_response['message']).to eq('Username has already been taken')
       end
@@ -1613,7 +1613,7 @@ RSpec.describe API::Users, :with_current_organization, :aggregate_failures, feat
               password: User.random_password,
               username: 'unique-domain'
             }
-        end.to change { User.count }.by(0)
+        end.not_to change { User.count }
         expect(response).to have_gitlab_http_status(:bad_request)
         expect(json_response['message']).to eq({ "username" => ["has already been taken"] })
       end
@@ -1632,7 +1632,7 @@ RSpec.describe API::Users, :with_current_organization, :aggregate_failures, feat
                 password: 'password',
                 username: 'TEST'
               }
-          end.to change { User.count }.by(0)
+          end.not_to change { User.count }
           expect(response).to have_gitlab_http_status(:conflict)
           expect(json_response['message']).to eq('Email has already been taken')
         end
@@ -1650,7 +1650,7 @@ RSpec.describe API::Users, :with_current_organization, :aggregate_failures, feat
                 password: 'password',
                 username: 'TEST'
               }
-          end.to change { User.count }.by(0)
+          end.not_to change { User.count }
           expect(response).to have_gitlab_http_status(:conflict)
           expect(json_response['message']).to eq('Email has already been taken')
         end
@@ -1670,7 +1670,7 @@ RSpec.describe API::Users, :with_current_organization, :aggregate_failures, feat
                 password: 'password',
                 username: 'TEST'
               }
-          end.to change { User.count }.by(0)
+          end.not_to change { User.count }
           expect(response).to have_gitlab_http_status(:conflict)
           expect(json_response['message']).to eq('Email has already been taken')
         end
@@ -1688,7 +1688,7 @@ RSpec.describe API::Users, :with_current_organization, :aggregate_failures, feat
                 password: 'password',
                 username: 'TEST'
               }
-          end.to change { User.count }.by(0)
+          end.not_to change { User.count }
           expect(response).to have_gitlab_http_status(:bad_request)
         end
       end
@@ -1857,7 +1857,7 @@ RSpec.describe API::Users, :with_current_organization, :aggregate_failures, feat
 
       expect(response).to have_gitlab_http_status(:ok)
       expect(json_response['organization']).to eq('GitLab')
-      expect(user.reload.organization).to eq('GitLab')
+      expect(user.reload.user_detail_organization).to eq('GitLab')
     end
 
     it 'updates user with avatar' do

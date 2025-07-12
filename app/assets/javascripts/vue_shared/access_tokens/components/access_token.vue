@@ -10,16 +10,14 @@ export default {
     ...mapState(useAccessTokens, ['token']),
     formInputGroupProps() {
       return {
-        'data-testid': this.$options.inputId,
-        id: this.$options.inputId,
-        name: this.$options.inputId,
+        'data-testid': 'created-access-token-field',
+        autocomplete: 'off', // Avoids the revealed token to be added to the search field
       };
     },
   },
   methods: {
     ...mapActions(useAccessTokens, ['setToken']),
   },
-  inputId: 'access-token-field',
 };
 </script>
 

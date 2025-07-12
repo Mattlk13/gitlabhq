@@ -9,7 +9,7 @@ module Organizations
 
     DEFAULT_ORGANIZATION_ID = 1
 
-    scope :without_default, -> { where.not(id: DEFAULT_ORGANIZATION_ID) }
+    scope :without_default, -> { id_not_in(DEFAULT_ORGANIZATION_ID) }
     scope :with_namespace_path, ->(path) {
       joins(namespaces: :route).where(route: { path: path.to_s })
     }
@@ -32,7 +32,8 @@ module Organizations
     has_one :organization_detail, inverse_of: :organization, autosave: true
 
     has_many :organization_users, inverse_of: :organization
-    has_many :organization_user_aliases, inverse_of: :organization
+    has_many :organization_user_aliases, inverse_of: :organization # deprecated
+    has_many :organization_user_details, inverse_of: :organization
     # if considering disable_joins on the below see:
     # https://gitlab.com/gitlab-org/gitlab/-/merge_requests/140343#note_1705047949
     has_many :users, through: :organization_users, inverse_of: :organizations

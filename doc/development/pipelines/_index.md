@@ -1,7 +1,7 @@
 ---
 stage: none
 group: Engineering Productivity
-info: Any user with at least the Maintainer role can merge updates to this content. For details, see https://docs.gitlab.com/ee/development/development_processes.html#development-guidelines-review.
+info: Any user with at least the Maintainer role can merge updates to this content. For details, see https://docs.gitlab.com/development/development_processes/#development-guidelines-review.
 title: Pipelines for the GitLab project
 ---
 
@@ -21,7 +21,7 @@ on the `dev.gitlab.com` mirror if they do not exist on that instance.
 
 ## Pipeline tiers
 
-**under active development:** For more information, see [epic 58](https://gitlab.com/groups/gitlab-org/quality/engineering-productivity/-/epics/58).
+**Under active development**: For more information, see [epic 58](https://gitlab.com/groups/gitlab-org/quality/engineering-productivity/-/epics/58).
 
 A merge request will typically run several CI/CD pipelines. Depending on where the merge request is at in the approval process, we will trigger different kinds of pipelines. We call those kinds of pipelines **pipeline tiers**.
 
@@ -812,7 +812,7 @@ test suites use PostgreSQL 16 because there is no dependency between the databas
 |-------------------------------------------------------------------------------------------------|-----------------------|----------------------|----------------------|
 | Merge requests with label `~group::global search` or `~pipeline:run-search-tests`               | 8.X (production)      |                      | 16 (default version) |
 | `nightly` scheduled pipelines for the `master` branch                                           | 7.X, 8.X (production) | 1.X, 2.X             | 16 (default version) |
-| `weekly` scheduled pipelines for the `master` branch                                            |                       | latest               | 16 (default version) |
+| `weekly` scheduled pipelines for the `master` branch                                            | 9.X                   | latest               | 16 (default version) |
 
 ## Monitoring
 

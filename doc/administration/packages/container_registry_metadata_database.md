@@ -76,7 +76,7 @@ for the status of features related to the container registry database.
 Prerequisites:
 
 - GitLab 17.3 or later.
-- PostgreSQL database version 12 or later. It must be accessible from the registry node.
+- PostgreSQL database [version 14 or later](../../install/requirements.md#postgresql). It must be accessible from the registry node.
 
 Follow the instructions that match your situation:
 
@@ -415,6 +415,8 @@ to see how to monitor the progress and health of the online garbage collector.
 
 ## Database migrations
 
+You must manually execute database migrations after each GitLab upgrade. Support to automate database migrations after upgrades is proposed in [issue 8670](https://gitlab.com/gitlab-org/omnibus-gitlab/-/issues/8670).
+
 The container registry supports two types of migrations:
 
 - **Regular schema migrations**: Changes to the database structure that must run before deploying new application code, also known as pre-deployment migrations. These should be fast (no more than a few minutes) to avoid deployment delays.
@@ -740,7 +742,7 @@ which can happen if you:
 - Attempted the [one step import](#one-step-import) and encountered errors.
 - Attempted the [three-step import](#three-step-import) process and encountered errors.
 - Stopped the import process on purpose.
-- Tried to run the import again after any of the above.
+- Tried to run the import again after any of the previous actions.
 - Ran the import against the wrong configuration file.
 
 To resolve this issue, you must delete the existing entries in the tags table.
@@ -834,3 +836,21 @@ By default, the online garbage collector will only start deleting unreferenced l
 that all tags they were associated with were deleted. This delay ensures that the garbage collector does
 not interfere with long-running or interrupted image pushes, as layers are pushed to the registry before
 they are associated with an image and tag.
+
+### Error: `permission denied for schema public (SQLSTATE 42501)`
+
+During a registry migration, you might get one of the following errors:
+
+- `ERROR: permission denied for schema public (SQLSTATE 42501)`
+- `ERROR: relation "public.blobs" does not exist (SQLSTATE 42P01)` 
+
+These types of errors are due to a change in PostgreSQL 15+, which removes the default CREATE privileges on the public schema for security reasons. 
+By default, only database owners can create objects in the public schema in PostgreSQL 15+.
+
+To resolve the error, run the following command to give a registry user owner privileges of the registry database:
+
+```sql
+ALTER DATABASE <registry_database_name> OWNER TO <registry_user>;
+```
+
+This gives the registry user the necessary permissions to create tables and run migrations successfully.

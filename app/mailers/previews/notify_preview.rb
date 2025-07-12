@@ -112,6 +112,10 @@ class NotifyPreview < ActionMailer::Preview
     Notify.access_token_about_to_expire_email(user, ['%w', '%w']).message
   end
 
+  def deploy_token_about_to_expire_email
+    Notify.deploy_token_about_to_expire_email(user, 'token_name', project).message
+  end
+
   def ssh_key_expired_email
     fingerprints = []
     Notify.ssh_key_expired_email(user, fingerprints).message
@@ -247,6 +251,10 @@ class NotifyPreview < ActionMailer::Preview
 
   def pipeline_fixed_email
     Notify.pipeline_fixed_email(pipeline, pipeline.user.try(:email))
+  end
+
+  def pipeline_schedule_owner_unavailable
+    Notify.pipeline_schedule_owner_unavailable_email(pipeline_schedule, user)
   end
 
   def autodevops_disabled_email
@@ -452,6 +460,12 @@ class NotifyPreview < ActionMailer::Preview
     Notify.import_source_user_rejected(source_user.id)
   end
 
+  def import_source_user_complete
+    source_user = Import::SourceUser.last
+
+    Notify.import_source_user_complete(source_user.id)
+  end
+
   def repository_rewrite_history_success_email
     Notify.repository_rewrite_history_success_email(project, user)
   end
@@ -552,6 +566,10 @@ class NotifyPreview < ActionMailer::Preview
 
   def pipeline
     @pipeline = Ci::Pipeline.last
+  end
+
+  def pipeline_schedule
+    @pipeline_schedule ||= Ci::PipelineSchedule.last
   end
 
   def remote_mirror

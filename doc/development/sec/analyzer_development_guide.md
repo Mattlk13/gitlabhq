@@ -1,7 +1,7 @@
 ---
 stage: Application Security Testing
 group: Static Analysis
-info: Any user with at least the Maintainer role can merge updates to this content. For details, see https://docs.gitlab.com/ee/development/development_processes.html#development-guidelines-review.
+info: Any user with at least the Maintainer role can merge updates to this content. For details, see https://docs.gitlab.com/development/development_processes/#development-guidelines-review.
 title: Sec section analyzer development
 ---
 
@@ -105,7 +105,7 @@ The secure stage is responsible for maintaining the following CI/CD Templates an
   - CI/CD Components
     - [Secret Detection](https://gitlab.com/components/secret-detection/-/blob/main/templates/secret-detection.yml)
 
-Changes must always be made to both the CI/CD template _and_ component for your group, and you must also determine if the changes need to be applied to the _latest_ CI/CD template.
+Changes must always be made to both the CI/CD template and component for your group, and you must also determine if the changes need to be applied to the latest CI/CD template.
 
 Analyzers are also referenced in the [`Secure-Binaries.gitlab-ci.yml`](https://gitlab.com/gitlab-org/gitlab/-/blob/master/lib/gitlab/ci/templates/Security/Secure-Binaries.gitlab-ci.yml) file for [offline environments](../../user/application_security/offline_deployments/_index.md#using-the-official-gitlab-template). Ensure this file is also kept in sync when doing changes.
 
@@ -125,7 +125,9 @@ Step 1 helps prevent wastage of compute quota that would be spent running analyz
 
 Video walkthrough of how Dependency Scanning analyzers are using [downstream pipeline](../../ci/pipelines/downstream_pipelines.md) feature to test analyzers using test projects:
 
-[![How Sec leverages the downstream pipeline feature of GitLab to test analyzers end to end](https://img.youtube.com/vi/KauRBlfUbDE/0.jpg)](https://www.youtube.com/watch?v=KauRBlfUbDE)
+<i class="fa-youtube-play" aria-hidden="true"></i>
+[How Sec leverages the downstream pipeline feature of GitLab to test analyzers end to end](https://www.youtube.com/watch?v=KauRBlfUbDE)
+<!-- Video published on 2019-10-09 -->
 
 ### Testing local changes
 
@@ -270,7 +272,7 @@ The following must be performed before the automatic release process can be used
 1. Check the `Variables` in the CI/CD project settings:
 
    - If the project is located under the `gitlab-org/security-products/analyzers` namespace, then it automatically inherits the `GITLAB_TOKEN` environment variable and nothing else needs to be done.
-   - If the project is _not_ located under the `gitlab-org/security-products/analyzers` namespace, then you'll need to create a new [masked and hidden](../../ci/variables/_index.md#hide-a-cicd-variable) `GITLAB_TOKEN` [`CI/CD` environment variable](../../ci/variables/_index.md) and set its value to the Personal Access Token for the [@gl-service-dev-secure-analyzers-automation](https://gitlab.com/gl-service-dev-secure-analyzers-automation) account described in the [Service account used in the automatic release process](#service-account-used-in-the-automatic-release-process) section below.
+   - If the project is not located under the `gitlab-org/security-products/analyzers` namespace, then you'll need to create a new [masked and hidden](../../ci/variables/_index.md#hide-a-cicd-variable) `GITLAB_TOKEN` [`CI/CD` environment variable](../../ci/variables/_index.md) and set its value to the Personal Access Token for the [@gl-service-dev-secure-analyzers-automation](https://gitlab.com/gl-service-dev-secure-analyzers-automation) account described in the [Service account used in the automatic release process](#service-account-used-in-the-automatic-release-process) section below.
 
 After the above steps have been completed, the automatic release process executes as follows:
 
@@ -395,10 +397,10 @@ Assuming the current analyzer release is `v{N}`:
    - Merge non-breaking changes to the `default` branch (aka `master` or `main`)
    - Merge breaking changes to the `v{N+1}` branch, and create a separate `release candidate` entry in the `CHANGELOG.md` file for each change:
 
-      ```markdown
-      ## v{N+1}.0.0-rc.0
-      - some breaking change (!123)
-      ```
+     ```markdown
+     ## v{N+1}.0.0-rc.0
+     - some breaking change (!123)
+     ```
 
       Using `release candidates` allows us to release **all breaking changes in a single major version bump**, which follows the [semver guidance](https://semver.org) of only making breaking changes in a major version update.
 

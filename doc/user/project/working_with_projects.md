@@ -92,7 +92,7 @@ If you are not authenticated, the list shows public projects only.
 
 {{< history >}}
 
-- [Introduced](https://gitlab.com/groups/gitlab-org/-/epics/13066) in GitLab 17.9 [with a flag](../../administration/feature_flags.md) named `your_work_projects_vue`. Disabled by default.
+- [Introduced](https://gitlab.com/groups/gitlab-org/-/epics/13066) in GitLab 17.9 [with a flag](../../administration/feature_flags/_index.md) named `your_work_projects_vue`. Disabled by default.
 - [Generally available](https://gitlab.com/gitlab-org/gitlab/-/issues/465889) in GitLab 17.10. Feature flag `your_work_projects_vue` removed.
 
 {{< /history >}}
@@ -122,7 +122,7 @@ To view projects you have contributed to:
 
 {{< history >}}
 
-- [Changed](https://gitlab.com/groups/gitlab-org/-/epics/13066) tab label from "Yours" to "Member" in GitLab 17.9 [with a flag](../../administration/feature_flags.md) named `your_work_projects_vue`. Disabled by default.
+- [Changed](https://gitlab.com/groups/gitlab-org/-/epics/13066) tab label from "Yours" to "Member" in GitLab 17.9 [with a flag](../../administration/feature_flags/_index.md) named `your_work_projects_vue`. Disabled by default.
 - [Changed tab label generally available](https://gitlab.com/gitlab-org/gitlab/-/issues/465889) in GitLab 17.10. Feature flag `your_work_projects_vue` removed.
 
 {{< /history >}}
@@ -240,18 +240,107 @@ To star a project:
 1. On the left sidebar, select **Search or go to** and find your project.
 1. In the upper-right corner of the page, select **Star**.
 
+## Transfer a project
+
+{{< history >}}
+
+- Support for transferring projects with container images within the same top-level namespace [introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/499163) on GitLab.com in GitLab 17.7 [with a flag](../../administration/feature_flags/_index.md) named `transfer_project_with_tags`. Disabled by default.
+- Support for transferring projects with container images within the same top-level namespace [enabled on GitLab.com](https://gitlab.com/gitlab-org/gitlab/-/issues/499163) in GitLab 17.7. Feature flag removed.
+
+{{< /history >}}
+
+Transfer a project to move it to a different group.
+A project transfer includes:
+
+- Project components:
+  - Issues
+  - Merge requests
+  - Pipelines
+  - Dashboards
+- Project members:
+  - Direct members
+  - Membership invitations
+
+   {{< alert type="note" >}}
+
+   Members with [inherited membership](members/_index.md#membership-types)
+   in the project lose access unless they are also members of the target group.
+   The project inherits new member permissions from the group you transfer it to.
+
+   {{< /alert >}}
+
+The project's [path also changes](repository/_index.md#repository-path-changes), so make sure to update the URLs to the project components where necessary.
+
+New project-level labels are created for issues and merge requests if matching group labels don't already exist in the target namespace.
+
+If a project contains issues assigned to an epic, and that epic is not available in the target
+group, GitLab creates a copy of the epic in the target group. When you transfer multiple projects
+with issues assigned to the same epic, GitLab creates a separate copy of that epic in the target
+group for each project.
+
+{{< alert type="warning" >}}
+
+Errors during the transfer process may lead to data loss of the project's components or dependencies of end users.
+
+{{< /alert >}}
+
+Prerequisites:
+
+- You must have at least the Maintainer role for the [group](../group/_index.md#create-a-group) you are transferring to.
+- You must be the Owner of the project you transfer.
+- The group must allow creation of new projects.
+- For projects where the container registry is enabled:
+  - On GitLab.com: You can only transfer projects within the same top-level namespace.
+  - On GitLab Self-Managed: The project must not contain [container images](../packages/container_registry/_index.md#move-or-rename-container-registry-repositories).
+- The project must not have a security policy.
+  If a security policy is assigned to the project, it is automatically unassigned during the transfer.
+- If the root namespace changes, you must remove npm packages that follow the [naming convention](../packages/npm_registry/_index.md#naming-convention) from the project.
+  After you transfer the project you can either:
+
+  - Update the package scope with the new root namespace path, and publish it again to the project.
+  - Republish the package to the project without updating the root namespace path, which causes the package to no longer follow the naming convention.
+    If you republish the package without updating the root namespace path, it will not be available for the [instance endpoint](../packages/npm_registry/_index.md#install-from-an-instance).
+
+To transfer a project:
+
+1. On the left sidebar, select **Search or go to** and find your project.
+1. Select **Settings > General**.
+1. Expand **Advanced**.
+1. Under **Transfer project**, choose the namespace to transfer the project to.
+1. Select **Transfer project**.
+1. Enter the project's name and select **Confirm**.
+
+You are redirected to the project's new page and GitLab applies a redirect. For more information about repository redirects, see [repository path changes](repository/_index.md#repository-path-changes).
+
+{{< alert type="note" >}}
+Administrators can also transfer projects from the [Admin area](../../administration/admin_area.md#administering-projects).
+
+{{< /alert >}}
+
+### Transfer a GitLab.com project to a different subscription tier
+
+When you transfer a project from a namespace licensed for GitLab.com Premium or Ultimate to GitLab Free:
+
+- [Project access tokens](settings/project_access_tokens.md) are revoked.
+- [Pipeline subscriptions](../../ci/pipelines/_index.md#trigger-a-pipeline-when-an-upstream-project-is-rebuilt-deprecated)
+  and [test cases](../../ci/test_cases/_index.md) are deleted.
+
 ## Delete a project
 
 {{< history >}}
 
 - Default behavior [changed](https://gitlab.com/gitlab-org/gitlab/-/issues/389557) to delayed project deletion for Premium and Ultimate tiers on [GitLab.com](https://gitlab.com/gitlab-org/gitlab/-/issues/393622) and [GitLab Self-Managed](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/119606) in 16.0.
+- Option to delete projects immediately as a group setting removed [on GitLab.com](https://gitlab.com/gitlab-org/gitlab/-/issues/393622) and [on GitLab Self-Managed](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/119606) in GitLab 16.0.
 - Default behavior changed to delayed project deletion for [GitLab Free](https://gitlab.com/groups/gitlab-org/-/epics/17208) and [personal projects](https://gitlab.com/gitlab-org/gitlab/-/issues/536244) in 18.0.
+- Option to delete projects immediately [moved](https://gitlab.com/groups/gitlab-org/-/epics/17208) from GitLab Premium to GitLab Free in 18.0.
 
 {{< /history >}}
 
-You can mark a project to be deleted.
-After you delete a project for the first time, it enters a pending deletion state.
-If you delete a project a second time, it is removed permanently.
+You can schedule a project for deletion.
+By default, when you delete a project for the first time, it enters a pending deletion state.
+Delete a project again to remove it immediately.
+
+On GitLab.com, after a project is deleted, its data is retained for seven days.
 
 Prerequisites:
 
@@ -265,77 +354,20 @@ To delete a project:
 1. Expand **Advanced**.
 1. In the **Delete project** section, select **Delete project**.
 1. On the confirmation dialog, enter the project name and select **Yes, delete project**.
-
-This action marks the project for deletion and places it in a pending deletion state.
+1. Optional. To delete the project immediately, repeat these steps.
 
 You can also [delete projects using the Rails console](troubleshooting.md#delete-a-project-using-console).
 
-### Delayed project deletion
-
-{{< history >}}
-
-- [Enabled for projects in personal namespaces](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/89466) in GitLab 15.1.
-- [Disabled for projects in personal namespaces](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/95495) in GitLab 15.3.
-- Enabled delayed deletion by default and removed the option to delete immediately [on GitLab.com](https://gitlab.com/gitlab-org/gitlab/-/issues/393622) and [on GitLab Self-Managed](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/119606) in GitLab 16.0.
-- [Moved](https://gitlab.com/groups/gitlab-org/-/epics/17208) from GitLab Premium to GitLab Free in 18.0.
-- [Enabled for projects in personal namespaces](https://gitlab.com/gitlab-org/gitlab/-/issues/536244) in GitLab 18.0.
-
-{{< /history >}}
-
-Prerequisites:
-
-- You must have the Owner role for the project.
-
-Projects enter a pending deletion state when deleted for the first time.
-
-On GitLab Self-Managed instances, group administrators can define a deletion delay period of between 1 and 90 days.
-On SaaS, there is a non-adjustable default retention period of seven days.
-
-You can [view projects that are pending deletion](#view-projects-pending-deletion),
-and use the Rails console to
-[find projects that are pending deletion](troubleshooting.md#find-projects-that-are-pending-deletion).
-
-If the user who scheduled the project deletion loses access to the project (for example, by leaving the project, having their role downgraded, or being banned from the project) before the deletion occurs,
-the deletion job will instead restore and unarchive the project, so the project will no longer be scheduled for deletion.
-
-   {{< alert type="warning" >}}
-
-   If the user who scheduled the project deletion regains Owner role or administrator access before the job runs, then the job removes the project permanently.
-
-   {{< /alert >}}
-
-### Delete a project immediately
-
-{{< history >}}
-
-- Option to delete projects immediately from the **Admin** area and as a group setting removed [on GitLab.com](https://gitlab.com/gitlab-org/gitlab/-/issues/393622) and [on GitLab Self-Managed](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/119606) in GitLab 16.0.
-- [Moved](https://gitlab.com/groups/gitlab-org/-/epics/17208) from GitLab Premium to GitLab Free in 18.0.
-
-{{< /history >}}
-
-If you don't want to wait for delayed deletion, you can delete a project immediately. To do this, perform the steps for [deleting a projects](#delete-a-project) again.
-
-In the first cycle of deleting a project, the project is moved to the delayed deletion queue and automatically deleted after the retention period has passed.
-If during this delayed deletion time you run a second deletion cycle, the project is deleted immediately.
-
-Prerequisites:
-
-- You must have the Owner role for the project.
-- The project must be [pending deletion](#delete-a-project).
-
-To immediately delete a project pending deletion:
-
-1. On the left sidebar, select **Search or go to** and find your project.
-1. Select **Settings > General**.
-1. Expand **Advanced**.
-1. In the **Delete project** section, select **Delete project**.
-1. On the confirmation dialog, enter the project name and select **Yes, delete project**.
+If the user who scheduled the project deletion loses access to the project before the deletion occurs
+(for example, by leaving the project, having their role downgraded, or being banned from the project),
+the deletion job restores the project. However, if the user regains access before the deletion job runs,
+the job removes the project permanently.
 
 ### View projects pending deletion
 
 {{< history >}}
 
-- [Changed](https://gitlab.com/groups/gitlab-org/-/epics/13066) tab label from "Pending deletion" to "Inactive" in GitLab 17.9 [with a flag](../../administration/feature_flags.md) named `your_work_projects_vue`. Disabled by default.
+- [Changed](https://gitlab.com/groups/gitlab-org/-/epics/13066) tab label from "Pending deletion" to "Inactive" in GitLab 17.9 [with a flag](../../administration/feature_flags/_index.md) named `your_work_projects_vue`. Disabled by default.
 - [Changed tab label generally available](https://gitlab.com/gitlab-org/gitlab/-/issues/465889) in GitLab 17.10. Feature flag `your_work_projects_vue` removed.
 - [Moved](https://gitlab.com/groups/gitlab-org/-/epics/17208) from GitLab Premium to GitLab Free in 18.0.
 - [Enabled for projects in personal namespaces](https://gitlab.com/gitlab-org/gitlab/-/issues/536244) in GitLab 18.0.
@@ -355,7 +387,7 @@ Each project in the list shows:
 - The time the project is scheduled for final deletion.
 - A **Restore** action to stop the project being eventually deleted.
 
-## Restore a project
+### Restore a project
 
 {{< history >}}
 
@@ -367,7 +399,6 @@ Each project in the list shows:
 Prerequisites:
 
 - You must have the Owner role for the project.
-- The project must be [pending deletion](#delete-a-project).
 
 To restore a project pending deletion:
 
@@ -492,7 +523,7 @@ You can sort projects by:
 
 {{< history >}}
 
-- [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/385465) in GitLab 15.9 [with a flag](../../administration/feature_flags.md) named `project_language_search`. Enabled by default.
+- [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/385465) in GitLab 15.9 [with a flag](../../administration/feature_flags/_index.md) named `project_language_search`. Enabled by default.
 - [Generally available](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/110956) in GitLab 15.9. Feature flag `project_language_search` removed.
 
 {{< /history >}}
@@ -577,7 +608,7 @@ To leave a project:
 
 {{< /details >}}
 
-You can add compliance frameworks to projects in a group that has a [compliance framework](../compliance/compliance_frameworks.md).
+You can add compliance frameworks to projects in a group that has a [compliance framework](../compliance/compliance_frameworks/_index.md).
 
 ## Manage project access through LDAP groups
 

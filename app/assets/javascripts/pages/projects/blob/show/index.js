@@ -14,22 +14,21 @@ import initBlob from '~/pages/projects/init_blob';
 import ForkInfo from '~/repository/components/fork_info.vue';
 import initWebIdeLink from '~/pages/projects/shared/web_ide_link';
 import CommitPipelineStatus from '~/projects/tree/components/commit_pipeline_status.vue';
-import BlobContentViewer from '~/repository/components/blob_content_viewer.vue';
+import App from '~/repository/components/app.vue';
 import '~/sourcegraph/load';
 import createStore from '~/code_navigation/store';
-import { generateRefDestinationPath } from '~/repository/utils/ref_switcher_utils';
 import { generateHistoryUrl } from '~/repository/utils/url_utility';
-import RefSelector from '~/ref/components/ref_selector.vue';
-import { joinPaths, visitUrl } from '~/lib/utils/url_utility';
 import { parseBoolean } from '~/lib/utils/common_utils';
 import HighlightWorker from '~/vue_shared/components/source_viewer/workers/highlight_worker?worker';
 import initAmbiguousRefModal from '~/ref/init_ambiguous_ref_modal';
-import { InternalEvents } from '~/tracking';
 import { HISTORY_BUTTON_CLICK } from '~/tracking/constants';
 import { initFindFileShortcut } from '~/projects/behaviors';
 import initHeaderApp from '~/repository/init_header_app';
 import createRouter from '~/repository/router';
 import initFileTreeBrowser from '~/repository/file_tree_browser';
+import LastCommit from '~/repository/components/last_commit.vue';
+import projectPathQuery from '~/repository/queries/project_path.query.graphql';
+import refsQuery from '~/repository/queries/ref.query.graphql';
 
 import PerformancePlugin from '~/performance/vue_performance_plugin';
 
@@ -48,35 +47,31 @@ const apolloProvider = new VueApollo({
 
 const viewBlobEl = document.querySelector('#js-view-blob-app');
 
-const initRefSwitcher = () => {
-  const refSwitcherEl = document.getElementById('js-tree-ref-switcher');
-
-  if (!refSwitcherEl) return false;
-
-  const { projectId, projectRootPath, ref, refType } = refSwitcherEl.dataset;
+const initLastCommitApp = (router) => {
+  const lastCommitEl = document.getElementById('js-last-commit');
+  if (!lastCommitEl) return null;
 
   return new Vue({
-    el: refSwitcherEl,
-    render(createElement) {
-      return createElement(RefSelector, {
+    el: lastCommitEl,
+    router,
+    apolloProvider,
+    render(h) {
+      const historyUrl = generateHistoryUrl(
+        lastCommitEl.dataset.historyLink,
+        this.$route.params.path,
+        this.$route.meta.refType || this.$route.query.ref_type,
+      );
+      return h(LastCommit, {
         props: {
-          projectId,
-          value: refType ? joinPaths('refs', refType, ref) : ref,
-          useSymbolicRefNames: true,
-          queryParams: { sort: 'updated_desc' },
-        },
-        on: {
-          input(selectedRef) {
-            InternalEvents.trackEvent('click_ref_selector_on_blob_page');
-            visitUrl(generateRefDestinationPath(projectRootPath, ref, selectedRef));
-          },
+          currentPath: this.$route.params.path,
+          refType: this.$route.meta.refType || this.$route.query.ref_type,
+          historyUrl: historyUrl.href,
         },
       });
     },
   });
 };
 
-initRefSwitcher();
 initAmbiguousRefModal();
 initFindFileShortcut();
 
@@ -90,13 +85,27 @@ if (viewBlobEl) {
     userId,
     explainCodeAvailable,
     refType,
+    escapedRef,
     canDownloadCode,
-    showDuoWorkflowAction,
-    duoWorkflowInvokePath,
+    fullName,
     ...dataset
   } = viewBlobEl.dataset;
-  const router = createRouter(projectPath, originalBranch);
-  initFileTreeBrowser(router, { projectPath, ref: originalBranch, refType });
+
+  apolloProvider.clients.defaultClient.cache.writeQuery({
+    query: projectPathQuery,
+    data: {
+      projectPath,
+    },
+  });
+
+  apolloProvider.clients.defaultClient.cache.writeQuery({
+    query: refsQuery,
+    data: { ref: originalBranch, escapedRef },
+  });
+
+  const router = createRouter(projectPath, originalBranch, fullName);
+  initFileTreeBrowser(router, { projectPath, ref: originalBranch, refType }, apolloProvider);
+  initLastCommitApp(router);
 
   initHeaderApp({ router, isBlobView: true });
 
@@ -114,12 +123,10 @@ if (viewBlobEl) {
       userId,
       explainCodeAvailable: parseBoolean(explainCodeAvailable),
       canDownloadCode: parseBoolean(canDownloadCode),
-      duoWorkflowInvokePath,
-      showDuoWorkflowAction: parseBoolean(showDuoWorkflowAction),
       ...provideWebIdeLink(dataset),
     },
     render(createElement) {
-      return createElement(BlobContentViewer, {
+      return createElement(App, {
         props: {
           path: blobPath,
           projectPath,

@@ -1,6 +1,7 @@
 import { nextTick } from 'vue';
 import MockAdapter from 'axios-mock-adapter';
 import { GlAvatarLabeled, GlIcon, GlBadge } from '@gitlab/ui';
+import GroupsListItemPlanBadge from 'ee_component/vue_shared/components/groups_list/groups_list_item_plan_badge.vue';
 import axios from '~/lib/utils/axios_utils';
 import { mountExtended } from 'helpers/vue_test_utils_helper';
 import GroupsListItem from '~/vue_shared/components/groups_list/groups_list_item.vue';
@@ -18,7 +19,6 @@ import {
 } from '~/visibility_level/constants';
 import { ACCESS_LEVEL_LABELS, ACCESS_LEVEL_NO_ACCESS_INTEGER } from '~/access_level/constants';
 import TimeAgoTooltip from '~/vue_shared/components/time_ago_tooltip.vue';
-import { ACTION_DELETE } from '~/vue_shared/components/list_actions/constants';
 import {
   TIMESTAMP_TYPE_CREATED_AT,
   TIMESTAMP_TYPE_UPDATED_AT,
@@ -68,6 +68,10 @@ describe('GroupsListItem', () => {
   const findLeaveModal = () => wrapper.findComponent(GroupListItemLeaveModal);
   const findAccessLevelBadge = () => wrapper.findByTestId('user-access-role');
   const findTimeAgoTooltip = () => wrapper.findComponent(TimeAgoTooltip);
+  const findSubgroupCount = () => wrapper.findByTestId('subgroups-count');
+  const findProjectsCount = () => wrapper.findByTestId('projects-count');
+  const findMembersCount = () => wrapper.findByTestId('members-count');
+  const findStorageSize = () => wrapper.findByTestId('storage-size');
 
   const findInactiveBadge = () => wrapper.findComponent(GroupListItemInactiveBadge);
 
@@ -93,7 +97,7 @@ describe('GroupsListItem', () => {
 
     expect(avatarLabeled.props()).toMatchObject({
       label: group.fullName,
-      labelLink: group.webUrl,
+      labelLink: group.relativeWebUrl,
     });
 
     expect(avatarLabeled.attributes()).toMatchObject({
@@ -117,30 +121,54 @@ describe('GroupsListItem', () => {
   it('renders subgroup count', () => {
     createComponent();
 
-    expect(wrapper.findByTestId('subgroups-count').props()).toMatchObject({
+    expect(findSubgroupCount().props()).toMatchObject({
       tooltipText: 'Subgroups',
       iconName: 'subgroup',
       stat: group.descendantGroupsCount.toString(),
     });
   });
 
+  describe('when subgroup count is not available', () => {
+    it.each([undefined, null])('does not render subgroup count', (descendantGroupsCount) => {
+      createComponent({ propsData: { group: { ...group, descendantGroupsCount } } });
+
+      expect(findSubgroupCount().exists()).toBe(false);
+    });
+  });
+
   it('renders projects count', () => {
     createComponent();
 
-    expect(wrapper.findByTestId('projects-count').props()).toMatchObject({
+    expect(findProjectsCount().props()).toMatchObject({
       tooltipText: 'Projects',
       iconName: 'project',
       stat: group.projectsCount.toString(),
     });
   });
 
+  describe('when projects count is not available', () => {
+    it.each([undefined, null])('does not render projects count', (projectsCount) => {
+      createComponent({ propsData: { group: { ...group, projectsCount } } });
+
+      expect(findProjectsCount().exists()).toBe(false);
+    });
+  });
+
   it('renders members count', () => {
     createComponent();
 
-    expect(wrapper.findByTestId('members-count').props()).toMatchObject({
+    expect(findMembersCount().props()).toMatchObject({
       tooltipText: 'Direct members',
       iconName: 'users',
       stat: group.groupMembersCount.toString(),
+    });
+  });
+
+  describe('when members count is not available', () => {
+    it.each([undefined, null])('does not render members count', (groupMembersCount) => {
+      createComponent({ propsData: { group: { ...group, groupMembersCount } } });
+
+      expect(findMembersCount().exists()).toBe(false);
     });
   });
 
@@ -179,6 +207,38 @@ describe('GroupsListItem', () => {
 
     it('does not render level role badge', () => {
       expect(findAccessLevelBadge().exists()).toBe(false);
+    });
+  });
+
+  describe('when group does not have projectStatistics key', () => {
+    beforeEach(() => {
+      createComponent();
+    });
+
+    it('does not render storage size', () => {
+      expect(findStorageSize().exists()).toBe(false);
+    });
+  });
+
+  describe('when group has projectStatistics key', () => {
+    it('renders storage size in human size', () => {
+      createComponent({
+        propsData: { group: { ...group, projectStatistics: { storageSize: 3072 } } },
+      });
+
+      expect(findStorageSize().text()).toBe('3.00 KiB');
+    });
+
+    describe('when storage size is null', () => {
+      beforeEach(() => {
+        createComponent({
+          propsData: { group: { ...group, projectStatistics: { storageSize: null } } },
+        });
+      });
+
+      it('renders 0 B', () => {
+        expect(findStorageSize().text()).toBe('0 B');
+      });
     });
   });
 
@@ -293,14 +353,9 @@ describe('GroupsListItem', () => {
     });
 
     describe('when list item actions emits delete', () => {
-      const groupWithDeleteAction = {
-        ...group,
-        actionLoadingStates: { [ACTION_DELETE]: false },
-      };
-
       describe('when group is linked to a subscription', () => {
         const groupLinkedToSubscription = {
-          ...groupWithDeleteAction,
+          ...group,
           isLinkedToSubscription: true,
         };
 
@@ -336,7 +391,7 @@ describe('GroupsListItem', () => {
         beforeEach(async () => {
           createComponent({
             propsData: {
-              group: groupWithDeleteAction,
+              group,
             },
           });
 
@@ -347,7 +402,7 @@ describe('GroupsListItem', () => {
         it('displays confirmation modal with correct props', () => {
           expect(findDeleteConfirmationModal().props()).toMatchObject({
             visible: true,
-            phrase: groupWithDeleteAction.fullName,
+            phrase: group.fullName,
             confirmLoading: false,
           });
         });
@@ -355,7 +410,7 @@ describe('GroupsListItem', () => {
         describe('when deletion is confirmed', () => {
           describe('when API call is successful', () => {
             it('calls DELETE on group path, properly sets loading state, and emits refetch event', async () => {
-              axiosMock.onDelete(groupWithDeleteAction.webUrl).reply(200);
+              axiosMock.onDelete(group.relativeWebUrl).reply(200);
 
               await deleteModalFireConfirmEvent();
               expect(findDeleteConfirmationModal().props('confirmLoading')).toBe(true);
@@ -365,14 +420,14 @@ describe('GroupsListItem', () => {
               expect(axiosMock.history.delete[0].params).toEqual(MOCK_DELETE_PARAMS);
               expect(findDeleteConfirmationModal().props('confirmLoading')).toBe(false);
               expect(wrapper.emitted('refetch')).toEqual([[]]);
-              expect(renderDeleteSuccessToast).toHaveBeenCalledWith(groupWithDeleteAction);
+              expect(renderDeleteSuccessToast).toHaveBeenCalledWith(group);
               expect(createAlert).not.toHaveBeenCalled();
             });
           });
 
           describe('when API call is not successful', () => {
             it('calls DELETE on group path, properly sets loading state, and shows error alert', async () => {
-              axiosMock.onDelete(groupWithDeleteAction.webUrl).networkError();
+              axiosMock.onDelete(group.relativeWebUrl).networkError();
 
               await deleteModalFireConfirmEvent();
               expect(findDeleteConfirmationModal().props('confirmLoading')).toBe(true);
@@ -400,6 +455,32 @@ describe('GroupsListItem', () => {
 
           it('updates visibility prop', () => {
             expect(findDeleteConfirmationModal().props('visible')).toBe(false);
+          });
+        });
+      });
+
+      describe('when group can be deleted immediately', () => {
+        beforeEach(async () => {
+          createComponent({
+            propsData: {
+              group: {
+                ...group,
+                markedForDeletion: true,
+                isSelfDeletionInProgress: true,
+                isSelfDeletionScheduled: false,
+              },
+            },
+          });
+
+          findGroupListItemActions().vm.$emit('delete');
+          await nextTick();
+        });
+
+        it('displays confirmation modal with correct props', () => {
+          expect(findDeleteConfirmationModal().props()).toMatchObject({
+            visible: true,
+            phrase: group.fullName,
+            confirmLoading: false,
           });
         });
       });
@@ -487,5 +568,11 @@ describe('GroupsListItem', () => {
     createComponent();
 
     expect(findInactiveBadge().exists()).toBe(true);
+  });
+
+  it('renders plan badge', () => {
+    createComponent();
+
+    expect(wrapper.findComponent(GroupsListItemPlanBadge).exists()).toBe(true);
   });
 });

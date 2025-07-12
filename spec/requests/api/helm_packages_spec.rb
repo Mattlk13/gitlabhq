@@ -7,8 +7,7 @@ RSpec.describe API::HelmPackages, feature_category: :package_registry do
   using RSpec::Parameterized::TableSyntax
 
   let_it_be_with_reload(:project) { create(:project, :public) }
-  let_it_be(:deploy_token) { create(:deploy_token, read_package_registry: true, write_package_registry: true) }
-  let_it_be(:project_deploy_token) { create(:project_deploy_token, deploy_token: deploy_token, project: project) }
+  let_it_be(:deploy_token) { create(:deploy_token, read_package_registry: true, write_package_registry: true, projects: [project]) }
   let_it_be(:package) { create(:helm_package, project: project, without_package_files: true) }
   let_it_be(:package_file1) { create(:helm_package_file, package: package) }
   let_it_be(:package_file2) { create(:helm_package_file, package: package) }
@@ -52,6 +51,36 @@ RSpec.describe API::HelmPackages, feature_category: :package_registry do
       end
 
       it_behaves_like 'returning response status', :success
+    end
+
+    context 'when helm metadata has appVersion' do
+      subject(:api_request) { get api(url) }
+
+      where(:app_version, :expected_app_version) do
+        '4852e000'  | "\"4852e000\""
+        '1.0.0'     | "\"1.0.0\""
+        'v1.0.0'    | "\"v1.0.0\""
+        'master'    | "\"master\""
+      end
+
+      with_them do
+        before do
+          Packages::Helm::FileMetadatum.where(project_id: project_id).update_all(
+            metadata: {
+              'name' => 'Package Name',
+              'version' => '1.0.0',
+              'apiVersion' => 'v2',
+              'appVersion' => app_version
+            }
+          )
+        end
+
+        it 'returns yaml content with quoted appVersion' do
+          api_request
+
+          expect(response.body).to include("appVersion: #{expected_app_version}")
+        end
+      end
     end
   end
 

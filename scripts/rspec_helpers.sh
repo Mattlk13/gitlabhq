@@ -70,7 +70,10 @@ function retrieve_failed_tests() {
 
   echo 'Generating failed tests lists...'
 
-  scripts/failed_tests.rb --previous-tests-report-path "${pipeline_report_path}" --format "${failed_tests_format}" --output-directory "${directory_for_output_reports}"
+  scripts/failed_tests.rb \
+    --previous-tests-report-path "${pipeline_report_path}" \
+    --format "${failed_tests_format}" \
+    --output-directory "${directory_for_output_reports}"
 }
 
 function rspec_args() {

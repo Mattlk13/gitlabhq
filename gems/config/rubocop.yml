@@ -164,3 +164,9 @@ Rake/TopLevelMethodDefinition:
 
 Scalability/RandomCronSchedule:
   Enabled: false
+
+Database/AvoidUsingConnectionExecute:
+  Enabled: false
+
+RSpec/RedundantMetatagType:
+  Enabled: false

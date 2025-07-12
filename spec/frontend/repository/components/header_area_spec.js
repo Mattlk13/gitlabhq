@@ -27,6 +27,8 @@ const defaultMockRoute = {
   },
 };
 
+const mockRootRef = 'root-ref';
+
 describe('HeaderArea', () => {
   let wrapper;
 
@@ -50,7 +52,9 @@ describe('HeaderArea', () => {
   const createComponent = ({
     props = {},
     route = { name: 'blobPathDecoded' },
-    provided = {},
+    provided = {
+      rootRef: mockRootRef,
+    },
   } = {}) => {
     return shallowMountExtended(HeaderArea, {
       provide: {
@@ -90,8 +94,15 @@ describe('HeaderArea', () => {
     expect(wrapper.exists()).toBe(true);
   });
 
-  it('renders RefSelector', () => {
-    expect(findRefSelector().exists()).toBe(true);
+  describe('Ref selector', () => {
+    it('renders correctly', () => {
+      expect(findRefSelector().props('defaultBranch')).toBe(mockRootRef);
+    });
+
+    it('renders correctly when branch names ending with .json', () => {
+      createComponent({ props: { refSelectorValue: 'ends-with.json' } });
+      expect(findRefSelector().exists()).toBe(true);
+    });
   });
 
   it('renders Breadcrumbs component', () => {
@@ -194,6 +205,7 @@ describe('HeaderArea', () => {
             directoryCodeDropdownUpdates: true,
           },
           newWorkspacePath: '/workspaces/new',
+          organizationId: '1',
         },
       });
     });
@@ -328,6 +340,7 @@ describe('HeaderArea', () => {
               directoryCodeDropdownUpdates: true,
             },
             newWorkspacePath: '/workspaces/new',
+            organizationId: '1',
             isReadmeView: true,
           },
         });

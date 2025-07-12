@@ -1,11 +1,11 @@
 <script>
-import { GlButton, GlCollapse } from '@gitlab/ui';
+import { GlButton, GlCollapse, GlAnimatedChevronLgRightDownIcon } from '@gitlab/ui';
 import { uniqueId } from 'lodash';
 
 import { __ } from '~/locale';
 
 export default {
-  components: { GlButton, GlCollapse },
+  components: { GlButton, GlCollapse, GlAnimatedChevronLgRightDownIcon },
   props: {
     title: {
       type: String,
@@ -17,7 +17,7 @@ export default {
       required: false,
       default: null,
     },
-    defaultExpanded: {
+    expanded: {
       type: Boolean,
       default: false,
       required: false,
@@ -25,29 +25,39 @@ export default {
   },
   data() {
     return {
-      expanded: window.location.hash?.replace('#', '') === this.id || this.defaultExpanded,
+      localExpanded: window.location.hash?.replace('#', '') === this.id || this.expanded,
     };
   },
+
   computed: {
     ariaExpanded() {
-      return this.expanded ? 'true' : 'false';
+      return this.localExpanded ? 'true' : 'false';
     },
     toggleButtonText() {
-      return this.expanded ? this.$options.i18n.collapseText : this.$options.i18n.expandText;
+      return this.localExpanded ? this.$options.i18n.collapseText : this.$options.i18n.expandText;
     },
     toggleButtonAriaLabel() {
       return `${this.toggleButtonText} ${this.$scopedSlots.title || this.title}`;
     },
     expandedClass() {
-      return this.expanded ? 'expanded' : '';
+      return this.localExpanded ? 'expanded' : '';
     },
     collapseId() {
       return this.id || uniqueId('settings-block-');
     },
+    isChevronUp() {
+      return this.expanded;
+    },
+  },
+  watch: {
+    expanded(newValue) {
+      this.localExpanded = newValue;
+    },
   },
   methods: {
     toggleExpanded() {
-      this.expanded = !this.expanded;
+      this.localExpanded = !this.localExpanded;
+      this.$emit('toggle-expand', this.localExpanded);
     },
   },
   i18n: {
@@ -66,16 +76,15 @@ export default {
         <gl-button
           category="tertiary"
           size="small"
-          class="settings-toggle gl-shrink-0 !gl-pl-2 !gl-pr-0"
-          icon="chevron-lg-right"
-          button-text-classes="gl-sr-only"
+          class="settings-toggle gl-shrink-0 !gl-px-0"
           :aria-label="toggleButtonAriaLabel"
           :aria-expanded="ariaExpanded"
           :aria-controls="collapseId"
           data-testid="settings-block-toggle"
           @click="toggleExpanded"
         >
-          {{ toggleButtonText }}
+          <gl-animated-chevron-lg-right-down-icon variant="default" :is-on="isChevronUp" />
+          <div class="gl-sr-only">{{ toggleButtonText }}</div>
         </gl-button>
       </div>
       <div class="gl-grow">
@@ -95,7 +104,7 @@ export default {
         <p class="gl-m-0 gl-text-subtle"><slot name="description"></slot></p>
       </div>
     </div>
-    <gl-collapse :id="collapseId" v-model="expanded" data-testid="settings-block-content">
+    <gl-collapse :id="collapseId" :visible="localExpanded" data-testid="settings-block-content">
       <div class="gl-pl-7 gl-pt-5 sm:gl-pl-8">
         <slot></slot>
       </div>

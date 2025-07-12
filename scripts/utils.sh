@@ -165,7 +165,7 @@ function setup_database_yml() {
 
   # Set up Geo database if the job name matches `rspec-ee` or `geo`.
   # Since Geo is an EE feature, we shouldn't set it up for non-EE tests.
-  if [[ "${CI_JOB_NAME}" =~ "rspec-ee" ]] || [[ "${CI_JOB_NAME}" =~ "geo" ]]; then
+  if [[ "${CI_JOB_NAME}" =~ "rspec-ee" ]] || [[ "${CI_JOB_NAME}" =~ "geo" ]] || [[ "${CI_JOB_NAME}" =~ "db:setup-ee" ]]; then
     echoinfo "Geo DB will be set up."
   else
     echoinfo "Geo DB won't be set up."
@@ -174,7 +174,7 @@ function setup_database_yml() {
 
   # Set up Embedding database if the job name matches `rspec-ee`
   # Since Embedding is an EE feature, we shouldn't set it up for non-EE tests.
-  if [[ "${CI_JOB_NAME}" =~ "rspec-ee" ]]; then
+  if [[ "${CI_JOB_NAME}" =~ "rspec-ee" ]] || [[ "${CI_JOB_NAME}" =~ "db:setup-ee" ]]; then
     echoinfo "Embedding DB will be set up."
   else
     echoinfo "Embedding DB won't be set up."
@@ -717,14 +717,4 @@ JSON
   curl --silent -o /dev/null -X POST "${CI_SLACK_WEBHOOK_URL}" \
     -H 'Content-type: application/json' \
     -d "${json_payload}"
-}
-
-function execute_failure_analyzer() {
-  # IMPORTANT - If you want to change the "failure-analyzer" string,
-  # please also change the logic for the failure categories, as we rely on this marker.
-  #
-  # Class relying on the marker: tooling/lib/tooling/glci/failure_categories/download_job_trace.rb
-  section_start "failure-analyzer" "Report failure category"
-  $CI_PROJECT_DIR/tooling/lib/tooling/glci/failure_analyzer.rb $CI_JOB_ID || true
-  section_end "failure-analyzer"
 }

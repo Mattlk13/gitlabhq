@@ -13,8 +13,15 @@ import {
   ACCESS_LEVEL_OWNER_INTEGER,
   ACCESS_LEVELS_INTEGER_TO_STRING,
 } from '~/access_level/constants';
+import {
+  VISIBILITY_LEVEL_LABELS,
+  VISIBILITY_LEVEL_PRIVATE_STRING,
+  VISIBILITY_LEVEL_INTERNAL_STRING,
+  VISIBILITY_LEVEL_PUBLIC_STRING,
+} from '~/visibility_level/constants';
 import * as Sentry from '~/sentry/sentry_browser_wrapper';
 import { InternalEvents } from '~/tracking';
+import NamespaceToken from '~/vue_shared/components/filtered_search_bar/tokens/namespace_token.vue';
 import {
   FILTERED_SEARCH_TOKEN_LANGUAGE,
   FILTERED_SEARCH_TOKEN_MIN_ACCESS_LEVEL,
@@ -23,6 +30,8 @@ import {
   PAGINATION_TYPE_KEYSET,
   PAGINATION_TYPE_OFFSET,
   QUERY_PARAM_PAGE,
+  FILTERED_SEARCH_TOKEN_VISIBILITY_LEVEL,
+  FILTERED_SEARCH_TOKEN_NAMESPACE,
 } from '../constants';
 import userPreferencesUpdateMutation from '../graphql/mutations/user_preferences_update.mutation.graphql';
 import TabView from './tab_view.vue';
@@ -63,6 +72,11 @@ export default {
     filteredSearchRecentSearchesStorageKey: {
       type: String,
       required: true,
+    },
+    filteredSearchInputPlaceholder: {
+      type: String,
+      required: false,
+      default: __('Filter or search (3 character minimum)'),
     },
     sortOptions: {
       type: Array,
@@ -129,6 +143,11 @@ export default {
         return [PAGINATION_TYPE_KEYSET, PAGINATION_TYPE_OFFSET].includes(value);
       },
     },
+    userPreferencesSortKey: {
+      type: String,
+      required: false,
+      default: null,
+    },
   },
   data() {
     return {
@@ -176,6 +195,31 @@ export default {
             },
           ],
         },
+        {
+          type: FILTERED_SEARCH_TOKEN_VISIBILITY_LEVEL,
+          icon: 'eye',
+          title: __('Visibility'),
+          token: GlFilteredSearchToken,
+          unique: true,
+          operators: OPERATORS_IS,
+          options: [
+            VISIBILITY_LEVEL_PRIVATE_STRING,
+            VISIBILITY_LEVEL_INTERNAL_STRING,
+            VISIBILITY_LEVEL_PUBLIC_STRING,
+          ].map((visibilityLevelString) => ({
+            value: visibilityLevelString,
+            title: VISIBILITY_LEVEL_LABELS[visibilityLevelString],
+          })),
+        },
+        {
+          type: FILTERED_SEARCH_TOKEN_NAMESPACE,
+          icon: 'namespace',
+          title: __('Namespace'),
+          token: NamespaceToken,
+          unique: true,
+          operators: OPERATORS_IS,
+          recentSuggestionsStorageKey: 'tabs-with-list-namespace',
+        },
       ].filter((filteredSearchToken) =>
         this.filteredSearchSupportedTokens.includes(filteredSearchToken.type),
       );
@@ -197,7 +241,7 @@ export default {
         return this.initialSort;
       }
 
-      return `${this.defaultSortOption.value}_${SORT_DIRECTION_ASC}`;
+      return `${this.defaultSortOption.value}_${SORT_DIRECTION_DESC}`;
     },
     activeSortOption() {
       return this.sortOptions.find((sortItem) => this.sort.includes(sortItem.value));
@@ -226,9 +270,8 @@ export default {
     },
     filters() {
       const filters = pick(this.routeQueryWithoutPagination, [
-        FILTERED_SEARCH_TOKEN_LANGUAGE,
-        FILTERED_SEARCH_TOKEN_MIN_ACCESS_LEVEL,
         this.filteredSearchTermKey,
+        ...this.filteredSearchSupportedTokens,
       ]);
 
       // Normalize the property to Number since Vue Router 4 will
@@ -255,10 +298,20 @@ export default {
         this.programmingLanguages.find(({ id }) => id === parseInt(programmingLanguageId, 10))?.name
       );
     },
+    namespacePath() {
+      const namespacePath = this.filters[FILTERED_SEARCH_TOKEN_NAMESPACE];
+      return Array.isArray(namespacePath) ? namespacePath[0] : namespacePath;
+    },
+    visibilityLevel() {
+      const visibilityLevel = this.filters[FILTERED_SEARCH_TOKEN_VISIBILITY_LEVEL];
+      return Array.isArray(visibilityLevel) ? visibilityLevel[0] : visibilityLevel;
+    },
     filtersAsQueryVariables() {
       return {
         programmingLanguageName: this.programmingLanguageName,
         minAccessLevel: this.minAccessLevel,
+        visibilityLevel: this.visibilityLevel,
+        namespacePath: this.namespacePath,
       };
     },
     timestampType() {
@@ -383,12 +436,16 @@ export default {
       this.getTabCounts();
     },
     async userPreferencesUpdateMutate(sort) {
+      if (this.userPreferencesSortKey === null) {
+        return;
+      }
+
       try {
         await this.$apollo.mutate({
           mutation: userPreferencesUpdateMutation,
           variables: {
             input: {
-              projectsSort: sort.toUpperCase(),
+              [this.userPreferencesSortKey]: sort.toUpperCase(),
             },
           },
         });
@@ -495,8 +552,9 @@ export default {
             size="sm"
             class="gl-tab-counter-badge"
             data-testid="tab-counter-badge"
-            >{{ tabCount(tab) }}</gl-badge
           >
+            {{ tabCount(tab) }}
+          </gl-badge>
         </div>
       </template>
 
@@ -532,6 +590,7 @@ export default {
           :filtered-search-term-key="filteredSearchTermKey"
           :filtered-search-recent-searches-storage-key="filteredSearchRecentSearchesStorageKey"
           :filtered-search-query="$route.query"
+          :search-input-placeholder="filteredSearchInputPlaceholder"
           :is-ascending="isAscending"
           :sort-options="sortOptions"
           :active-sort-option="activeSortOption"

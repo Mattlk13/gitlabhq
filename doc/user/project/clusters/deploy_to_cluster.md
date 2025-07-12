@@ -21,7 +21,7 @@ title: Deploy to a Kubernetes cluster with cluster certificates (deprecated)
 {{< alert type="warning" >}}
 
 This feature was [deprecated](https://gitlab.com/groups/gitlab-org/configure/-/epics/8) in GitLab 14.5.
-To connect your cluster to GitLab, use the [GitLab agent](../../clusters/agent/_index.md).
+To connect your cluster to GitLab, use the [GitLab agent for Kubernetes](../../clusters/agent/_index.md).
 To deploy with the agent, use the [CI/CD workflow](../../clusters/agent/ci_cd_workflow.md).
 
 {{< /alert >}}
@@ -101,7 +101,7 @@ an environment's deployment job. This includes `KUBECONFIG`, which gives access 
 any secret available to the associated service account in your cluster.
 To keep your production credentials safe, consider using
 [protected environments](../../../ci/environments/protected_environments.md),
-combined with *one* of the following:
+combined with one of the following:
 
 - A GitLab-managed cluster and namespace per environment.
 - An environment-scoped cluster per protected environment. The same cluster

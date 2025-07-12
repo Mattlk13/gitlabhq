@@ -247,12 +247,16 @@ Settings.gitlab['trusted_proxies'] ||= []
 Settings.gitlab['content_security_policy'] ||= {}
 Settings.gitlab['allowed_hosts'] ||= []
 Settings.gitlab['impersonation_enabled'] ||= true if Settings.gitlab['impersonation_enabled'].nil?
+Settings.gitlab['server_fqdn'] ||= Settings.__send__(:build_server_fqdn)
 Settings.gitlab['usage_ping_enabled'] = true if Settings.gitlab['usage_ping_enabled'].nil?
 Settings.gitlab['max_request_duration_seconds'] ||= 57
 Settings.gitlab['display_initial_root_password'] = false if Settings.gitlab['display_initial_root_password'].nil?
 Settings.gitlab['weak_passwords_digest_set'] ||= YAML.safe_load(File.open(Rails.root.join('config', 'weak_password_digests.yml')), permitted_classes: [String]).to_set.freeze
 Settings.gitlab['log_decompressed_response_bytesize'] = ENV["GITLAB_LOG_DECOMPRESSED_RESPONSE_BYTESIZE"].to_i > 0 ? ENV["GITLAB_LOG_DECOMPRESSED_RESPONSE_BYTESIZE"].to_i : 0
 Settings.gitlab['initial_gitlab_product_usage_data'] = true if Settings.gitlab['initial_gitlab_product_usage_data'].nil?
+
+Settings['ci_id_tokens'] ||= {}
+Settings.ci_id_tokens['issuer_url'] = Settings.gitlab.url if Settings.ci_id_tokens['issuer_url'].blank?
 
 Gitlab.ee do
   Settings.gitlab['mirror_max_delay'] ||= 300
@@ -279,7 +283,6 @@ Settings.gitlab_ci['shared_runners_enabled'] = true if Settings.gitlab_ci['share
 # If you are changing default storage paths, then you must change them in the gitlab-backup-cli gem as well
 Settings.gitlab_ci['builds_path']           = Settings.absolute(Settings.gitlab_ci['builds_path'] || "builds/")
 Settings.gitlab_ci['url']                 ||= Settings.__send__(:build_gitlab_ci_url)
-Settings.gitlab_ci['server_fqdn']         ||= Settings.__send__(:build_ci_server_fqdn)
 
 #
 # CI Secure Files
@@ -384,8 +387,8 @@ Settings.gitlab_docs['host'] = nil unless Settings.gitlab_docs.enabled
 #
 Gitlab.ee do
   Settings['geo'] ||= {}
-  # For backwards compatibility, default to gitlab_url and if so, ensure it ends with "/"
-  Settings.geo['node_name'] = Settings.geo['node_name'].presence || Settings.gitlab['url'].chomp('/').concat('/')
+  # For backwards compatibility, default to gitlab_url
+  Settings.geo['node_name'] = Settings.geo['node_name'].presence || Settings.gitlab['url']
 
   #
   # Registry replication
@@ -498,6 +501,9 @@ if Gitlab.ee? && Settings['ee_cron_jobs']
 end
 
 Settings.cron_jobs['poll_interval'] ||= ENV["GITLAB_CRON_JOBS_POLL_INTERVAL"] ? ENV["GITLAB_CRON_JOBS_POLL_INTERVAL"].to_i : nil
+Settings.cron_jobs['flush_stale_counter_increments_cron_worker'] ||= {}
+Settings.cron_jobs['flush_stale_counter_increments_cron_worker']['cron'] ||= '0 */1 * * *'
+Settings.cron_jobs['flush_stale_counter_increments_cron_worker']['job_class'] = 'Gitlab::Counters::FlushStaleCounterIncrementsCronWorker'
 Settings.cron_jobs['stuck_ci_jobs_worker'] ||= {}
 Settings.cron_jobs['stuck_ci_jobs_worker']['cron'] ||= '0 * * * *'
 Settings.cron_jobs['stuck_ci_jobs_worker']['job_class'] = 'StuckCiJobsWorker'
@@ -845,9 +851,6 @@ Gitlab.ee do
   Settings.cron_jobs['ldap_admin_sync_worker'] ||= {}
   Settings.cron_jobs['ldap_admin_sync_worker']['cron'] ||= '0 * * * *'
   Settings.cron_jobs['ldap_admin_sync_worker']['job_class'] = 'Authz::LdapAdminRoleWorker'
-  Settings.cron_jobs['queue_refresh_of_broken_adherence_groups_worker'] ||= {}
-  Settings.cron_jobs['queue_refresh_of_broken_adherence_groups_worker']['cron'] ||= '*/20 * * * *'
-  Settings.cron_jobs['queue_refresh_of_broken_adherence_groups_worker']['job_class'] = 'ComplianceManagement::QueueRefreshOfBrokenAdherenceGroupsWorker'
   Settings.cron_jobs['elastic_index_bulk_cron_worker'] ||= {}
   Settings.cron_jobs['elastic_index_bulk_cron_worker']['cron'] ||= '*/1 * * * *'
   Settings.cron_jobs['elastic_index_bulk_cron_worker']['job_class'] ||= 'ElasticIndexBulkCronWorker'
@@ -929,6 +932,9 @@ Gitlab.ee do
   Settings.cron_jobs['security_pipeline_execution_policies_schedule_worker'] ||= {}
   Settings.cron_jobs['security_pipeline_execution_policies_schedule_worker']['cron'] ||= '* * * * *'
   Settings.cron_jobs['security_pipeline_execution_policies_schedule_worker']['job_class'] = 'Security::PipelineExecutionPolicies::ScheduleWorker'
+  Settings.cron_jobs['users_security_policy_bot_cleanup_cron_worker'] ||= {}
+  Settings.cron_jobs['users_security_policy_bot_cleanup_cron_worker']['cron'] ||= '0 * * * *'
+  Settings.cron_jobs['users_security_policy_bot_cleanup_cron_worker']['job_class'] = 'Users::SecurityPolicyBotCleanupCronWorker'
   Settings.cron_jobs['security_scans_purge_worker'] ||= {}
   Settings.cron_jobs['security_scans_purge_worker']['cron'] ||= '0 */4 * * 6,0'
   Settings.cron_jobs['security_scans_purge_worker']['job_class'] = 'Security::Scans::PurgeWorker'
@@ -984,6 +990,9 @@ Gitlab.ee do
   Settings.cron_jobs['click_house_user_add_on_assignments_sync_worker'] ||= {}
   Settings.cron_jobs['click_house_user_add_on_assignments_sync_worker']['cron'] = "*/3 * * * *"
   Settings.cron_jobs['click_house_user_add_on_assignments_sync_worker']['job_class'] = 'ClickHouse::UserAddOnAssignmentsSyncWorker'
+  Settings.cron_jobs['click_house_user_addon_assignment_versions_sync'] ||= {}
+  Settings.cron_jobs['click_house_user_addon_assignment_versions_sync']['cron'] = "*/3 * * * *"
+  Settings.cron_jobs['click_house_user_addon_assignment_versions_sync']['job_class'] = 'ClickHouse::UserAddonAssignmentVersionsSyncWorker'
   Settings.cron_jobs['click_house_event_authors_consistency_cron_worker'] ||= {}
   Settings.cron_jobs['click_house_event_authors_consistency_cron_worker']['cron'] ||= "*/30 * * * *"
   Settings.cron_jobs['click_house_event_authors_consistency_cron_worker']['job_class'] = 'ClickHouse::EventAuthorsConsistencyCronWorker'
@@ -1026,6 +1035,9 @@ Gitlab.ee do
   Settings.cron_jobs['ai_active_context_bulk_process_worker'] ||= {}
   Settings.cron_jobs['ai_active_context_bulk_process_worker']['cron'] ||= '*/1 * * * *'
   Settings.cron_jobs['ai_active_context_bulk_process_worker']['job_class'] ||= 'Ai::ActiveContext::BulkProcessWorker'
+  Settings.cron_jobs['ai_active_context_code_scheduling_worker'] ||= {}
+  Settings.cron_jobs['ai_active_context_code_scheduling_worker']['cron'] ||= '*/1 * * * *'
+  Settings.cron_jobs['ai_active_context_code_scheduling_worker']['job_class'] ||= 'Ai::ActiveContext::Code::SchedulingWorker'
   Settings.cron_jobs['ai_active_context_migration_worker'] ||= {}
   Settings.cron_jobs['ai_active_context_migration_worker']['cron'] ||= '*/5 * * * *'
   Settings.cron_jobs['ai_active_context_migration_worker']['job_class'] ||= 'Ai::ActiveContext::MigrationWorker'
@@ -1128,10 +1140,12 @@ Settings.cell.database['skip_sequence_alteration'] ||= false
 # NOTE: `topology_service_client` is the configuration to use going forward as per https://docs.gitlab.com/administration/cells/#configuration
 #   We continue to be backwards compatible and support `topology_service` as a top-level key.
 Settings.cell['topology_service_client'] ||= Settings.respond_to?(:topology_service) ? Settings.topology_service || {} : {}
-Settings.cell.topology_service_client['address'] ||= 'topology-service.gitlab.example.com:443'
-Settings.cell.topology_service_client['ca_file'] ||= '/home/git/gitlab/config/topology-service-ca.pem'
-Settings.cell.topology_service_client['certificate_file'] ||= '/home/git/gitlab/config/topology-service-cert.pem'
-Settings.cell.topology_service_client['private_key_file'] ||= '/home/git/gitlab/config/topology-service-key.pem'
+Settings.cell.topology_service_client['address'] ||= 'topology-service.example.com:443'
+Settings.cell.topology_service_client['ca_file'] ||= nil
+Settings.cell.topology_service_client['certificate_file'] ||= nil
+Settings.cell.topology_service_client['private_key_file'] ||= nil
+Settings.cell.topology_service_client['tls'] ||= {}
+Settings.cell.topology_service_client['tls']['enabled'] = true if Settings.cell.topology_service_client['tls']['enabled'].nil?
 
 #
 # GitLab KAS

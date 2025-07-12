@@ -39,6 +39,7 @@ describe('YourWorkGroupsApp', () => {
       filteredSearchTermKey: FILTERED_SEARCH_TERM_KEY,
       filteredSearchNamespace: FILTERED_SEARCH_NAMESPACE,
       filteredSearchRecentSearchesStorageKey: RECENT_SEARCHES_STORAGE_KEY_GROUPS,
+      filteredSearchInputPlaceholder: 'Search',
       sortOptions: SORT_OPTIONS,
       defaultSortOption: SORT_OPTION_UPDATED,
       timestampTypeMap: {
@@ -53,6 +54,7 @@ describe('YourWorkGroupsApp', () => {
       tabCountsQueryErrorMessage: 'An error occurred loading the group counts.',
       shouldUpdateActiveTabCountFromTabQuery: false,
       paginationType: PAGINATION_TYPE_OFFSET,
+      userPreferencesSortKey: null,
     });
   });
 });

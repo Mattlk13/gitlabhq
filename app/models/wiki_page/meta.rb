@@ -5,6 +5,7 @@ class WikiPage
     include Gitlab::Utils::StrongMemoize
     include Mentionable
     include Noteable
+    include Subscribable
     include Todoable
 
     self.table_name = 'wiki_page_meta'
@@ -28,7 +29,7 @@ class WikiPage
     scope :with_canonical_slug, ->(slug) do
       slug_table_name = klass.reflect_on_association(:slugs).table_name
 
-      joins(:slugs).where(slug_table_name => { canonical: true, slug: slug }).order(created_at: :asc)
+      joins(:slugs).where(slug_table_name => { canonical: true, slug: slug })
     end
     scope :for_project, ->(project) do
       where(project: project)
@@ -76,6 +77,13 @@ class WikiPage
           .limit(2)
 
         if conflict.present?
+          # Ensure the conflict record will be the orphaned record when doing a page update
+          if canonical_slug.size > 1
+            old_slug, _new_slug = canonical_slug
+
+            meta, conflict = conflict, meta if conflict.canonical_slug == old_slug
+          end
+
           transaction(requires_new: false) do
             conflict.todos.each_batch do |batch|
               batch.update_all(target_id: meta.id)
@@ -233,7 +241,7 @@ class WikiPage
       return unless container_id.present? && canonical_slug.present?
 
       offending = self.class.with_canonical_slug(canonical_slug).where(container_key => container_id)
-      offending = offending.where.not(id: id) if persisted?
+      offending = offending.id_not_in(id) if persisted?
 
       return unless offending.exists?
 

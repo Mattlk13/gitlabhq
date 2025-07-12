@@ -13,6 +13,7 @@ module Clusters
 
     DEFAULT_ENVIRONMENT = '*'
     KUBE_INGRESS_BASE_DOMAIN = 'KUBE_INGRESS_BASE_DOMAIN'
+    MAX_ENVIRONMENT_SCOPE_LENGTH = 255
 
     self.reactive_cache_work_type = :external_dependency
 
@@ -52,7 +53,7 @@ module Clusters
     accepts_nested_attributes_for :platform_kubernetes, update_only: true
 
     validates :name, cluster_name: true
-    validates :environment_scope, length: 1..255, if: :environment_scope_changed?
+    validates :environment_scope, length: 1..MAX_ENVIRONMENT_SCOPE_LENGTH, if: :environment_scope_changed?
     validates :cluster_type, presence: true
     validates :domain, allow_blank: true, hostname: { allow_numeric_hostname: true }
     validates :namespace_per_environment, inclusion: { in: [true, false] }
@@ -72,7 +73,6 @@ module Clusters
     delegate :status_reason, to: :provider, allow_nil: true
 
     alias_attribute :base_domain, :domain
-    alias_attribute :provided_by_user?, :user?
 
     enum :cluster_type, {
       instance_type: 1,
@@ -89,6 +89,7 @@ module Clusters
       gcp: 1,
       aws: 2
     }
+    alias_method :provided_by_user?, :user?
 
     scope :enabled, -> { where(enabled: true) }
     scope :disabled, -> { where(enabled: false) }
@@ -325,13 +326,13 @@ module Clusters
 
       duplicate_management_clusters = management_project.management_clusters
         .where(environment_scope: environment_scope)
-        .where.not(id: id)
+        .id_not_in(id)
 
       errors.add(:environment_scope, 'cannot add duplicated environment scope') if duplicate_management_clusters.any?
     end
 
     def unique_environment_scope
-      if clusterable.present? && clusterable.clusters.where(environment_scope: environment_scope).where.not(id: id).exists?
+      if clusterable.present? && clusterable.clusters.where(environment_scope: environment_scope).id_not_in(id).exists?
         errors.add(:environment_scope, 'cannot add duplicated environment scope')
       end
     end

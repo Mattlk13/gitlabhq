@@ -125,7 +125,7 @@ class Issue < ApplicationRecord
     inverse_of: :work_item,
     autosave: true
 
-  alias_attribute :escalation_status, :incident_management_issuable_escalation_status
+  alias_method :escalation_status, :incident_management_issuable_escalation_status
 
   accepts_nested_attributes_for :issuable_severity, update_only: true
   accepts_nested_attributes_for :sentry_issue
@@ -336,6 +336,13 @@ class Issue < ApplicationRecord
       where('issues.namespace_id IN (SELECT id FROM namespace_ids)').with(cte.to_arel)
     end
 
+    def with_accessible_sub_namespace_ids_cte(namespace_ids)
+      # Using materialized: true to ensure the CTE is computed once and reused, which significantly improves performance
+      # for complex queries. See: https://gitlab.com/gitlab-org/gitlab/-/issues/548094
+      accessible_sub_namespace_ids = Gitlab::SQL::CTE.new(:accessible_sub_namespace_ids, namespace_ids, materialized: true)
+      with(accessible_sub_namespace_ids.to_arel)
+    end
+
     override :order_upvotes_desc
     def order_upvotes_desc
       reorder(upvotes_count: :desc)
@@ -412,11 +419,7 @@ class Issue < ApplicationRecord
   end
 
   def self.alternative_reference_prefix_with_postfix
-    if Feature.enabled?(:extensible_reference_filters, Feature.current_request)
-      '[issue:'
-    else
-      ''
-    end
+    '[issue:'
   end
 
   def self.reference_postfix

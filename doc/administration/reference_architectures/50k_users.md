@@ -26,7 +26,6 @@ specifically the [Before you start](_index.md#before-you-start) and [Deciding wh
 
 > - **Target load**: API: 1000 RPS, Web: 100 RPS, Git (Pull): 100 RPS, Git (Push): 20 RPS
 > - **High Availability**: Yes ([Praefect](#configure-praefect-postgresql) needs a third-party PostgreSQL solution for HA)
-> - **Cost calculator template**: [See cost calculator templates section](_index.md#cost-calculator-templates)
 > - **Cloud Native Hybrid Alternative**: [Yes](#cloud-native-hybrid-reference-architecture-with-helm-charts-alternative)
 > - **Unsure which Reference Architecture to use?** [Go to this guide for more info](_index.md#deciding-which-architecture-to-start-with)
 
@@ -58,9 +57,9 @@ specifically the [Before you start](_index.md#before-you-start) and [Deciding wh
 4. Can be optionally run on reputable third-party load balancing services (LB PaaS). See [Recommended cloud providers and services](_index.md#recommended-cloud-providers-and-services) for more information.
 5. Should be run on reputable Cloud Provider or Self Managed solutions. See [Configure the object storage](#configure-the-object-storage) for more information.
 6. Gitaly Cluster provides the benefits of fault tolerance, but comes with additional complexity of setup and management.
-   Review the existing [technical limitations and considerations before deploying Gitaly Cluster](../gitaly/_index.md#before-deploying-gitaly-cluster). If you want sharded Gitaly, use the same specs listed above for `Gitaly`.
+   Review the existing [technical limitations and considerations before deploying Gitaly Cluster](../gitaly/praefect/_index.md#before-deploying-gitaly-cluster). If you want sharded Gitaly, use the same specs listed in the previous table for `Gitaly`.
 7. Gitaly specifications are based on high percentiles of both usage patterns and repository sizes in good health.
-   However, if you have [large monorepos](_index.md#large-monorepos) (larger than several gigabytes) or [additional workloads](_index.md#additional-workloads) these can *significantly* impact Git and Gitaly performance and further adjustments will likely be required.
+   However, if you have [large monorepos](_index.md#large-monorepos) (larger than several gigabytes) or [additional workloads](_index.md#additional-workloads) these can significantly impact Git and Gitaly performance and further adjustments will likely be required.
 8. Can be placed in Auto Scaling Groups (ASGs) as the component doesn't store any [stateful data](_index.md#autoscaling-of-stateful-nodes).
    However, [Cloud Native Hybrid setups](#cloud-native-hybrid-reference-architecture-with-helm-charts-alternative) are generally preferred as certain components
    such as like [migrations](#gitlab-rails-post-configuration) and [Mailroom](../incoming_email.md) can only be run on one node, which is handled better in Kubernetes.
@@ -328,7 +327,7 @@ GitLab Pages requires a separate virtual IP address. Configure DNS to point the
 Some organizations have policies against opening SSH port 22. In this case,
 it may be helpful to configure an alternate SSH hostname that allows users
 to use SSH on port 443. An alternate SSH hostname will require a new virtual IP address
-compared to the other GitLab HTTP configuration above.
+compared to the other GitLab HTTP configuration documented previously.
 
 Configure DNS for an alternate SSH hostname such as `altssh.gitlab.example.com`.
 
@@ -345,7 +344,7 @@ There are several different options:
 - [The load balancer terminates SSL without backend SSL](#load-balancer-terminates-ssl-without-backend-ssl)
   and communication is not secure between the load balancer and the application node.
 - [The load balancer terminates SSL with backend SSL](#load-balancer-terminates-ssl-with-backend-ssl)
-  and communication is *secure* between the load balancer and the application node.
+  and communication is secure between the load balancer and the application node.
 
 #### Application node terminates SSL
 
@@ -474,9 +473,9 @@ The following IPs will be used as an example:
 To configure Consul:
 
 1. SSH in to the server that will host Consul.
-1. [Download and install](https://about.gitlab.com/install/) the Linux
-   package of your choice. Be sure to follow _only_ installation steps 1 and 2
-   on the page, and to select the correct Linux package, with the same version
+1. [Download and install](../../install/package/_index.md#supported-platforms) the Linux
+   package of your choice. Be sure to only add the GitLab package repository and install GitLab
+   for your chosen operating system. Select the same version
    and type (Community or Enterprise editions) as your current install.
 1. Edit `/etc/gitlab/gitlab.rb` and add the contents:
 
@@ -508,7 +507,7 @@ To configure Consul:
 1. Go through the steps again for all the other Consul nodes, and
    make sure you set up the correct IPs.
 
-A Consul leader is _elected_ when the provisioning of the third Consul server is
+A Consul leader is elected when the provisioning of the third Consul server is
 complete. Viewing the Consul logs `sudo gitlab-ctl tail consul` displays
 `...[INFO] consul: New leader elected: ...`.
 
@@ -584,11 +583,10 @@ The following IPs will be used as an example:
 - `10.6.0.22`: PostgreSQL secondary 1
 - `10.6.0.23`: PostgreSQL secondary 2
 
-First, make sure to [install](https://about.gitlab.com/install/)
-the Linux GitLab package **on each node**. Following the steps,
-install the necessary dependencies from step 1, and add the
-GitLab package repository from step 2. When installing GitLab
-in the second step, do not supply the `EXTERNAL_URL` value.
+First, make sure to [install](../../install/package/_index.md#supported-platforms)
+the Linux package **on each node**. Be sure to only add the GitLab
+package repository and install GitLab for your chosen operating system,
+but do **not** provide the `EXTERNAL_URL` value.
 
 #### PostgreSQL nodes
 
@@ -913,9 +911,9 @@ a node and change its status from primary to replica (and vice versa).
 #### Configure the primary Redis Cache node
 
 1. SSH in to the **Primary** Redis server.
-1. [Download and install](https://about.gitlab.com/install/) the Linux
-   package of your choice. Be sure to both follow _only_ installation steps 1 and 2
-   on the page, and to select the correct Linux package, with the same version
+1. [Download and install](../../install/package/_index.md#supported-platforms) the Linux
+   package of your choice. Be sure to only add the GitLab package repository and install GitLab
+   for your chosen operating system. Select the same version
    and type (Community or Enterprise editions) as your current install.
 1. Edit `/etc/gitlab/gitlab.rb` and add the contents:
 
@@ -986,9 +984,9 @@ a node and change its status from primary to replica (and vice versa).
 #### Configure the replica Redis Cache nodes
 
 1. SSH in to the **replica** Redis server.
-1. [Download and install](https://about.gitlab.com/install/) the Linux
-   package of your choice. Be sure to both follow _only_ installation steps 1 and 2
-   on the page, and to select the correct Linux package, with the same version
+1. [Download and install](../../install/package/_index.md#supported-platforms) the Linux
+   package of your choice. Be sure to only add the GitLab package repository and install GitLab
+   for your chosen operating system. Select the same version
    and type (Community or Enterprise editions) as your current install.
 1. Edit `/etc/gitlab/gitlab.rb` and add the same contents as the primary node in the previous section by replacing `redis_master_node` with `redis_replica_node`:
 
@@ -1081,9 +1079,9 @@ a node and change its status from primary to replica (and vice versa).
 #### Configure the primary Redis Persistent node
 
 1. SSH in to the **Primary** Redis server.
-1. [Download and install](https://about.gitlab.com/install/) the Linux
-   package of your choice. Be sure to both follow _only_ installation steps 1 and 2
-   on the page, and to select the correct Linux package, with the same version
+1. [Download and install](../../install/package/_index.md#supported-platforms) the Linux
+   package of your choice. Be sure to only add the GitLab package repository and install GitLab
+   for your chosen operating system. Select the same version
    and type (Community or Enterprise editions) as your current install.
 1. Edit `/etc/gitlab/gitlab.rb` and add the contents:
 
@@ -1144,9 +1142,9 @@ a node and change its status from primary to replica (and vice versa).
 #### Configure the replica Redis Persistent nodes
 
 1. SSH in to the **replica** Redis Persistent server.
-1. [Download and install](https://about.gitlab.com/install/) the Linux
-   package of your choice. Be sure to both follow _only_ installation steps 1 and 2
-   on the page, and to select the correct Linux package, with the same version
+1. [Download and install](../../install/package/_index.md#supported-platforms) the Linux
+   package of your choice. Be sure to only add the GitLab package repository and install GitLab
+   for your chosen operating system. Select the same version
    and type (Community or Enterprise editions) as your current install.
 1. Edit `/etc/gitlab/gitlab.rb` and add the contents:
 
@@ -1217,27 +1215,27 @@ Advanced [configuration options](https://docs.gitlab.com/omnibus/settings/redis.
 
 ## Configure Gitaly Cluster
 
-[Gitaly Cluster](../gitaly/praefect.md) is a GitLab-provided and recommended fault tolerant solution for storing Git
+[Gitaly Cluster](../gitaly/praefect/_index.md) is a GitLab-provided and recommended fault tolerant solution for storing Git
 repositories. In this configuration, every Git repository is stored on every Gitaly node in the cluster, with one being
 designated the primary, and failover occurs automatically if the primary node goes down.
 
 {{< alert type="warning" >}}
 
 **Gitaly specifications are based on high percentiles of both usage patterns and repository sizes in good health**.
-**However, if you have [large monorepos](_index.md#large-monorepos) (larger than several gigabytes) or [additional workloads](_index.md#additional-workloads) these can *significantly* impact the performance of the environment and further adjustments may be required**.
+**However, if you have [large monorepos](_index.md#large-monorepos) (larger than several gigabytes) or [additional workloads](_index.md#additional-workloads) these can significantly impact the performance of the environment and further adjustments may be required**.
 If you believe this applies to you, contact us for additional guidance as required.
 
 {{< /alert >}}
 
 Gitaly Cluster provides the benefits of fault tolerance, but comes with additional complexity of setup and management.
-Review the existing [technical limitations and considerations before deploying Gitaly Cluster](../gitaly/_index.md#before-deploying-gitaly-cluster).
+Review the existing [technical limitations and considerations before deploying Gitaly Cluster](../gitaly/praefect/_index.md#before-deploying-gitaly-cluster).
 
 For guidance on:
 
 - Implementing sharded Gitaly instead, follow the [separate Gitaly documentation](../gitaly/configure_gitaly.md)
   instead of this section. Use the same Gitaly specs.
 - Migrating existing repositories that aren't managed by Gitaly Cluster, see
-  [migrate to Gitaly Cluster](../gitaly/_index.md#migrate-to-gitaly-cluster).
+  [migrate to Gitaly Cluster](../gitaly/praefect/_index.md#migrate-to-gitaly-cluster).
 
 The recommended cluster setup includes the following components:
 
@@ -1249,7 +1247,7 @@ The recommended cluster setup includes the following components:
   [internal load balancer](#configure-the-internal-load-balancer) is used.
 
 This section details how to configure the recommended standard setup in order.
-For more advanced setups refer to the [standalone Gitaly Cluster documentation](../gitaly/praefect.md).
+For more advanced setups refer to the [standalone Gitaly Cluster documentation](../gitaly/praefect/_index.md).
 
 ### Configure Praefect PostgreSQL
 
@@ -1264,11 +1262,10 @@ The following IPs will be used as an example:
 
 - `10.6.0.141`: Praefect PostgreSQL
 
-First, make sure to [install](https://about.gitlab.com/install/)
-the Linux GitLab package in the Praefect PostgreSQL node. Following the steps,
-install the necessary dependencies from step 1, and add the
-GitLab package repository from step 2. When installing GitLab
-in the second step, do not supply the `EXTERNAL_URL` value.
+First, make sure to [install](../../install/package/_index.md#supported-platforms)
+the Linux package on the Praefect PostgreSQL node. Be sure to only add the GitLab
+package repository and install GitLab for your chosen operating system,
+but do **not** provide the `EXTERNAL_URL` value.
 
 1. SSH in to the Praefect PostgreSQL node.
 1. Create a strong password to be used for the Praefect PostgreSQL user. Take note of this password as `<praefect_postgresql_password>`.
@@ -1356,8 +1353,6 @@ A reputable provider or solution should be used for this. [Google Cloud SQL](htt
 and [Amazon RDS](https://aws.amazon.com/rds/) are known to work. However, Amazon Aurora is **incompatible** with load balancing enabled by default from
 [14.4.0](https://archives.docs.gitlab.com/17.3/ee/update/versions/gitlab_14_changes/#1440).
 
-Examples of the above could include [Google's Cloud SQL](https://cloud.google.com/sql/docs/postgres/high-availability#normal) or [Amazon RDS](https://aws.amazon.com/rds/).
-
 Once the database is set up, follow the [post configuration](#praefect-postgresql-post-configuration).
 
 #### Praefect PostgreSQL post-configuration
@@ -1424,7 +1419,7 @@ the details of each Gitaly node that makes up the cluster. Each storage is also 
 and this name is used in several areas of the configuration. In this guide, the name of the storage will be
 `default`. Also, this guide is geared towards new installs, if upgrading an existing environment
 to use Gitaly Cluster, you might have to use a different name.
-Refer to the [Praefect documentation](../gitaly/praefect.md#praefect) for more information.
+Refer to the [Praefect documentation](../gitaly/praefect/_index.md#praefect) for more information.
 
 The following IPs will be used as an example:
 
@@ -1435,9 +1430,9 @@ The following IPs will be used as an example:
 To configure the Praefect nodes, on each one:
 
 1. SSH in to the Praefect server.
-1. [Download and install](https://about.gitlab.com/install/) the Linux
-   package of your choice. Be sure to follow _only_ installation steps 1 and 2
-   on the page.
+1. [Download and install](../../install/package/_index.md#supported-platforms) the Linux
+   package of your choice. Be sure to only add the GitLab package repository and install GitLab
+   for your chosen operating system.
 1. Edit the `/etc/gitlab/gitlab.rb` file to configure Praefect:
 
    {{< alert type="note" >}}
@@ -1448,7 +1443,7 @@ To configure the Praefect nodes, on each one:
 
    <!--
    Updates to example must be made at:
-   - https://gitlab.com/gitlab-org/gitlab/-/blob/master/doc/administration/gitaly/praefect.md
+   - https://gitlab.com/gitlab-org/gitlab/-/blob/master/doc/administration/gitaly/praefect/_index.md
    - all reference architecture pages
    -->
 
@@ -1571,17 +1566,12 @@ requirements that are dependent on data and load.
 {{< alert type="warning" >}}
 
 **Gitaly specifications are based on high percentiles of both usage patterns and repository sizes in good health**.
-**However, if you have [large monorepos](_index.md#large-monorepos) (larger than several gigabytes) or [additional workloads](_index.md#additional-workloads) these can *significantly* impact the performance of the environment and further adjustments may be required**.
+**However, if you have [large monorepos](_index.md#large-monorepos) (larger than several gigabytes) or [additional workloads](_index.md#additional-workloads) these can significantly impact the performance of the environment and further adjustments may be required**.
 If you believe this applies to you, contact us for additional guidance as required.
 
 {{< /alert >}}
 
-Due to Gitaly having notable input and output requirements, we strongly
-recommend that all Gitaly nodes use solid-state drives (SSDs). These SSDs
-should have a throughput of at least 8,000
-input/output operations per second (IOPS) for read operations and 2,000 IOPS for
-write operations. If you're running the environment on a Cloud provider,
-refer to their documentation about how to configure IOPS correctly.
+Gitaly has certain [disk requirements](../gitaly/_index.md#disk-requirements) for Gitaly storages.
 
 Gitaly servers must not be exposed to the public internet because network traffic
 on Gitaly is unencrypted by default. The use of a firewall is highly recommended
@@ -1601,9 +1591,10 @@ The following IPs will be used as an example:
 
 On each node:
 
-1. [Download and install](https://about.gitlab.com/install/) the Linux
-   package of your choice. Be sure to follow _only_ installation steps 1 and 2
-   on the page, and _do not_ provide the `EXTERNAL_URL` value.
+1. [Download and install](../../install/package/_index.md#supported-platforms) the Linux
+   package of your choice. Be sure to only add the GitLab
+   package repository and install GitLab for your chosen operating system,
+   but do **not** provide the `EXTERNAL_URL` value.
 1. Edit the Gitaly server node's `/etc/gitlab/gitlab.rb` file to configure
    storage paths, enable the network listener, and to configure the token:
 
@@ -1853,9 +1844,9 @@ To configure the Sidekiq nodes, on each one:
    telnet <GitLab host> 6379 # Redis
    ```
 
-1. [Download and install](https://about.gitlab.com/install/) the Linux
-   package of your choice. Be sure to follow _only_ installation steps 1 and 2
-   on the page.
+1. [Download and install](../../install/package/_index.md#supported-platforms) the Linux
+   package of your choice. Be sure to only add the GitLab package repository and install GitLab
+   for your chosen operating system.
 1. Create or edit `/etc/gitlab/gitlab.rb` and use the following configuration:
 
    ```ruby
@@ -2016,9 +2007,9 @@ The following IPs will be used as an example:
 
 On each node perform the following:
 
-1. [Download and install](https://about.gitlab.com/install/) the Linux
-   package of your choice. Be sure to follow _only_ installation steps 1 and 2
-   on the page.
+1. [Download and install](../../install/package/_index.md#supported-platforms) the Linux
+   package of your choice. Be sure to only add the GitLab package repository and install GitLab
+   for your chosen operating system.
 
 1. Edit `/etc/gitlab/gitlab.rb` and use the following configuration.
    To maintain uniformity of links across nodes, the `external_url`
@@ -2208,9 +2199,9 @@ The following IP will be used as an example:
 To configure the Monitoring node:
 
 1. SSH in to the Monitoring node.
-1. [Download and install](https://about.gitlab.com/install/) the Linux
-   package of your choice. Be sure to follow _only_ installation steps 1 and 2
-   on the page.
+1. [Download and install](../../install/package/_index.md#supported-platforms) the Linux
+   package of your choice. Be sure to only add the GitLab package repository and install GitLab
+   for your chosen operating system.
 
 1. Edit `/etc/gitlab/gitlab.rb` and add the contents:
 
@@ -2326,8 +2317,8 @@ The following services are supported:
 - Prometheus
 
 Hybrid installations leverage the benefits of both cloud native and traditional
-compute deployments. With this, _stateless_ components can benefit from cloud native
-workload management benefits while _stateful_ components are deployed in compute VMs
+compute deployments. With this, stateless components can benefit from cloud native
+workload management benefits while stateful components are deployed in compute VMs
 with Linux package installations to benefit from increased permanence.
 
 Refer to the Helm charts [Advanced configuration](https://docs.gitlab.com/charts/advanced/)
@@ -2353,7 +2344,7 @@ Refer to [epic 6127](https://gitlab.com/groups/gitlab-org/-/epics/6127) for more
 ### Cluster topology
 
 The following tables and diagram detail the hybrid environment using the same formats
-as the typical environment above.
+as the typical environment documented previously.
 
 First are the components that run in Kubernetes. These run across several node groups, although you can change
 the overall makeup as desired as long as the minimum CPU and Memory requirements are observed.
@@ -2398,9 +2389,9 @@ services where applicable):
 4. Can be optionally run on reputable third-party load balancing services (LB PaaS). See [Recommended cloud providers and services](_index.md#recommended-cloud-providers-and-services) for more information.
 5. Should be run on reputable Cloud Provider or Self Managed solutions. See [Configure the object storage](#configure-the-object-storage) for more information.
 6. Gitaly Cluster provides the benefits of fault tolerance, but comes with additional complexity of setup and management.
-   Review the existing [technical limitations and considerations before deploying Gitaly Cluster](../gitaly/_index.md#before-deploying-gitaly-cluster). If you want sharded Gitaly, use the same specs listed above for `Gitaly`.
+   Review the existing [technical limitations and considerations before deploying Gitaly Cluster](../gitaly/praefect/_index.md#before-deploying-gitaly-cluster). If you want sharded Gitaly, use the same specs listed in the previous table for `Gitaly`.
 7. Gitaly specifications are based on high percentiles of both usage patterns and repository sizes in good health.
-   However, if you have [large monorepos](_index.md#large-monorepos) (larger than several gigabytes) or [additional workloads](_index.md#additional-workloads) these can *significantly* impact Git and Gitaly performance and further adjustments will likely be required.
+   However, if you have [large monorepos](_index.md#large-monorepos) (larger than several gigabytes) or [additional workloads](_index.md#additional-workloads) these can significantly impact Git and Gitaly performance and further adjustments will likely be required.
 <!-- markdownlint-enable MD029 -->
 
 {{< alert type="note" >}}
@@ -2512,7 +2503,7 @@ Each Sidekiq pod is recommended to be run with the following configuration:
 - 2 GB memory (request)
 - 4 GB memory (limit)
 
-Similar to the standard deployment above, an initial target of 14 Sidekiq workers has been used here.
+Similar to the standard deployment documented previously, an initial target of 14 Sidekiq workers has been used here.
 Additional workers may be required depending on your specific workflow.
 
 For further information on Sidekiq resource usage, see the Charts documentation on [Sidekiq resources](https://docs.gitlab.com/charts/charts/gitlab/sidekiq/#resources).
@@ -2530,7 +2521,7 @@ pool as given, you can increase the node pool accordingly. Conversely, if the po
 
 ### Example config file
 
-An example for the GitLab Helm Charts targeting the above 1000 RPS or 50,000 reference architecture configuration [can be found in the Charts project](https://gitlab.com/gitlab-org/charts/gitlab/-/blob/master/examples/ref/50k.yaml).
+An example for the GitLab Helm Charts targeting the 1000 RPS or 50,000 users reference architecture configuration [can be found in the Charts project](https://gitlab.com/gitlab-org/charts/gitlab/-/blob/master/examples/ref/50k.yaml).
 
 <div align="right">
   <a type="button" class="btn btn-default" href="#set-up-components">

@@ -519,48 +519,7 @@ RSpec.describe Projects::DestroyService, :aggregate_failures, :event_store_publi
 
       subject { destroy_project(project, user) }
 
-      context 'when there are immutable tag protection rules' do
-        before_all do
-          create(:container_registry_protection_tag_rule,
-            :immutable,
-            project: project,
-            tag_name_pattern: 'immutable'
-          )
-
-          project.add_owner(user)
-          project.container_repositories << create(:container_repository)
-        end
-
-        context 'when there are registry tags' do
-          before do
-            stub_container_registry_tags(repository: project.full_path, tags: ['tag'])
-            allow_any_instance_of(described_class)
-              .to receive(:remove_legacy_registry_tags).and_return(true)
-          end
-
-          it { is_expected.to be false }
-
-          context 'when the current user is an admin', :enable_admin_mode do
-            let(:user) { build_stubbed(:admin) }
-
-            it { is_expected.to be false }
-          end
-
-          context 'when the feature `container_registry_immutable_tags` is disabled' do
-            before do
-              stub_feature_flags(container_registry_immutable_tags: false)
-            end
-
-            it { is_expected.to be true }
-          end
-        end
-
-        context 'when there are no registry tags' do
-          it { is_expected.to be true }
-        end
-      end
-
-      context 'when there are mutable tag protection rules only' do
+      context 'when there are tag protection rules' do
         before_all do
           create(:container_registry_protection_tag_rule,
             project: project,
@@ -1044,13 +1003,13 @@ RSpec.describe Projects::DestroyService, :aggregate_failures, :event_store_publi
       before do
         orphaned_job_artifact.connection.transaction do
           orphaned_job_artifact.connection.execute(<<~SQL)
-            ALTER TABLE p_ci_job_artifacts DISABLE TRIGGER ALL;
+            SET session_replication_role = 'replica';
           SQL
 
           orphaned_job_artifact.update_column(:job_id, non_existing_record_id)
 
           orphaned_job_artifact.connection.execute(<<~SQL)
-            ALTER TABLE p_ci_job_artifacts ENABLE TRIGGER ALL;
+            SET session_replication_role = 'origin';
           SQL
         end
       end

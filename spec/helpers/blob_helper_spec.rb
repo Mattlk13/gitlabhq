@@ -398,8 +398,10 @@ RSpec.describe BlobHelper, feature_category: :source_code_management do
     let(:project) { create(:project) }
     let(:user) { build_stubbed(:user) }
     let(:ref) { 'main' }
+    let(:organization) { build_stubbed(:organization) }
 
     before do
+      Current.organization = organization
       allow(helper).to receive_messages(selected_branch: ref, current_user: user)
     end
 
@@ -413,7 +415,9 @@ RSpec.describe BlobHelper, feature_category: :source_code_management do
         user_id: user.to_global_id,
         target_branch: ref,
         original_branch: ref,
-        can_download_code: 'false'
+        escaped_ref: ActionDispatch::Journey::Router::Utils.escape_path(ref),
+        can_download_code: 'false',
+        full_name: project.name_with_namespace
       })
     end
 
@@ -434,7 +438,8 @@ RSpec.describe BlobHelper, feature_category: :source_code_management do
   end
 
   describe '#edit_blob_app_data' do
-    let(:project) { build_stubbed(:project) }
+    let(:project_namespace) { build_stubbed(:project_namespace) }
+    let(:project) { build_stubbed(:project, project_namespace: project_namespace) }
     let(:user) { build_stubbed(:user) }
     let(:blob) { fake_blob(path: 'test.rb', size: 100.bytes) }
     let(:ref) { 'main' }
@@ -585,8 +590,10 @@ RSpec.describe BlobHelper, feature_category: :source_code_management do
     let(:ref) { 'feature' }
     let(:ref_type) { :branch }
     let(:breadcrumb_data) { { title: 'README.md', 'is-last': true } }
+    let(:organization) { build_stubbed(:organization) }
 
     before do
+      Current.organization = organization
       assign(:project, project)
       assign(:ref, ref)
       assign(:ref_type, ref_type)

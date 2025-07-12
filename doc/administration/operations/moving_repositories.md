@@ -32,7 +32,7 @@ For more information, see:
   querying and scheduling snippet repository moves.
 - [The API documentation](../../api/group_repository_storage_moves.md) details the endpoints for
   querying and scheduling group repository moves.
-- [Migrate to Gitaly Cluster](../gitaly/_index.md#migrate-to-gitaly-cluster).
+- [Migrate to Gitaly Cluster](../gitaly/praefect/_index.md#migrate-to-gitaly-cluster).
 
 ### Moving Repositories
 
@@ -250,7 +250,7 @@ sudo -u git  sh -c 'rsync -a --delete /var/opt/gitlab/git-data/repositories/. \
   /mnt/gitlab/repositories'
 ```
 
-The `/.` in the command above is very important, without it you can
+The `/.` in the previous command is very important, without it you can
 get the wrong directory structure in the target directory.
 If you want to see progress, replace `-a` with `-av`.
 

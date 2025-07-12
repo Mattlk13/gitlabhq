@@ -41,6 +41,7 @@ class Profiles::PreferencesController < Profiles::ApplicationController
     [
       :color_scheme_id,
       :color_mode_id,
+      :dark_color_scheme_id,
       :diffs_deletion_color,
       :diffs_addition_color,
       :home_organization_id,
@@ -63,6 +64,7 @@ class Profiles::PreferencesController < Profiles::ApplicationController
       :keyboard_shortcuts_enabled,
       :markdown_surround_selection,
       :markdown_automatic_lists,
+      :markdown_maintain_indentation,
       :use_new_navigation,
       :enabled_following,
       :use_work_items_view,

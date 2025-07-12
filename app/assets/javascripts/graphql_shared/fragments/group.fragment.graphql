@@ -24,7 +24,8 @@ fragment Group on Group {
     integerValue
   }
   isLinkedToSubscription
-  markedForDeletionOn
-  isAdjournedDeletionEnabled
+  markedForDeletion
+  isSelfDeletionInProgress
+  isSelfDeletionScheduled
   permanentDeletionDate
 }

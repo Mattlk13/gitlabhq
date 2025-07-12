@@ -3,7 +3,7 @@
 .rd-diff-file-component {
   display: block;
   scroll-margin-top: var(--rd-app-sticky-top-with-padding);
-  margin-bottom: $gl-padding;
+  margin-bottom: var(--rd-diff-file-bottom-margin);
 }
 
 .rd-diff-file {
@@ -11,7 +11,11 @@
   // top/bottom padding + toggle button size, excluding borders
   $file-header-height: calc($header-padding + $gl-button-small-size);
   --rd-diff-file-header-height: #{$file-header-height};
-  --rd-diff-file-border-radius: #{calc($gl-border-radius-base - 1px)};
+  --rd-diff-file-border-radius: #{$gl-border-radius-base};
+}
+
+.rd-diff-file-details > summary {
+  display: none;
 }
 
 .rd-diff-file[data-virtual]:not([data-collapsed]) {
@@ -37,12 +41,18 @@
   container-type: scroll-state;
 }
 
+.rd-diff-file-header-sticky:has([data-options-toggle] button[aria-expanded='true']) {
+  z-index: constants.$diff-file-header-active-z-index;
+}
+
 .rd-diff-file-header {
+  --rd-diff-file-header-horizontal-padding: #{$gl-spacing-scale-4};
+  --rd-diff-file-header-vertical-padding: #{$gl-spacing-scale-3};
   @apply gl-text-default;
   display: flex;
   background-color: var(--gl-background-color-subtle);
   border: 1px solid var(--gl-border-color-default);
-  padding: constants.$diff-file-header-padding-y $gl-spacing-scale-4;
+  padding: #{constants.$diff-file-header-padding-y} var(--rd-diff-file-header-horizontal-padding);
   border-radius: var(--rd-diff-file-border-radius) var(--rd-diff-file-border-radius) 0 0;
   word-break: break-word;
 
@@ -51,24 +61,23 @@
   }
 }
 
-.rd-diff-file-header:has([data-options-toggle] button[aria-expanded='true']) {
-  z-index: 10;
-}
-
 .rd-diff-file[data-collapsed] .rd-diff-file-header {
   border-radius: var(--rd-diff-file-border-radius);
 }
 
 .rd-diff-file-header-main {
   position: relative;
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
   // extra spacing to avoid accidental file collapse clicks
-  padding: $gl-spacing-scale-3;
-  margin: -$gl-spacing-scale-3;
-  gap: $gl-padding-4;
+  padding: var(--rd-diff-file-header-vertical-padding);
+  margin: calc(var(--rd-diff-file-header-vertical-padding) * -1);
   z-index: 1;
+}
+
+// we shouldn't use flex to align these items because it forces copy button to always wrap to a new line
+.rd-diff-file-header-submodule,
+.rd-diff-file-title,
+.rd-diff-file-deleted {
+  display: inline;
 }
 
 .rd-diff-file-title {
@@ -78,7 +87,35 @@
   margin: 0;
 }
 
+.rd-diff-file-title .commit-sha {
+  font-size: 85%;
+  font-weight: normal;
+}
+
+.rd-diff-file-link {
+  font: inherit;
+  color: inherit;
+}
+
+.rd-diff-file-header-submodule,
+.rd-diff-file-title,
+.rd-file-mode-change,
+.rd-copy-path,
+.rd-diff-file-deleted,
+.rd-submodule-icon.rd-submodule-icon {
+  vertical-align: middle;
+}
+
+.rd-diff-file-title,
+.rd-file-mode-change,
+.rd-copy-path,
+.rd-diff-file-deleted,
+.rd-submodule-icon {
+  margin-right: $gl-padding-4;
+}
+
 .rd-diff-file-moved {
+  margin: 0 $gl-padding-4;
   font-weight: $gl-font-weight-normal;
 }
 
@@ -94,18 +131,22 @@
 .rd-diff-file-toggle-button::before {
   content: '';
   position: absolute;
-  inset: 0;
+  inset: 1px;
 }
 
 .rd-diff-file-info {
+  $horizontal-padding: var(--rd-diff-file-header-horizontal-padding);
+  $horizontal-padding-inv: calc(var(--rd-diff-file-header-horizontal-padding) * -1);
+  $vertical-padding: var(--rd-diff-file-header-vertical-padding);
+  $vertical-padding-inv: calc(var(--rd-diff-file-header-vertical-padding) * -1);
   position: relative;
   display: flex;
   align-self: flex-start;
   align-items: center;
+  min-height: calc(#{$gl-button-small-size} + var(--rd-diff-file-header-vertical-padding) * 2);
   // extra spacing to avoid accidental file collapse clicks
-  padding: $gl-spacing-scale-3;
-  margin: -$gl-spacing-scale-3;
-  margin-left: auto;
+  padding: $vertical-padding     $horizontal-padding     $vertical-padding     $vertical-padding;
+  margin:  $vertical-padding-inv $horizontal-padding-inv $vertical-padding-inv auto;
   gap: $gl-padding;
   z-index: 1;
 }
@@ -115,16 +156,15 @@
   align-items: center;
   margin: 0 0 0 auto;
   white-space: nowrap;
+  gap: $gl-padding-8;
 }
 
-.rd-lines-added {
+.rd-stats-added {
   @apply gl-text-success;
-  margin: 0;
 }
 
-.rd-lines-removed {
+.rd-stats-removed {
   @apply gl-text-danger;
-  margin: 0 0 0 $gl-padding-8;
 }
 
 .rd-diff-file-body {

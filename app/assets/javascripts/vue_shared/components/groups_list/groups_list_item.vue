@@ -8,8 +8,12 @@ import axios from '~/lib/utils/axios_utils';
 import { VISIBILITY_TYPE_ICON, GROUP_VISIBILITY_TYPE } from '~/visibility_level/constants';
 import { ACCESS_LEVEL_LABELS, ACCESS_LEVEL_NO_ACCESS_INTEGER } from '~/access_level/constants';
 import { __ } from '~/locale';
-import { numberToMetricPrefix } from '~/lib/utils/number_utils';
-import { ACTION_DELETE, ACTION_LEAVE } from '~/vue_shared/components/list_actions/constants';
+import { numberToMetricPrefix, numberToHumanSize, isNumeric } from '~/lib/utils/number_utils';
+import {
+  ACTION_DELETE,
+  ACTION_DELETE_IMMEDIATELY,
+  ACTION_LEAVE,
+} from '~/vue_shared/components/list_actions/constants';
 import {
   TIMESTAMP_TYPES,
   TIMESTAMP_TYPE_CREATED_AT,
@@ -41,6 +45,8 @@ export default {
     GroupListItemPreventDeleteModal,
     GroupListItemDeleteModal,
     GroupListItemInactiveBadge,
+    GroupsListItemPlanBadge: () =>
+      import('ee_component/vue_shared/components/groups_list/groups_list_item_plan_badge.vue'),
   },
   directives: {
     GlTooltip: GlTooltipDirective,
@@ -110,8 +116,30 @@ export default {
     groupMembersCount() {
       return numberToMetricPrefix(this.group.groupMembersCount);
     },
+    showDescendantGroupsCount() {
+      return isNumeric(this.group.descendantGroupsCount);
+    },
+    showProjectsCount() {
+      return isNumeric(this.group.projectsCount);
+    },
+    showGroupMembersCount() {
+      return isNumeric(this.group.groupMembersCount);
+    },
+    storageSize() {
+      if (!this.hasStorageSize) {
+        return null;
+      }
+
+      return numberToHumanSize(this.group.projectStatistics?.storageSize || 0);
+    },
+    hasStorageSize() {
+      return Object.hasOwn(this.group, 'projectStatistics');
+    },
     hasActionDelete() {
-      return this.group.availableActions?.includes(ACTION_DELETE);
+      return (
+        this.group.availableActions?.includes(ACTION_DELETE) ||
+        this.group.availableActions?.includes(ACTION_DELETE_IMMEDIATELY)
+      );
     },
     hasActionLeave() {
       return this.group.availableActions?.includes(ACTION_LEAVE);
@@ -121,6 +149,9 @@ export default {
     },
     hasFooterAction() {
       return this.hasActionDelete || this.hasActionLeave;
+    },
+    dataTestid() {
+      return `groups-list-item-${this.group.id}`;
     },
   },
   methods: {
@@ -134,7 +165,7 @@ export default {
       this.isDeleteModalLoading = true;
 
       try {
-        await axios.delete(this.group.webUrl, {
+        await axios.delete(this.group.relativeWebUrl, {
           params: deleteParams(this.group),
         });
         this.refetch();
@@ -162,6 +193,7 @@ export default {
     :icon-name="groupIconName"
     :list-item-class="listItemClass"
     :timestamp-type="timestampType"
+    :data-testid="dataTestid"
   >
     <template #children-toggle>
       <slot name="children-toggle"></slot>
@@ -180,19 +212,24 @@ export default {
 
     <template #stats>
       <group-list-item-inactive-badge :group="group" />
+      <gl-badge v-if="hasStorageSize" data-testid="storage-size">{{ storageSize }}</gl-badge>
+      <groups-list-item-plan-badge :group="group" />
       <list-item-stat
+        v-if="showDescendantGroupsCount"
         :tooltip-text="$options.i18n.subgroups"
         icon-name="subgroup"
         :stat="descendantGroupsCount"
         data-testid="subgroups-count"
       />
       <list-item-stat
+        v-if="showProjectsCount"
         :tooltip-text="$options.i18n.projects"
         icon-name="project"
         :stat="projectsCount"
         data-testid="projects-count"
       />
       <list-item-stat
+        v-if="showGroupMembersCount"
         :tooltip-text="$options.i18n.directMembers"
         icon-name="users"
         :stat="groupMembersCount"

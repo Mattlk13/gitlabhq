@@ -46,12 +46,18 @@ Prerequisites:
     with the `--path` option, you must pass the same value to the `--manifest-path` option of the
     `glab cluster agent bootstrap` command.
 
-To install the agent:
+To install the agent, either:
 
-- Run `glab cluster agent bootstrap`:
+- Run `glab cluster agent bootstrap` within the directory of your Git repository of your target project:
 
   ```shell
-  glab cluster agent bootstrap <agent-name> --manifest-path <same as --path used in flux bootstrap>
+  glab cluster agent bootstrap <agent-name> --manifest-path <same_path_used_in_flux_bootstrap>
+  ```
+
+- Run `glab -R path-with-namespace cluster agent bootstrap` if you must run the command outside of the Git repo of your target project:
+
+  ```shell
+  glab -R <full/path/to/project> cluster agent bootstrap <agent-name> --manifest-path <same_path_used_in_flux_bootstrap>
   ```
 
 By default, the command:
@@ -330,7 +336,7 @@ The following example projects can help you get started with the agent.
 
 GitLab warns you on the agent's list page to update the agent version installed on your cluster.
 
-For the best experience, the version of the agent installed in your cluster should match the GitLab major and minor version. The previous and next minor versions are also supported. For example, if your GitLab version is v14.9.4 (major version 14, minor version 9), then versions v14.9.0 and v14.9.1 of the agent are ideal, but any v14.8.x or v14.10.x version of the agent is also supported. See [the release page](https://gitlab.com/gitlab-org/cluster-integration/gitlab-agent/-/releases) of the GitLab agent.
+For the best experience, the version of the agent installed in your cluster should match the GitLab major and minor version. The previous and next minor versions are also supported. For example, if your GitLab version is v14.9.4 (major version 14, minor version 9), then versions v14.9.0 and v14.9.1 of the agent are ideal, but any v14.8.x or v14.10.x version of the agent is also supported. See [the release page](https://gitlab.com/gitlab-org/cluster-integration/gitlab-agent/-/releases) of the GitLab agent for Kubernetes.
 
 ### Update the agent version
 

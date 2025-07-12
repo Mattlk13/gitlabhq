@@ -678,7 +678,8 @@ RSpec.describe ProjectPresenter do
               "original_branch" => "master",
               "path" => "/#{project.full_path}/-/create/master",
               "project_path" => project.full_path,
-              "target_branch" => "master"
+              "target_branch" => "master",
+              "full_name" => project.name_with_namespace
             }
           )
         end
@@ -777,7 +778,8 @@ RSpec.describe ProjectPresenter do
   end
 
   describe '#statistics_buttons' do
-    let(:project) { build_stubbed(:project) }
+    let(:project_namespace) { build_stubbed(:project_namespace) }
+    let(:project) { build_stubbed(:project, project_namespace: project_namespace) }
 
     it 'orders the items correctly' do
       allow(project.repository).to receive(:readme_path).and_return('readme')

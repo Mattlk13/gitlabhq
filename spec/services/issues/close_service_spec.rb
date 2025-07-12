@@ -55,7 +55,7 @@ RSpec.describe Issues::CloseService, feature_category: :team_planning do
         .and_return(false)
 
       expect(service).to receive(:close_issue)
-        .with(external_issue, closed_via: nil, notifications: true, system_note: true)
+        .with(external_issue, closed_via: nil, notifications: true, system_note: true, status: nil)
 
       service.execute(external_issue)
     end
@@ -65,7 +65,7 @@ RSpec.describe Issues::CloseService, feature_category: :team_planning do
         .and_return(true)
 
       expect(service).to receive(:close_issue)
-        .with(issue, closed_via: nil, notifications: true, system_note: true)
+        .with(issue, closed_via: nil, notifications: true, system_note: true, status: nil)
 
       service.execute(issue)
     end
@@ -90,6 +90,10 @@ RSpec.describe Issues::CloseService, feature_category: :team_planning do
       expect { service.execute(issue) }
         .to not_change { IncidentManagement::IssuableEscalationStatus.where(issue: issue).count }
         .and not_change { IncidentManagement::IssuableEscalationStatus.where(status: resolved).count }
+    end
+
+    it_behaves_like 'update service that triggers GraphQL work_item_updated subscription' do
+      subject(:execute_service) { service.execute(issue) }
     end
 
     context 'issue is incident type' do
@@ -261,7 +265,7 @@ RSpec.describe Issues::CloseService, feature_category: :team_planning do
 
       it 'verifies the number of queries' do
         recorded = ActiveRecord::QueryRecorder.new { close_issue }
-        expected_queries = 33
+        expected_queries = 40
 
         expect(recorded.count).to be <= expected_queries
         expect(recorded.cached_count).to eq(0)

@@ -14,7 +14,7 @@ module API
       expose :emails_enabled, documentation: { type: 'boolean' }
       expose :mentions_disabled
       expose :lfs_enabled?, as: :lfs_enabled
-      expose :archived, documentation: { type: 'boolean' }
+      expose(:archived, documentation: { type: 'boolean' }) { |group, _options| group.self_or_ancestors_archived? }
       expose :math_rendering_limits_enabled, documentation: { type: 'boolean' }
       expose :lock_math_rendering_limits_enabled, documentation: { type: 'boolean' }
       expose :default_branch_name, as: :default_branch
@@ -47,9 +47,8 @@ module API
         end
       end
 
-      expose :marked_for_deletion_on, if: ->(group, _) {
-        group.adjourned_deletion?
-      }
+      # It is always enabled since 18.0
+      expose :marked_for_deletion_on
 
       expose :root_storage_statistics, using: Entities::Namespace::RootStorageStatistics,
         if: ->(group, opts) {

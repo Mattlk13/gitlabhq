@@ -1,7 +1,7 @@
 ---
 stage: none
 group: unassigned
-info: Any user with at least the Maintainer role can merge updates to this content. For details, see https://docs.gitlab.com/ee/development/development_processes.html#development-guidelines-review.
+info: Any user with at least the Maintainer role can merge updates to this content. For details, see https://docs.gitlab.com/development/development_processes/#development-guidelines-review.
 title: Backend GraphQL API guide
 ---
 
@@ -14,6 +14,248 @@ See the [GraphQL and REST APIs section](api_styleguide.md#graphql-and-rest-apis)
 ## Versioning
 
 The GraphQL API is [versionless](https://graphql.org/learn/best-practices/#versioning).
+
+### Multi-version compatibility
+
+Though the GraphQL API is versionless, we have to be considerate about [Backwards compatibility across updates](multi_version_compatibility.md),
+and how it can cause incidents, like [Sidebar wasn’t loading for some users](multi_version_compatibility.md#sidebar-wasnt-loading-for-some-users).
+
+#### Mitigation
+
+To reduce the risks of an incident, on GitLab Self-Managed and GitLab Dedicated, the `@gl_introduced` directive can be used to
+indicate to the backend in which GitLab version the node was introduced. This way, when the query hits an older backend
+version, that future node is stripped out from the query.
+
+This does not mitigate the problem on GitLab.com. New GraphQL fields still need to be deployed to GitLab.com by the backend before the frontend.
+
+You can use the `@gl_introduced` directive any field, for example:
+
+<table>
+<thead>
+  <tr>
+    <td>
+      Query
+    </td>
+    <td>
+      Response
+    </td>
+  </tr>
+</thead>
+
+<tbody>
+<tr>
+<td>
+
+```graphql
+fragment otherFieldsWithFuture on Namespace {
+  webUrl
+  otherFutureField @gl_introduced(version: "99.9.9")
+}
+
+query namespaceWithFutureFields {
+  futureField @gl_introduced(version: "99.9.9")
+  namespace(fullPath: "gitlab-org") {
+    name
+    futureField @gl_introduced(version: "99.9.9")
+    ...otherFieldsWithFuture
+  }
+}
+```
+
+</td>
+<td>
+
+```json
+{
+  "data": {
+    "futureField": null,
+    "namespace": {
+      "name": "Gitlab Org",
+      "futureField": null,
+      "webUrl": "http://gdk.test:3000/groups/gitlab-org",
+      "otherFutureField": null
+    }
+  }
+}
+```
+
+</td>
+</tr>
+</tbody>
+</table>
+
+You shouldn't use the directive with:
+
+- Arguments: Executable directives don't support arguments.
+- Fragments: Instead, use the directive in the fragment nodes.
+- Single future fields, in the query or in objects:
+
+<table>
+<thead>
+  <tr>
+    <td>
+      Query
+    </td>
+    <td>
+      Response
+    </td>
+  </tr>
+</thead>
+
+<tbody>
+<tr>
+<td>
+
+  ```graphql
+  query fetchData {
+    futureField @gl_introduced(version: "99.9.9")
+  }
+  ```
+
+</td>
+<td>
+
+  ```json
+  {
+    "errors": [
+      {
+        "graphQLErrors": [
+          {
+            "message": "Field must have selections (query 'fetchData' returns Query but has no selections. Did you mean 'fetchData { ... }'?)",
+            "locations": [
+              {
+                "line": 1,
+                "column": 1
+              }
+            ],
+            "path": [
+              "query fetchData"
+            ],
+            "extensions": {
+              "code": "selectionMismatch",
+              "nodeName": "query 'fetchData'",
+              "typeName": "Query"
+            }
+          }
+        ],
+        "clientErrors": [],
+        "networkError": null,
+        "message": "Field must have selections (query 'fetchData' returns Query but has no selections. Did you mean 'fetchData { ... }'?)",
+        "stack": "<REDACTED>"
+      }
+    ]
+  }
+  ```
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+  ```graphql
+  query fetchData {
+    futureField @gl_introduced(version: "99.9.9") {
+      id
+    }
+  }
+  ```
+
+</td>
+<td>
+
+  ```json
+  {
+    "errors": [
+      {
+        "graphQLErrors": [
+          {
+            "message": "Field must have selections (query 'fetchData' returns Query but has no selections. Did you mean 'fetchData { ... }'?)",
+            "locations": [
+              {
+                "line": 1,
+                "column": 1
+              }
+            ],
+            "path": [
+              "query fetchData"
+            ],
+            "extensions": {
+              "code": "selectionMismatch",
+              "nodeName": "query 'fetchData'",
+              "typeName": "Query"
+            }
+          }
+        ],
+        "clientErrors": [],
+        "networkError": null,
+        "message": "Field must have selections (query 'fetchData' returns Query but has no selections. Did you mean 'fetchData { ... }'?)",
+        "stack": "<REDACTED>"
+      }
+    ]
+  }
+  ```
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+  ```graphql
+  query fetchData {
+    project(fullPath: "gitlab-org/gitlab") {
+      futureField @gl_introduced(version: "99.9.9")
+    }
+  }
+  ```
+
+</td>
+<td>
+
+  ```json
+  {
+    "errors": [
+      {
+        "graphQLErrors": [
+          {
+            "message": "Field must have selections (field 'project' returns Project but has no selections. Did you mean 'project { ... }'?)",
+            "locations": [
+              {
+                "line": 2,
+                "column": 3
+              }
+            ],
+            "path": [
+              "query fetchData",
+              "project"
+            ],
+            "extensions": {
+              "code": "selectionMismatch",
+              "nodeName": "field 'project'",
+              "typeName": "Project"
+            }
+          }
+        ],
+        "clientErrors": [],
+        "networkError": null,
+        "message": "Field must have selections (field 'project' returns Project but has no selections. Did you mean 'project { ... }'?)",
+        "stack": "<REDACTED>"
+      }
+    ]
+  }
+  ```
+
+</td>
+</tr>
+
+</tbody>
+</table>
+
+##### Non-nullable fields
+
+Future fields fallback to `null` when they don't exist in the backend. This means that non-nullable
+fields still require a null-check on the frontend when they have the `@gl_introduced` directive.
 
 ## Learning GraphQL at GitLab
 
@@ -840,7 +1082,7 @@ be treated as opaque tokens, and any structure in them is incidental and not to 
 
 {{< /alert >}}
 
-**Example scenario:**
+**Example scenario**:
 
 This example scenario is based on this [merge request](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/62645).
 
@@ -1854,7 +2096,7 @@ The three states a mutation response can be in are:
 
 #### Success
 
-In the happy path, errors *may* be returned, along with the anticipated payload, but
+In the happy path, errors may be returned, along with the anticipated payload, but
 if everything was successful, then `errors` should be an empty array, because
 there are no problems we need to inform the user of.
 
@@ -1899,14 +2141,14 @@ need to be told what is wrong, so they understand the reason for the failure and
 what they can do to achieve their intent. For example, they might only need to retry the
 request.
 
-It is possible to return *recoverable* errors alongside mutation data. For example, if
+It is possible to return recoverable errors alongside mutation data. For example, if
 a user uploads 10 files and 3 of them fail and the rest succeed, the errors for the
 failures can be made available to the user, alongside the information about
 the successes.
 
 #### Failure (irrelevant to the user)
 
-One or more *non-recoverable* errors can be returned at the _top level_. These
+One or more non-recoverable errors can be returned at the _top level_. These
 are things over which the **user** has little to no control, and should mainly
 be system or programming problems, that a **developer** needs to know about.
 In this case there is no `data`:

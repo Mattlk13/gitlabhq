@@ -46,6 +46,13 @@ RSpec.describe Gitlab::Highlight do
       expect(result).to eq(%(<span id="LC1" class="line" lang="plaintext">plain text contents</span>))
     end
 
+    it 'avoids attributes when used on diff' do
+      expected = %[<span class="line" data-lang="common_lisp"><span class="p">(</span><span class="nb">make-pathname</span> <span class="ss">:defaults</span> <span class="nv">name</span></span>
+<span class="line" data-lang="common_lisp"><span class="ss">:type</span> <span class="s">"assem"</span><span class="p">)</span></span>]
+
+      expect(described_class.highlight(file_name, content, used_on: :diff)).to eq(expected)
+    end
+
     context 'when content is too long to be highlighted' do
       let(:result) { described_class.highlight(file_name, content) } # content is 44 bytes
 
@@ -137,7 +144,7 @@ RSpec.describe Gitlab::Highlight do
     it 'increments usage counter', :prometheus do
       described_class.highlight(file_name, content)
 
-      gitlab_highlight_usage_counter = Gitlab::Metrics.registry.get(:gitlab_highlight_usage)
+      gitlab_highlight_usage_counter = Gitlab::Metrics.client.get(:gitlab_highlight_usage)
 
       expect(gitlab_highlight_usage_counter.get(used_on: :blob)).to eq(1)
       expect(gitlab_highlight_usage_counter.get(used_on: :diff)).to eq(0)
@@ -147,7 +154,7 @@ RSpec.describe Gitlab::Highlight do
       it 'increments usage counter', :prometheus do
         described_class.highlight(file_name, content, used_on: :diff)
 
-        gitlab_highlight_usage_counter = Gitlab::Metrics.registry.get(:gitlab_highlight_usage)
+        gitlab_highlight_usage_counter = Gitlab::Metrics.client.get(:gitlab_highlight_usage)
 
         expect(gitlab_highlight_usage_counter.get(used_on: :diff)).to eq(1)
         expect(gitlab_highlight_usage_counter.get(used_on: :blob)).to eq(0)

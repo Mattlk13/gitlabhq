@@ -342,7 +342,7 @@ Merge requests enforce these maximums:
 
 {{< history >}}
 
-- [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/521970) in GitLab 17.10 [with a flag](../../administration/feature_flags.md) named `merge_requests_diffs_limit`. Disabled by default.
+- [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/521970) in GitLab 17.10 [with a flag](../../administration/feature_flags/_index.md) named `merge_requests_diffs_limit`. Disabled by default.
 - [Enabled on GitLab.com](https://gitlab.com/gitlab-org/gitlab/-/issues/521970) in GitLab 17.10.
 
 {{< /history >}}
@@ -362,7 +362,7 @@ close the affected merge request and create a new merge request.
 
 {{< history >}}
 
-- [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/527036) in GitLab 17.11 [with a flag](../../administration/feature_flags.md) named `merge_requests_diff_commits_limit`. Disabled by default.
+- [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/527036) in GitLab 17.11 [with a flag](../../administration/feature_flags/_index.md) named `merge_requests_diff_commits_limit`. Disabled by default.
 
 {{< /history >}}
 
@@ -457,8 +457,9 @@ documentation.
 
 When a request is rate limited, GitLab responds with a `429` status
 code. The client should wait before attempting the request again. There
-are also informational headers with this response detailed in
-[rate limiting responses](#rate-limiting-responses).
+may also be informational headers with this response detailed in
+[rate limiting responses](#rate-limiting-responses). Rate limiting responses
+for the Projects, Groups, and Users APIs do not include informational headers.
 
 The following table describes the rate limits for GitLab.com:
 
@@ -689,12 +690,14 @@ The limit varies depending on your plan and the number of seats in your subscrip
 
 ### Security policy limits
 
-| Policy type                                                         | Default limit            |
-|:--------------------------------------------------------------------|:-----------------------|
-| Merge request approval policy                                       | 5 per security policy project |
-| Scan execution policy                                               | 5 per security policy project |
-| Pipeline execution policy                                           | 5 per security policy project |
-| Vulnerability management policy                                     | 5 per security policy project |
+The maximum number of policies that you can add to a security policy project. These limits apply to each policy type individually. For example, you can have five merge request approval policies and five scan execution policies in the same security policy project.
+
+| Policy type                                            | Default limit                             |
+|--------------------------------------------------------|-------------------------------------------|
+| Merge request approval policies                        | Five policies per security policy project |
+| Scan execution policies                                | Five policies per security policy project |
+| Pipeline execution policies                            | Five policies per security policy project |
+| Vulnerability management policies                      | Five policies per security policy project |
 
 ### Other limits
 

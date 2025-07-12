@@ -5,7 +5,7 @@ require 'spec_helper'
 RSpec.describe ActiveContext::Databases::Opensearch::Processor do
   let(:collection) { double('collection', current_search_embedding_version: search_embedding_version) }
   let(:user) { double('user') }
-  let(:search_embedding_version) { { field: 'preset_field', model: model } }
+  let(:search_embedding_version) { { field: 'preset_field', model: model, class: Test::Embeddings } }
   let(:generated_embedding) { [0.5, 0.6] }
   let(:model) { 'some-model' }
 
@@ -21,13 +21,14 @@ RSpec.describe ActiveContext::Databases::Opensearch::Processor do
       ActiveContext::Query.knn(
         target: 'embedding',
         vector: [0.1, 0.2],
-        limit: 5
+        k: 5
       )
     end
 
     before do
       allow(ActiveContext::Embeddings).to receive(:generate_embeddings)
-        .with(anything, model: model, user: user).and_return([generated_embedding])
+        .with(anything, version: search_embedding_version, user: user)
+        .and_return([generated_embedding])
     end
 
     context 'with filter queries' do
@@ -214,7 +215,7 @@ RSpec.describe ActiveContext::Databases::Opensearch::Processor do
         it 'handles content-based KNN queries' do
           content_knn = ActiveContext::Query.knn(
             content: 'Sample text for embedding',
-            limit: 5
+            k: 5
           )
 
           result = processor.process(content_knn)
@@ -269,7 +270,7 @@ RSpec.describe ActiveContext::Databases::Opensearch::Processor do
         query = simple_filter.knn(
           target: 'embedding',
           vector: [0.1, 0.2],
-          limit: 5
+          k: 5
         )
 
         result = processor.process(query)
@@ -293,7 +294,7 @@ RSpec.describe ActiveContext::Databases::Opensearch::Processor do
         query = filter.knn(
           target: 'embedding',
           vector: [0.1, 0.2],
-          limit: 5
+          k: 5
         )
 
         result = processor.process(query)
@@ -320,7 +321,7 @@ RSpec.describe ActiveContext::Databases::Opensearch::Processor do
         query = base_query.knn(
           target: 'embedding',
           vector: [0.1, 0.2],
-          limit: 5
+          k: 5
         )
 
         result = processor.process(query)
@@ -348,7 +349,7 @@ RSpec.describe ActiveContext::Databases::Opensearch::Processor do
         query = base_query.knn(
           target: 'embedding',
           vector: [0.1, 0.2],
-          limit: 5
+          k: 5
         )
 
         result = processor.process(query)

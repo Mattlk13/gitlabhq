@@ -38,21 +38,18 @@ RSpec.describe ContainerRegistry::Protection::Concerns::TagRule, feature_categor
         )
       end
 
-      let_it_be(:rule1) { create_rule(:owner, 'owner_pattern') }
-      let_it_be(:rule2) { create_rule(:admin, 'admin_pattern') }
-      let_it_be(:rule3) { create_rule(:maintainer, 'maintainer_pattern') }
-      let_it_be(:immutable_rule) do
-        create(:container_registry_protection_tag_rule, :immutable, project: project,
-          tag_name_pattern: 'immutable_pattern')
+      before_all do
+        create_rule(:owner, 'owner_pattern')
+        create_rule(:admin, 'admin_pattern')
+        create_rule(:maintainer, 'maintainer_pattern')
       end
 
       context 'when current user is nil' do
         let_it_be(:current_user) { nil }
-        let(:expected_tag_name_pattern) { [rule1, rule2, rule3, immutable_rule].map(&:tag_name_pattern) }
 
         it 'returns all tag rules' do
           expect(tag_name_patterns).to all(be_a(Gitlab::UntrustedRegexp))
-          expect(tag_name_patterns.map(&:source)).to match_array(expected_tag_name_pattern)
+          expect(tag_name_patterns.map(&:source)).to match_array(%w[owner_pattern admin_pattern maintainer_pattern])
         end
       end
 
@@ -60,25 +57,15 @@ RSpec.describe ContainerRegistry::Protection::Concerns::TagRule, feature_categor
         context 'when current user is an admin', :enable_admin_mode do
           let(:current_user) { build_stubbed(:admin) }
 
-          it 'returns immutable tag rules only' do
-            expect(tag_name_patterns.count).to eq(1)
-            expect(tag_name_patterns[0]).to be_a(Gitlab::UntrustedRegexp)
-              .and(have_attributes(source: 'immutable_pattern'))
-          end
-
-          context 'when feature container_registry_immutable_tags is disabled' do
-            before do
-              stub_feature_flags(container_registry_immutable_tags: false)
-            end
-
-            it { is_expected.to be_nil }
+          it 'does not return anything' do
+            expect(tag_name_patterns).to be_nil
           end
         end
 
         where(:user_role, :expected_patterns) do
-          :developer   | %w[admin_pattern maintainer_pattern owner_pattern immutable_pattern]
-          :maintainer  | %w[admin_pattern owner_pattern immutable_pattern]
-          :owner       | %w[admin_pattern immutable_pattern]
+          :developer   | %w[admin_pattern maintainer_pattern owner_pattern]
+          :maintainer  | %w[admin_pattern owner_pattern]
+          :owner       | %w[admin_pattern]
         end
 
         with_them do
@@ -90,17 +77,6 @@ RSpec.describe ContainerRegistry::Protection::Concerns::TagRule, feature_categor
             expect(tag_name_patterns).to all(be_a(Gitlab::UntrustedRegexp))
             expect(tag_name_patterns.map(&:source)).to match_array(expected_patterns)
           end
-
-          context 'when feature container_registry_immutable_tags is disabled' do
-            before do
-              stub_feature_flags(container_registry_immutable_tags: false)
-            end
-
-            it 'returns the tag name patterns with access levels that are above the user excluding immutable tags' do
-              expect(tag_name_patterns).to all(be_a(Gitlab::UntrustedRegexp))
-              expect(tag_name_patterns.map(&:source)).to match_array(expected_patterns - %w[immutable_pattern])
-            end
-          end
         end
       end
     end
@@ -111,100 +87,6 @@ RSpec.describe ContainerRegistry::Protection::Concerns::TagRule, feature_categor
 
     subject(:protected_by_rules) { service.protected_for_delete?(project:, current_user:) }
 
-    shared_examples 'checking for mutable tag rules' do
-      context 'when project has matching mutable tag rules for delete and access level' do
-        before_all do
-          create(:container_registry_protection_tag_rule, tag_name_pattern: 'b',
-            minimum_access_level_for_delete: :owner, project: project)
-        end
-
-        where(:user_role, :protected_from_delete_with_tags) do
-          :guest      | true
-          :reporter   | true
-          :developer  | true
-          :maintainer | true
-          :owner      | false
-          :admin      | false
-        end
-
-        with_them do
-          before do
-            if user_role == :admin
-              allow(current_user).to receive(:can_admin_all_resources?).and_return(true)
-            else
-              project.send(:"add_#{user_role}", current_user)
-            end
-          end
-
-          context 'when the project has container registry tags' do
-            before do
-              allow(project).to receive(:has_container_registry_tags?).and_return(true)
-            end
-
-            it { is_expected.to be(protected_from_delete_with_tags) }
-          end
-
-          context 'when project has no container registry tags' do
-            before do
-              allow(project).to receive(:has_container_registry_tags?).and_return(false)
-            end
-
-            it { is_expected.to be(false) }
-          end
-        end
-      end
-
-      context 'when project has no matching tag rules for delete and access level' do
-        before do
-          allow(project).to receive(:has_container_registry_tags?).and_return(true)
-        end
-
-        it { is_expected.to be(false) }
-      end
-    end
-
-    context 'when project has immutable tag rules' do
-      before_all do
-        create(:container_registry_protection_tag_rule, :immutable, tag_name_pattern: 'a', project: project)
-      end
-
-      context 'when project has container registry tags' do
-        before do
-          allow(project).to receive(:has_container_registry_tags?).and_return(true)
-        end
-
-        it { is_expected.to be(true) }
-
-        context 'when current_user is an admin', :enable_admin_mode do
-          let(:current_user) { build_stubbed(:admin) }
-
-          it { is_expected.to be(true) }
-        end
-      end
-
-      context 'when project has no container registry tags' do
-        before do
-          allow(project).to receive(:has_container_registry_tags?).and_return(false)
-        end
-
-        it { is_expected.to be(false) }
-      end
-
-      context 'when immutable tags feature flag is disabled' do
-        before do
-          stub_feature_flags(container_registry_immutable_tags: false)
-        end
-
-        it_behaves_like 'checking for mutable tag rules'
-      end
-    end
-
-    context 'when project has no immutable tag rules' do
-      before do
-        allow(project).to receive(:has_container_registry_tags?).and_return(true)
-      end
-
-      it_behaves_like 'checking for mutable tag rules'
-    end
+    it_behaves_like 'checking for mutable tag rules'
   end
 end

@@ -14,6 +14,7 @@ class UserDetail < ApplicationRecord
   validate :bot_namespace_user_type, if: :bot_namespace_id_changed?
 
   ignore_column :registration_objective, remove_after: '2025-07-17', remove_with: '18.2'
+  ignore_column :skype, remove_after: '2025-09-18', remove_with: '18.4'
 
   DEFAULT_FIELD_LENGTH = 500
 
@@ -42,7 +43,10 @@ class UserDetail < ApplicationRecord
     (             #
       [0-9]{4}-   # 4 digits spaced by dash
     ){3}          # 3 times
-    [0-9]{4}      # end with 4 digits
+    (             #
+    [0-9]{3}      # end with 3 digits
+    )             #
+    [0-9X]        # followed by a fourth digit or an X
     \z            # end of string
   /x
 
@@ -59,7 +63,6 @@ class UserDetail < ApplicationRecord
   validates :orcid, length: { maximum: DEFAULT_FIELD_LENGTH }, allow_blank: true
   validate :orcid_format
   validates :organization, length: { maximum: DEFAULT_FIELD_LENGTH }, allow_blank: true
-  validates :skype, length: { maximum: DEFAULT_FIELD_LENGTH }, allow_blank: true
   validates :twitter, length: { maximum: DEFAULT_FIELD_LENGTH }, allow_blank: true
   validates :website_url, length: { maximum: DEFAULT_FIELD_LENGTH }, url: true, allow_blank: true, if: :website_url_changed?
   validates :onboarding_status, json_schema: { filename: 'user_detail_onboarding_status' }
@@ -69,7 +72,7 @@ class UserDetail < ApplicationRecord
   before_save :prevent_nil_fields
 
   def sanitize_attrs
-    %i[bluesky discord linkedin mastodon orcid skype twitter website_url github].each do |attr|
+    %i[bluesky discord linkedin mastodon orcid twitter website_url github].each do |attr|
       value = self[attr]
       self[attr] = Sanitize.clean(value) if value.present?
     end
@@ -90,7 +93,6 @@ class UserDetail < ApplicationRecord
     self.mastodon = '' if mastodon.nil?
     self.organization = '' if organization.nil?
     self.orcid = '' if orcid.nil?
-    self.skype = '' if skype.nil?
     self.twitter = '' if twitter.nil?
     self.website_url = '' if website_url.nil?
     self.github = '' if github.nil?
@@ -119,7 +121,7 @@ end
 def orcid_format
   return if orcid.blank? || orcid =~ UserDetail::ORCID_VALIDATION_REGEX
 
-  errors.add(:orcid, _('must contain only a orcid ID.'))
+  errors.add(:orcid, _('must contain only a valid ORCID.'))
 end
 
 UserDetail.prepend_mod_with('UserDetail')

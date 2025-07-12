@@ -37,14 +37,18 @@ namespace :ci do
     if diff.empty?
       logger.info("No changed file diff provided, full test suite will be executed")
     else
-      if qa_changes.quarantine_changes?
-        logger.info("Merge request contains only quarantine changes, e2e test execution will be skipped!")
-        next pipeline_creator.create_noop(reason: "no-op run, only quarantine changes detected in merge request")
-      end
+      noop_pipeline = qa_changes.quarantine_changes? || qa_changes.only_spec_removal?
 
-      if qa_changes.only_spec_removal?
-        logger.info("Merge request contains only e2e spec removal, e2e test execution will be skipped!")
-        next pipeline_creator.create_noop(reason: "no-op run, only spec removal detected in merge request")
+      if noop_pipeline && !run_all_label_present
+        if qa_changes.quarantine_changes?
+          logger.info("Merge request contains only quarantine changes, e2e test execution will be skipped!")
+          next pipeline_creator.create_noop(reason: "no-op run, only quarantine changes detected in merge request")
+        end
+
+        if qa_changes.only_spec_removal?
+          logger.info("Merge request contains only e2e spec removal, e2e test execution will be skipped!")
+          next pipeline_creator.create_noop(reason: "no-op run, only spec removal detected in merge request")
+        end
       end
 
       feature_flags_changes = QA::Tools::Ci::FfChanges.new(diff).fetch
@@ -80,10 +84,21 @@ namespace :ci do
 
     logger.info("Following specs were selected for execution: '#{tests_from_mapping}'")
     begin
+      type_of_mr = if mr_labels.include?("frontend") && mr_labels.include?("backend")
+                     "fullstack"
+                   elsif mr_labels.include?("backend")
+                     "backend"
+                   elsif mr_labels.include?("frontend")
+                     "frontend"
+                   else
+                     "other"
+                   end
+
       QA::Tools::Ci::PipelineCreator.new(tests_from_mapping, **creator_args).create(pipelines_for_selective_improved)
       properties = {
         label: tests_from_mapping.nil? || tests_from_mapping.empty? ? 'non-selective' : 'selective',
-        value: tests_from_mapping.nil? || tests_from_mapping.empty? ? 0 : tests_from_mapping.count
+        value: tests_from_mapping.nil? || tests_from_mapping.empty? ? 0 : tests_from_mapping.count,
+        property: type_of_mr
       }
       Tooling::Events::TrackPipelineEvents.new(logger: logger).send_event(
         "e2e_tests_selected_for_execution_gitlab_pipeline",
@@ -111,10 +126,12 @@ namespace :ci do
   end
 
   desc "Export frontend code paths mapping to GCP"
-  task :export_code_paths_mapping, [:glob] do |_, args|
+  task :export_frontend_code_paths_mapping, [:glob] do |_, args|
     raise("Code paths mapping JSON glob pattern is required") unless args[:glob]
 
+    filename = File.basename(args[:glob])
+    prefix = "#{filename.split('*').first}merged-pipeline"
     QA::Tools::Ci::CodePathsMapping.export(args[:glob], bucket: "code-path-mappings",
-      file_name: "js-coverage-by-example-merged-pipeline")
+      file_name: prefix)
   end
 end

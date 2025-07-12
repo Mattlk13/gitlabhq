@@ -16,7 +16,7 @@ module RuboCop
 
         # NOTE: Other tables are prevented by this cop via `table_size:`
         FORBIDDEN_TABLES = [
-          :ci_builds,               # Too many indexes + frequently accessed
+          :p_ci_builds,             # Too many indexes + frequently accessed
           :namespaces,              # Too many indexes + frequently accessed
           :projects,                # Too many indexes + frequently accessed
           :users,                   # Too many indexes + frequently accessed
@@ -43,11 +43,11 @@ module RuboCop
         PATTERN
 
         def_node_matcher :add_concurrent_index?, <<~PATTERN
-          (send nil? :add_concurrent_index ({sym|str} #forbidden_tables?) ...)
+          (send nil? { :add_concurrent_index | :add_concurrent_partitioned_index } ({sym|str} #forbidden_tables?) ...)
         PATTERN
 
         def_node_matcher :prepare_async_index?, <<~PATTERN
-          (send nil? :prepare_async_index ({sym|str} #forbidden_tables?) ...)
+          (send nil? { :prepare_async_index | :prepare_partitioned_async_index } ({sym|str} #forbidden_tables?) ...)
         PATTERN
 
         def_node_matcher :forbidden_constant_defined?, <<~PATTERN
@@ -55,15 +55,15 @@ module RuboCop
         PATTERN
 
         def_node_matcher :add_concurrent_index_with_constant?, <<~PATTERN
-          (send nil? :add_concurrent_index (const nil? _) ...)
+          (send nil? { :add_concurrent_index | :add_concurrent_partitioned_index } (const nil? _) ...)
         PATTERN
 
         def_node_matcher :prepare_async_index_with_constant?, <<~PATTERN
-          (send nil? :prepare_async_index (const nil? _) ...)
+          (send nil? { :prepare_async_index | :prepare_partitioned_async_index } (const nil? _) ...)
         PATTERN
 
         def on_casgn(node)
-          @forbidden_tables_used = !!forbidden_constant_defined?(node)
+          @forbidden_tables_used ||= !!forbidden_constant_defined?(node)
         end
 
         def on_def(node)
@@ -84,10 +84,12 @@ module RuboCop
         end
 
         def offense?(node)
-          add_index?(node) ||
-            add_concurrent_index?(node) ||
-            prepare_async_index?(node) ||
-            any_constant_used_with_forbidden_tables?(node)
+          return true if add_index?(node)
+          return true if add_concurrent_index?(node)
+          return true if prepare_async_index?(node)
+          return true if any_constant_used_with_forbidden_tables?(node)
+
+          false
         end
 
         def any_constant_used_with_forbidden_tables?(node)
