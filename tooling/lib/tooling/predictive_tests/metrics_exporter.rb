@@ -278,6 +278,7 @@ module Tooling
             changed_files_count: changed_files.size,
             predicted_test_files_count: predicted_test_files.size,
             missed_failing_test_files: (failed_test_files - predicted_test_files).size,
+            predicted_failing_test_files: (failed_test_files & predicted_test_files).size,
             failed_test_files_count: failed_test_files.size,
             # rspec tests have runtime information provided via knapsack report
             # frontend tests don't have a runtime report yet, so we skip them
@@ -300,7 +301,7 @@ module Tooling
       # @param value [Integer|Float]
       # @param strategy [Symbol]
       def send_event(label, value, strategy)
-        extra_properties = { ci_job_id: ENV["CI_JOB_ID"], test_type: test_type }
+        extra_properties = { ci_job_id: ENV["CI_JOB_ID"], ci_pipeline_id: ENV["CI_PIPELINE_ID"], test_type: test_type }
         tracker.send_event(
           PREDICTIVE_TEST_METRICS_EVENT,
           label: label,
@@ -321,6 +322,7 @@ module Tooling
         send_event("changed_files_count", core[:changed_files_count], strategy)
         send_event("predicted_test_files_count", core[:predicted_test_files_count], strategy)
         send_event("missed_failing_test_files", core[:missed_failing_test_files], strategy)
+        send_event("predicted_failing_test_files", core[:predicted_failing_test_files], strategy)
 
         return unless test_type == :backend
 
