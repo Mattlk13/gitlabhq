@@ -2492,6 +2492,11 @@ msgstr ""
 msgid "AIAgent|Your agent's system prompt will be applied to the chat input."
 msgstr ""
 
+msgid "AICatalog|%d agent"
+msgid_plural "AICatalog|%d agents"
+msgstr[0] ""
+msgstr[1] ""
+
 msgid "AICatalog|%{linkStart}Service accounts%{linkEnd} represent non-human entities. This is the account that you mention or assign to trigger the %{itemType}."
 msgstr ""
 
@@ -2660,6 +2665,9 @@ msgstr ""
 msgid "AICatalog|Basic information"
 msgstr ""
 
+msgid "AICatalog|Beta"
+msgstr ""
+
 msgid "AICatalog|Build a custom agent in GitLab or connect to an AI model provider you already use."
 msgstr ""
 
@@ -2702,6 +2710,9 @@ msgstr ""
 msgid "AICatalog|Configuration is required."
 msgstr ""
 
+msgid "AICatalog|Connect"
+msgstr ""
+
 msgid "AICatalog|Connect Model Context Protocol servers to extend this agent with external tools and data sources."
 msgstr ""
 
@@ -2736,6 +2747,9 @@ msgid "AICatalog|Could not enable flow"
 msgstr ""
 
 msgid "AICatalog|Could not enable flow in the %{target}. Check that the %{target} meets the %{linkStart}prerequisites%{linkEnd} and try again."
+msgstr ""
+
+msgid "AICatalog|Could not fetch MCP servers."
 msgstr ""
 
 msgid "AICatalog|Could not update %{itemType} in the %{target}."
@@ -3044,6 +3058,9 @@ msgstr ""
 msgid "AICatalog|MCP servers allow your agent to connect with external tools."
 msgstr ""
 
+msgid "AICatalog|MCP servers associated with agents in this group appear here."
+msgstr ""
+
 msgid "AICatalog|Make %{itemType} public?"
 msgstr ""
 
@@ -3081,6 +3098,9 @@ msgid "AICatalog|New agent"
 msgstr ""
 
 msgid "AICatalog|New flow"
+msgstr ""
+
+msgid "AICatalog|No MCP servers found"
 msgstr ""
 
 msgid "AICatalog|No MCP servers yet"
