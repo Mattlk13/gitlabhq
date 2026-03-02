@@ -204,6 +204,12 @@ RSpec.describe Issue, feature_category: :team_planning do
         end
       end
     end
+
+    describe '#validate_work_item_type_id' do
+      subject { build(:issue, project: reusable_project) }
+
+      it_behaves_like 'validates work item type ID'
+    end
   end
 
   subject { create(:issue, project: reusable_project) }

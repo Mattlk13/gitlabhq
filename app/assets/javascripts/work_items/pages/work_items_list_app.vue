@@ -154,6 +154,7 @@ import EmptyStateWithoutAnyIssues from '../list/components/empty_state_without_a
 import searchProjectsQuery from '../list/graphql/search_projects.query.graphql';
 import { combineWorkItemLists, findHierarchyWidget } from '../utils';
 import getUserWorkItemsPreferences from '../graphql/get_user_preferences.query.graphql';
+import { initPlanningViewFeedbackBadge } from '../init_feedback_badge';
 
 const DateToken = () => import('~/vue_shared/components/filtered_search_bar/tokens/date_token.vue');
 const EmojiToken = () =>
@@ -1204,6 +1205,9 @@ export default {
     window.addEventListener('popstate', this.checkDrawerParams);
     this.releasesCache = [];
     this.areReleasesFetched = false;
+    if (this.isPlanningViewsEnabled) {
+      initPlanningViewFeedbackBadge(this.$router);
+    }
   },
   mounted() {
     setPageFullWidth();

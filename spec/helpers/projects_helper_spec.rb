@@ -893,11 +893,11 @@ RSpec.describe ProjectsHelper, feature_category: :source_code_management do
   describe '#transfer_project_message' do
     let_it_be(:project) { create(:project, name: 'My Test  Project') }
 
-    it 'preserves whitespace in the project name' do
+    it 'includes the project full path' do
       result = helper.transfer_project_message(project)
 
       expect(result).to include('class="gl-whitespace-pre-wrap"')
-      expect(result).to include(project.full_name)
+      expect(result).to include(project.full_path)
     end
   end
 

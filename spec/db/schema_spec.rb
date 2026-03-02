@@ -116,7 +116,7 @@ RSpec.describe 'Database schema',
       geo_repository_deleted_events: %w[project_id],
       ghost_user_migrations: %w[initiator_user_id],
       gitlab_subscription_histories: %w[gitlab_subscription_id hosted_plan_id namespace_id],
-      issues: %w[last_edited_by_id state_id],
+      issues: %w[last_edited_by_id state_id work_item_type_id],
       issue_emails: %w[email_message_id],
       jira_tracker_data: %w[jira_issue_transition_id],
       keys: %w[user_id],
@@ -283,7 +283,11 @@ RSpec.describe 'Database schema',
       background_operation_jobs_cell_local: %w[worker_id], # background operation workers partitions have to dropped independently.
       background_operation_jobs: %w[worker_id], # background operation workers partitions have to dropped independently.
       sbom_occurrence_refs: %w[pipeline_id project_id],
-      sbom_occurrences: %w[partition_id]
+      sbom_occurrences: %w[partition_id],
+      work_item_custom_status_mappings: %w[work_item_type_id], # Referential integrity will be handled by application code
+      work_item_type_custom_fields: %w[work_item_type_id], # Referential integrity will be handled by application code
+      work_item_type_custom_lifecycles: %w[work_item_type_id], # Referential integrity will be handled by application code
+      work_item_type_user_preferences: %w[work_item_type_id] # Referential integrity will be handled by application code
     }.with_indifferent_access.freeze
   end
 

@@ -38,7 +38,6 @@ module Namespaces
       # TODO: Remove `transition ancestor_inherited:` after backfills are complete https://gitlab.com/groups/gitlab-org/-/epics/17956
       state_machine :state, initial: :ancestor_inherited do
         state :creation_in_progress
-        state :transfer_in_progress
         state :maintenance
 
         before_transition :validate_ancestors_state
@@ -47,6 +46,9 @@ module Namespaces
         before_transition on: :schedule_deletion, do: :ensure_transition_user
         before_transition on: :schedule_deletion, do: :set_deletion_schedule_data
         before_transition on: :cancel_deletion, do: :clear_deletion_schedule_data
+        before_transition on: :start_transfer, do: :ensure_transition_user
+        before_transition on: :start_transfer, do: :set_transfer_data
+        before_transition on: [:complete_transfer, :cancel_transfer], do: :clear_transfer_data
 
         event :archive do
           transition ancestor_inherited: :archived
@@ -81,6 +83,22 @@ module Namespaces
           transition %i[deletion_scheduled deletion_in_progress] => :ancestor_inherited
           transition ancestor_inherited: :archived, if: :restore_to_archived_on_cancel_deletion?
           transition ancestor_inherited: :ancestor_inherited
+        end
+
+        event :start_transfer do
+          transition %i[ancestor_inherited archived] => :transfer_in_progress
+        end
+
+        event :complete_transfer do
+          transition transfer_in_progress: :archived,
+            if: :restore_to_archived_on_complete_transfer?
+          transition transfer_in_progress: :ancestor_inherited
+        end
+
+        event :cancel_transfer do
+          transition transfer_in_progress: :archived,
+            if: :restore_to_archived_on_cancel_transfer?
+          transition transfer_in_progress: :ancestor_inherited
         end
 
         after_transition :log_transition

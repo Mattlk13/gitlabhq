@@ -69,13 +69,13 @@ func (m *workflowLockManager) acquireLock(ctx context.Context, workflowID string
 }
 
 func (m *workflowLockManager) releaseLock(ctx context.Context, mutex *redsync.Mutex, workflowID string, workflowDefinition string) {
-	logger := log.WithContextFields(ctx, log.Fields{
-		"workflow_id": workflowID, "workflow_definition": workflowDefinition,
-	})
-
 	if m == nil || mutex == nil {
 		return
 	}
+
+	logger := log.WithContextFields(ctx, log.Fields{
+		"workflow_id": workflowID, "workflow_definition": workflowDefinition,
+	})
 
 	ok, err := mutex.UnlockContext(ctx)
 	if err != nil {

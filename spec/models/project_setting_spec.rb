@@ -398,4 +398,46 @@ RSpec.describe ProjectSetting, type: :model, feature_category: :groups_and_proje
     it_behaves_like 'a cascading project setting boolean attribute',
       settings_attribute_name: :web_based_commit_signing_enabled
   end
+
+  describe '#code_owner_reviewer_auto_assignment_enabled?', feature_category: :code_review_workflow do
+    let_it_be(:project) { create(:project) }
+    let(:project_setting) { project.project_setting }
+
+    context 'when feature flag is disabled' do
+      before do
+        stub_feature_flags(auto_assign_code_owner_reviewers: false)
+        project_setting.update!(code_owner_reviewer_assignment_strategy: 'all_members')
+      end
+
+      it 'returns false' do
+        expect(project_setting.code_owner_reviewer_auto_assignment_enabled?).to be(false)
+      end
+    end
+
+    context 'when feature flag is enabled' do
+      before do
+        stub_feature_flags(auto_assign_code_owner_reviewers: true)
+      end
+
+      context 'when strategy is disabled' do
+        before do
+          project_setting.update!(code_owner_reviewer_assignment_strategy: 'disabled')
+        end
+
+        it 'returns false' do
+          expect(project_setting.code_owner_reviewer_auto_assignment_enabled?).to be(false)
+        end
+      end
+
+      context 'when strategy is all_members' do
+        before do
+          project_setting.update!(code_owner_reviewer_assignment_strategy: 'all_members')
+        end
+
+        it 'returns true' do
+          expect(project_setting.code_owner_reviewer_auto_assignment_enabled?).to be(true)
+        end
+      end
+    end
+  end
 end

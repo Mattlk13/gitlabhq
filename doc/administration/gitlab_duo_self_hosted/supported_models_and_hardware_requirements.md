@@ -93,23 +93,15 @@ This feature is in beta and is therefore subject to change as we gather feedback
 - Not all GitLab Duo features are guaranteed to work optimally with every compatible model.
 - Response quality, speed, and performance overall might vary significantly based on your model choice.
 
-| Model family | Model requirements | Supported platforms |
-|--------------|--------------------|---------------------|
-| General | Any model compatible with the [OpenAI API specification](https://platform.openai.com/docs/api-reference) | Any platform that provides OpenAI-compatible API endpoints |
-| CodeGemma      | [CodeGemma 2b](https://huggingface.co/google/codegemma-2b) | [vLLM](supported_llm_serving_platforms.md#for-self-hosted-model-deployments) |
-| CodeGemma      | [CodeGemma 7b-it](https://huggingface.co/google/codegemma-7b-it) | [vLLM](supported_llm_serving_platforms.md#for-self-hosted-model-deployments) |
-| CodeGemma      | [CodeGemma 7b-code](https://huggingface.co/google/codegemma-7b) | [vLLM](supported_llm_serving_platforms.md#for-self-hosted-model-deployments) |
-| Code Llama     | [Code-Llama 13b](https://huggingface.co/meta-llama/CodeLlama-13b-Instruct-hf) | [vLLM](supported_llm_serving_platforms.md#for-self-hosted-model-deployments) |
-| DeepSeek Coder | [DeepSeek Coder 33b Instruct](https://huggingface.co/deepseek-ai/deepseek-coder-33b-instruct) | [vLLM](supported_llm_serving_platforms.md#for-self-hosted-model-deployments) |
-| DeepSeek Coder | [DeepSeek Coder 33b Base](https://huggingface.co/deepseek-ai/deepseek-coder-33b-base) | [vLLM](supported_llm_serving_platforms.md#for-self-hosted-model-deployments) |
-| Mistral        | [Mistral 7B-it v0.2](https://huggingface.co/mistralai/Mistral-7B-Instruct-v0.2) | [vLLM](supported_llm_serving_platforms.md#for-self-hosted-model-deployments) <br> [AWS Bedrock](https://aws.amazon.com/bedrock/mistral/) |
-| Mistral | [Mistral 7B-it v0.3](https://huggingface.co/mistralai/Mistral-7B-Instruct-v0.3) <sup>1</sup> | [vLLM](supported_llm_serving_platforms.md#for-self-hosted-model-deployments) |
-| Mistral | [Mixtral 8x7B-it v0.1](https://huggingface.co/mistralai/Mixtral-8x7B-Instruct-v0.1) <sup>1</sup> | [vLLM](supported_llm_serving_platforms.md#for-self-hosted-model-deployments), [AWS Bedrock](https://aws.amazon.com/bedrock/mistral/) |
-| Mistral | [Mixtral 8x22B-it v0.1](https://huggingface.co/mistralai/Mixtral-8x22B-Instruct-v0.1) <sup>1</sup> | [vLLM](supported_llm_serving_platforms.md#for-self-hosted-model-deployments) |
-
-**Footnotes**:
-
-1. This model was [deprecated](../../update/deprecations.md#early-mistral-models-deprecated-for-gitlab-duo-self-hosted) in GitLab 18.3. You should use Mistral Small 24B Instruct 2506 instead.
+| Model family | Model |
+|-------------|-------|
+| General | Any model compatible with the [OpenAI API specification](https://platform.openai.com/docs/api-reference) |
+| CodeGemma      | [CodeGemma 2b](https://huggingface.co/google/codegemma-2b) |
+| CodeGemma      | [CodeGemma 7b-it](https://huggingface.co/google/codegemma-7b-it) |
+| CodeGemma      | [CodeGemma 7b-code](https://huggingface.co/google/codegemma-7b) |
+| Code Llama     | [Code-Llama 13b](https://huggingface.co/meta-llama/CodeLlama-13b-Instruct-hf) |
+| DeepSeek Coder | [DeepSeek Coder 33b Instruct](https://huggingface.co/deepseek-ai/deepseek-coder-33b-instruct) |
+| DeepSeek Coder | [DeepSeek Coder 33b Base](https://huggingface.co/deepseek-ai/deepseek-coder-33b-base) |
 
 <!-- vale gitlab_base.Spelling = YES -->
 

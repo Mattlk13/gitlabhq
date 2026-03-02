@@ -933,6 +933,7 @@ project:
 - error_tracking_client_keys
 - pending_builds
 - security_scans
+- security_ascp_scans
 - ci_feature_usages
 - bulk_import_exports
 - ci_project_mirror

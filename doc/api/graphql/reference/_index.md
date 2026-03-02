@@ -288,6 +288,7 @@ four standard [pagination arguments](#pagination-arguments):
 | <a id="query-aicatalogconfigureditems-configurableforprojectid"></a>`configurableForProjectId` | [`ProjectID`](#projectid) | Project ID to filter AI Catalog item consumers. When provided with group_id, returns only consumers whose associated items are configurable within the project (i.e., group-enabled items that are public or owned by the project). Excludes consumers for items that are private to other projects. |
 | <a id="query-aicatalogconfigureditems-foundationalflowreference"></a>`foundationalFlowReference` | [`String`](#string) | Filter by foundational flow reference. |
 | <a id="query-aicatalogconfigureditems-groupid"></a>`groupId` | [`GroupID`](#groupid) | Group ID to retrieve configured AI Catalog items for. |
+| <a id="query-aicatalogconfigureditems-includefoundationalconsumers"></a>`includeFoundationalConsumers` {{< icon name="warning-solid" >}} | [`Boolean`](#boolean) | **Introduced** in GitLab 18.10. **Status**: Experiment. Include configured foundational AI Catalog items. |
 | <a id="query-aicatalogconfigureditems-includeinherited"></a>`includeInherited` | [`Boolean`](#boolean) | Include configured AI Catalog items inherited from parent groups. |
 | <a id="query-aicatalogconfigureditems-itemid"></a>`itemId` | [`AiCatalogItemID`](#aicatalogitemid) | Item ID to retrieve configured AI Catalog items for. |
 | <a id="query-aicatalogconfigureditems-itemtype"></a>`itemType` | [`AiCatalogItemType`](#aicatalogitemtype) | Type of items to retrieve. |
@@ -3679,6 +3680,34 @@ Input type: `ArtifactDestroyInput`
 | <a id="mutation-artifactdestroy-clientmutationid"></a>`clientMutationId` | [`String`](#string) | A unique identifier for the client performing the mutation. |
 | <a id="mutation-artifactdestroy-errors"></a>`errors` | [`[String!]!`](#string) | Errors encountered during the mutation. |
 
+### `Mutation.ascpScanCreate`
+
+{{< details >}}
+**Introduced** in GitLab 18.10.
+**Status**: Experiment.
+{{< /details >}}
+
+Input type: `AscpScanCreateInput`
+
+#### Arguments
+
+| Name | Type | Description |
+| ---- | ---- | ----------- |
+| <a id="mutation-ascpscancreate-basecommitsha"></a>`baseCommitSha` | [`String`](#string) | Base commit SHA for incremental scans. |
+| <a id="mutation-ascpscancreate-basescanid"></a>`baseScanId` | [`SecurityAscpScanID`](#securityascpscanid) | ID of the base scan for incremental scans. |
+| <a id="mutation-ascpscancreate-clientmutationid"></a>`clientMutationId` | [`String`](#string) | A unique identifier for the client performing the mutation. |
+| <a id="mutation-ascpscancreate-commitsha"></a>`commitSha` | [`String!`](#string) | Git commit SHA that was scanned. |
+| <a id="mutation-ascpscancreate-projectpath"></a>`projectPath` | [`ID!`](#id) | Full path of the project. |
+| <a id="mutation-ascpscancreate-scantype"></a>`scanType` | [`AscpScanType`](#ascpscantype) | Type of scan (default: full). |
+
+#### Fields
+
+| Name | Type | Description |
+| ---- | ---- | ----------- |
+| <a id="mutation-ascpscancreate-clientmutationid"></a>`clientMutationId` | [`String`](#string) | A unique identifier for the client performing the mutation. |
+| <a id="mutation-ascpscancreate-errors"></a>`errors` | [`[String!]!`](#string) | Errors encountered during the mutation. |
+| <a id="mutation-ascpscancreate-scan"></a>`scan` {{< icon name="warning-solid" >}} | [`AscpScan`](#ascpscan) | **Deprecated**: **Status**: Experiment. Introduced in GitLab 18.10. |
+
 ### `Mutation.auditEventsAmazonS3ConfigurationCreate`
 
 {{< details >}}
@@ -5267,6 +5296,30 @@ Input type: `ConfigureSecretDetectionInput`
 | <a id="mutation-configuresecretdetection-errors"></a>`errors` | [`[String!]!`](#string) | Errors encountered during the mutation. |
 | <a id="mutation-configuresecretdetection-successpath"></a>`successPath` | [`String`](#string) | Redirect path to use when the response is successful. |
 
+### `Mutation.containerCacheEntryDelete`
+
+{{< details >}}
+**Introduced** in GitLab 18.10.
+**Status**: Experiment.
+{{< /details >}}
+
+Input type: `ContainerCacheEntryDeleteInput`
+
+#### Arguments
+
+| Name | Type | Description |
+| ---- | ---- | ----------- |
+| <a id="mutation-containercacheentrydelete-clientmutationid"></a>`clientMutationId` | [`String`](#string) | A unique identifier for the client performing the mutation. |
+| <a id="mutation-containercacheentrydelete-id"></a>`id` | [`String!`](#string) | ID of the cache entry. |
+
+#### Fields
+
+| Name | Type | Description |
+| ---- | ---- | ----------- |
+| <a id="mutation-containercacheentrydelete-cacheentry"></a>`cacheEntry` | [`ContainerUpstreamCacheEntry`](#containerupstreamcacheentry) | Deleted container cache entry. |
+| <a id="mutation-containercacheentrydelete-clientmutationid"></a>`clientMutationId` | [`String`](#string) | A unique identifier for the client performing the mutation. |
+| <a id="mutation-containercacheentrydelete-errors"></a>`errors` | [`[String!]!`](#string) | Errors encountered during the mutation. |
+
 ### `Mutation.containerUpstreamCacheDelete`
 
 {{< details >}}
@@ -6066,6 +6119,39 @@ Input type: `CreateIterationInput`
 | <a id="mutation-createiteration-clientmutationid"></a>`clientMutationId` | [`String`](#string) | A unique identifier for the client performing the mutation. |
 | <a id="mutation-createiteration-errors"></a>`errors` | [`[String!]!`](#string) | Errors encountered during the mutation. |
 | <a id="mutation-createiteration-iteration"></a>`iteration` | [`Iteration`](#iteration) | Created iteration. |
+
+### `Mutation.createLatestDiffNote`
+
+{{< details >}}
+**Introduced** in GitLab 18.10.
+**Status**: Experiment.
+{{< /details >}}
+
+Creates a diff note on a merge request using minimal parameters. SHAs, file paths, and position type are resolved automatically from the latest merge request diff.
+
+Input type: `CreateLatestDiffNoteInput`
+
+#### Arguments
+
+| Name | Type | Description |
+| ---- | ---- | ----------- |
+| <a id="mutation-createlatestdiffnote-body"></a>`body` | [`String!`](#string) | Content of the note. |
+| <a id="mutation-createlatestdiffnote-clientmutationid"></a>`clientMutationId` | [`String`](#string) | A unique identifier for the client performing the mutation. |
+| <a id="mutation-createlatestdiffnote-filepath"></a>`filePath` | [`String!`](#string) | Path of the file to comment on. For renamed files, either the old or new path can be used. |
+| <a id="mutation-createlatestdiffnote-headsha"></a>`headSha` | [`String!`](#string) | HEAD SHA of the merge request diff. The request fails if it does not match the current diff, guarding against commenting on a stale diff. |
+| <a id="mutation-createlatestdiffnote-internal"></a>`internal` | [`Boolean`](#boolean) | Internal flag for a note. Default is false. |
+| <a id="mutation-createlatestdiffnote-newline"></a>`newLine` | [`Int`](#int) | Line number on the new version of the file. Use alone for added lines, with oldLine for unchanged context lines. At least one of newLine or oldLine is required. |
+| <a id="mutation-createlatestdiffnote-noteableid"></a>`noteableId` | [`MergeRequestID!`](#mergerequestid) | Global ID of the merge request to add a diff note to. |
+| <a id="mutation-createlatestdiffnote-oldline"></a>`oldLine` | [`Int`](#int) | Line number on the old version of the file. Use alone for removed lines, with newLine for unchanged context lines. At least one of newLine or oldLine is required. |
+
+#### Fields
+
+| Name | Type | Description |
+| ---- | ---- | ----------- |
+| <a id="mutation-createlatestdiffnote-clientmutationid"></a>`clientMutationId` | [`String`](#string) | A unique identifier for the client performing the mutation. |
+| <a id="mutation-createlatestdiffnote-errors"></a>`errors` | [`[String!]!`](#string) | Errors encountered during the mutation. |
+| <a id="mutation-createlatestdiffnote-note"></a>`note` | [`Note`](#note) | Note after mutation. |
+| <a id="mutation-createlatestdiffnote-quickactionsstatus"></a>`quickActionsStatus` | [`QuickActionsStatus`](#quickactionsstatus) | Status of quick actions after mutation. |
 
 ### `Mutation.createNote`
 
@@ -17821,6 +17907,29 @@ The edge type for [`ApprovalProjectRule`](#approvalprojectrule).
 | <a id="approvalprojectruleedge-cursor"></a>`cursor` | [`String!`](#string) | A cursor for use in pagination. |
 | <a id="approvalprojectruleedge-node"></a>`node` | [`ApprovalProjectRule`](#approvalprojectrule) | The item at the end of the edge. |
 
+#### `AscpScanConnection`
+
+The connection type for [`AscpScan`](#ascpscan).
+
+##### Fields
+
+| Name | Type | Description |
+| ---- | ---- | ----------- |
+| <a id="ascpscanconnection-edges"></a>`edges` | [`[AscpScanEdge]`](#ascpscanedge) | A list of edges. |
+| <a id="ascpscanconnection-nodes"></a>`nodes` | [`[AscpScan]`](#ascpscan) | A list of nodes. |
+| <a id="ascpscanconnection-pageinfo"></a>`pageInfo` | [`PageInfo!`](#pageinfo) | Information to aid in pagination. |
+
+#### `AscpScanEdge`
+
+The edge type for [`AscpScan`](#ascpscan).
+
+##### Fields
+
+| Name | Type | Description |
+| ---- | ---- | ----------- |
+| <a id="ascpscanedge-cursor"></a>`cursor` | [`String!`](#string) | A cursor for use in pagination. |
+| <a id="ascpscanedge-node"></a>`node` | [`AscpScan`](#ascpscan) | The item at the end of the edge. |
+
 #### `AuditEventDefinitionConnection`
 
 The connection type for [`AuditEventDefinition`](#auditeventdefinition).
@@ -28095,6 +28204,23 @@ Represents the scan result policy.
 | <a id="approvalscanresultpolicy-approvalsrequired"></a>`approvalsRequired` | [`Int!`](#int) | Represents the required approvals defined in the policy. |
 | <a id="approvalscanresultpolicy-name"></a>`name` | [`String!`](#string) | Represents the name of the policy. |
 | <a id="approvalscanresultpolicy-reporttype"></a>`reportType` | [`ApprovalReportType!`](#approvalreporttype) | Represents the report_type of the approval rule. |
+
+### `AscpScan`
+
+An ASCP scan of a project.
+
+#### Fields
+
+| Name | Type | Description |
+| ---- | ---- | ----------- |
+| <a id="ascpscan-basecommitsha"></a>`baseCommitSha` | [`String`](#string) | Base commit SHA for incremental scans. |
+| <a id="ascpscan-basescan"></a>`baseScan` | [`AscpScan`](#ascpscan) | Reference to the base scan for incremental scans. |
+| <a id="ascpscan-commitsha"></a>`commitSha` | [`String!`](#string) | Git commit SHA that was scanned. |
+| <a id="ascpscan-createdat"></a>`createdAt` | [`Time!`](#time) | Timestamp when the scan was created. |
+| <a id="ascpscan-id"></a>`id` | [`SecurityAscpScanID!`](#securityascpscanid) | ID of the scan. |
+| <a id="ascpscan-scansequence"></a>`scanSequence` | [`Int!`](#int) | Sequence number of the scan within the project. |
+| <a id="ascpscan-scantype"></a>`scanType` | [`AscpScanType!`](#ascpscantype) | Type of scan (full or incremental). |
+| <a id="ascpscan-updatedat"></a>`updatedAt` | [`Time!`](#time) | Timestamp when the scan was last updated. |
 
 ### `AssetType`
 
@@ -44392,6 +44518,27 @@ four standard [pagination arguments](#pagination-arguments):
 | <a id="project-approvalpolicies-includeunscoped"></a>`includeUnscoped` | [`Boolean`](#boolean) | Filter policies that are scoped to the project. |
 | <a id="project-approvalpolicies-relationship"></a>`relationship` | [`SecurityPolicyRelationType`](#securitypolicyrelationtype) | Filter policies by the given policy relationship. Default is DIRECT. |
 
+##### `Project.ascpScans`
+
+{{< details >}}
+**Introduced** in GitLab 18.10.
+**Status**: Experiment.
+{{< /details >}}
+
+ASCP security scans for this project.
+
+Returns [`AscpScanConnection`](#ascpscanconnection).
+
+This field returns a [connection](#connections). It accepts the
+four standard [pagination arguments](#pagination-arguments):
+`before: String`, `after: String`, `first: Int`, and `last: Int`.
+
+###### Arguments
+
+| Name | Type | Description |
+| ---- | ---- | ----------- |
+| <a id="project-ascpscans-scantype"></a>`scanType` | [`AscpScanType`](#ascpscantype) | Filter by scan type. |
+
 ##### `Project.autocompleteUsers`
 
 Search users for autocompletion.
@@ -53529,6 +53676,15 @@ The kind of an approval rule.
 | <a id="approvalruletype-regular"></a>`REGULAR` | A `regular` approval rule. |
 | <a id="approvalruletype-report_approver"></a>`REPORT_APPROVER` | A `report_approver` approval rule. |
 
+### `AscpScanType`
+
+Type of ASCP scan (full or incremental).
+
+| Value | Description |
+| ----- | ----------- |
+| <a id="ascpscantype-full"></a>`FULL` | Full scan of the entire codebase. |
+| <a id="ascpscantype-incremental"></a>`INCREMENTAL` | Incremental scan based on changes since last scan. |
+
 ### `AssigneeWildcardId`
 
 Assignee ID wildcard values.
@@ -58911,6 +59067,12 @@ An example `SbomComponentVersionID` is: `"gid://gitlab/Sbom::ComponentVersion/1"
 A `SbomOccurrenceID` is a global ID. It is encoded as a string.
 
 An example `SbomOccurrenceID` is: `"gid://gitlab/Sbom::Occurrence/1"`.
+
+### `SecurityAscpScanID`
+
+A `SecurityAscpScanID` is a global ID. It is encoded as a string.
+
+An example `SecurityAscpScanID` is: `"gid://gitlab/Security::Ascp::Scan/1"`.
 
 ### `SecurityAttributeID`
 

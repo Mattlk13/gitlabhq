@@ -846,6 +846,9 @@ Settings.cron_jobs['lost_transaction_recovery_worker']['job_class'] = 'Cells::Lo
 Settings.cron_jobs['topology_service_stale_requests_cleanup_worker'] ||= {}
 Settings.cron_jobs['topology_service_stale_requests_cleanup_worker']['cron'] ||= '*/5 * * * *'
 Settings.cron_jobs['topology_service_stale_requests_cleanup_worker']['job_class'] = 'Cells::StaleRequestsCleanupCronWorker'
+Settings.cron_jobs['concurrency_limit_resume_worker'] ||= {}
+Settings.cron_jobs['concurrency_limit_resume_worker']['cron'] ||= '*/1 * * * *'
+Settings.cron_jobs['concurrency_limit_resume_worker']['job_class'] ||= 'ConcurrencyLimit::ResumeWorker'
 
 Gitlab.ee do
   Settings.cron_jobs['analytics_devops_adoption_create_all_snapshots_worker'] ||= {}
@@ -950,9 +953,6 @@ Gitlab.ee do
   Settings.cron_jobs['pause_control_resume_worker'] ||= {}
   Settings.cron_jobs['pause_control_resume_worker']['cron'] ||= '*/5 * * * *'
   Settings.cron_jobs['pause_control_resume_worker']['job_class'] ||= 'PauseControl::ResumeWorker'
-  Settings.cron_jobs['concurrency_limit_resume_worker'] ||= {}
-  Settings.cron_jobs['concurrency_limit_resume_worker']['cron'] ||= '*/1 * * * *'
-  Settings.cron_jobs['concurrency_limit_resume_worker']['job_class'] ||= 'ConcurrencyLimit::ResumeWorker'
   Settings.cron_jobs['sync_seat_link_worker'] ||= {}
   Settings.cron_jobs['sync_seat_link_worker']['cron'] ||= "#{rand(60)} #{rand(3..4)} * * * UTC" # rubocop: disable Scalability/RandomCronSchedule -- https://gitlab.com/gitlab-org/gitlab/-/issues/536393
   Settings.cron_jobs['sync_seat_link_worker']['job_class'] = 'SyncSeatLinkWorker'
@@ -1051,7 +1051,7 @@ Gitlab.ee do
   Settings.cron_jobs['timeout_pending_status_check_responses_worker']['job_class'] = 'ComplianceManagement::TimeoutPendingStatusCheckResponsesWorker'
   Settings.cron_jobs['click_house_ci_finished_builds_sync_worker'] ||= {}
   Settings.cron_jobs['click_house_ci_finished_builds_sync_worker']['cron'] ||= '*/3 * * * *'
-  Settings.cron_jobs['click_house_ci_finished_builds_sync_worker']['args'] ||= [1]
+  Settings.cron_jobs['click_house_ci_finished_builds_sync_worker']['args'] ||= [3]
   Settings.cron_jobs['click_house_ci_finished_builds_sync_worker']['job_class'] = 'ClickHouse::CiFinishedBuildsSyncCronWorker'
   Settings.cron_jobs['click_house_events_sync_worker'] ||= {}
   Settings.cron_jobs['click_house_events_sync_worker']['cron'] ||= "*/3 * * * *"

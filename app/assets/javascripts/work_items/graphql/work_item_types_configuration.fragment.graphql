@@ -2,6 +2,7 @@ fragment WorkItemTypesConfiguration on WorkItemType {
   id
   name
   archived
+  enabled
   canPromoteToObjective
   canUserCreateItems
   isConfigurable

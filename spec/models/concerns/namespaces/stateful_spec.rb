@@ -102,8 +102,13 @@ RSpec.describe Namespaces::Stateful, feature_category: :groups_and_projects do
       it { is_expected.to handle_events :cancel_deletion, when: :deletion_scheduled }
       it { is_expected.to handle_events :cancel_deletion, when: :deletion_in_progress }
       it { is_expected.to handle_events :cancel_deletion, when: :ancestor_inherited }
+      it { is_expected.to handle_events :start_transfer, when: :ancestor_inherited }
+      it { is_expected.to handle_events :start_transfer, when: :archived }
+      it { is_expected.to handle_events :complete_transfer, when: :transfer_in_progress }
+      it { is_expected.to handle_events :cancel_transfer, when: :transfer_in_progress }
       it { is_expected.to reject_events :archive, when: :archived }
       it { is_expected.to reject_events :schedule_deletion, when: :deletion_scheduled }
+      it { is_expected.to reject_events :start_transfer, when: :transfer_in_progress }
     end
 
     describe 'transitions' do
@@ -117,6 +122,10 @@ RSpec.describe Namespaces::Stateful, feature_category: :groups_and_projects do
         :start_deletion      | :deletion_scheduled   | :deletion_in_progress
         :reschedule_deletion | :deletion_in_progress | :deletion_scheduled
         :reschedule_deletion | :ancestor_inherited   | :deletion_scheduled
+        :start_transfer      | :ancestor_inherited   | :transfer_in_progress
+        :start_transfer      | :archived             | :transfer_in_progress
+        :complete_transfer   | :transfer_in_progress | :ancestor_inherited
+        :cancel_transfer     | :transfer_in_progress | :ancestor_inherited
       end
 
       with_them do
@@ -154,6 +163,9 @@ RSpec.describe Namespaces::Stateful, feature_category: :groups_and_projects do
           :reschedule_deletion | :deletion_in_progress | :start_deletion    | :ancestor_inherited
           :reschedule_deletion | :deletion_in_progress | :start_deletion    | :archived
           :reschedule_deletion | :deletion_in_progress | :start_deletion    | :deletion_scheduled
+          :complete_transfer   | :transfer_in_progress | :start_transfer    | :ancestor_inherited
+          :complete_transfer   | :transfer_in_progress | :start_transfer    | :archived
+          :cancel_transfer     | :transfer_in_progress | :start_transfer    | :archived
         end
 
         with_them do
@@ -224,6 +236,23 @@ RSpec.describe Namespaces::Stateful, feature_category: :groups_and_projects do
         :cancel_deletion     | :creation_in_progress
         :cancel_deletion     | :transfer_in_progress
         :cancel_deletion     | :maintenance
+        :start_transfer      | :deletion_scheduled
+        :start_transfer      | :deletion_in_progress
+        :start_transfer      | :creation_in_progress
+        :start_transfer      | :transfer_in_progress
+        :start_transfer      | :maintenance
+        :complete_transfer   | :ancestor_inherited
+        :complete_transfer   | :archived
+        :complete_transfer   | :deletion_scheduled
+        :complete_transfer   | :deletion_in_progress
+        :complete_transfer   | :creation_in_progress
+        :complete_transfer   | :maintenance
+        :cancel_transfer     | :ancestor_inherited
+        :cancel_transfer     | :archived
+        :cancel_transfer     | :deletion_scheduled
+        :cancel_transfer     | :deletion_in_progress
+        :cancel_transfer     | :creation_in_progress
+        :cancel_transfer     | :maintenance
       end
 
       with_them do

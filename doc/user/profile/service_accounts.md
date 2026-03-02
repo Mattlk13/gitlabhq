@@ -44,6 +44,8 @@ Service accounts:
 - Are not [billable users](../../subscriptions/manage_users_and_seats.md#billable-users) or [internal users](../../administration/internal_users.md).
 - Are available on [trial versions](https://gitlab.com/-/trial_registrations/new?glm_source=docs.gitlab.com&glm_content=free-user-limit-faq/ee/user/free_user_limit.html)
   of GitLab. On GitLab.com, the Owner of the top-level group must verify their identity first.
+- Cannot create top-level groups or other service accounts.
+  when provisioned by a subgroup or project.
 
 You can also manage service accounts through the [service accounts API](../../api/service_accounts.md).
 
@@ -55,8 +57,8 @@ Service accounts have three types, each with a different scope and prerequisites
 
 {{< tab title="Instance service accounts" >}}
 
-Instance service accounts are available to an entire GitLab instance, but must still be added
-to groups and projects like a human user.
+Instance service accounts are created through the Admin area, and can be invited to any group or
+project on the instance.
 
 Prerequisites:
 
@@ -66,8 +68,9 @@ Prerequisites:
 
 {{< tab title="Group service accounts" >}}
 
-Group service accounts are owned by a specific group and can be invited to the group where they were
-created or to any descendant subgroups or projects. They cannot be invited to ancestor groups.
+Group service accounts are created by a specific group and can be invited to the group where they
+were created or to any descendant subgroups or projects. They cannot create top-level groups or
+service accounts.
 
 Prerequisites:
 
@@ -80,7 +83,8 @@ Prerequisites:
 
 {{< tab title="Project service accounts" >}}
 
-Project service accounts are owned by a specific project and are available only to that project.
+Project service accounts are created by a specific project and are available only to that project.
+They cannot create top-level groups or service accounts.
 
 Prerequisites:
 

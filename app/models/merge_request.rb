@@ -949,12 +949,20 @@ class MergeRequest < ApplicationRecord
   end
 
   def committer_ids_to_filter_from_approvers
-    committers(with_merge_commits: true, include_author_when_signed: true).select(:id)
+    if Feature.enabled?(:approval_committer_emails_from_diff, target_project)
+      User.by_any_email(committer_emails_from_diff).select(:id)
+    else
+      committers(with_merge_commits: true, include_author_when_signed: true).select(:id)
+    end
   end
   strong_memoize_attr :committer_ids_to_filter_from_approvers
 
   def committers_to_filter_from_approvers
-    committers(with_merge_commits: true, lazy: true, include_author_when_signed: true)
+    if Feature.enabled?(:approval_committer_emails_from_diff, target_project)
+      User.by_any_email(committer_emails_from_diff)
+    else
+      committers(with_merge_commits: true, lazy: true, include_author_when_signed: true)
+    end
   end
   strong_memoize_attr :committers_to_filter_from_approvers
 
@@ -1466,7 +1474,7 @@ class MergeRequest < ApplicationRecord
 
   def reload_diff_if_branch_changed
     if (saved_change_to_source_branch? || saved_change_to_target_branch?) &&
-        (source_branch_head && target_branch_head)
+        source_branch_head && target_branch_head
       reload_diff
     end
   end
@@ -2871,6 +2879,42 @@ class MergeRequest < ApplicationRecord
   end
 
   private
+
+  def committer_emails_from_diff
+    return [] unless merge_request_diff&.persisted?
+
+    union = Arel::Nodes::Union.new(
+      committer_emails_via_metadata_query,
+      committer_emails_via_direct_query
+    )
+
+    ApplicationRecord.connection.select_values(union.to_sql)
+  end
+  strong_memoize_attr :committer_emails_from_diff
+
+  def committer_emails_via_metadata_query
+    dc = MergeRequestDiffCommit.arel_table
+    m = MergeRequest::CommitsMetadata.arel_table
+    u = MergeRequest::DiffCommitUser.arel_table
+
+    dc.project(u[:email])
+      .join(m).on(
+        m[:id].eq(dc[:merge_request_commits_metadata_id])
+        .and(m[:project_id].eq(target_project_id))
+      )
+      .join(u).on(u[:id].eq(m[:committer_id]))
+      .where(dc[:merge_request_diff_id].eq(merge_request_diff.id))
+  end
+
+  def committer_emails_via_direct_query
+    dc = MergeRequestDiffCommit.arel_table
+    u = MergeRequest::DiffCommitUser.arel_table
+
+    dc.project(u[:email])
+      .join(u).on(u[:id].eq(dc[:committer_id]))
+      .where(dc[:merge_request_diff_id].eq(merge_request_diff.id))
+      .where(dc[:merge_request_commits_metadata_id].eq(nil))
+  end
 
   def update_cached_closing_issues_from_description!(issues_to_close_ids)
     # These might have been created manually from the work item interface

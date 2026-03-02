@@ -324,22 +324,17 @@ module MergeRequests
         existing_commits, @push.oldrev
       )
 
-      if Feature.enabled?(:split_refresh_worker_notify_about_push, @current_user)
-        new_commits_data, total_new = prepare_commits_for_notification(new_commits)
-        existing_commits_data, total_existing = prepare_commits_for_notification(existing_commits, first_and_last_only: true)
+      new_commits_data, total_new = prepare_commits_for_notification(new_commits)
+      existing_commits_data, total_existing = prepare_commits_for_notification(existing_commits, first_and_last_only: true)
 
-        MergeRequests::Refresh::NotifyAboutPushWorker.perform_async(
-          merge_request.id,
-          @current_user.id,
-          new_commits_data,
-          total_new,
-          existing_commits_data,
-          total_existing
-        )
-      else
-        notification_service.push_to_merge_request(
-          merge_request, @current_user, new_commits: new_commits, existing_commits: existing_commits)
-      end
+      MergeRequests::Refresh::NotifyAboutPushWorker.perform_async(
+        merge_request.id,
+        @current_user.id,
+        new_commits_data,
+        total_new,
+        existing_commits_data,
+        total_existing
+      )
     end
 
     def mark_mr_as_draft_from_commits(merge_request)

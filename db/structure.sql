@@ -27519,6 +27519,7 @@ CREATE TABLE project_settings (
     duo_sast_vr_workflow_enabled boolean DEFAULT false NOT NULL,
     automatic_rebase_enabled boolean DEFAULT false NOT NULL,
     duo_secret_detection_fp_enabled boolean DEFAULT true NOT NULL,
+    code_owner_reviewer_assignment_strategy smallint DEFAULT 0 NOT NULL,
     CONSTRAINT check_1a30456322 CHECK ((char_length(pages_unique_domain) <= 63)),
     CONSTRAINT check_237486989c CHECK ((char_length(merge_request_title_regex_description) <= 255)),
     CONSTRAINT check_3a03e7557a CHECK ((char_length(previous_default_branch) <= 4096)),
@@ -54315,9 +54316,6 @@ ALTER TABLE ONLY import_placeholder_user_details
 ALTER TABLE ONLY lists
     ADD CONSTRAINT fk_10deab2eef FOREIGN KEY (custom_status_id) REFERENCES work_item_custom_statuses(id) ON DELETE CASCADE;
 
-ALTER TABLE ONLY work_item_type_custom_lifecycles
-    ADD CONSTRAINT fk_111d417cb7 FOREIGN KEY (work_item_type_id) REFERENCES work_item_types(id) ON DELETE CASCADE;
-
 ALTER TABLE ONLY group_deletion_schedules
     ADD CONSTRAINT fk_11e3ebfcdd FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE;
 
@@ -56054,9 +56052,6 @@ ALTER TABLE ONLY projects_branch_rules_merge_request_approval_settings
 
 ALTER TABLE ONLY issue_tracker_data
     ADD CONSTRAINT fk_b33e816ada FOREIGN KEY (organization_id) REFERENCES organizations(id) ON DELETE CASCADE NOT VALID;
-
-ALTER TABLE ONLY issues
-    ADD CONSTRAINT fk_b37be69be6 FOREIGN KEY (work_item_type_id) REFERENCES work_item_types(id);
 
 ALTER TABLE ONLY packages_conan_package_revisions
     ADD CONSTRAINT fk_b482b1a2f8 FOREIGN KEY (package_reference_id) REFERENCES packages_conan_package_references(id) ON DELETE CASCADE;
@@ -59106,20 +59101,11 @@ ALTER TABLE ONLY work_item_custom_status_mappings
 ALTER TABLE ONLY work_item_custom_status_mappings
     ADD CONSTRAINT fk_wi_status_mappings_old_status_id FOREIGN KEY (old_status_id) REFERENCES work_item_custom_statuses(id) ON DELETE RESTRICT;
 
-ALTER TABLE ONLY work_item_custom_status_mappings
-    ADD CONSTRAINT fk_wi_status_mappings_work_item_type_id FOREIGN KEY (work_item_type_id) REFERENCES work_item_types(id) ON DELETE CASCADE;
-
 ALTER TABLE ONLY work_item_colors
     ADD CONSTRAINT fk_work_item_colors_on_namespace_id FOREIGN KEY (namespace_id) REFERENCES namespaces(id) ON DELETE CASCADE;
 
 ALTER TABLE ONLY work_item_dates_sources
     ADD CONSTRAINT fk_work_item_dates_sources_on_namespace_id FOREIGN KEY (namespace_id) REFERENCES namespaces(id) ON DELETE CASCADE;
-
-ALTER TABLE ONLY work_item_type_custom_fields
-    ADD CONSTRAINT fk_work_item_type_custom_fields_on_work_item_type_id FOREIGN KEY (work_item_type_id) REFERENCES work_item_types(id) ON DELETE CASCADE;
-
-ALTER TABLE ONLY work_item_type_user_preferences
-    ADD CONSTRAINT fk_work_item_type_user_preferences_on_work_item_type_id FOREIGN KEY (work_item_type_id) REFERENCES work_item_types(id) ON DELETE CASCADE;
 
 ALTER TABLE ONLY work_item_widget_definitions
     ADD CONSTRAINT fk_work_item_widget_definitions_work_item_type_id FOREIGN KEY (work_item_type_id) REFERENCES work_item_types(id) ON UPDATE CASCADE ON DELETE CASCADE;

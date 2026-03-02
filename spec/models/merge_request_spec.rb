@@ -3228,35 +3228,263 @@ RSpec.describe MergeRequest, factory_default: :keep, feature_category: :code_rev
   end
 
   describe '#committer_ids_to_filter_from_approvers' do
-    let(:commits) { double }
-    let(:committers) { double }
+    let(:emails) { ['test@example.com'] }
+    let(:users) { double }
 
-    it 'calls committers with expected params and selects id', :aggregate_failures do
-      expect(subject).to receive(:commits).and_return(commits)
-      expect(commits).to receive(:committers).with(
-        with_merge_commits: true,
-        lazy: false,
-        include_author_when_signed: true
-      ).and_return(committers)
-      expect(committers).to receive(:select).with(:id).and_return(committers)
+    context 'when approval_committer_emails_from_diff is enabled' do
+      it 'queries committer emails from diff and selects user ids' do
+        allow(subject).to receive(:committer_emails_from_diff).and_return(emails)
+        allow(User).to receive(:by_any_email).with(emails).and_return(users)
+        allow(users).to receive(:select).with(:id).and_return(users)
 
-      expect(subject.committer_ids_to_filter_from_approvers).to eq(committers)
+        expect(subject.committer_ids_to_filter_from_approvers).to eq(users)
+      end
+    end
+
+    context 'when approval_committer_emails_from_diff is disabled' do
+      let(:commits) { double }
+      let(:committers) { double }
+
+      before do
+        stub_feature_flags(approval_committer_emails_from_diff: false)
+      end
+
+      it 'falls back to committers method' do
+        expect(subject).to receive(:commits).and_return(commits)
+        expect(commits).to receive(:committers).with(
+          with_merge_commits: true,
+          lazy: false,
+          include_author_when_signed: true
+        ).and_return(committers)
+        expect(committers).to receive(:select).with(:id).and_return(committers)
+
+        expect(subject.committer_ids_to_filter_from_approvers).to eq(committers)
+      end
     end
   end
 
   describe '#committers_to_filter_from_approvers' do
-    let(:commits) { double }
-    let(:committers) { double }
+    let(:emails) { ['test@example.com'] }
+    let(:users) { double }
 
-    it 'calls committers with expected params', :aggregate_failures do
-      expect(subject).to receive(:commits).and_return(commits)
-      expect(commits).to receive(:committers).with(
-        with_merge_commits: true,
-        lazy: true,
-        include_author_when_signed: true
-      ).and_return(committers)
+    context 'when approval_committer_emails_from_diff is enabled' do
+      it 'queries committer emails from diff and returns matching users' do
+        allow(subject).to receive(:committer_emails_from_diff).and_return(emails)
+        allow(User).to receive(:by_any_email).with(emails).and_return(users)
 
-      expect(subject.committers_to_filter_from_approvers).to eq(committers)
+        expect(subject.committers_to_filter_from_approvers).to eq(users)
+      end
+    end
+
+    context 'when approval_committer_emails_from_diff is disabled' do
+      let(:commits) { double }
+      let(:committers) { double }
+
+      before do
+        stub_feature_flags(approval_committer_emails_from_diff: false)
+      end
+
+      it 'falls back to committers method' do
+        expect(subject).to receive(:commits).and_return(commits)
+        expect(commits).to receive(:committers).with(
+          with_merge_commits: true,
+          lazy: true,
+          include_author_when_signed: true
+        ).and_return(committers)
+
+        expect(subject.committers_to_filter_from_approvers).to eq(committers)
+      end
+    end
+  end
+
+  describe 'committer filtering equivalence with committers()' do
+    let_it_be(:project) { create(:project) }
+    let_it_be(:committer_user) { create(:user) }
+    let_it_be(:diff_commit_user) do
+      create(:merge_request_diff_commit_user, email: committer_user.email)
+    end
+
+    let(:committers_result) do
+      subject.committers(with_merge_commits: true, include_author_when_signed: true)
+    end
+
+    before do
+      subject.clear_memoization(:committer_ids_to_filter_from_approvers)
+      subject.clear_memoization(:committers_to_filter_from_approvers)
+    end
+
+    shared_examples 'committer filtering matches expected' do
+      it 'committers_to_filter_from_approvers matches expected' do
+        expect(subject.committers_to_filter_from_approvers.map(&:id))
+          .to match_array(expected_committer_ids)
+      end
+
+      it 'committer_ids_to_filter_from_approvers matches expected' do
+        expect(subject.committer_ids_to_filter_from_approvers.pluck(:id))
+          .to match_array(expected_committer_ids)
+      end
+    end
+
+    context 'with a standard commit via metadata path' do
+      let_it_be(:merge_request) do
+        create(:merge_request, :skip_diff_creation, source_project: project, target_project: project)
+      end
+
+      let(:expected_committer_ids) { committers_result.map(&:id) }
+
+      let_it_be(:diff) { create(:merge_request_diff, merge_request: merge_request) }
+      let_it_be(:diff_commit) do
+        create(:merge_request_diff_commit, merge_request_diff: diff, committer: diff_commit_user)
+      end
+
+      subject { merge_request.reload }
+
+      it_behaves_like 'committer filtering matches expected'
+    end
+
+    context 'with no merge_request_diff' do
+      let_it_be(:merge_request) do
+        create(:merge_request, :skip_diff_creation, source_project: project, target_project: project)
+      end
+
+      let(:expected_committer_ids) { [] }
+
+      subject { merge_request.reload }
+
+      it_behaves_like 'committer filtering matches expected'
+    end
+
+    context 'with a commit via direct committer_id (no metadata)' do
+      let_it_be(:merge_request) do
+        create(:merge_request, :skip_diff_creation, source_project: project, target_project: project)
+      end
+
+      let(:expected_committer_ids) { committers_result.map(&:id) }
+
+      let_it_be(:diff) { create(:merge_request_diff, merge_request: merge_request) }
+      let_it_be(:diff_commit) do
+        create(
+          :diff_commit_without_metadata,
+          merge_request_diff: diff, committer_id: diff_commit_user.id
+        )
+      end
+
+      subject { merge_request.reload }
+
+      it_behaves_like 'committer filtering matches expected'
+    end
+
+    context 'with multiple commits from different committers' do
+      let_it_be(:merge_request) do
+        create(:merge_request, :skip_diff_creation, source_project: project, target_project: project)
+      end
+
+      let(:expected_committer_ids) { committers_result.map(&:id) }
+
+      let_it_be(:diff) { create(:merge_request_diff, merge_request: merge_request) }
+      let_it_be(:other_user) { create(:user) }
+      let_it_be(:other_diff_commit_user) do
+        create(:merge_request_diff_commit_user, email: other_user.email)
+      end
+
+      let_it_be(:diff_commit_1) do
+        create(
+          :merge_request_diff_commit,
+          merge_request_diff: diff, committer: diff_commit_user, relative_order: 0
+        )
+      end
+
+      let_it_be(:diff_commit_2) do
+        create(
+          :merge_request_diff_commit,
+          merge_request_diff: diff, committer: other_diff_commit_user, relative_order: 1
+        )
+      end
+
+      subject { merge_request.reload }
+
+      it_behaves_like 'committer filtering matches expected'
+    end
+
+    context 'with mixed commits: one via metadata, one via direct path' do
+      let_it_be(:merge_request) do
+        create(:merge_request, :skip_diff_creation, source_project: project, target_project: project)
+      end
+
+      let(:expected_committer_ids) { [committer_user.id, other_user.id] }
+
+      let_it_be(:diff) { create(:merge_request_diff, merge_request: merge_request) }
+      let_it_be(:other_user) { create(:user) }
+      let_it_be(:other_diff_commit_user) do
+        create(:merge_request_diff_commit_user, email: other_user.email)
+      end
+
+      let_it_be(:metadata_commit) do
+        create(
+          :merge_request_diff_commit,
+          merge_request_diff: diff, committer: diff_commit_user, relative_order: 0
+        )
+      end
+
+      let_it_be(:direct_commit) do
+        create(
+          :diff_commit_without_metadata,
+          merge_request_diff: diff, committer_id: other_diff_commit_user.id, relative_order: 1
+        )
+      end
+
+      subject { merge_request.reload }
+
+      it_behaves_like 'committer filtering matches expected'
+    end
+
+    context 'with duplicate committer emails across metadata and direct paths' do
+      let_it_be(:merge_request) do
+        create(:merge_request, :skip_diff_creation, source_project: project, target_project: project)
+      end
+
+      let(:expected_committer_ids) { [committer_user.id] }
+
+      let_it_be(:diff) { create(:merge_request_diff, merge_request: merge_request) }
+
+      let_it_be(:metadata_commit) do
+        create(
+          :merge_request_diff_commit,
+          merge_request_diff: diff, committer: diff_commit_user, relative_order: 0
+        )
+      end
+
+      let_it_be(:direct_commit) do
+        create(
+          :diff_commit_without_metadata,
+          merge_request_diff: diff, committer_id: diff_commit_user.id, relative_order: 1
+        )
+      end
+
+      subject { merge_request.reload }
+
+      it_behaves_like 'committer filtering matches expected'
+    end
+
+    context 'with a commit whose committer email does not match any user' do
+      let_it_be(:merge_request) do
+        create(:merge_request, :skip_diff_creation, source_project: project, target_project: project)
+      end
+
+      let(:expected_committer_ids) { [] }
+
+      let_it_be(:diff) { create(:merge_request_diff, merge_request: merge_request) }
+      let_it_be(:unknown_committer) do
+        create(:merge_request_diff_commit_user, email: 'nobody@unknown.com')
+      end
+
+      let_it_be(:diff_commit) do
+        create(:merge_request_diff_commit, merge_request_diff: diff, committer: unknown_committer)
+      end
+
+      subject { merge_request.reload }
+
+      it_behaves_like 'committer filtering matches expected'
     end
   end
 

@@ -712,24 +712,41 @@ module Ci
         return Ci::PipelineVariable.projects_with_variables(project_ids, limit)
       end
 
-      project_ids_from_pipeline_variables =
-        Ci::PipelineVariable
-          .select(:project_id)
-          .where(project_id: project_ids)
+      pipeline_variables_table = Ci::PipelineVariable.quoted_table_name
+      pipeline_artifacts_table = Ci::PipelineArtifact.quoted_table_name
 
-      project_ids_from_pipeline_artifacts =
-        Ci::PipelineArtifact
-          .select(:project_id)
-          .where(project_id: project_ids, file_type: :pipeline_variables)
+      project_ids_from_pipeline_variables_sql = <<~SQL.squish
+        SELECT input_projects.project_id
+        FROM input_projects
+        WHERE EXISTS (
+          SELECT 1
+          FROM #{pipeline_variables_table}
+          WHERE #{pipeline_variables_table}.project_id = input_projects.project_id
+        )
+      SQL
+
+      project_ids_from_pipeline_artifacts_sql = <<~SQL.squish
+        SELECT input_projects.project_id
+        FROM input_projects
+        WHERE EXISTS (
+          SELECT 1
+          FROM #{pipeline_artifacts_table}
+          WHERE #{pipeline_artifacts_table}.project_id = input_projects.project_id
+            AND #{pipeline_artifacts_table}.file_type = #{Ci::PipelineArtifact.file_types[:pipeline_variables]}
+        )
+      SQL
 
       project_ids_sql = <<~SQL.squish
-        (#{project_ids_from_pipeline_variables.to_sql})
+        WITH input_projects AS (
+          SELECT unnest(ARRAY[?]) AS project_id
+        )
+        (#{project_ids_from_pipeline_variables_sql})
         UNION
-        (#{project_ids_from_pipeline_artifacts.to_sql})
+        (#{project_ids_from_pipeline_artifacts_sql})
         LIMIT ?
       SQL
 
-      connection.select_values(sanitize_sql_array([project_ids_sql, limit]))
+      connection.select_values(sanitize_sql_array([project_ids_sql, project_ids, limit]))
     end
 
     def ci_pipeline_statuses_rate_limited?

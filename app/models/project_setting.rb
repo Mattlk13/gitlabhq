@@ -11,6 +11,11 @@ class ProjectSetting < ApplicationRecord
 
   columns_changing_default :auto_duo_code_review_enabled, :duo_remote_flows_enabled
 
+  CODE_OWNER_REVIEWER_ASSIGNMENT_STRATEGIES = {
+    disabled: 0,
+    all_members: 1
+  }.freeze
+
   ALLOWED_TARGET_PLATFORMS = %w[ios osx tvos watchos android].freeze
 
   belongs_to :project, inverse_of: :project_setting
@@ -38,6 +43,13 @@ class ProjectSetting < ApplicationRecord
     encode_iv: false
 
   self.primary_key = :project_id
+
+  # TODO: Remove in 18.11 once backfill_security_project_tracked_contexts_default_branch BBM is removed.
+  # Needed because that spec uses `create(:user)` which loads ProjectSetting after schema rollback.
+  attribute :code_owner_reviewer_assignment_strategy, :integer, default: 0, limit: 2
+
+  enum :code_owner_reviewer_assignment_strategy, CODE_OWNER_REVIEWER_ASSIGNMENT_STRATEGIES,
+    prefix: :reviewer_assignment
 
   validates :merge_commit_template, length: { maximum: Project::MAX_COMMIT_TEMPLATE_LENGTH }
   validates :squash_commit_template, length: { maximum: Project::MAX_COMMIT_TEMPLATE_LENGTH }
@@ -99,6 +111,11 @@ class ProjectSetting < ApplicationRecord
 
   def branch_rule
     ::Projects::AllBranchesRule.new(project)
+  end
+
+  def code_owner_reviewer_auto_assignment_enabled?
+    ::Feature.enabled?(:auto_assign_code_owner_reviewers, project) &&
+      !reviewer_assignment_disabled?
   end
 
   private

@@ -32,6 +32,60 @@ RSpec.describe Namespace::Detail, type: :model, feature_category: :groups_and_pr
 
         expect(namespace_detail).to be_valid
       end
+
+      it 'accepts valid transfer fields in state_metadata' do
+        namespace_detail.state_metadata = {
+          transfer_initiated_at: Time.current.as_json,
+          transfer_initiated_by_user_id: 1,
+          transfer_target_parent_id: 2,
+          transfer_attempt_count: 0,
+          transfer_last_error: nil
+        }
+
+        expect(namespace_detail).to be_valid
+      end
+
+      it 'accepts start_transfer in preserved_states' do
+        namespace_detail.state_metadata = {
+          preserved_states: { start_transfer: 'archived' }
+        }
+
+        expect(namespace_detail).to be_valid
+      end
+
+      it 'rejects invalid transfer field values' do
+        namespace_detail.state_metadata = {
+          transfer_initiated_at: 'not-a-date'
+        }
+
+        expect(namespace_detail).not_to be_valid
+        expect(namespace_detail.errors[:state_metadata]).to be_present
+      end
+    end
+  end
+
+  describe 'jsonb_accessor for transfer fields' do
+    let(:namespace_detail) { create(:namespace).namespace_details }
+
+    it 'provides accessors for transfer fields' do
+      freeze_time do
+        namespace_detail.update!(
+          state_metadata: {
+            transfer_initiated_at: Time.current.as_json,
+            transfer_initiated_by_user_id: 42,
+            transfer_target_parent_id: 99,
+            transfer_attempt_count: 3,
+            transfer_last_error: 'some error'
+          }
+        )
+        namespace_detail.reload
+
+        expect(namespace_detail.transfer_initiated_at).to eq(Time.current)
+        expect(namespace_detail.transfer_initiated_by_user_id).to eq(42)
+        expect(namespace_detail.transfer_target_parent_id).to eq(99)
+        expect(namespace_detail.transfer_attempt_count).to eq(3)
+        expect(namespace_detail.transfer_last_error).to eq('some error')
+      end
     end
   end
 
