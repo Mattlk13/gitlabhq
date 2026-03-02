@@ -87,7 +87,7 @@ Configure group settings:
 
 Authentication varies based on your use case. Refer
 to the suggestions below. For more information about
-authentication, see [Authenticate with the registry](../../packages/package_registry/supported_functionality.md#authenticate-with-the-registry)
+authentication, see [Authenticate with the registry](../package_registry/supported_functionality.md#authenticate-with-the-registry)
 
 For local development (developers):
 

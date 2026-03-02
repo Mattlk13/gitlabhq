@@ -138,3 +138,14 @@ To test Agent Platform capabilities in a controlled environment:
 1. Create a test group or project.
 1. Add test users to the `agent-testers` group.
 1. Validate functionality and train users before a broader rollout.
+
+## Troubleshooting
+
+### GitLab Duo sidebar does not display for certain groups
+
+In GitLab 18.8 and earlier, if you give a group access to Agent Platform but not to
+GitLab Duo (Classic), the GitLab Duo sidebar does not display for members of that group.
+As a workaround, ensure the group has access to both
+GitLab Duo (Classic) and Agent Platform features.
+
+To resolve this issue, upgrade to GitLab 18.9 or later.

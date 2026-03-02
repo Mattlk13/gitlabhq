@@ -14,7 +14,7 @@ title: Redmine
 
 Prerequisites:
 
-- You must disable [GitLab internal issue tracking](../issues/_index.md) in the project.
+- You must [disable GitLab internal issue tracking](../../../integration/external-issue-tracker.md#disable-the-gitlab-issue-tracker) in the project.
   For more information about the steps and consequences of disabling
   GitLab issues, see [change project visibility](../../public_access.md#change-project-visibility), and
   [configure project features and permissions](../settings/_index.md#configure-project-features-and-permissions).

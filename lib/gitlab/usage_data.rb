@@ -141,7 +141,9 @@ module Gitlab
         }
       end
 
-      def features_usage_data = {}
+      def features_usage_data
+        {}
+      end
 
       def components_usage_data
         {

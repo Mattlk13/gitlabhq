@@ -66,17 +66,17 @@ RSpec.describe AbuseReport, feature_category: :insider_threat do
     it { is_expected.to allow_value(['https://gitlab.com'] * 20).for(:links_to_spam) }
     it { is_expected.not_to allow_value(['https://gitlab.com'] * 21).for(:links_to_spam) }
 
-    it {
+    it do
       is_expected.to allow_value([
         "https://gitlab.com/#{SecureRandom.alphanumeric(493)}"
       ]).for(:links_to_spam)
-    }
+    end
 
-    it {
+    it do
       is_expected.not_to allow_value([
         "https://gitlab.com/#{SecureRandom.alphanumeric(494)}"
       ]).for(:links_to_spam)
-    }
+    end
 
     context 'for screenshot' do
       let(:txt_file) { fixture_file_upload('spec/fixtures/doc_sample.txt', 'text/plain') }
@@ -95,7 +95,7 @@ RSpec.describe AbuseReport, feature_category: :insider_threat do
 
       it { is_expected.to allow_value(nil).for(:evidence) }
 
-      it {
+      it do
         is_expected.to allow_value(
           {
             issues: [
@@ -128,7 +128,7 @@ RSpec.describe AbuseReport, feature_category: :insider_threat do
               virus_total_score: 0.2
             }
           }).for(:evidence)
-      }
+      end
     end
   end
 

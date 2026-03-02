@@ -81,6 +81,18 @@ RSpec.describe API::Support::GitAccessActor do
         expect(actor.key).to eq(key)
       end
     end
+
+    context 'when identifier is for a deploy token' do
+      let_it_be(:deploy_token) { create(:deploy_token) }
+
+      it 'finds the deploy token based on an identifier' do
+        actor = described_class.from_params(identifier: "deploy-token-#{deploy_token.id}")
+
+        expect(actor.deploy_token).to eq(deploy_token)
+        expect(actor.user).to be_nil
+        expect(actor.key).to be_nil
+      end
+    end
   end
 
   describe 'attributes' do

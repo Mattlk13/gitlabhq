@@ -39,7 +39,7 @@ The challenge is to create a CLI tool for querying the GitLab REST API.
 
 - Use Code Suggestions to generate a REST API client with a new code comment:
 
-  ```csharp
+  ```c#
   // Connect to a REST API and print the response
   ```
 
@@ -218,7 +218,7 @@ Watch the walkthrough of these steps in [GitLab Duo Coffee Chat: Refactor C++ fu
 
 - Code Suggestions helps generate the correct syntax for `std::shared_ptr` pointer arithmetic and help improve the code quality.
 
-  ```cpp
+  ```c++
   // Define the SQLite path in a variable, default value database.db
 
   // Create a shared pointer for the SQLite class
@@ -236,7 +236,7 @@ Watch the walkthrough of these steps in [GitLab Duo Coffee Chat: Refactor C++ fu
 
 - A specific SQL query string should be refactored into a multi-line string for more efficient editing.
 
-  ```cpp
+  ```c++
   std::string sql = "CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, email TEXT NOT NULL)";
   ```
 

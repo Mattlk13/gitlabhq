@@ -42,7 +42,7 @@ This approach provides better package performance over time,
 and makes it easier to manage your Maven packages.
 
 For general information about managing virtual registries and upstream registries, see
-[Virtual registry](../../virtual_registry/_index.md).
+[Virtual registry](../_index.md).
 
 ## Prerequisites
 
@@ -118,7 +118,7 @@ To create a Maven upstream registry:
 
 1. Select **Create upstream**.
 
-For more information about cache validity settings, see [Set the cache validity period](../../virtual_registry/_index.md#set-the-cache-validity-period).
+For more information about cache validity settings, see [Set the cache validity period](../_index.md#set-the-cache-validity-period).
 
 ## Use the Maven virtual registry
 

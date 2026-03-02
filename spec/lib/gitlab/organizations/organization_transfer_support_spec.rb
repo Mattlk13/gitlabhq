@@ -48,11 +48,11 @@ RSpec.describe 'organization transfer support tracking', :aggregate_failures, fe
       issue_tracker_data
       jira_connect_installations
       jira_tracker_data
+      labels
       ldap_admin_role_links
       member_roles
       merge_request_diff_commit_users
       non_sql_service_pings
-      notes
       oauth_applications
       oauth_device_grants
       oauth_openid_requests
@@ -87,6 +87,7 @@ RSpec.describe 'organization transfer support tracking', :aggregate_failures, fe
       snippet_uploads
       snippet_user_mentions
       subscription_user_add_on_assignment_versions
+      todos
       topics
       upcoming_reconciliations
       user_agent_details
@@ -96,17 +97,18 @@ RSpec.describe 'organization transfer support tracking', :aggregate_failures, fe
       vulnerability_export_uploads
       web_hooks
       web_hook_logs_daily
+      work_item_custom_types
       zentao_tracker_data
     ]
   end
 
-  describe 'tables sharded by organization_id' do
-    let(:org_sharded_tables) do
-      Gitlab::Database::Dictionary.entries.select do |entry|
-        entry.sharding_key.is_a?(Hash) && entry.sharding_key.key?('organization_id')
-      end
+  let(:org_sharded_tables) do
+    Gitlab::Database::Dictionary.entries.select do |entry|
+      entry.sharding_key.is_a?(Hash) && entry.sharding_key.key?('organization_id')
     end
+  end
 
+  describe 'tables sharded by organization_id' do
     it 'requires organization_transfer_support field for all tables sharded by organization_id' do
       org_sharded_tables.each do |entry|
         transfer_support = entry.organization_transfer_support
@@ -157,6 +159,87 @@ RSpec.describe 'organization transfer support tracking', :aggregate_failures, fe
         expect(transfer_support).to eq('todo'),
           "Table '#{table_name}' is in allowed_todo_tables but has value '#{transfer_support}'. " \
             "Remove it from allowed_todo_tables or update its value to 'todo'."
+      end
+    end
+  end
+
+  # These tests validate that:
+  # 1. Tables marked 'supported' in db/docs/*.yml are actually updated during transfer specs
+  # 2. Tables updated during transfer specs are marked 'supported' in db/docs/*.yml
+  #
+  # The transfer specs are loaded and run internally before validation.
+  #
+  # We can only run these specs in EE as this will cover FOSS & EE models. Running this spec in
+  # FOSS_ONLY=1 <run_spec> leads to specs failing because the models don't exist in FOSS but
+  # we've marked them as supported. (e.g db/docs/vulnerability_exports.yml)
+  # rubocop:disable RSpec/InstanceVariable -- We need to track sql queries around all the specs
+  describe 'runtime transfer tracking validation', :eager_load, if: Gitlab.ee? do
+    before(:context) do
+      @tracker = Gitlab::Organizations::TransferTracker.new(
+        service_path_pattern: %r{app/services/.*#{transfer_path_pattern}}o
+      )
+      @tracker.track do
+        load_and_run_transfer_specs
+      end
+    end
+
+    let(:supported_tables) do
+      org_sharded_tables.select do |entry|
+        entry.organization_transfer_support == 'supported'
+      end
+    end
+
+    it 'ensures tables marked supported were actually updated during transfer specs' do
+      supported_tables.each do |entry|
+        expect(@tracker.tracked_tables).to include(entry.table_name),
+          "Table '#{entry.table_name}' has organization_transfer_support: supported " \
+            "in db/docs/#{entry.table_name}.yml but was not updated during any transfer spec. " \
+            "Either add test coverage or update the status to 'todo' if transfer support is " \
+            "not yet implemented."
+      end
+    end
+
+    it 'ensures tables updated during transfer are marked as supported' do
+      @tracker.tracked_table_locations.each do |table_name, locations|
+        entry = Gitlab::Database::Dictionary.entry(table_name)
+
+        locations_text = locations.to_a.sort.map { |loc| "  - #{loc}" }.join("\n")
+
+        expect(entry.organization_transfer_support).to eq('supported'),
+          "Table '#{table_name}' was updated during transfer at:\n" \
+            "#{locations_text}\n" \
+            "but has organization_transfer_support: '#{entry.organization_transfer_support}' " \
+            "in db/docs/#{table_name}.yml. Update it to 'supported'."
+      end
+    end
+    # rubocop:enable RSpec/InstanceVariable
+
+    def transfer_path_pattern
+      'organizations/transfer/'
+    end
+
+    def load_and_run_transfer_specs
+      spec_files = transfer_spec_files
+
+      raise ArgumentError, "Expected transfer specs at **/#{transfer_path_pattern} but found none" if spec_files.empty?
+
+      spec_files.each { |file| require file }
+
+      reporter = RSpec::Core::NullReporter
+
+      transfer_group_examples(spec_files).each do |group|
+        group.run(reporter)
+      end
+    end
+
+    def transfer_spec_files
+      Dir.glob(Rails.root.join("{,ee/}spec/services/**/#{transfer_path_pattern}**/*_spec.rb"))
+    end
+
+    # Called after specs are required so that they're visible in Rspec.world
+    def transfer_group_examples(spec_files)
+      RSpec.world.example_groups.select do |group|
+        spec_files.include?(group.metadata[:absolute_file_path])
       end
     end
   end

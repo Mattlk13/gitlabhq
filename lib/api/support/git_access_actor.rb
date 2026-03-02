@@ -5,11 +5,12 @@ module API
     class GitAccessActor
       extend ::Gitlab::Identifier
 
-      attr_reader :user, :key
+      attr_reader :user, :key, :deploy_token
 
-      def initialize(user: nil, key: nil)
+      def initialize(user: nil, key: nil, deploy_token: nil)
         @user = user
         @key = key
+        @deploy_token = deploy_token
 
         @user = key.user if !user && key
       end
@@ -29,9 +30,13 @@ module API
       end
 
       def self.from_identifier(identifier)
-        user = identify(identifier)
-        if user
-          new(user: user)
+        result = identify(identifier)
+
+        case result
+        when User
+          new(user: result)
+        when DeployToken
+          new(deploy_token: result)
         else
           new(key: identify_using_deploy_key(identifier))
         end

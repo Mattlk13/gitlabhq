@@ -29,8 +29,8 @@ To authenticate, you can use either:
 
 - One of the following tokens, with the scope set to `api`:
   - [Personal access token](../../profile/personal_access_tokens.md)
-  - [Group access token](../../../user/group/settings/group_access_tokens.md)
-  - [Project access token](../../../user/project/settings/project_access_tokens.md)
+  - [Group access token](../../group/settings/group_access_tokens.md)
+  - [Project access token](../../project/settings/project_access_tokens.md)
 - A [deploy token](../../project/deploy_tokens/_index.md) with the scope set to
   `read_package_registry`, `write_package_registry`, or both.
 - A [CI/CD job token](../../../ci/jobs/ci_job_token.md) if you want to publish packages with a CI/CD pipeline.
