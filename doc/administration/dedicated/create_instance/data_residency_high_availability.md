@@ -23,7 +23,7 @@ data location while GitLab manages the underlying infrastructure and ensures hig
 through proven reference architectures.
 
 GitLab Dedicated uses a modified version of the
-[Cloud Native Hybrid reference architecture](../../../administration/reference_architectures/_index.md#cloud-native-hybrid)
+[Cloud Native Hybrid reference architecture](../../reference_architectures/_index.md#cloud-native-hybrid)
 with high availability. Within your selected region, GitLab distributes your infrastructure across multiple availability zones for redundancy.
 During onboarding, you can let GitLab automatically select availability zones (recommended),
 or specify custom availability zone IDs to align with your existing AWS infrastructure.

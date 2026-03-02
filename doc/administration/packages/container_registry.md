@@ -409,7 +409,7 @@ Container registry feature flags are environment variable toggles
 that control experimental or transitional functionality in the
 container registry.
 
-Unlike [GitLab application feature flags](../../administration/feature_flags/list.md),
+Unlike [GitLab application feature flags](../feature_flags/list.md),
 container registry feature flags:
 
 - Are managed through registry-specific environment variables

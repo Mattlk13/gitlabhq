@@ -65,7 +65,7 @@ The following table lists:
 
 To use GitLab Duo (Classic) features with GitLab Duo Self-Hosted, you must have the GitLab
 Duo Enterprise add-on. This applies even if you can use these features with GitLab Duo Core
-or GitLab Duo Pro when GitLab hosts and connects to those models through the cloud-based [AI Gateway](../../administration/gitlab_duo/gateway.md).
+or GitLab Duo Pro when GitLab hosts and connects to those models through the cloud-based [AI Gateway](../gitlab_duo/gateway.md).
 
 | Feature                                                                                                                                | GitLab version          | Status              |
 |----------------------------------------------------------------------------------------------------------------------------------------|-------------------------|---------------------|
@@ -185,7 +185,7 @@ offering a ready-to-use AI solution without the need for on-premise infrastructu
 
 For more information, see the [GitLab.com AI Gateway configuration diagram](configuration_types.md#gitlabcom-ai-gateway).
 
-To set up this infrastructure, see [how to configure GitLab Duo on a GitLab Self-Managed instance](../../administration/gitlab_duo/configure/gitlab_self_managed.md).
+To set up this infrastructure, see [how to configure GitLab Duo on a GitLab Self-Managed instance](../gitlab_duo/configure/gitlab_self_managed.md).
 
 ## Set up a private infrastructure
 

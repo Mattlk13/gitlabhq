@@ -44,7 +44,7 @@ For more information on troubleshooting GitLab Duo, see:
 We provide two debugging scripts to help administrators verify their self-hosted model configuration.
 
 1. Debug the GitLab to AI Gateway connection. From your GitLab instance, run the
-   [Rake task](../../administration/raketasks/_index.md):
+   [Rake task](../raketasks/_index.md):
 
    ```shell
    gitlab-rake "gitlab:duo:verify_self_hosted_setup[<username>]"
@@ -112,7 +112,7 @@ raise an issue on the issue tracker.
 
 ## GitLab Duo health check is not working
 
-When you [run a health check for GitLab Duo](../../administration/gitlab_duo/configure/gitlab_self_managed.md#run-a-health-check-for-gitlab-duo), you might get an error like a `401 response from the AI Gateway`.
+When you [run a health check for GitLab Duo](../gitlab_duo/configure/gitlab_self_managed.md#run-a-health-check-for-gitlab-duo), you might get an error like a `401 response from the AI Gateway`.
 
 To resolve, first check if GitLab Duo features are functioning correctly. For example, send a message to GitLab Duo Chat.
 

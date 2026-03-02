@@ -11,6 +11,8 @@ module Namespaces
       include TransitionValidation
       include TransitionLogging
 
+      attribute :state, :integer, limit: 2, default: 0
+
       enum :state, {
         ancestor_inherited: 0,
         archived: 1,

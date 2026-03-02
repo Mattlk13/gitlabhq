@@ -823,7 +823,7 @@ You might see this error for projects that do not sync successfully.
 
 Exit code 128 during repository creation means Git encountered a fatal error while cloning. This could be due to repository corruption, network issues, authentication problems, resource limits or because the project does not have an associated Git repository. More details about the specific cause for such failures can be found in the Gitaly logs.
 
-When unsure where to start, run an integrity check on the source repository on the Primary site by [executing the `git fsck` command manually on the command line](../../../../administration/repository_checks.md#run-a-check-using-the-command-line).
+When unsure where to start, run an integrity check on the source repository on the Primary site by [executing the `git fsck` command manually on the command line](../../../repository_checks.md#run-a-check-using-the-command-line).
 
 ### Error: `gitmodulesUrl: disallowed submodule url`
 

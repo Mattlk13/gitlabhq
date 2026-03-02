@@ -32,7 +32,7 @@ Choose from multiple integration methods based on your organization's needs:
 - [OmniAuth](../../integration/omniauth.md)
 - [SAML](../../integration/saml.md)
 - [SAML Group Sync](../../user/group/saml_sso/group_sync.md)
-- [SCIM](../../administration/settings/scim_setup.md)
+- [SCIM](../settings/scim_setup.md)
 
 {{< /cards >}}
 

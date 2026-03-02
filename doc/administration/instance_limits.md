@@ -521,7 +521,7 @@ Some API endpoints have specific JSON validation limits.
 
 **Footnotes**:
 
-1. The Terraform state max size limit can be set by using the [application settings API](../../doc/api/settings.md) to set `max_terraform_state_size_bytes`.
+1. The Terraform state max size limit can be set by using the [application settings API](../api/settings.md) to set `max_terraform_state_size_bytes`.
 
 ### Environment variable configuration
 

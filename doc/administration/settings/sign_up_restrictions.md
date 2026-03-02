@@ -140,7 +140,7 @@ You can still independently configure [project sharing for the group and its sub
 
 {{< history >}}
 
-- [Introduced](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/206932) in GitLab 18.6 [with a flag](../../administration/feature_flags/_index.md) named `bso_minimal_access_fallback`. Disabled by default.
+- [Introduced](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/206932) in GitLab 18.6 [with a flag](../feature_flags/_index.md) named `bso_minimal_access_fallback`. Disabled by default.
 
 {{< /history >}}
 

@@ -23613,7 +23613,6 @@ CREATE TABLE namespace_details (
     description text,
     description_html text,
     creator_id bigint,
-    deleted_at timestamp with time zone,
     state_metadata jsonb DEFAULT '{}'::jsonb NOT NULL,
     deletion_scheduled_at timestamp with time zone,
     CONSTRAINT check_namespace_details_state_metadata_is_hash CHECK ((jsonb_typeof(state_metadata) = 'object'::text))

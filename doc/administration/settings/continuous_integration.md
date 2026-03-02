@@ -107,7 +107,7 @@ Control how [job artifacts](../cicd/job_artifacts.md) are stored and managed acr
 Set size limits for job artifacts to control storage use.
 Each artifact file in a job has a default maximum size of 100 MB.
 
-Job artifacts defined with `artifacts:reports` can have [different limits](../../administration/instance_limits.md#maximum-file-size-per-type-of-artifact).
+Job artifacts defined with `artifacts:reports` can have [different limits](../instance_limits.md#maximum-file-size-per-type-of-artifact).
 When different limits apply, the smaller value is used.
 
 > [!note]
@@ -575,7 +575,7 @@ To access these settings:
 
 {{< history >}}
 
-- Instance setting [introduced](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/186182) in GitLab 17.11, replacing the `ci_enable_live_trace` [feature flag](../../administration/feature_flags/_index.md).
+- Instance setting [introduced](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/186182) in GitLab 17.11, replacing the `ci_enable_live_trace` [feature flag](../feature_flags/_index.md).
 - `ci_enable_live_trace` feature flag [removed](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/189232) in GitLab 18.0.
 
 {{< /history >}}
@@ -661,7 +661,7 @@ Projects not in the allowlist receive a `not authorized to publish` error when a
 
 - [Deprecated](https://gitlab.com/gitlab-org/gitlab/-/issues/389467) in GitLab 15.9.
 - [Removed](https://gitlab.com/gitlab-org/gitlab/-/issues/389467) in GitLab 17.0.
-- [Re-added](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/165111) in GitLab 17.4 [with a flag](../../administration/feature_flags/_index.md) named `required_pipelines`. Disabled by default.
+- [Re-added](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/165111) in GitLab 17.4 [with a flag](../feature_flags/_index.md) named `required_pipelines`. Disabled by default.
 
 {{< /history >}}
 
