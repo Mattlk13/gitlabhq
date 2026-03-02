@@ -43,7 +43,9 @@ module QA
       end
 
       it 'manually creates a pipeline and uses the defined custom variable value',
-        testcase: 'https://gitlab.com/gitlab-org/gitlab/-/quality/test_cases/378975' do
+        testcase: 'https://gitlab.com/gitlab-org/gitlab/-/quality/test_cases/378975',
+        quarantine: { issue: 'https://gitlab.com/gitlab-org/quality/test-failure-issues/-/issues/23168',
+                      type: 'flaky' } do
         Page::Project::Pipeline::New.perform do |new|
           new.configure_variable(value: variable_custom_value)
           new.click_run_pipeline_button

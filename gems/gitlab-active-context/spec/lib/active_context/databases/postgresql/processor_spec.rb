@@ -5,10 +5,19 @@ require 'spec_helper'
 RSpec.describe ActiveContext::Databases::Postgresql::Processor, feature_category: :global_search do
   let(:client) { instance_double(ActiveContext::Databases::Postgresql::Client) }
   let(:adapter) { instance_double(ActiveContext::Databases::Postgresql::Adapter, client: client) }
+
   let(:collection) do
-    double(
-      collection_name: 'items', current_search_embedding_version: { field: 'preset_field', class: Test::Embeddings }
+    klass = Class.new(Test::Collections::Mock) do
+      def self.collection_name
+        'items'
+      end
+    end
+
+    allow(klass).to receive(:collection_record).and_return(
+      double("CollectionRecord", search_embedding_model: { field: 'preset_field', model_ref: 'model_001' })
     )
+
+    klass
   end
 
   let(:model) do
@@ -32,7 +41,6 @@ RSpec.describe ActiveContext::Databases::Postgresql::Processor, feature_category
   before do
     allow(client).to receive(:with_model_for).with('items').and_yield(model)
     allow(ActiveContext).to receive(:adapter).and_return(adapter)
-    allow(ActiveContext::Embeddings).to receive(:generate_embeddings).and_return([[0.5, 0.6]])
   end
 
   shared_examples 'a SQL transformer' do |query, expected_sql|
@@ -148,13 +156,20 @@ RSpec.describe ActiveContext::Databases::Postgresql::Processor, feature_category
       "SELECT \"items\".*, ((2.0 - (\"items\".\"embedding\" <=> '[0.1,0.2]')) / 2.0) AS score " \
         "FROM \"items\" ORDER BY \"items\".\"embedding\" <=> '[0.1,0.2]' LIMIT 5"
 
-    it_behaves_like 'a SQL transformer',
-      ActiveContext::Query.knn(
-        content: 'something',
-        k: 5
-      ),
-      "SELECT \"items\".*, ((2.0 - (\"items\".\"preset_field\" <=> '[0.5,0.6]')) / 2.0) AS score " \
-        "FROM \"items\" ORDER BY \"items\".\"preset_field\" <=> '[0.5,0.6]' LIMIT 5"
+    describe 'content-based KNN query' do
+      before do
+        allow_any_instance_of(::ActiveContext::EmbeddingModel).to receive(:generate_embeddings)
+          .with('something', user: anything).and_return([[0.5, 0.6]])
+      end
+
+      it_behaves_like 'a SQL transformer',
+        ActiveContext::Query.knn(
+          content: 'something',
+          k: 5
+        ),
+        "SELECT \"items\".*, ((2.0 - (\"items\".\"preset_field\" <=> '[0.5,0.6]')) / 2.0) AS score " \
+          "FROM \"items\" ORDER BY \"items\".\"preset_field\" <=> '[0.5,0.6]' LIMIT 5"
+    end
 
     it_behaves_like 'a SQL transformer',
       ActiveContext::Query.filter(status: 'active').knn(

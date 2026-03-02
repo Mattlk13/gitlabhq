@@ -11,7 +11,7 @@ module Test
         model_name: model_metadata[:model_ref],
         field: model_metadata[:field],
         llm_class: Test::MockLlmClass,
-        llm_params: {}
+        llm_params: { model: model_metadata[:model_ref] }
       )
     end
   end

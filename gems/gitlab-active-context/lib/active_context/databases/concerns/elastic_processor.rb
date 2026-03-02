@@ -289,11 +289,11 @@ module ActiveContext
 
         def knn_node_values(node)
           node_values = node.value
-          preset_values = collection.current_search_embedding_version
+          embedding_model = collection.search_embedding_model
 
           k = node_values[:k]
-          field = node_values[:target] || preset_values[:field]
-          vector = node_values[:vector] || get_embeddings(node_values[:content], preset_values)
+          field = node_values[:target] || embedding_model.field
+          vector = node_values[:vector] || get_embeddings(node_values[:content], embedding_model)
 
           {
             k: k,

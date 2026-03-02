@@ -10,7 +10,7 @@ module Test
       new(contents, unit_primitive: unit_primitive, user: user, model: model).execute
     end
 
-    def initialize(contents, unit_primitive:, user:, model:)
+    def initialize(contents, unit_primitive: nil, model: nil, user: nil)
       @contents = contents
       @unit_primitive = unit_primitive
       @user = user
